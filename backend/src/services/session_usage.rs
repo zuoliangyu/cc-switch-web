@@ -278,7 +278,11 @@ fn sync_single_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppEr
             continue;
         }
 
-        let request_id = format!("session:{}", msg.message_id);
+        let request_id = format!(
+            "{}{}",
+            crate::proxy::usage::parser::SESSION_REQUEST_ID_PREFIX,
+            msg.message_id
+        );
 
         // 跳过 output_tokens 为 0 的无意义条目
         if msg.output_tokens == 0 {
@@ -342,19 +346,6 @@ fn insert_session_log_entry(
 ) -> Result<bool, AppError> {
     let conn = lock_conn!(db.conn);
 
-    // 检查是否已存在
-    let exists: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM proxy_request_logs WHERE request_id = ?1",
-            rusqlite::params![request_id],
-            |row| row.get::<_, i64>(0).map(|c| c > 0),
-        )
-        .unwrap_or(false);
-
-    if exists {
-        return Ok(false);
-    }
-
     // 解析时间戳
     let created_at = msg
         .timestamp
@@ -372,6 +363,23 @@ fn insert_session_log_entry(
                 .unwrap_or(0)
         });
 
+    // 跨源去重：request_id 命中（Claude 原生路径常见）或 7 维指纹命中代理日志（其它）→ 跳过
+    if crate::services::usage_stats::should_skip_session_insert(
+        &conn,
+        request_id,
+        &crate::services::usage_stats::DedupKey {
+            app_type: "claude",
+            model: &msg.model,
+            input_tokens: msg.input_tokens,
+            output_tokens: msg.output_tokens,
+            cache_read_tokens: msg.cache_read_tokens,
+            cache_creation_tokens: msg.cache_creation_tokens,
+            created_at,
+        },
+    )? {
+        return Ok(false);
+    }
+
     // 计算费用
     let usage = TokenUsage {
         input_tokens: msg.input_tokens,
@@ -379,6 +387,7 @@ fn insert_session_log_entry(
         cache_read_tokens: msg.cache_read_tokens,
         cache_creation_tokens: msg.cache_creation_tokens,
         model: Some(msg.model.clone()),
+        message_id: None,
     };
 
     let pricing = find_model_pricing_for_session(&conn, &msg.model);

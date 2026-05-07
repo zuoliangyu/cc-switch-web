@@ -1,6 +1,6 @@
 [package]
 name = "cc-switch-web"
-version = "0.3.2"
+version = "0.4.0"
 description = "CC Switch Web branch local Rust service for browser UI"
 authors = ["左岚"]
 license = "MIT"

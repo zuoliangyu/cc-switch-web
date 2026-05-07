@@ -2,6 +2,52 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.4.0] - 2026-05-07
+
+落地 0.3.x 系列中跨度最大的延后项 B1：跨源 usage 去重重构。涉及 `TokenUsage` 类型扩展与 `proxy_request_logs` 查询/写入/rollup 三层 SQL 改造，因为是类型层的架构变化，bump 到 minor 版本。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### 7 维指纹 usage 跨源去重（上游 `8669b408` + `2ee7cb41`）
+
+**问题背景**：proxy 实时写入与 session-log 同步使用不同的 `request_id` 生成规则——只有 Claude 走原生 Anthropic 后端时才共享 `session:{message_id}` key；Codex / Gemini / Claude-through-OpenAI compat 路径产生的 `request_id` 总是不同，主键去重根本不起作用，每笔真实请求被记录两次，dashboard 用量翻倍。
+
+**解决方案**：
+
+- `proxy/usage/parser.rs` 扩展 `TokenUsage`：新增 `pub message_id: Option<String>`（`#[serde(skip)]`），新增 `pub fn dedup_request_id() -> String` 方法（有 `message_id` 返回 `session:{id}`、否则随机 UUID），新增 `pub const SESSION_REQUEST_ID_PREFIX = "session:"` 常量。`from_claude_response` / `from_claude_stream_events` 现在会从 `body.id` / `message_start.message.id` 提取 message_id，让 Claude API 直连和 OpenRouter Claude-Anthropic 转换路径都能命中
+- `proxy/handlers.rs` 与 `proxy/response_processor.rs` 的 `request_id` 生成从 `Uuid::new_v4()` 改为 `usage.dedup_request_id()`
+- `proxy/usage/logger.rs` 的 INSERT 改为 INSERT OR REPLACE：当 proxy 与 session-log 撞上同一 `session:msg_xxx` 主键时，后到的更完整数据会替代前者
+- `services/session_usage.rs` 拼 request_id 改用 `SESSION_REQUEST_ID_PREFIX` 常量，避免硬编码
+
+**SQL 层 7 维指纹去重**：
+
+- `services/usage_stats.rs` 新增 `effective_usage_log_filter(log_alias)` SQL 片段生成器：在每个聚合查询的 WHERE 子句插入 `NOT (data_source IN ('session_log','codex_session','gemini_session') AND EXISTS (...))`，子查询用 `(app_type, input/output/cache_read/cache_creation_tokens, status_code∈[200,300), model 大小写不敏感, created_at±10min 窗口)` 7 维匹配排除已被 proxy 行覆盖的 session 行
+- 新增 `pub(crate) const SESSION_PROXY_DEDUP_WINDOW_SECONDS = 10*60`、`pub(crate) struct DedupKey`、`pub(crate) fn should_skip_session_insert(conn, request_id, &DedupKey)`、`pub(crate) fn has_matching_proxy_usage_log(conn, &DedupKey)`、`fn proxy_request_id_exists`
+- Codex/Gemini session 不暴露 `cache_creation_tokens`，传 0 时匹配器放行 proxy 任意值（避免误把不同请求当重复）
+- 三个聚合查询全部接入 filter：`get_usage_summary` / `get_provider_stats` / `get_model_stats` / `get_request_logs` / `check_provider_limits`（今日 + 本月）
+- 三个 session 写入路径在 INSERT 前调用 `should_skip_session_insert`：`session_usage.rs::insert_session_log_entry`、`session_usage_codex.rs::insert_codex_session_entry`、`session_usage_gemini.rs::insert_gemini_session_entry`（Gemini 走 UPSERT，调用 `has_matching_proxy_usage_log` 仅在指纹与 proxy 撞上时跳过，不影响同 request_id 的合法更新）
+- `database/dao/usage_rollup.rs::do_rollup_and_prune` 的聚合 SQL 同样应用 filter，确保 `usage_daily_rollups` 不会再吸收 session_log 的重复数据
+
+**配套 schema 与 transform 改动**：
+
+- `database/schema.rs` 的 `proxy_request_logs` CREATE TABLE 现在直接包含 `data_source TEXT NOT NULL DEFAULT 'proxy'`，与 migration 路径对齐，避免 memory db 测试缺列
+- `proxy/providers/transform.rs::openai_to_anthropic` 行为不变，但新增回归测试 `test_openai_to_anthropic_preserves_id_for_usage_dedup` 钉死它必须把 OpenAI `id` 透传到 Anthropic `body.id` —— 这是 Claude 走 OpenAI compat 路径能复用 `session:` 主键去重的前提
+
+**测试**：
+
+- 新增 `dedup_filter_excludes_session_rows_already_covered_by_proxy`：插入 codex/gemini 的 proxy + session 各一对、再加一条 session-only，验证 logs/summary 都正确排除被覆盖的 session 行
+- 新增 `dedup_filter_keeps_session_rows_outside_window_or_with_mismatched_tokens`：session 在时间窗口外或 token 不一致时正确保留
+- 新增 `should_skip_session_insert_returns_true_for_matching_proxy_row`：直接调用 helper 函数验证写入路径短路逻辑
+- 同步把所有 `TokenUsage { ... }` 构造点（10 处：parser 内部 + response_processor / calculator / logger / session_usage*.rs 的测试）补上 `message_id: None` 字段
+
+### B1 收口
+
+- 0.3.1 已落地的 schema 索引 `idx_request_logs_dedup_lookup` 与 0.3.2 已落地的 dashboard 覆盖索引 `idx_request_logs_app_created_at` 现在都被 B1 实际使用：filter 子查询走前者保持 index-only scan；按 app_type + 时间倒序的 dashboard 查询走后者
+- F1-rest 中 `find_model_pricing_row` 的大小写不敏感（0.3.1 已落地）+ 启动时懒 backfill `maybe_backfill_log_costs`（Web 既有）+ B1 的指纹去重，三者共同消除 dashboard 的"幽灵 zero-cost"行 + 双计行
+
+### 文档与版本
+
+- 仓库版本提升到 `0.4.0`（minor bump，因为 `TokenUsage` 是 `pub` 类型，新增 `message_id` 字段属于 ABI 变化）
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.4.0` 版本说明
+
 ## [0.3.2] - 2026-05-07
 
 继续推进 0.3.1 中标记为延后的两项：上游 `a1e6c3b6` 的 Codex 切换历史稳定，以及 `f061b777` 中未被 `518d945e` 撤销的 usage perf 余项。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。

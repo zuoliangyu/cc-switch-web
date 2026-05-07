@@ -18,7 +18,21 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.3.2`.
+The current repository version is `0.4.0`.
+
+`0.4.0` lands the largest deferred item from the 0.3.x line — B1 cross-source usage deduplication.
+
+**Background**: proxy live writes and session-log sync used different `request_id` generation rules. Only Claude on the native Anthropic backend shared the `session:{message_id}` key; Codex / Gemini / Claude-through-OpenAI compat paths always produced distinct ids, so primary-key dedup never fired and every real request was recorded twice — dashboard totals were doubled.
+
+**Fix**:
+
+- `TokenUsage` gains a `message_id` field and a `dedup_request_id()` method (extracted from Claude `body.id` / `message_start.message.id`); proxy writes and session-log sync now share the `session:{msg_xxx}` primary key so primary-key dedup actually works.
+- The proxy logger switches to `INSERT OR REPLACE`: when both paths collide on the same key, the richer data wins.
+- SQL-layer 7-dim fingerprint dedup filter: `(app_type, 4 token counts, 2xx status, case-insensitive model, created_at ± 10min window)`, covering Codex / Gemini / Claude-through-OpenAI paths where the request_id can't be shared.
+- The filter is applied at all three layers: read (summary/provider/model/logs/limits), write (`should_skip_session_insert` before INSERT in all three `session_usage_*.rs`), and rollup (`usage_daily_rollups` no longer absorbs session_log duplicates).
+- Minor bump to 0.4.0 because `TokenUsage` is `pub` and adding `message_id` is an ABI change.
+
+This closes out all B1 / C7 / F1 items deferred from 0.3.x. See `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md` for the per-fix upstream commit references.
 
 `0.3.2` follows up on the two items deferred in `0.3.1`:
 

@@ -73,7 +73,9 @@ impl<'a> UsageLogger<'a> {
             });
 
         conn.execute(
-            "INSERT INTO proxy_request_logs (
+            // INSERT OR REPLACE：proxy 写入和 session-log 同步如果共享 dedup_request_id
+            // （形如 `session:msg_xxx`），后到的更完整数据会覆盖前者，避免双计或半填的行残留。
+            "INSERT OR REPLACE INTO proxy_request_logs (
                 request_id, provider_id, app_type, model, request_model,
                 input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
                 input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
@@ -358,6 +360,7 @@ mod tests {
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             model: None,
+            message_id: None,
         };
 
         logger.log_with_calculation(

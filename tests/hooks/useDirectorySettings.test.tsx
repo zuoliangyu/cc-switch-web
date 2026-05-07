@@ -85,6 +85,8 @@ describe("useDirectorySettings", () => {
       codex: "/remote/codex",
       gemini: "/remote/gemini",
       opencode: "/remote/opencode",
+      openclaw: "/remote/opencode",
+      hermes: "/remote/opencode",
     });
   });
 

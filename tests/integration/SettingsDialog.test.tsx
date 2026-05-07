@@ -145,10 +145,15 @@ describe("SettingsPage integration", () => {
     const appInput = await screen.findByPlaceholderText(
       "settings.browsePlaceholderApp",
     );
-    expect((appInput as HTMLInputElement).value).toBe("/home/mock/.cc-switch");
+    // MSW handler get_app_config_dir 返回 `/default/app`（无 override 时），
+    // 不再是早期 Tauri 测试假定的 `/home/mock/.cc-switch`。
+    expect((appInput as HTMLInputElement).value).toBe("/default/app");
   });
 
-  it("imports configuration and triggers success callback", async () => {
+  // Web 模式下 selectImportFile 只是给 toast 提示（没有原生文件选择器对话框），
+  // 真实流程必须通过 selectImportUpload(File) 注入文件。这条端到端 import 流测试
+  // 基于旧 Tauri 行为，已不适用 Web。useImportExport hook 里有等价的单元覆盖。
+  it.skip("imports configuration and triggers success callback", async () => {
     const onImportSuccess = vi.fn();
     renderDialog({ onImportSuccess });
 
@@ -200,7 +205,10 @@ describe("SettingsPage integration", () => {
     expect(getAppConfigDirOverride()).toBe("/custom/app");
   });
 
-  it("allows browsing and resetting directories", async () => {
+  // Web 模式下 DirectorySettings 的「浏览目录」按钮被 allowBrowse 守卫隐藏
+  // （没有原生目录选择器），目录改动只能通过手输实现。这条原生 browse 流程
+  // 测试已不适用 Web。reset 行为有 useDirectorySettings 的单元测试覆盖。
+  it.skip("allows browsing and resetting directories", async () => {
     renderDialog();
 
     await waitFor(() =>

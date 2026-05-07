@@ -243,9 +243,11 @@ describe("useSettings hook", () => {
     );
     expect(directorySettingsMock.resetAllDirectories).toHaveBeenCalledWith(
       "/server/claude",
-      undefined,
+      undefined, // codexConfigDir
       undefined, // geminiConfigDir
       undefined, // opencodeConfigDir
+      undefined, // openclawConfigDir
+      undefined, // hermesConfigDir
     );
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
   });

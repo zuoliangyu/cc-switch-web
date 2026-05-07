@@ -18,7 +18,12 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.4.0`.
+The current repository version is `0.5.0`.
+
+`0.5.0` is a routine dependency-bump + test-fixture repair release:
+
+- Fixes the `OpenClaw delete_session_updates_index_and_removes_jsonl` test fixture: on Windows, temp paths contain backslashes that `serde_json::from_str` rejects as invalid escapes (`\T`, `\U`, etc.). The fixture now builds the index via `serde_json::json!` and lets serde handle escaping. Backend `cargo test` now reports 775/775 with zero pre-existing failures.
+- Frontend dependencies are bumped within minor / patch range (`@tanstack/react-query`, `@codemirror/*`, `framer-motion`, `i18next` / `react-i18next`, `prettier`, `vite 7.3.x`, `tailwindcss 3.4.x`, etc., 24 packages total). Deliberately skipped `react` 18→19, `tailwindcss` 3→4, `vite` 7→8, `typescript` 5→6, `vitest` 2→4 — these have known breaking changes and will be addressed in dedicated iterations.
 
 `0.4.0` lands the largest deferred item from the 0.3.x line — B1 cross-source usage deduplication.
 

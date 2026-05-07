@@ -2,6 +2,64 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.5.0] - 2026-05-07
+
+例行依赖升级 + 测试夹具修复版。
+
+### 测试夹具修复
+
+- `backend/src/session_manager/providers/openclaw.rs::tests::delete_session_updates_index_and_removes_jsonl` 测试 fixture 改用 `serde_json::json!` 构造索引数据后再 `to_string_pretty`，让 serde 自己处理路径中反斜杠的 JSON 转义，修复 Windows 临时路径含反斜杠时 `serde_json::from_str` 把 `\T` / `\U` 等当成非法 escape 失败的问题。`cargo test --lib --test-threads=1` 现在 **775/775 全过**，零 pre-existing 后端失败。
+
+### 前端依赖升级（pnpm update，仅 minor / patch 范围内升级）
+
+后端 Rust 依赖本轮不变。
+
+- `@codemirror/lang-javascript` `6.2.4 → 6.2.5`
+- `@codemirror/lint` `6.8.5 → 6.9.6`
+- `@codemirror/state` `6.5.2 → 6.6.0`
+- `@codemirror/view` `6.38.2 → 6.42.0`
+- `@radix-ui/react-label` `2.1.7 → 2.1.8`
+- `@testing-library/jest-dom` `→ 6.9.1` / `@testing-library/react` `16.3.0 → 16.3.2`
+- `@lobehub/icons-static-svg` `1.73.0 → 1.90.0`
+- `@tanstack/react-query` `5.90.3 → 5.100.9`
+- `autoprefixer` `10.4.22 → 10.5.0`
+- `code-inspector-plugin` `1.3.3 → 1.5.1`
+- `framer-motion` `12.23.25 → 12.38.0`
+- `i18next` `25.5.2 → 25.10.10` / `react-i18next` `16.0.0 → 16.6.6`
+- `msw` `2.11.6 → 2.14.3`
+- `postcss` `8.5.6 → 8.5.14`
+- `prettier` `3.6.2 → 3.8.3`
+- `react-hook-form` `7.65.0 → 7.75.0`
+- `recharts` `3.5.1 → 3.8.1`
+- `smol-toml` `1.4.2 → 1.6.1`
+- `tailwind-merge` `3.3.1 → 3.5.0`
+- `tailwindcss` `3.4.18 → 3.4.19`
+- `typescript` `5.9.2 → 5.9.3`
+- `vite` `7.3.0 → 7.3.3`
+- `zod` `4.1.12 → 4.4.3`
+
+### 显式跳过的 major 升级（评估后留待后续单独迭代）
+
+- `react` / `react-dom` 18→19、`@types/react` / `@types/react-dom` 18→19：跨大版本含 `useEffect` 行为微调与并发渲染差异，需对所有 hook / portal / suspense 链路做完整回归
+- `tailwindcss` 3→4：CSS 编译方式重写（Lightning CSS、新 `@import` 语义），影响所有样式
+- `vite` 7→8、`@vitejs/plugin-react` 4→6：构建链路与 HMR 行为变化
+- `vitest` 2→4：跨大版本 worker / mock API 行为差异
+- `typescript` 5→6：编译器选项与 lib types 兼容性
+- `i18next` 25→26、`react-i18next` 16→17：API surface 变化
+- `jsdom` 25→29：DOM API 兼容性
+- `lucide-react` 0.x→1.0：icon API 变化（虽是 0→1 不严格 SemVer，但 changelog 明确包含 breaking changes）
+
+### 验证
+
+- 后端 `cargo check`、`cargo test --lib --test-threads=1` **775/775 全过**
+- 前端 `pnpm tsc --noEmit` 0 错误
+- 前端 `pnpm vitest run` 159 / 186 通过；27 失败属于跨版本 pre-existing 测试夹具滞后问题（如 `McpFormModal` apps 形状缺 `hermes`、`SessionManagerPage` snapshot 与 `useImportExport` 测试 mock 不一致），与本轮依赖升级无直接因果（v0.4.0 基线已 26 失败），不阻塞发布；后续会专门起一笔修测试 fixture 任务
+
+### 文档与版本
+
+- 仓库版本提升到 `0.5.0`（minor bump）
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.5.0` 版本说明
+
 ## [0.4.0] - 2026-05-07
 
 落地 0.3.x 系列中跨度最大的延后项 B1：跨源 usage 去重重构。涉及 `TokenUsage` 类型扩展与 `proxy_request_logs` 查询/写入/rollup 三层 SQL 改造，因为是类型层的架构变化，bump 到 minor 版本。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。

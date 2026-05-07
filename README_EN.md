@@ -18,7 +18,16 @@ This direction targets Windows, macOS, Linux, and headless Linux server environm
 
 ## Version
 
-The current repository version is `0.5.0`.
+The current repository version is `0.5.1`.
+
+`0.5.1` is an engineering patch with no behavior changes: the vitest matrix is reduced from the 0.4.0 baseline of 26 failures down to **0** (184 passed + 2 skipped = 186/186). The repair covers:
+
+- Shape / type drift: `McpFormModal` apps, `useDirectorySettings.resolvedDirs`, and `useSettings.resetAllDirectories` arg lists now include `hermes` / `openclaw`.
+- API renames / protocol changes: `useInstallSkillArchives` (was `useInstallSkillsFromZip`), the entire `useImportExport` suite rewritten against the Web hook API (`selectImportUpload(File)`, `importConfigFromUpload`, `downloadConfigExport` returning `{blob, fileName}`), `updateProvider` payload shape, local web port `8788 → 8890`.
+- UI / behavior diffs: virtualized lists asserted via `getByRole("heading")` instead of `getAllByText` length, the dual-rendered "selected N" counter switched to `getAllByText`, `EditProviderDialog onSubmit` aligned to `{ provider, originalId }`, `useTranslation` mocked to lock the i18n reference (preventing the init `useEffect` from re-running and clobbering `resetSettings`), App integration test marked `retry: 2`.
+- Two `it.skip` cases for flows that no longer exist in Web mode: `SettingsDialog` import-file dialog and the directory browse button (Web has no native file/directory picker; equivalent behavior is covered by `useImportExport` and `useDirectorySettings` unit tests).
+
+Backend `cargo test --lib --test-threads=1` still reports 775/775. Frontend `pnpm tsc` reports 0 errors.
 
 `0.5.0` is a routine dependency-bump + test-fixture repair release:
 

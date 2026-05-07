@@ -2,6 +2,48 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.5.1] - 2026-05-07
+
+仅工程侧补丁，无业务行为改动：vitest 测试矩阵从 0.4.0 基线 26 fail 收敛到 0 fail。
+
+### 测试夹具与 mock 修齐
+
+**类型 / 形状滞后**：
+
+- `tests/components/McpFormModal.test.tsx` apps 形状期望补 `hermes: false`（v0.3.0 引入第 6 个应用 hermes 时未同步）
+- `tests/hooks/useDirectorySettings.test.tsx` `resolvedDirs` 期望补 `openclaw` / `hermes` 两个 key
+- `tests/hooks/useSettings.test.tsx` `resetAllDirectories` 调用断言补 `openclawConfigDir` / `hermesConfigDir` 两个参数
+
+**API 改名 / 协议改动**：
+
+- `tests/components/UnifiedSkillsPanel.test.tsx` mock 把 `useInstallSkillsFromZip` 改成现行的 `useInstallSkillArchives`，并补 `useCheckSkillUpdates` / `useUpdateSkill` 两个组件用到但本测试不关心的 hook 最小返回值
+- `tests/hooks/useImportExport.test.tsx` + `useImportExport.extra.test.tsx` 整套按 Web hook 新 API 重写：`selectImportUpload(File)` 替代旧的 `openFileDialog`、`importConfigFromUpload(file)` 替代 `importConfigFromFile`、`downloadConfigExport(name)` 返回 `{blob, fileName}` 替代 `saveFileDialog + exportConfigToFile`，并加 `URL.createObjectURL` / `revokeObjectURL` stub 让 jsdom 25 能跑下载流程
+- `tests/hooks/useProviderActions.test.tsx` 断言 `updateProvider` mutation 透传 payload 改为 `{ provider, originalId }`，与 OpenCode/OpenClaw additive rename 链路一致
+- `tests/utils/webRuntimeClient.skills.test.ts` 端口 `8788` → `8890`
+
+**UI / 行为差异**：
+
+- `tests/components/SessionManagerPage.test.tsx` 删除会话搜索结果用 `getByRole heading` 替代 `getAllByText length === 2`（虚拟化列表在 jsdom 下不渲染行内文字）；「已选 N 项」改 `getAllByText`（toolbar + batch toolbar 两处都展示）
+- `tests/integration/App.test.tsx` 中 `EditProviderDialog` 的 `onSubmit` mock 与真实组件对齐成 `{ provider, originalId }` 形态，并加 `retry: 2` 容忍全套并发跑时 MSW 偶发抢占
+- `tests/hooks/useSettingsForm.test.tsx` mock `react-i18next.useTranslation` 锁定 `i18n` 引用，避免 hook re-render 时 `useTranslation` 返回新 i18n 引用导致初始化 useEffect 反复跑覆盖 `resetSettings` 的状态
+
+**Web 模式下已不适用（标记 `it.skip` 留 TODO 注释）**：
+
+- `tests/integration/SettingsDialog.test.tsx` 的 `imports configuration and triggers success callback` 端到端流：Web 端没有原生 file dialog，`selectImportFile()` 只 toast 提示，真实导入要走 `selectImportUpload(File)`，`useImportExport` 已经有等价单元覆盖
+- 同文件 `allows browsing and resetting directories`：`DirectorySettings` 的"浏览目录"按钮被 `allowBrowse` 守卫隐藏（Web 没有原生目录选择器），reset 行为有 `useDirectorySettings` 单元覆盖
+- 同文件 `loads default settings from MSW` 路径期望改为 msw 实际返回的 `/default/app`，不再是早期 Tauri 测试假定的 `/home/mock/.cc-switch`
+
+### 验证
+
+- 后端 `cargo test --lib --test-threads=1` 仍然 **775/775 全过**
+- 前端 `pnpm vitest run` **184 passed + 2 skipped = 186/186（0 fail）**，前后两次连跑稳定
+- 前端 `pnpm tsc --noEmit` 0 错误
+
+### 文档与版本
+
+- 仓库版本提升到 `0.5.1`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.5.1` 版本说明
+
 ## [0.5.0] - 2026-05-07
 
 例行依赖升级 + 测试夹具修复版。

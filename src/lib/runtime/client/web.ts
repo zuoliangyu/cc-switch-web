@@ -929,6 +929,37 @@ export async function getWebProxyTakeoverStatus(): Promise<ProxyTakeoverStatus> 
   }
 }
 
+export async function getWebClaudeDesktopStatus(): Promise<
+  import("@/types/claudeDesktop").ClaudeDesktopStatus
+> {
+  const { getDefaultClaudeDesktopStatus } = await import(
+    "@/types/claudeDesktop"
+  );
+  try {
+    return await requestJson("/api/claude-desktop/status");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load claude-desktop status from local service",
+      error,
+    );
+    return getDefaultClaudeDesktopStatus();
+  }
+}
+
+export async function getWebClaudeDesktopDefaultRoutes(): Promise<
+  import("@/types/claudeDesktop").ClaudeDesktopDefaultRoute[]
+> {
+  try {
+    return await requestJson("/api/claude-desktop/default-routes");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load claude-desktop default routes",
+      error,
+    );
+    return [];
+  }
+}
+
 export async function getWebProxyConfig(): Promise<ProxyConfig> {
   try {
     return await requestJson<ProxyConfig>("/api/proxy/config");

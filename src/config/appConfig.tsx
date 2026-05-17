@@ -17,6 +17,7 @@ export interface AppConfig {
 
 export const APP_IDS: AppId[] = [
   "claude",
+  "claude-desktop",
   "codex",
   "gemini",
   "opencode",

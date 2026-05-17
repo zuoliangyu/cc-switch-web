@@ -1,6 +1,8 @@
 # Web Parity — Claude Desktop 子系统移植实施计划
 
-> 状态：**计划草案，待审阅**。本文件只描述方案，未改任何代码。
+> 状态：**Phase 0–5 已实现并验证（0.7.0），Phase 6 收尾中**。后端子系统完整；
+> 延后项（OFFICIAL_SEEDS 依赖的 import 命令、935 行专属预设+富 routeId 表单、
+> 通用 proxy 改进）见 CHANGELOG 0.7.0「显式延后」。下文为原始方案，保留备查。
 > 对应上游：cc-switch `5bbd83f7~1 .. c460a404`（claude-desktop 全量，19 提交 / 98 文件 / +8544 −2315）。
 
 ## 1. 背景与关键发现

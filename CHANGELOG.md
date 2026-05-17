@@ -2,6 +2,27 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.7.0] - 2026-05-17
+
+移植上游 cc-switch 的 Claude Desktop 3P 子系统（C 类，分 6 阶段，每阶段独立 CI 等价验证）。
+
+### Claude Desktop 3P（后端完整 + 前端接入）
+
+- **Phase0 脚手架**：`AppId`(TS) / `AppType`(Rust，serde `rename="claude-desktop"`+alias) 新增 claude-desktop，收口前后端全部 `Record<AppId>`/`match` 站点
+- **Phase1 后端核心**：移植 cc-switch `claude_desktop_config.rs`（1561 行，唯一适配 `get_proxy_config`→`get_global_proxy_config`）；`provider.rs` 增 `ClaudeDesktopMode`/`ClaudeDesktopModelRoute` + `ProviderMeta` 两字段；`CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID` 常量
+- **Phase2 网关**：`/claude-desktop/v1/{models,messages}` 路由 + 每请求 Bearer token 鉴权；`handle_messages` 泛化为 `handle_messages_for_app`；forwarder 对 ClaudeDesktop 走 `map_proxy_request_model`（未知 route 报错，不兜底）
+- **Phase3 命令/状态**：`/api/claude-desktop/{status,default-routes}`（漂移检测：stale models / missing routes / proxy stopped / base url mismatch / missing token）
+- **Phase4/5 前端**：接入 web 既有 AppId 体系（非克隆 23 个 Tauri 组件）—— APP_IDS 启用、`claudeDesktop` 类型/api/runtime/`useClaudeDesktopStatus`(5s 轮询)、i18n × zh/en/ja；ProviderForm 经 claude 兜底支持 claude-desktop
+
+### 显式延后（架构分叉，非网关核心，单列后续）
+
+- `import_claude_desktop_providers_from_claude` 及通用 proxy 改进（model_mapper ONE_M、claude.rs GEMINI_API_KEY）—— 依赖 web 无的 OFFICIAL_SEEDS 子系统 / web 已独立实现
+- cc-switch 935 行 `claudeDesktopProviderPresets.ts`（baseUrl+modelRoutes 形态）与专属 routeId/proxy-mode 富表单 —— web 通用 ProviderForm 为 env 型，faithful 富 UI 作为后续
+
+### 验证
+
+各阶段 `cargo check --locked --bin`（CI 等价）+ `cargo test --lib` **789 passed/0 failed** + `tsc` 0 + vitest **184 passed/2 skipped**；收尾本地完整 Docker CI 模拟通过。
+
 ## [0.6.1] - 2026-05-17
 
 热修：0.6.0 推送后 Web CI 的 ubuntu job 在 `docker build` 阶段失败（仅工程，无业务改动）。

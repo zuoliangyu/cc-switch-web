@@ -402,5 +402,25 @@ pub(crate) fn import_opencode_providers_from_live_internal(
 }
 
 // ============================================================================
+// Claude Desktop 3P 命令（C-Phase3）
+// ============================================================================
+
+/// 获取 Claude Desktop 3P 状态（漂移信号：stale models / missing routes /
+/// proxy stopped / base url mismatch / missing token）。
+pub(crate) async fn get_claude_desktop_status_internal(
+    state: &AppState,
+) -> Result<crate::claude_desktop_config::ClaudeDesktopStatus, String> {
+    let proxy_running = state.proxy_service.is_running().await;
+    crate::claude_desktop_config::get_status(state.db.as_ref(), proxy_running)
+        .map_err(|e| e.to_string())
+}
+
+/// 获取 Claude Desktop proxy 模式的默认模型路由（唯一来源）。
+pub(crate) fn get_claude_desktop_default_routes_internal(
+) -> Vec<crate::claude_desktop_config::ClaudeDesktopDefaultRoute> {
+    crate::claude_desktop_config::default_proxy_routes()
+}
+
+// ============================================================================
 // OpenClaw 专属命令 → 已迁移至 commands/openclaw.rs
 // ============================================================================

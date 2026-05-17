@@ -2569,6 +2569,23 @@ async fn is_proxy_running(State(state): State<WebApiState>) -> Json<bool> {
     )
 }
 
+async fn get_claude_desktop_status(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::claude_desktop_config::ClaudeDesktopStatus>, ApiError> {
+    let status =
+        crate::commands::get_claude_desktop_status_internal(state.app_state.as_ref())
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!("failed to load claude-desktop status: {e}"))
+            })?;
+    Ok(Json(status))
+}
+
+async fn get_claude_desktop_default_routes(
+) -> Json<Vec<crate::claude_desktop_config::ClaudeDesktopDefaultRoute>> {
+    Json(crate::commands::get_claude_desktop_default_routes_internal())
+}
+
 async fn is_live_takeover_active(State(state): State<WebApiState>) -> Result<Json<bool>, ApiError> {
     let active = crate::commands::is_live_takeover_active_internal(state.app_state.as_ref())
         .await
@@ -3512,6 +3529,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_proxy_config_for_app).put(update_proxy_config_for_app),
         )
         .route("/api/proxy/running", get(is_proxy_running))
+        .route(
+            "/api/claude-desktop/status",
+            get(get_claude_desktop_status),
+        )
+        .route(
+            "/api/claude-desktop/default-routes",
+            get(get_claude_desktop_default_routes),
+        )
         .route(
             "/api/proxy/live-takeover-active",
             get(is_live_takeover_active),

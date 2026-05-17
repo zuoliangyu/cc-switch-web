@@ -38,6 +38,13 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-warm",
     badgeClass: "theme-chip-warm border-0 gap-1.5",
   },
+  // C-Phase0 脚手架：claude-desktop 目标已建型，但未加入 APP_IDS（UI 暂不暴露）
+  "claude-desktop": {
+    label: "Claude Desktop",
+    icon: <ClaudeIcon size={14} />,
+    activeClass: "theme-chip-warm",
+    badgeClass: "theme-chip-warm border-0 gap-1.5",
+  },
   codex: {
     label: "Codex",
     icon: <CodexIcon size={14} />,

@@ -202,6 +202,7 @@ export type ClaudeApiKeyField = "ANTHROPIC_AUTH_TOKEN" | "ANTHROPIC_API_KEY";
 // 主页面显示的应用配置
 export interface VisibleApps {
   claude: boolean;
+  "claude-desktop": boolean;
   codex: boolean;
   gemini: boolean;
   opencode: boolean;
@@ -360,6 +361,7 @@ export interface McpServerSpec {
 // v3.7.0: MCP 服务器应用启用状态
 export interface McpApps {
   claude: boolean;
+  "claude-desktop": boolean;
   codex: boolean;
   gemini: boolean;
   opencode: boolean;

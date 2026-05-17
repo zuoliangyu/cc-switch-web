@@ -382,6 +382,12 @@ impl ProxyService {
     /// 这样代理才能从数据库读取到正确的认证信息。
     async fn sync_live_to_provider(&self, app_type: &AppType) -> Result<(), String> {
         let live_config = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => self.read_claude_live()?,
             AppType::Codex => self.read_codex_live()?,
             AppType::Gemini => self.read_gemini_live()?,
@@ -405,6 +411,12 @@ impl ProxyService {
         live_config: &Value,
     ) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 let provider_id =
                     crate::settings::get_effective_current_provider(&self.db, &AppType::Claude)
@@ -685,6 +697,12 @@ impl ProxyService {
     /// 备份指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
     async fn backup_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
         let (app_type_str, config) = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => ("claude", self.read_claude_live()?),
             AppType::Codex => ("codex", self.read_codex_live()?),
             AppType::Gemini => ("gemini", self.read_gemini_live()?),
@@ -737,6 +755,12 @@ impl ProxyService {
         let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
 
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 let mut live_config = self.read_claude_live()?;
                 if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
@@ -828,6 +852,12 @@ impl ProxyService {
         let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
 
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 if let Ok(mut live_config) = self.read_claude_live() {
                     if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
@@ -915,6 +945,12 @@ impl ProxyService {
     /// 恢复指定应用的 Live 配置（若无备份则不做任何操作）
     async fn restore_live_config_for_app(&self, app_type: &AppType) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 if let Ok(Some(backup)) = self.db.get_live_backup("claude").await {
                     let config: Value = serde_json::from_str(&backup.original_config)
@@ -1021,6 +1057,10 @@ impl ProxyService {
 
     fn write_live_config_for_app(&self, app_type: &AppType, config: &Value) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                Err("claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string())
+            }
             AppType::Claude => self.write_claude_live(config),
             AppType::Codex => self.write_codex_live(config),
             AppType::Gemini => self.write_gemini_live(config),
@@ -1037,6 +1077,8 @@ impl ProxyService {
 
     pub fn detect_takeover_in_live_config_for_app(&self, app_type: &AppType) -> bool {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现，无接管
+            AppType::ClaudeDesktop => false,
             AppType::Claude => match self.read_claude_live() {
                 Ok(config) => Self::is_claude_live_taken_over(&config),
                 Err(_) => false,
@@ -1093,6 +1135,8 @@ impl ProxyService {
         app_type: &AppType,
     ) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 无接管占位符可清理
+            AppType::ClaudeDesktop => Ok(()),
             AppType::Claude => self.cleanup_claude_takeover_placeholders_in_live(),
             AppType::Codex => self.cleanup_codex_takeover_placeholders_in_live(),
             AppType::Gemini => self.cleanup_gemini_takeover_placeholders_in_live(),
@@ -1299,6 +1343,12 @@ impl ProxyService {
         }
 
         let backup_json = match app_type_enum {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => serde_json::to_string(&effective_settings)
                 .map_err(|e| format!("序列化 Claude 配置失败: {e}"))?,
             AppType::Codex => serde_json::to_string(&effective_settings)

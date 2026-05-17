@@ -153,6 +153,7 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   const visibleApps: VisibleApps = settingsData?.visibleApps ?? {
     claude: true,
+    "claude-desktop": false,
     codex: true,
     gemini: true,
     opencode: true,

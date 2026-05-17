@@ -430,6 +430,7 @@ type = "stdio"
     expect(entry.id).toBe("no-apps");
     expect(entry.apps).toEqual({
       claude: false,
+      "claude-desktop": false,
       codex: false,
       gemini: false,
       opencode: false,

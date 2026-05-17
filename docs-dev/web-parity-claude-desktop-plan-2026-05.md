@@ -42,11 +42,15 @@ UX/修复链（依赖骨架，可后置）：
 
 ## 4. 分阶段方案
 
-### Phase 0 — 脚手架与类型（低风险，~0.5–1 天）
-- 扩 `AppId` 联合 + `AppType` 枚举 + `APP_IDS` + `appConfig.tsx` 增 `claude-desktop`
-- 补齐所有 `Record<AppId,…>` 缺口（靠 `tsc` 全量定位）
-- 仅放空壳/feature flag，UI 暂不暴露
-- 验证门槛：`tsc --noEmit` 0、`cargo check` 通过、vitest 不回归
+### Phase 0 — 脚手架与类型（低风险，~0.5–1 天）✅ 已完成 2026-05-17
+- 扩 `AppId`（TS 联合，新增 `"claude-desktop"`）+ `AppType`（Rust 枚举 `ClaudeDesktop`，serde `rename="claude-desktop"` + alias）
+- `appConfig.tsx` `APP_ICON_MAP` 增 `claude-desktop`（Claude 同款图标/chip）；**不进 `APP_IDS`/`MCP_SKILLS_APP_IDS`**，UI 不暴露；`visibleApps`/`ProxyTakeoverStatus` 默认 `false`
+- 收口全部 `Record<AppId,…>`/exhaustive 站点（前端 ~15 处 + 测试夹具）；后端 ~30 处 `match AppType`（含 `#[cfg(test)]`）
+  - 运行时路径：返回显式「claude-desktop 运行时尚未实现（C-Phase0 脚手架）」错误或 `unreachable!`
+  - 结构/同族路径（prompt 文件 CLAUDE.md、proxy adapter、common-config、skills 目录等）：与 `AppType::Claude` 合并分支（Claude-family，Phase 0 下不可达）
+  - MCP/Skills：按 OpenClaw 既有「不支持」先例处理（false/skip）
+- 验证门槛全过：`tsc --noEmit` 0；vitest 184 passed/2 skipped；`cargo test --lib` 776 passed/0 failed；`cargo check` 干净
+- 修复 1 处测试基线回归：`McpFormModal.test.tsx` apps 形状补 `"claude-desktop": false`
 - **产出可独立合并**，后续阶段在其上叠加
 
 ### Phase 1 — 后端核心模块（中风险，~2–3 天）

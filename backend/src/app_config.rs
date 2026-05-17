@@ -31,6 +31,7 @@ impl McpApps {
             AppType::Gemini => self.gemini,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
+            AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 MCP
         }
     }
 
@@ -42,6 +43,7 @@ impl McpApps {
             AppType::Gemini => self.gemini = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
+            AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 MCP
         }
     }
 
@@ -89,6 +91,7 @@ impl SkillApps {
             AppType::Gemini => self.gemini,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support Skills
+            AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
 
@@ -100,6 +103,7 @@ impl SkillApps {
             AppType::Gemini => self.gemini = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support Skills, ignore
+            AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
 
@@ -300,6 +304,13 @@ use crate::prompt_files::prompt_file_path;
 #[serde(rename_all = "lowercase")]
 pub enum AppType {
     Claude,
+    // C-Phase0 脚手架：claude-desktop 应用目标已建型，运行时尚未实现（不进 all()）
+    #[serde(
+        rename = "claude-desktop",
+        alias = "claude_desktop",
+        alias = "claudeDesktop"
+    )]
+    ClaudeDesktop,
     Codex,
     Gemini,
     OpenCode,
@@ -310,6 +321,7 @@ impl AppType {
     pub fn as_str(&self) -> &str {
         match self {
             AppType::Claude => "claude",
+            AppType::ClaudeDesktop => "claude-desktop",
             AppType::Codex => "codex",
             AppType::Gemini => "gemini",
             AppType::OpenCode => "opencode",
@@ -676,7 +688,8 @@ impl MultiAppConfig {
 
         // 插入到对应的应用配置中
         let prompts = match app {
-            AppType::Claude => &mut config.prompts.claude.prompts,
+            // C-Phase0：claude-desktop 为 Claude 同族，复用 Claude prompts（测试辅助）
+            AppType::Claude | AppType::ClaudeDesktop => &mut config.prompts.claude.prompts,
             AppType::Codex => &mut config.prompts.codex.prompts,
             AppType::Gemini => &mut config.prompts.gemini.prompts,
             AppType::OpenCode => &mut config.prompts.opencode.prompts,
@@ -722,6 +735,7 @@ impl MultiAppConfig {
                 AppType::Gemini => &self.mcp.gemini.servers,
                 AppType::OpenCode => &self.mcp.opencode.servers,
                 AppType::OpenClaw => continue, // OpenClaw MCP is still in development, skip
+                AppType::ClaudeDesktop => continue, // C-Phase0：claude-desktop 暂不支持 MCP
             };
 
             for (id, entry) in old_servers {

@@ -233,6 +233,10 @@ impl StreamCheckService {
         let test_prompt = &config.test_prompt;
 
         let result = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现（Phase 0 下不可达）
+            AppType::ClaudeDesktop => {
+                unreachable!("claude-desktop 运行时尚未实现（C-Phase0 脚手架）")
+            }
             AppType::Claude => {
                 Self::check_claude_stream(
                     &client,
@@ -1162,8 +1166,10 @@ impl StreamCheckService {
         config: &StreamCheckConfig,
     ) -> String {
         match app_type {
-            AppType::Claude => Self::extract_env_model(provider, "ANTHROPIC_MODEL")
-                .unwrap_or_else(|| config.claude_model.clone()),
+            AppType::Claude | AppType::ClaudeDesktop => {
+                Self::extract_env_model(provider, "ANTHROPIC_MODEL")
+                    .unwrap_or_else(|| config.claude_model.clone())
+            }
             AppType::Codex => {
                 Self::extract_codex_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }

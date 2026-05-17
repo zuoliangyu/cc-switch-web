@@ -97,7 +97,8 @@ impl ProviderType {
     /// 根据配置中的 base_url、auth_mode、api_key 格式等信息推断具体的供应商类型
     pub fn from_app_type_and_config(app_type: &AppType, provider: &Provider) -> Self {
         match app_type {
-            AppType::Claude => {
+            // C-Phase0：claude-desktop 为 Claude 同族，推断逻辑复用 Claude
+            AppType::Claude | AppType::ClaudeDesktop => {
                 if get_claude_api_format(provider) == "gemini_native" {
                     let adapter = ClaudeAdapter::new();
                     return match adapter.extract_auth(provider).map(|auth| auth.strategy) {
@@ -225,7 +226,7 @@ impl std::str::FromStr for ProviderType {
 /// 根据 AppType 获取对应的适配器
 pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
     match app_type {
-        AppType::Claude => Box::new(ClaudeAdapter::new()),
+        AppType::Claude | AppType::ClaudeDesktop => Box::new(ClaudeAdapter::new()),
         AppType::Codex => Box::new(CodexAdapter::new()),
         AppType::Gemini => Box::new(GeminiAdapter::new()),
         AppType::OpenCode => {

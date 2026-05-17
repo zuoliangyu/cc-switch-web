@@ -228,6 +228,7 @@ const mergeMcpApps = (apps: string | undefined) => {
 
   return {
     claude: targets.includes("claude"),
+    "claude-desktop": targets.includes("claude-desktop"),
     codex: targets.includes("codex"),
     gemini: targets.includes("gemini"),
     opencode: targets.includes("opencode"),
@@ -264,6 +265,9 @@ const importMcp = async (
             ...current,
             apps: {
               claude: current.apps.claude || targetApps.claude,
+              "claude-desktop":
+                current.apps["claude-desktop"] ||
+                targetApps["claude-desktop"],
               codex: current.apps.codex || targetApps.codex,
               gemini: current.apps.gemini || targetApps.gemini,
               opencode: current.apps.opencode || targetApps.opencode,

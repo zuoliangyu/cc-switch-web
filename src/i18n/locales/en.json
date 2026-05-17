@@ -826,12 +826,20 @@
       "x-code": "XCodeAPI offers a special bonus for CC Switch users — register via this link and get 10% extra credit on your first order (contact admin to claim)",
       "ctok": "Join the CTok community on the official website and subscribe to a plan.",
       "ddshub": "DDSHub offers a special bonus for CC Switch users — register via this link and get 10% extra credit on your first top-up (contact group admin to claim)!",
+      "patewayai": "PatewayAI offers special benefits for CC Switch users. Register via this link to receive $3 credit.",
+      "claudeapi": "ClaudeAPI offers special benefits for CC Switch users. Register via this link to claim test credits.",
+      "claudecn": "ClaudeCN is an enterprise-grade AI gateway operated by a registered company, supporting enterprise procurement processes with corporate payments, contracts, and compliance guarantees.",
+      "runapi": "RunAPI offers special benefits for CC Switch users. Register via this link and contact customer support to claim ¥14 free credit.",
+      "volcengine_agentplan": "Volcengine Ark Agent Plan offers exclusive benefits for CC Switch users: subscribe via this link, starting from ¥40/month for new customers.",
+      "byteplus": "Register via this link to get 500,000 tokens of free inference quota per model.",
+      "doubaoseed": "DouBao offers exclusive benefits for CC Switch users: register via this link to get 500K tokens of inference credits for all DouBao text models and 5M tokens of free Seedance 2.0 credits.",
       "lionccapi": "LionCCAPI offers exclusive benefits for CC Switch users. After registration, add WeChat HSQBJ088888888 and mention 'cc-switch' to receive $10 free credits!",
       "shengsuanyun": "Shengsuanyun offers exclusive benefits for CC Switch users. New users who register via this link get ¥10 free credits and 10% bonus on first top-up!",
       "lemondata": "Lemon Code offers a special promotion for CC Switch users. Sign up via this link to receive $1 in free credits."
     },
     "presets": {
       "ucloud": "Compshare",
+      "ucloudCoding": "Compshare Coding Plan",
       "shengsuanyun": "Shengsuanyun"
     },
     "parameterConfig": "Parameter Config - {{name}} *",
@@ -2125,6 +2133,8 @@
     "error": "{{providerName}} check error: {{error}}",
     "modelNotFound": "{{providerName}} test model {{model}} does not exist or has been deprecated",
     "modelNotFoundHint": "This model may have been retired by the provider. Update the default test model in \"Model Test Config\".",
+    "quotaExceeded": "{{providerName}} Coding Plan quota has been exceeded",
+    "quotaExceededHint": "Baidu Qianfan returned a Coding Plan quota-limit error. Wait for the 5-hour, weekly, or monthly quota refresh, or adjust the plan in the Qianfan console.",
     "httpHint": {
       "400": "Provider rejected request format. Health check probe may differ from actual usage.",
       "401": "API key may be invalid, or provider uses OAuth auth. Check failure doesn't mean it's unusable.",

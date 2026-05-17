@@ -2,6 +2,35 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.6.0] - 2026-05-17
+
+同步上游 cc-switch `2026-04-24 .. 2026-05-16` 积压的 preset 改动（A 类纯预设、B 类需判断项），按"对 Web 后端有直接价值且 runtime 适用"筛过后落地；不含 claude-desktop 整子系统（C 类，另见计划文档）。
+
+### A 类 — 上游预设同步
+
+- **域名/链接迁移**：Micu/米醋 全面迁到 `www.micuapi.ai`（websiteUrl/apiKeyUrl/baseUrl/endpointCandidates，对应上游 `cb45c22b`），openclaw/opencode 模型同步升 `claude-opus-4-7`；邀请链接 `aff` 参数按运营要求改为 `cODn`（Web 专属，上游仍 `aOYQ`）
+- **endpoint/链接更新**：Kimi 官网 `/coding/docs/` → `/code/docs/`（`bcf8434c`）；CrazyRouter API 切 `cn.` 子域名（`8dabb9fa`）；DouBaoSeed 改 console 直达链接 + `api/compatible` + 设为合作方（`a0131c9a`）
+- **DeepSeek 切 V4**：`deepseek-chat`/`deepseek-reasoner` → `deepseek-v4-pro`/`deepseek-v4-flash`，含 1M 上下文与新定价（`b1f9ce46`）
+- **移除 DDSHub 合作方**：claude/codex 预设块整体移除（`99304ffc`），i18n/图标孤儿项保留与上游该提交一致
+- **新增预设**：PatewayAI / ClaudeAPI / ClaudeCN / RunAPI / RelaxyCode / 火山Agentplan / BytePlus，按上游各提交触及的文件落到 claude/codex/openclaw/opencode（`08cd5ab5` `df11df4d` `d6bbbf72` `18ffddbf` `3fd38b0a` `58cd5302` `d94eb672` `9050442b`）；web 无 claudeDesktop/hermes preset 文件，相应部分跳过
+- **i18n**：新增 7 个合作方促销文案 × zh/en/ja
+
+### B 类 — 需判断项
+
+- **compshare Coding Plan**：claude/codex/openclaw 新增独立预设（`cp.compshare.cn`，与既有 Compshare `api.modelverse.cn` 区分），复用 ucloud 图标/促销 key，新增 `providerForm.presets.ucloudCoding` i18n（`08e2b29b`）
+- **百度千帆 Coding Plan**：claude 新增预设；`useStreamCheck` 与后端 `stream_check.rs` 新增千帆 Coding Plan 额度超额（5h/周/月）检测与 `quotaExceeded` 提示 + 单测；i18n × zh/en/ja（`db66348f`）
+- **预设按数组顺序渲染**：`ProviderPresetSelector`/`ProviderForm` 去掉 category 分组，数组位置成为展示顺序唯一来源；PatewayAI/火山Agentplan/BytePlus/DouBaoSeed 移到 Shengsuanyun 之后（claude/codex/openclaw/opencode）（`ec8afd63`）
+- **图标资源**：7 个 raster 图标接入 web 自有 `src/icons/local.ts` 机制（`src/assets/icons/`），非上游 extracted/iconUrls 体系
+
+### 文档
+
+- README（zh/en/ja）重构：用户使用在前、开发在后；顶部逐版 changelog 折叠为指向 `CHANGELOG.md` 的一行
+- 新增 `docs-dev/web-parity-claude-desktop-plan-2026-05.md`：C 类（claude-desktop 整子系统，~8500 行 Tauri→Axum）分阶段实施计划
+
+### 验证
+
+`pnpm tsc` 0 错误；vitest 184 passed + 2 skipped（31 文件全过）；`vite build` 通过；后端新增 `stream_check` 千帆单测。
+
 ## [0.5.1] - 2026-05-07
 
 仅工程侧补丁，无业务行为改动：vitest 测试矩阵从 0.4.0 基线 26 fail 收敛到 0 fail。

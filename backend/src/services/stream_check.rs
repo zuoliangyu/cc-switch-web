@@ -742,6 +742,15 @@ impl StreamCheckService {
         }
 
         let lower = body.to_lowercase();
+        let qianfan_quota_indicators = [
+            "coding_plan_hour_quota_exceeded",
+            "coding_plan_week_quota_exceeded",
+            "coding_plan_month_quota_exceeded",
+        ];
+        if qianfan_quota_indicators.iter().any(|s| lower.contains(s)) {
+            return Some("quotaExceeded");
+        }
+
         if !lower.contains("model") {
             return None;
         }
@@ -1458,6 +1467,22 @@ mod tests {
             StreamCheckService::detect_error_category(404, generic_404),
             None
         );
+    }
+
+    #[test]
+    fn test_detect_qianfan_coding_plan_quota_errors() {
+        let cases = [
+            r#"{"error":{"code":"coding_plan_hour_quota_exceeded","message":"hour quota exceeded"}}"#,
+            r#"{"error":{"code":"coding_plan_week_quota_exceeded","message":"week quota exceeded"}}"#,
+            r#"{"error":{"code":"coding_plan_month_quota_exceeded","message":"month quota exceeded"}}"#,
+        ];
+
+        for body in cases {
+            assert_eq!(
+                StreamCheckService::detect_error_category(429, body),
+                Some("quotaExceeded")
+            );
+        }
     }
 
     #[test]

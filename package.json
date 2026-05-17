@@ -1,8 +1,9 @@
 {
   "name": "cc-switch-web",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "CC Switch Web branch with local Rust service and browser UI",
   "type": "module",
+  "packageManager": "pnpm@10.20.0",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",

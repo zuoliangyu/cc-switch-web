@@ -2,6 +2,19 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.6.1] - 2026-05-17
+
+热修：0.6.0 推送后 Web CI 的 ubuntu job 在 `docker build` 阶段失败（仅工程，无业务改动）。
+
+### 修复
+
+- **Docker 构建 pnpm 版本漂移**：Dockerfile `corepack enable` 后无 `packageManager` 锁定，corepack 拉取最新 pnpm 11.x，其依赖 Node 22 才有的 `node:sqlite`，而 `frontend-builder` 基于 `node:20-bookworm`，导致 `pnpm install --frozen-lockfile` 报 `ERR_UNKNOWN_BUILTIN_MODULE`。`package.json` 增加 `"packageManager": "pnpm@10.20.0"` 锁定（与本地一致、兼容 Node 20）。windows/macos job 不跑 docker 故未受影响。
+- 本地完整 CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证通过。
+
+### 工程约定
+
+- 新增项目 `CLAUDE.md`：确立铁律——**每次 `git push` 前必须本地跑一遍 Docker CI 模拟**（本地单测覆盖不到 ubuntu 的 docker 链路），并锁定 pnpm/Node 工具链三处同步。
+
 ## [0.6.0] - 2026-05-17
 
 同步上游 cc-switch `2026-04-24 .. 2026-05-16` 积压的 preset 改动（A 类纯预设、B 类需判断项），按"对 Web 后端有直接价值且 runtime 适用"筛过后落地；不含 claude-desktop 整子系统（C 类，另见计划文档）。

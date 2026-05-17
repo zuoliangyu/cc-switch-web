@@ -47,6 +47,9 @@ use std::sync::Mutex;
 /// 每次修改表结构时递增，并在 schema.rs 中添加相应的迁移逻辑
 pub(crate) const SCHEMA_VERSION: i32 = 10;
 
+/// Claude Desktop 官方预设供应商 ID（恢复官方配置时识别用）
+pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
+
 /// 安全地序列化 JSON，避免 unwrap panic
 pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError> {
     serde_json::to_string(value)

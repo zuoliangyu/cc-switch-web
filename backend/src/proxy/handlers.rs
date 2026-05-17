@@ -59,7 +59,7 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
 // Claude API 处理器（包含格式转换逻辑）
 // ============================================================================
 
-/// 处理 /v1/messages 请求（Claude API）
+/// 处理 /v1/messages 请求（Claude API）—— 薄包装，复用通用实现
 ///
 /// Claude 处理器包含独特的格式转换逻辑：
 /// - 过去用于 OpenRouter 的 OpenAI Chat Completions 兼容接口（Anthropic ↔ OpenAI 转换）
@@ -67,6 +67,80 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
 pub async fn handle_messages(
     State(state): State<ProxyState>,
     request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    handle_messages_for_app(state, request, AppType::Claude, "Claude", "claude", None).await
+}
+
+/// Claude Desktop 3P 本地 gateway：`POST /claude-desktop/v1/messages`
+pub async fn handle_claude_desktop_messages(
+    State(state): State<ProxyState>,
+    request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    validate_claude_desktop_gateway_auth(&state, request.headers())?;
+    handle_messages_for_app(
+        state,
+        request,
+        AppType::ClaudeDesktop,
+        "Claude Desktop",
+        "claude-desktop",
+        Some("/claude-desktop"),
+    )
+    .await
+}
+
+/// Claude Desktop 3P 本地 gateway：`GET /claude-desktop/v1/models`
+pub async fn handle_claude_desktop_models(
+    State(state): State<ProxyState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, ProxyError> {
+    validate_claude_desktop_gateway_auth(&state, &headers)?;
+    let providers = state
+        .provider_router
+        .select_providers("claude-desktop")
+        .await
+        .map_err(|e| ProxyError::DatabaseError(e.to_string()))?;
+    let provider = providers.first().ok_or(ProxyError::NoAvailableProvider)?;
+    let response = crate::claude_desktop_config::model_list_response(provider)
+        .map_err(|e| ProxyError::ConfigError(e.to_string()))?;
+    Ok(Json(response))
+}
+
+/// 校验 Claude Desktop 本地 gateway 的 Bearer token（每请求验证）。
+fn validate_claude_desktop_gateway_auth(
+    state: &ProxyState,
+    headers: &axum::http::HeaderMap,
+) -> Result<(), ProxyError> {
+    let expected = crate::claude_desktop_config::get_or_create_gateway_token(state.db.as_ref())
+        .map_err(|e| ProxyError::AuthError(e.to_string()))?;
+    let Some(value) = headers.get(axum::http::header::AUTHORIZATION) else {
+        return Err(ProxyError::AuthError(
+            "Claude Desktop gateway 缺少 Authorization 头".to_string(),
+        ));
+    };
+    let value = value
+        .to_str()
+        .map_err(|_| ProxyError::AuthError("Authorization 头格式无效".to_string()))?;
+    let token = value
+        .strip_prefix("Bearer ")
+        .or_else(|| value.strip_prefix("bearer "))
+        .unwrap_or("")
+        .trim();
+    if token != expected {
+        return Err(ProxyError::AuthError(
+            "Claude Desktop gateway token 无效".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// `/v1/messages` 通用实现（Claude 与 Claude Desktop 共用）
+async fn handle_messages_for_app(
+    state: ProxyState,
+    request: axum::extract::Request,
+    app_type: AppType,
+    tag: &'static str,
+    app_type_str: &'static str,
+    strip_prefix: Option<&'static str>,
 ) -> Result<axum::response::Response, ProxyError> {
     let (parts, body) = request.into_parts();
     let uri = parts.uri;
@@ -81,12 +155,16 @@ pub async fn handle_messages(
         .map_err(|e| ProxyError::Internal(format!("Failed to parse request body: {e}")))?;
 
     let mut ctx =
-        RequestContext::new(&state, &body, &headers, AppType::Claude, "Claude", "claude").await?;
+        RequestContext::new(&state, &body, &headers, app_type.clone(), tag, app_type_str).await?;
 
-    let endpoint = uri
+    let raw_endpoint = uri
         .path_and_query()
         .map(|path_and_query| path_and_query.as_str())
         .unwrap_or(uri.path());
+    // Claude Desktop gateway 走 /claude-desktop 前缀，转发到上游前需剥离。
+    let endpoint = strip_prefix
+        .and_then(|prefix| raw_endpoint.strip_prefix(prefix))
+        .unwrap_or(raw_endpoint);
 
     let is_stream = body
         .get("stream")
@@ -97,7 +175,7 @@ pub async fn handle_messages(
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
         .forward_with_retry(
-            &AppType::Claude,
+            &app_type,
             endpoint,
             body.clone(),
             headers,
@@ -125,7 +203,7 @@ pub async fn handle_messages(
     let response = result.response;
 
     // 检查是否需要格式转换（OpenRouter 等中转服务）
-    let adapter = get_adapter(&AppType::Claude);
+    let adapter = get_adapter(&app_type);
     let needs_transform = adapter.needs_transform(&ctx.provider);
 
     // Claude 特有：格式转换处理

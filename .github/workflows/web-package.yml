@@ -35,11 +35,6 @@ jobs:
             artifact_name: cc-switch-web-linux-arm64
             archive_name: cc-switch-web-linux-arm64.tar.gz
             platform: linux/arm64
-          - name: linux-armv7
-            os: ubuntu-latest
-            artifact_name: cc-switch-web-linux-armv7
-            archive_name: cc-switch-web-linux-armv7.tar.gz
-            platform: linux/arm/v7
           - name: macos-universal
             os: macos-14
             artifact_name: cc-switch-web-macos-universal

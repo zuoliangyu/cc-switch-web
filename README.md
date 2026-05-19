@@ -287,29 +287,27 @@ release/docker-linux/cc-switch-web-linux-x64/
 
 #### ARM / 嵌入式开发板
 
-如果目标是 ARM 开发板（如树莓派、RK35xx、各类 Allwinner 板等），可通过
-`--platform` 指定架构交叉导出（首次需要本机有 `binfmt`/QEMU 支持，
-GitHub Actions runner 已内置；本机可执行
+如果目标是 64 位 ARM 开发板（aarch64 / arm64，如树莓派 3/4/5 的 64 位系统、
+RK35xx、各类 Allwinner 板等），可通过 `--platform` 交叉导出（QEMU 原生编译，
+首次需本机有 binfmt/QEMU，GitHub Actions runner 已内置；本机可执行
 `docker run --privileged --rm tonistiigi/binfmt --install all` 启用）：
 
 ```bash
-# aarch64 / arm64（64 位，绝大多数现代开发板）
 docker buildx build --platform linux/arm64 --target package-linux-tar \
   --output type=local,dest=release/docker-linux .
 # -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
-
-# armv7（32 位 hard-float，较老/低端板子）
-docker buildx build --platform linux/arm/v7 --target package-linux-tar \
-  --output type=local,dest=release/docker-linux .
-# -> release/docker-linux/cc-switch-web-linux-armv7.tar.gz
 ```
 
 打 `v*` tag 触发的 Web Package 发布流水线会自动产出
-`linux-x64` / `linux-arm64` / `linux-armv7` 三份 `tar.gz`。
+`linux-x64` / `linux-arm64` 两份 `tar.gz`。
+
+> 32 位 armv7 暂不提供：直接依赖 `rquickjs-sys` 未为
+> `armv7-unknown-linux-musleabihf` 预置 FFI 绑定，交叉编译需额外的
+> bindgen/libclang 链路，暂未纳入发布矩阵。
 
 当前导出的 Linux 二进制均为静态链接（musl）版本——x64 为
 `x86_64-unknown-linux-musl`，arm64 为 `aarch64-unknown-linux-musl`，
-armv7 为 `armv7-unknown-linux-musleabihf`，可尽量减少宿主机运行库差异导致的问题。
+可尽量减少宿主机运行库差异导致的问题。
 
 ### Windows 本地导出产物
 

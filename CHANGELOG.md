@@ -4,22 +4,26 @@
 
 ## [0.7.1] - 2026-05-19
 
-新增 Linux ARM 发布产物，面向嵌入式开发板（树莓派、RK35xx、Allwinner 等）。
+新增 Linux arm64 发布产物，面向 64 位嵌入式开发板（树莓派 64 位系统、RK35xx、Allwinner 等）。
 
 ### 新增
 
-- **Linux ARM 静态二进制**：Web Package 发布流水线（打 `v*` tag 触发）在原 `linux-x64` 之外新增 `linux-arm64`（`aarch64-unknown-linux-musl`）与 `linux-armv7`（`armv7-unknown-linux-musleabihf`）两份静态链接 `tar.gz`，与 x64 一致为单文件可执行、免宿主机运行库依赖。
-- `web-package.yml` Linux 矩阵新增 arm64/armv7 项，接入 `docker/setup-qemu-action` 并对 buildx 传 `--platform`。
+- **Linux arm64 静态二进制**：Web Package 发布流水线（打 `v*` tag 触发）在原 `linux-x64` 之外新增 `linux-arm64`（`aarch64-unknown-linux-musl`）静态链接 `tar.gz`，与 x64 一致为单文件可执行、免宿主机运行库依赖。
+- `web-package.yml` Linux 矩阵新增 arm64 项，接入 `docker/setup-qemu-action` 并对 buildx 传 `--platform`。
 
 ### 变更
 
-- **Dockerfile 按架构参数化**：`service-builder` 与打包阶段改为读取 BuildKit 自动注入的 `TARGETARCH`/`TARGETVARIANT`，按架构选择 Rust 目标三元组与产物标签；采用 QEMU 模拟原生编译，规避 musl 交叉工具链与 C 依赖交叉编译问题。`TARGETARCH` 为空/`amd64` 时行为与原先完全一致（x64 产物名、路径、CI 冒烟、docker-image 均不受影响）。
+- **Dockerfile 按架构参数化**：`service-builder` 与打包阶段改为读取 BuildKit 自动注入的 `TARGETARCH`/`TARGETVARIANT`，按架构选择 Rust 目标三元组与产物标签；x64/arm64 采用 QEMU 模拟原生编译（基于 `rust:alpine`），规避 musl 交叉工具链与 C 依赖交叉编译问题。`TARGETARCH` 为空/`amd64` 时行为与原先完全一致（x64 产物名、路径、CI 冒烟、docker-image 均不受影响）。
 - 最终运行镜像与打包阶段统一从 `/app/out/cc-switch-web` 取二进制（替代写死的 `x86_64-unknown-linux-musl` 路径）。
-- README 补充 ARM/嵌入式开发板的 `--platform` 交叉导出说明。
+- README 补充 ARM 开发板的 `--platform` 交叉导出说明。
+
+### 已知限制
+
+- **32 位 armv7 暂不提供**：直接依赖 `rquickjs-sys 0.8.1` 未为 `armv7-unknown-linux-musleabihf` 预置 FFI 绑定（alpine 亦无 `linux/arm/v7` 镜像），交叉编译需额外 bindgen/libclang 链路，暂未纳入发布矩阵；arm64 不受影响。
 
 ### 验证
 
-本地完整 Docker CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证 amd64 默认路径无回归。
+本地完整 Docker CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证 amd64 默认路径无回归；arm64 由 tag 触发的 Web Package 流水线 QEMU 矩阵实际构建验证。
 
 ## [0.7.0] - 2026-05-17
 

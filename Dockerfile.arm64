@@ -1,0 +1,51 @@
+# arm64 (aarch64) static musl build.
+#
+# The main ./Dockerfile can produce arm64 via buildx --platform linux/arm64,
+# but that runs cargo under QEMU emulation, which on hosted CI runners is
+# impractically slow for this C-heavy Rust project (hours). Here we instead
+# cross-compile on the amd64 host using messense/rust-musl-cross, which ships
+# a preconfigured aarch64-unknown-linux-musl toolchain (no QEMU, minutes).
+# rquickjs-sys ships aarch64-unknown-linux-musl bindings, so no bindgen needed.
+# The result is still a fully static musl binary, consistent with linux-x64.
+#
+# Used only by the linux-arm64 leg of .github/workflows/web-package.yml
+# (target: package-linux-tar). x64 keeps using ./Dockerfile.
+
+FROM node:20-bookworm AS frontend-builder
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+RUN pnpm exec vite build
+
+
+FROM messense/rust-musl-cross:aarch64-musl AS service-builder
+
+WORKDIR /app
+
+COPY . .
+COPY --from=frontend-builder /app/dist ./dist
+
+RUN set -eux; \
+    cargo build --locked --release \
+      --target aarch64-unknown-linux-musl \
+      --manifest-path backend/Cargo.toml --bin cc-switch-web; \
+    mkdir -p /app/out; \
+    cp backend/target/aarch64-unknown-linux-musl/release/cc-switch-web /app/out/cc-switch-web
+
+
+FROM debian:bookworm-slim AS package-linux-tar
+
+WORKDIR /work
+
+COPY --from=service-builder /app/out/cc-switch-web cc-switch-web-linux-arm64/cc-switch-web
+
+RUN set -eux; \
+    chmod +x cc-switch-web-linux-arm64/cc-switch-web; \
+    mkdir -p /out; \
+    tar -czf /out/cc-switch-web-linux-arm64.tar.gz cc-switch-web-linux-arm64

@@ -9,13 +9,13 @@
 ### 新增
 
 - **Linux arm64 静态二进制**：Web Package 发布流水线（打 `v*` tag 触发）在原 `linux-x64` 之外新增 `linux-arm64`（`aarch64-unknown-linux-musl`）静态链接 `tar.gz`，与 x64 一致为单文件可执行、免宿主机运行库依赖。
-- `web-package.yml` Linux 矩阵新增 arm64 项，接入 `docker/setup-qemu-action` 并对 buildx 传 `--platform`。
+- 新增独立 `Dockerfile.arm64`：arm64 用 `messense/rust-musl-cross` 在 amd64 主机**交叉编译**（不走 QEMU），几分钟出包、发版时间可控；`rquickjs-sys` 有 aarch64-musl 预置绑定，无需 bindgen。`web-package.yml` Linux 矩阵新增 arm64 项（`-f Dockerfile.arm64`、不传 `--platform`）。
 
 ### 变更
 
-- **Dockerfile 按架构参数化**：`service-builder` 与打包阶段改为读取 BuildKit 自动注入的 `TARGETARCH`/`TARGETVARIANT`，按架构选择 Rust 目标三元组与产物标签；x64/arm64 采用 QEMU 模拟原生编译（基于 `rust:alpine`），规避 musl 交叉工具链与 C 依赖交叉编译问题。`TARGETARCH` 为空/`amd64` 时行为与原先完全一致（x64 产物名、路径、CI 冒烟、docker-image 均不受影响）。
+- **主 Dockerfile 按架构参数化**：`service-builder` 与打包阶段改为读取 BuildKit 自动注入的 `TARGETARCH`/`TARGETVARIANT`，按架构选择 Rust 目标三元组与产物标签；x64 走主 Dockerfile（官方 `rust:alpine`、原生 amd64）。`TARGETARCH` 为空/`amd64` 时行为与原先完全一致（x64 产物名、路径、CI 冒烟、docker-image 均不受影响）。
 - 最终运行镜像与打包阶段统一从 `/app/out/cc-switch-web` 取二进制（替代写死的 `x86_64-unknown-linux-musl` 路径）。
-- README 补充 ARM 开发板的 `--platform` 交叉导出说明。
+- README 补充 ARM 开发板（`Dockerfile.arm64` 交叉）导出说明。
 
 ### 已知限制
 
@@ -23,7 +23,7 @@
 
 ### 验证
 
-本地完整 Docker CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证 amd64 默认路径无回归；arm64 由 tag 触发的 Web Package 流水线 QEMU 矩阵实际构建验证。
+本地完整 Docker CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证 amd64 默认路径无回归；arm64 本地 `Dockerfile.arm64` 交叉构建验证通过后，由 tag 触发的 Web Package 流水线实际产出。
 
 ## [0.7.0] - 2026-05-17
 

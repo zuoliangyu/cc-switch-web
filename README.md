@@ -288,12 +288,12 @@ release/docker-linux/cc-switch-web-linux-x64/
 #### ARM / 嵌入式开发板
 
 如果目标是 64 位 ARM 开发板（aarch64 / arm64，如树莓派 3/4/5 的 64 位系统、
-RK35xx、各类 Allwinner 板等），可通过 `--platform` 交叉导出（QEMU 原生编译，
-首次需本机有 binfmt/QEMU，GitHub Actions runner 已内置；本机可执行
-`docker run --privileged --rm tonistiigi/binfmt --install all` 启用）：
+RK35xx、各类 Allwinner 板等），用单独的 `Dockerfile.arm64`
+（`messense/rust-musl-cross` 在 amd64 主机交叉编译，不走 QEMU，几分钟即可，
+无需 binfmt），不要传 `--platform`：
 
 ```bash
-docker buildx build --platform linux/arm64 --target package-linux-tar \
+docker buildx build -f Dockerfile.arm64 --target package-linux-tar \
   --output type=local,dest=release/docker-linux .
 # -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
 ```

@@ -29,12 +29,16 @@ jobs:
             os: ubuntu-latest
             artifact_name: cc-switch-web-linux-x64
             archive_name: cc-switch-web-linux-x64.tar.gz
+            dockerfile: Dockerfile
             platform: linux/amd64
+          # arm64 cross-compiles via Dockerfile.arm64 (messense/rust-musl-cross,
+          # no QEMU). Hosted-runner QEMU emulation is impractically slow here.
           - name: linux-arm64
             os: ubuntu-latest
             artifact_name: cc-switch-web-linux-arm64
             archive_name: cc-switch-web-linux-arm64.tar.gz
-            platform: linux/arm64
+            dockerfile: Dockerfile.arm64
+            platform: ""
           - name: macos-universal
             os: macos-14
             artifact_name: cc-switch-web-macos-universal
@@ -66,10 +70,6 @@ jobs:
       - name: Add macOS Rust targets
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-
-      - name: Setup QEMU
-        if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
         if: runner.os == 'Linux'
@@ -113,11 +113,14 @@ jobs:
           out_dir="$RUNNER_TEMP/linux-package"
           rm -rf "$out_dir"
           mkdir -p "$out_dir"
-          docker buildx build \
-            --platform "${{ matrix.platform }}" \
-            --target package-linux-tar \
-            --output "type=local,dest=$out_dir" \
-            .
+          build_args=(buildx build
+            --target package-linux-tar
+            --file "${{ matrix.dockerfile }}"
+            --output "type=local,dest=$out_dir")
+          if [ -n "${{ matrix.platform }}" ]; then
+            build_args+=(--platform "${{ matrix.platform }}")
+          fi
+          docker "${build_args[@]}" .
           archive_path="$out_dir/${{ matrix.archive_name }}"
           if [ ! -f "$archive_path" ]; then
             archive_path="$out_dir/out/${{ matrix.archive_name }}"

@@ -29,6 +29,17 @@ jobs:
             os: ubuntu-latest
             artifact_name: cc-switch-web-linux-x64
             archive_name: cc-switch-web-linux-x64.tar.gz
+            platform: linux/amd64
+          - name: linux-arm64
+            os: ubuntu-latest
+            artifact_name: cc-switch-web-linux-arm64
+            archive_name: cc-switch-web-linux-arm64.tar.gz
+            platform: linux/arm64
+          - name: linux-armv7
+            os: ubuntu-latest
+            artifact_name: cc-switch-web-linux-armv7
+            archive_name: cc-switch-web-linux-armv7.tar.gz
+            platform: linux/arm/v7
           - name: macos-universal
             os: macos-14
             artifact_name: cc-switch-web-macos-universal
@@ -60,6 +71,10 @@ jobs:
       - name: Add macOS Rust targets
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Setup QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
         if: runner.os == 'Linux'
@@ -104,6 +119,7 @@ jobs:
           rm -rf "$out_dir"
           mkdir -p "$out_dir"
           docker buildx build \
+            --platform "${{ matrix.platform }}" \
             --target package-linux-tar \
             --output "type=local,dest=$out_dir" \
             .

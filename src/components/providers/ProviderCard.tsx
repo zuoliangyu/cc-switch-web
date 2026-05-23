@@ -17,7 +17,11 @@ import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
 import { PROVIDER_TYPES } from "@/config/constants";
-import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import {
+  extractCodexBaseUrl,
+  extractCodexWireApi,
+  isCodexChatWireApi,
+} from "@/utils/providerConfigUtils";
 import { useProviderHealth } from "@/lib/query/failover";
 import { useUsageQuery } from "@/lib/query/queries";
 
@@ -182,6 +186,23 @@ export function ProviderCard({
   const isCodexOauth =
     provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH;
 
+  // 跟随上游 cc-switch 1c82b8a3：当 Codex 非官方 provider 走 Chat Completions
+  // 协议（apiFormat=openai_chat 或 TOML wire_api 是 chat 类）时，在卡片上挂"需要路由"徽标。
+  const codexNeedsRouting = useMemo(() => {
+    if (appId !== "codex" || provider.category === "official") return false;
+    if (provider.meta?.apiFormat === "openai_chat") return true;
+    const config = (provider.settingsConfig as Record<string, any>)?.config;
+    return (
+      typeof config === "string" &&
+      isCodexChatWireApi(extractCodexWireApi(config))
+    );
+  }, [
+    appId,
+    provider.category,
+    provider.meta?.apiFormat,
+    (provider.settingsConfig as Record<string, any>)?.config,
+  ]);
+
   // 获取用量数据以判断是否有多套餐
   // 累加模式应用（OpenCode/OpenClaw）：使用 isInConfig 代替 isCurrent
   const shouldAutoQuery =
@@ -334,6 +355,14 @@ export function ProviderCard({
                 failoverPriority && (
                   <FailoverPriorityBadge priority={failoverPriority} />
                 )}
+
+              {codexNeedsRouting && (
+                <span className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                  {t("codex.needsRouting", {
+                    defaultValue: "需要路由",
+                  })}
+                </span>
+              )}
 
               {provider.category === "third_party" && provider.meta?.isPartner && (
                 <span

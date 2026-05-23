@@ -66,7 +66,7 @@ Capabilities already available on the Web branch:
 
 ## Version
 
-The current repository version is `0.5.1`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
+The current repository version is `0.8.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
 
 This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
 

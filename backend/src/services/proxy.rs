@@ -37,6 +37,21 @@ const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 6] = [
     "ANTHROPIC_SMALL_FAST_MODEL",
 ];
 
+/// Claude Live 配置接管时的 token 注入策略（跟随上游 cc-switch 61e68d75）。
+///
+/// - `PreserveExistingOrAuthToken`：普通 API key 供应商。settings 里已有的
+///   token env 字段都替换成 PROXY_MANAGED；若一个都没有则补一个
+///   `ANTHROPIC_AUTH_TOKEN`。
+/// - `ManagedAccount`：托管账号供应商（GitHub Copilot / Codex OAuth）。
+///   先把已有的所有 token env 字段全部移除（这类供应商的真实 token 由代理在
+///   出站时通过 OAuth 注入到 `Authorization` 头），仅写入 `ANTHROPIC_API_KEY`
+///   作为客户端可见的占位符，避免客户端因为没有 token 而提示缺 key。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeTakeoverAuthPolicy {
+    PreserveExistingOrAuthToken,
+    ManagedAccount,
+}
+
 #[derive(Clone)]
 pub struct ProxyService {
     db: Arc<Database>,
@@ -750,33 +765,52 @@ impl ProxyService {
         Ok((proxy_url, proxy_codex_base_url))
     }
 
-    /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
-    async fn takeover_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
-        let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+    /// 根据 provider 类型自动选择 auth policy 并改写 Claude Live 配置。
+    ///
+    /// 跟随上游 cc-switch 61e68d75：托管账号供应商（GitHub Copilot / Codex OAuth）
+    /// 不应该在 settings 里留 `ANTHROPIC_AUTH_TOKEN` 这类 placeholder，否则
+    /// Claude Code 客户端的 auth header 选择顺序会优先用它，发到代理的请求
+    /// 就携带 `Bearer PROXY_MANAGED`，进而被 forwarder outbound guard 拒绝
+    /// 或最坏被原样转发到上游。
+    fn apply_claude_takeover_fields_for_provider(
+        live_config: &mut Value,
+        proxy_url: &str,
+        provider: &Provider,
+    ) {
+        let auth_policy = if provider.uses_managed_account_auth() {
+            ClaudeTakeoverAuthPolicy::ManagedAccount
+        } else {
+            ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken
+        };
 
-        match app_type {
-            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
-            AppType::ClaudeDesktop => {
-                return Err(
-                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
-                )
+        Self::apply_claude_takeover_fields_with_policy(live_config, proxy_url, auth_policy);
+    }
+
+    /// 真正改写 Claude Live 配置的核心：
+    /// - 设置 ANTHROPIC_BASE_URL → 本机代理
+    /// - 移除模型覆盖 env（CLAUDE_MODEL_OVERRIDE_ENV_KEYS）
+    /// - 按 policy 写 token 占位符
+    fn apply_claude_takeover_fields_with_policy(
+        live_config: &mut Value,
+        proxy_url: &str,
+        auth_policy: ClaudeTakeoverAuthPolicy,
+    ) {
+        let token_keys = [
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+        ];
+
+        if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
+            env.insert("ANTHROPIC_BASE_URL".to_string(), json!(proxy_url));
+            // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
+            for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
+                env.remove(key);
             }
-            AppType::Claude => {
-                let mut live_config = self.read_claude_live()?;
-                if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                    env.insert("ANTHROPIC_BASE_URL".to_string(), json!(&proxy_url));
-                    // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
-                    for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-                        env.remove(key);
-                    }
 
-                    let token_keys = [
-                        "ANTHROPIC_AUTH_TOKEN",
-                        "ANTHROPIC_API_KEY",
-                        "OPENROUTER_API_KEY",
-                        "OPENAI_API_KEY",
-                    ];
-
+            match auth_policy {
+                ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => {
                     let mut replaced_any = false;
                     for key in token_keys {
                         if env.contains_key(key) {
@@ -791,13 +825,69 @@ impl ProxyService {
                             json!(PROXY_TOKEN_PLACEHOLDER),
                         );
                     }
-                } else {
-                    live_config["env"] = json!({
-                        "ANTHROPIC_BASE_URL": &proxy_url,
-                        "ANTHROPIC_AUTH_TOKEN": PROXY_TOKEN_PLACEHOLDER
-                    });
                 }
+                ClaudeTakeoverAuthPolicy::ManagedAccount => {
+                    // 托管账号：彻底清掉历史 token env，仅写 ANTHROPIC_API_KEY 占位符。
+                    for key in token_keys {
+                        env.remove(key);
+                    }
+                    env.insert(
+                        "ANTHROPIC_API_KEY".to_string(),
+                        json!(PROXY_TOKEN_PLACEHOLDER),
+                    );
+                }
+            }
+        } else {
+            // 没有 env 字段：按 policy 选择占位符字段名建一个新的。
+            let token_key = match auth_policy {
+                ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => "ANTHROPIC_AUTH_TOKEN",
+                ClaudeTakeoverAuthPolicy::ManagedAccount => "ANTHROPIC_API_KEY",
+            };
+            live_config["env"] = json!({
+                "ANTHROPIC_BASE_URL": proxy_url,
+                token_key: PROXY_TOKEN_PLACEHOLDER,
+            });
+        }
+    }
 
+    /// 读取指定 AppType 当前生效的 provider（不存在则 Ok(None)）。
+    fn get_current_provider_for_app(&self, app_type: &AppType) -> Result<Option<Provider>, String> {
+        let Some(current_id) = crate::settings::get_effective_current_provider(&self.db, app_type)
+            .map_err(|e| format!("获取 {app_type:?} 当前供应商失败: {e}"))?
+        else {
+            return Ok(None);
+        };
+
+        self.db
+            .get_provider_by_id(&current_id, app_type.as_str())
+            .map_err(|e| format!("读取 {app_type:?} 当前供应商失败: {e}"))
+    }
+
+    /// 严格模式版本：当前 provider 不存在时返回 Err。
+    fn require_current_provider_for_app(&self, app_type: &AppType) -> Result<Provider, String> {
+        self.get_current_provider_for_app(app_type)?
+            .ok_or_else(|| format!("{app_type:?} 当前供应商不存在，无法接管 Live 配置"))
+    }
+
+    /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
+    async fn takeover_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
+        let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+
+        match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
+            AppType::Claude => {
+                let mut live_config = self.read_claude_live()?;
+                let claude_provider = self.require_current_provider_for_app(&AppType::Claude)?;
+                Self::apply_claude_takeover_fields_for_provider(
+                    &mut live_config,
+                    &proxy_url,
+                    &claude_provider,
+                );
                 self.write_claude_live(&live_config)?;
                 log::info!("Claude Live 配置已接管，代理地址: {proxy_url}");
             }
@@ -860,41 +950,25 @@ impl ProxyService {
             }
             AppType::Claude => {
                 if let Ok(mut live_config) = self.read_claude_live() {
-                    if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                        env.insert("ANTHROPIC_BASE_URL".to_string(), json!(&proxy_url));
-                        // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
-                        for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-                            env.remove(key);
-                        }
-
-                        let token_keys = [
-                            "ANTHROPIC_AUTH_TOKEN",
-                            "ANTHROPIC_API_KEY",
-                            "OPENROUTER_API_KEY",
-                            "OPENAI_API_KEY",
-                        ];
-
-                        let mut replaced_any = false;
-                        for key in token_keys {
-                            if env.contains_key(key) {
-                                env.insert(key.to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-                                replaced_any = true;
-                            }
-                        }
-
-                        if !replaced_any {
-                            env.insert(
-                                "ANTHROPIC_AUTH_TOKEN".to_string(),
-                                json!(PROXY_TOKEN_PLACEHOLDER),
-                            );
-                        }
+                    // best-effort：拿不到 current provider 时退回老 policy，
+                    // 保证不会因为状态异常把 Live 写成 ManagedAccount 模式。
+                    let claude_provider = self
+                        .get_current_provider_for_app(&AppType::Claude)
+                        .ok()
+                        .flatten();
+                    if let Some(provider) = claude_provider.as_ref() {
+                        Self::apply_claude_takeover_fields_for_provider(
+                            &mut live_config,
+                            &proxy_url,
+                            provider,
+                        );
                     } else {
-                        live_config["env"] = json!({
-                            "ANTHROPIC_BASE_URL": &proxy_url,
-                            "ANTHROPIC_AUTH_TOKEN": PROXY_TOKEN_PLACEHOLDER
-                        });
+                        Self::apply_claude_takeover_fields_with_policy(
+                            &mut live_config,
+                            &proxy_url,
+                            ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken,
+                        );
                     }
-
                     let _ = self.write_claude_live(&live_config);
                 }
             }

@@ -12,8 +12,6 @@ import {
 } from "./useDirectorySettings";
 import { useSettingsMetadata } from "./useSettingsMetadata";
 
-type Language = "zh" | "en" | "ja";
-
 interface SaveResult {
   requiresRestart: boolean;
 }
@@ -366,11 +364,10 @@ export function useSettings(): UseSettingsResult {
         }
 
         try {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              "language",
-              payload.language as Language,
-            );
+          // 跟随上游 cc-switch 8786f44c：增加 payload.language truthy 守卫，
+          // 防止 undefined 经类型断言写入 localStorage 后续读出 "undefined" 字符串。
+          if (typeof window !== "undefined" && payload.language) {
+            window.localStorage.setItem("language", payload.language);
           }
         } catch (error) {
           console.warn(

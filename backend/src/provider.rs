@@ -65,6 +65,45 @@ impl Provider {
             in_failover_queue: false,
         }
     }
+
+    // ------------------------------------------------------------------
+    // 托管账号识别 helpers（跟随上游 cc-switch 61e68d75）
+    //
+    // 用于：proxy takeover 写 Live config 时，针对 GitHub Copilot /
+    // Codex OAuth 这类"托管账号"供应商（auth 不走 ANTHROPIC_AUTH_TOKEN，
+    // 而走 OAuth 注入的 ANTHROPIC_API_KEY）采用不同的占位符注入策略，
+    // 同时让出站 forwarder 能识别这类上游做 PROXY_MANAGED 兜底防护。
+    // ------------------------------------------------------------------
+
+    fn provider_type(&self) -> Option<&str> {
+        self.meta.as_ref().and_then(|m| m.provider_type.as_deref())
+    }
+
+    fn claude_base_url_contains(&self, needle: &str) -> bool {
+        self.settings_config
+            .pointer("/env/ANTHROPIC_BASE_URL")
+            .and_then(|value| value.as_str())
+            .map(|base_url| base_url.contains(needle))
+            .unwrap_or(false)
+    }
+
+    pub fn is_codex_oauth(&self) -> bool {
+        self.provider_type() == Some("codex_oauth")
+    }
+
+    pub fn is_github_copilot(&self) -> bool {
+        self.provider_type() == Some("github_copilot")
+            || self.claude_base_url_contains("githubcopilot.com")
+    }
+
+    /// 是否使用"托管账号"鉴权（GitHub Copilot / Codex OAuth），
+    /// 这类供应商的真实 token 由代理在出站时通过 OAuth 注入到
+    /// `Authorization` 头，不依赖 settings 里的 `ANTHROPIC_AUTH_TOKEN`。
+    pub fn uses_managed_account_auth(&self) -> bool {
+        self.is_github_copilot()
+            || self.is_codex_oauth()
+            || self.claude_base_url_contains("chatgpt.com/backend-api/codex")
+    }
 }
 
 /// 供应商管理器
@@ -297,10 +336,11 @@ pub struct ProviderMeta {
     /// 供应商单独的代理配置
     #[serde(rename = "proxyConfig", skip_serializing_if = "Option::is_none")]
     pub proxy_config: Option<ProviderProxyConfig>,
-    /// Claude API 格式（仅 Claude 供应商使用）
+    /// API 格式（Claude / Codex 供应商使用，跟随上游 cc-switch 1c82b8a3）
     /// - "anthropic": 原生 Anthropic Messages API，直接透传
     /// - "openai_chat": OpenAI Chat Completions 格式，需要转换
     /// - "openai_responses": OpenAI Responses API 格式，需要转换
+    /// - "gemini_native": Gemini Native generateContent 格式，需要转换
     #[serde(rename = "apiFormat", skip_serializing_if = "Option::is_none")]
     pub api_format: Option<String>,
     /// 通用认证绑定（provider_config / managed_account）
@@ -805,6 +845,74 @@ mod tests {
         assert!(provider.icon.is_none());
         assert!(provider.icon_color.is_none());
         assert!(!provider.in_failover_queue);
+    }
+
+    #[test]
+    fn provider_managed_account_auth_detection_uses_type_or_known_endpoint() {
+        // 跟随上游 cc-switch 61e68d75：
+        // - provider_type="github_copilot" 直接命中
+        // - provider_type="codex_oauth" 直接命中
+        // - ANTHROPIC_BASE_URL 含 githubcopilot.com 也算 copilot
+        // - ANTHROPIC_BASE_URL 含 chatgpt.com/backend-api/codex 算 codex OAuth 端点
+        let mut copilot = Provider::with_id(
+            "copilot".to_string(),
+            "Copilot".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.githubcopilot.com"
+                }
+            }),
+            None,
+        );
+        assert!(copilot.is_github_copilot());
+        assert!(copilot.uses_managed_account_auth());
+
+        let mut codex = Provider::with_id(
+            "codex".to_string(),
+            "Codex".to_string(),
+            json!({ "env": {} }),
+            None,
+        );
+        codex.meta = Some(ProviderMeta {
+            provider_type: Some("codex_oauth".to_string()),
+            ..Default::default()
+        });
+        assert!(codex.is_codex_oauth());
+        assert!(codex.uses_managed_account_auth());
+
+        let codex_endpoint = Provider::with_id(
+            "codex-endpoint".to_string(),
+            "Codex Endpoint".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://chatgpt.com/backend-api/codex"
+                }
+            }),
+            None,
+        );
+        assert!(codex_endpoint.uses_managed_account_auth());
+
+        copilot.meta = Some(ProviderMeta {
+            provider_type: Some("github_copilot".to_string()),
+            ..Default::default()
+        });
+        assert!(copilot.is_github_copilot());
+
+        // 普通 third-party Claude 供应商不算 managed
+        let third_party = Provider::with_id(
+            "tp".to_string(),
+            "ThirdParty".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.example.com",
+                    "ANTHROPIC_AUTH_TOKEN": "sk-xxx"
+                }
+            }),
+            None,
+        );
+        assert!(!third_party.is_github_copilot());
+        assert!(!third_party.is_codex_oauth());
+        assert!(!third_party.uses_managed_account_auth());
     }
 
     #[test]

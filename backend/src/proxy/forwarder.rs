@@ -28,6 +28,11 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// 出站请求中如果发现这个占位符，说明上游 token 注入失败 —— 必须拒发，
+/// 避免把 PROXY_MANAGED 字面量带到上游（特别是托管账号上游 `*.githubcopilot.com`
+/// 和 `chatgpt.com/backend-api/codex`）。跟随上游 cc-switch 61e68d75。
+const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
+
 pub struct ForwardResult {
     pub response: ProxyResponse,
     pub provider: Provider,
@@ -811,31 +816,47 @@ impl RequestForwarder {
             Some(api_format) => super::providers::claude_api_format_needs_transform(api_format),
             None => adapter.needs_transform(provider),
         };
-        let (effective_endpoint, passthrough_query) =
-            if needs_transform && adapter.name() == "Claude" {
-                let api_format = resolved_claude_api_format
-                    .as_deref()
-                    .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
-                rewrite_claude_transform_endpoint(endpoint, api_format, is_copilot, &mapped_body)
-            } else {
-                (
-                    endpoint.to_string(),
-                    split_endpoint_and_query(endpoint)
-                        .1
-                        .map(ToString::to_string),
-                )
-            };
+        // 跟随上游 cc-switch 1c82b8a3：Codex provider 通过 wire_api=chat /
+        // apiFormat=openai_chat / base_url 直指 /chat/completions 等信号决定
+        // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
+        let codex_responses_to_chat = matches!(app_type, AppType::Codex)
+            && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
+        let (effective_endpoint, passthrough_query) = if codex_responses_to_chat {
+            rewrite_codex_responses_endpoint_to_chat(endpoint)
+        } else if needs_transform && adapter.name() == "Claude" {
+            let api_format = resolved_claude_api_format
+                .as_deref()
+                .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
+            rewrite_claude_transform_endpoint(endpoint, api_format, is_copilot, &mapped_body)
+        } else {
+            (
+                endpoint.to_string(),
+                split_endpoint_and_query(endpoint)
+                    .1
+                    .map(ToString::to_string),
+            )
+        };
+
+        // 如果 base_url 本身就是 /chat/completions 完整端点（不带 v1 后缀的供应商常见配置），
+        // 上面 effective_endpoint 已经是 /chat/completions，直接拼 query 即可，不再走 adapter.build_url。
+        let codex_chat_base_is_full_endpoint = codex_responses_to_chat
+            && base_url
+                .trim_end_matches('/')
+                .to_ascii_lowercase()
+                .ends_with("/chat/completions");
 
         let url = if matches!(resolved_claude_api_format.as_deref(), Some("gemini_native")) {
             super::gemini_url::resolve_gemini_native_url(&base_url, &effective_endpoint, is_full_url)
-        } else if is_full_url {
+        } else if is_full_url || codex_chat_base_is_full_endpoint {
             append_query_to_full_url(&base_url, passthrough_query.as_deref())
         } else {
             adapter.build_url(&base_url, &effective_endpoint)
         };
 
         // 转换请求体（如果需要）
-        let request_body = if needs_transform {
+        let request_body = if codex_responses_to_chat {
+            super::providers::transform_codex_chat::responses_to_chat_completions(mapped_body)?
+        } else if needs_transform {
             if adapter.name() == "Claude" {
                 let api_format = resolved_claude_api_format
                     .as_deref()
@@ -858,6 +879,7 @@ impl RequestForwarder {
         // 默认使用空白名单，过滤所有 _ 前缀字段
         let filtered_body = filter_private_params_with_whitelist(request_body, &[]);
         let force_identity_encoding = needs_transform
+            || codex_responses_to_chat
             || should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
 
         let mut codex_oauth_account_id: Option<String> = None;
@@ -1154,6 +1176,12 @@ impl RequestForwarder {
                 http::HeaderValue::from_static("application/json"),
             );
         }
+
+        // 跟随上游 cc-switch 61e68d75：出站前最后一道防线 ——
+        // 如果发往托管账号上游（GitHub Copilot / chatgpt.com/backend-api/codex）
+        // 的请求 header 还含有 PROXY_MANAGED 字面量，说明 OAuth 注入失败，
+        // 立刻拒绝，避免把占位符泄露到上游 / 留在上游日志里。
+        reject_proxy_placeholder_for_managed_account_upstream(&url, &ordered_headers)?;
 
         // 输出请求信息日志
         let tag = adapter.name();
@@ -1511,6 +1539,20 @@ fn is_claude_messages_path(path: &str) -> bool {
     matches!(path, "/v1/messages" | "/claude/v1/messages")
 }
 
+/// 把 Codex Responses 端点改写成 OpenAI Chat Completions 端点。
+/// 跟随上游 cc-switch 1c82b8a3：用于 Codex provider 配置为 chat 协议时的转换路径。
+fn rewrite_codex_responses_endpoint_to_chat(endpoint: &str) -> (String, Option<String>) {
+    let (_path, query) = split_endpoint_and_query(endpoint);
+    let passthrough_query = query.map(ToString::to_string);
+    let target_path = "/chat/completions";
+    let rewritten = match passthrough_query.as_deref() {
+        Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+        _ => target_path.to_string(),
+    };
+
+    (rewritten, passthrough_query)
+}
+
 fn rewrite_claude_transform_endpoint(
     endpoint: &str,
     api_format: &str,
@@ -1641,6 +1683,53 @@ fn summarize_text_for_log(text: &str, max_chars: usize) -> String {
     let truncated: String = trimmed.chars().take(max_chars).collect();
     let truncated = truncated.trim_end();
     format!("{truncated}...")
+}
+
+// ---------------------------------------------------------------------------
+// 出站请求 PROXY_MANAGED 占位符防护（跟随上游 cc-switch 61e68d75）
+//
+// 托管账号供应商（GitHub Copilot / Codex OAuth）在 Live config 里只放
+// `ANTHROPIC_API_KEY=PROXY_MANAGED` 占位符；真实 token 由代理在出站时通过
+// OAuth 注入到 `Authorization` 头。如果注入流程出错（refresh token 过期等），
+// 这里是把请求实际发到 *.githubcopilot.com 或 chatgpt.com/backend-api/codex
+// 之前的最后一道防线 —— 任何 header value 仍然带 PROXY_MANAGED 都拒发。
+// ---------------------------------------------------------------------------
+
+fn reject_proxy_placeholder_for_managed_account_upstream(
+    url: &str,
+    headers: &http::HeaderMap,
+) -> Result<(), ProxyError> {
+    if !is_managed_account_upstream_url(url) || !headers_contain_proxy_placeholder(headers) {
+        return Ok(());
+    }
+
+    Err(ProxyError::AuthError(
+        "Managed account proxy auth was not resolved; PROXY_MANAGED must not be sent upstream"
+            .to_string(),
+    ))
+}
+
+fn is_managed_account_upstream_url(url: &str) -> bool {
+    let Ok(uri) = url.parse::<http::Uri>() else {
+        return false;
+    };
+
+    let Some(host) = uri.host().map(str::to_ascii_lowercase) else {
+        return false;
+    };
+
+    host == "githubcopilot.com"
+        || host.ends_with(".githubcopilot.com")
+        || (host == "chatgpt.com" && uri.path().starts_with("/backend-api/codex"))
+}
+
+fn headers_contain_proxy_placeholder(headers: &http::HeaderMap) -> bool {
+    headers.values().any(|value| {
+        value
+            .to_str()
+            .map(|value| value.contains(PROXY_AUTH_PLACEHOLDER))
+            .unwrap_or(false)
+    })
 }
 
 #[cfg(test)]
@@ -1817,5 +1906,78 @@ mod tests {
             &json!({ "model": "gpt-5" }),
             &headers
         ));
+    }
+
+    #[test]
+    fn rewrite_codex_responses_endpoint_to_chat_preserves_query() {
+        let (endpoint, passthrough_query) =
+            rewrite_codex_responses_endpoint_to_chat("/v1/responses?foo=bar");
+
+        assert_eq!(endpoint, "/chat/completions?foo=bar");
+        assert_eq!(passthrough_query.as_deref(), Some("foo=bar"));
+    }
+
+    #[test]
+    fn rewrite_codex_responses_compact_endpoint_to_chat_preserves_query() {
+        let (endpoint, passthrough_query) =
+            rewrite_codex_responses_endpoint_to_chat("/v1/responses/compact?foo=bar");
+
+        assert_eq!(endpoint, "/chat/completions?foo=bar");
+        assert_eq!(passthrough_query.as_deref(), Some("foo=bar"));
+    }
+
+    #[test]
+    fn managed_account_upstream_rejects_proxy_managed_placeholder_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer PROXY_MANAGED"),
+        );
+
+        let err = reject_proxy_placeholder_for_managed_account_upstream(
+            "https://api.githubcopilot.com/chat/completions",
+            &headers,
+        )
+        .expect_err("placeholder should be rejected before upstream");
+
+        assert!(matches!(
+            err,
+            ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
+        ));
+    }
+
+    #[test]
+    fn codex_oauth_upstream_rejects_proxy_managed_placeholder_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer PROXY_MANAGED"),
+        );
+
+        let err = reject_proxy_placeholder_for_managed_account_upstream(
+            "https://chatgpt.com/backend-api/codex/responses",
+            &headers,
+        )
+        .expect_err("placeholder should be rejected before upstream");
+
+        assert!(matches!(
+            err,
+            ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
+        ));
+    }
+
+    #[test]
+    fn non_managed_upstream_allows_proxy_managed_placeholder_guard() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer PROXY_MANAGED"),
+        );
+
+        reject_proxy_placeholder_for_managed_account_upstream(
+            "https://api.example.com/v1/messages",
+            &headers,
+        )
+        .expect("guard is scoped to managed-account upstreams");
     }
 }

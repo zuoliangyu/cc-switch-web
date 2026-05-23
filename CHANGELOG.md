@@ -2,6 +2,64 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.8.0] - 2026-05-23
+
+跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。
+
+### P0 · 上游 B/C 类 fix（4 条小修复）
+
+- **`6e8ee094` PricingEditModal step 精度**：`src/components/usage/PricingEditModal.tsx` 四个价格输入框 `step="0.01"` → `PRICE_INPUT_STEP="0.0001"`，支持 DeepSeek 等供应商 cache read `$0.0028/M tokens` 这类亚分级价格。
+- **`bbce75fc` session_usage 子 Agent 扫描**：`backend/src/services/session_usage.rs` `collect_jsonl_files` 从两层固定深度扩展到三层，新增 `projects_dir/<项目>/<SESSION_ID>/subagents/*.jsonl` 扫描；修复 session log 模式下 Task tool 派生子 Agent 的 token 用量完全未统计的问题（proxy 模式不受影响）。
+- **`5c79cf64` gemini-native functionResponse.name + thought_signature**：`backend/src/proxy/providers/transform_gemini.rs` 两个并发 bug：(1) 长会话/会话重启后 shadow store 老化导致 `tool_result` 找不到合成 ID 的 name → 422，增加 pre-scan 整个 request body 的 assistant tool_use 块构建 `tool_name_by_id` + content-array last-resort fallback；(2) Anthropic Messages 格式不存 `thoughtSignature` 导致 Gemini 多轮 tool-use 报"missing thought_signature" → 400，新增 `build_thought_signature_map_from_shadow_turns` / `merge_thought_signatures_from_shadow`，转 `tool_use → functionCall` 时按 ID 重新挂回签名。
+- **`8786f44c` useSettings.ts language truthy guard**：`src/hooks/useSettings.ts` 把 `payload.language as Language` 强转改为 `&& payload.language` 守卫，避免 undefined 经类型断言写入 localStorage 后续读出 `"undefined"` 字符串；同时删去不再使用的 `type Language` 别名。上游同 commit 的前半（App.tsx 三个 useEffect active flag）不适用——cc-switch-web 没有 Tauri event 订阅路径，整段跳过。
+
+### P1 · 托管账号 proxy 加固（`61e68d75`，分三段）
+
+修复 GitHub Copilot / Codex OAuth 这类托管账号供应商在 Claude Live 接管时同时写入 `ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_API_KEY` 占位符的 bug——Claude Code 客户端优先用 `ANTHROPIC_AUTH_TOKEN`，会把 `Bearer PROXY_MANAGED` 发到代理；进一步如果代理的 OAuth 注入失败，占位符可能被原样转发到上游。
+
+- **`backend/src/provider.rs` 加 5 个 helper**：`provider_type()` / `claude_base_url_contains()` 私有方法 + 公开 `is_codex_oauth()` / `is_github_copilot()` / `uses_managed_account_auth()`。`is_github_copilot()` 同时识别 `provider_type="github_copilot"` 与 `ANTHROPIC_BASE_URL` 含 `githubcopilot.com` 两种信号；`uses_managed_account_auth()` 额外把 `chatgpt.com/backend-api/codex` 端点归入托管账号。配套 1 个单测覆盖所有判定路径。
+- **`backend/src/services/proxy.rs` 引入 auth policy 枚举**：新增 `ClaudeTakeoverAuthPolicy::{PreserveExistingOrAuthToken, ManagedAccount}`，把原来散在 `takeover_live_config_strict` / `takeover_live_config_best_effort` 两处的 inline takeover 代码提炼为单一 `apply_claude_takeover_fields_with_policy(live_config, proxy_url, policy)`。新增 `apply_claude_takeover_fields_for_provider(live_config, proxy_url, provider)`：依据 `provider.uses_managed_account_auth()` 选 policy。`ManagedAccount` 分支会**先清掉**全部 4 个 token env（`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`/`OPENROUTER_API_KEY`/`OPENAI_API_KEY`），**只写 `ANTHROPIC_API_KEY: PROXY_MANAGED`** 一个占位符。两个 takeover 调用点改为先查当前 provider 再选 policy；strict 调用点用 `require_current_provider_for_app()`、best-effort 用 `get_current_provider_for_app()` Option 兜底。
+- **`backend/src/proxy/forwarder.rs` outbound guard**：出站请求实际 send 之前最后一道防线 —— `reject_proxy_placeholder_for_managed_account_upstream(url, headers)` 检查目标 URL 是 `*.githubcopilot.com` 或 `chatgpt.com/backend-api/codex` 且任意 header value 含 `PROXY_MANAGED` 字面量时直接返回 `ProxyError::AuthError`，宁可让客户端报 401 也不把占位符泄到上游。3 个单测覆盖 Copilot 上游、Codex OAuth 上游、非托管上游放行三种路径。
+
+### P2 · Codex Chat Completions 路由（`1c82b8a3` + `79d6486e` + `09f67c1b` 三连合并）
+
+让 cc-switch-web 作为协议适配代理：客户端 Codex CLI 始终通过 Responses API 跟本地代理对话，代理把请求转为 Chat Completions 发到上游、把 Chat 响应（JSON 或 SSE）翻译回 Responses 格式回给客户端。
+
+支持很多"Codex 兼容"第三方供应商——它们只暴露 OpenAI Chat Completions 端点，原本无法用 Codex CLI 接入。
+
+**新文件（直接搬运上游最终版本）**：
+- `backend/src/proxy/json_canonical.rs`（102 行）：`canonicalize_value` / `canonical_json_string` / `short_value_hash` / `short_sha256_hex` 稳定 JSON 工具，供 transform 内部生成稳定的 tool 调用键。
+- `backend/src/proxy/providers/transform_codex_chat.rs`（888 行，含三连最终改进）：双向 JSON 转换 —— Codex Responses request → Chat Completions request；Chat Completions response → Responses response。覆盖 reasoning_content / reasoning 字段 → Responses reasoning items，inline `<think>...</think>` 块切割与重组（MiniMax 风格兼容），tool_calls 与 outputs 顺序保持，length stop reason 映射等。
+- `backend/src/proxy/providers/streaming_codex_chat.rs`（1041 行）：Chat SSE → Responses SSE 流式翻译器。处理增量 delta、reasoning summary 事件、多 tool_call delta、stream_error / data-only error 终态、保持 reasoning/text/tool_calls 三种 stream 项的相对顺序。
+
+**后端路由判定与接入**：
+- `backend/src/proxy/providers/codex.rs` 加 `codex_provider_uses_chat_completions(provider)` 与 `should_convert_codex_responses_to_chat(provider, endpoint)`，四层 fallback 判定：`meta.api_format` → `settings_config.api_format` / `apiFormat` → TOML 里 `model_providers.<active>.wire_api` → `base_url` / 当前 provider 的 base_url 是否以 `/chat/completions` 结尾。配套 3 个单测。
+- `backend/src/proxy/forwarder.rs`：endpoint rewrite 路径新增 `codex_responses_to_chat` 分支，把 `/v1/responses` / `/v1/responses/compact` 改写为 `/chat/completions`；当 base_url 本身就是完整 chat endpoint 时跳过 `adapter.build_url` 拼接。request body 走 `transform_codex_chat::responses_to_chat_completions`，`force_identity_encoding` 标记同时考虑 codex_responses_to_chat。新增 `rewrite_codex_responses_endpoint_to_chat` 函数 + 2 个单测（普通路径与 compact 路径都保留 query）。
+- `backend/src/proxy/handlers.rs`：`handle_responses` / `handle_responses_compact` 两个入口都加 `should_convert_codex_responses_to_chat` 判断，命中即走新的 `handle_codex_chat_to_responses_transform`。该函数对失败响应原样透传、对流式响应走 `create_responses_sse_stream_from_chat` 翻译并经过 `create_logged_passthrough_stream` 透传、对非流式响应先 `read_decoded_body` 再 `transform_codex_chat::chat_completion_to_response` 翻译后重建响应。
+  - 已知 TODO：SSE usage 收集器没接上（web 的 `SseUsageCollector::new(start_time, callback)` 是 2 参签名，上游 src-tauri 3 参带 SSE filter）—— Codex Chat 路由跑出来的请求暂不进 usage_stats。不影响协议路由本身工作，单独立 issue 跟进。
+
+**前端 UI**：
+- `src/types.ts`：新增 `type CodexApiFormat = "openai_responses" | "openai_chat"`；`ProviderMeta.apiFormat` 注释扩展为 Claude / Codex 共用。
+- `src/utils/providerConfigUtils.ts`：`extractCodexWireApi` / `setCodexWireApi` / `isCodexChatWireApi` / `CODEX_CHAT_WIRE_API_VALUES`，从 Codex TOML 文本读写 `wire_api` 字段（支持 6 种 chat 别名）。
+- `src/components/providers/forms/CodexFormFields.tsx`：第三方 Codex provider 表单加 `apiFormat` Select（OpenAI Responses 原生 / OpenAI Chat Completions 需开启路由）+ 提示文案。
+- `src/components/providers/forms/ProviderForm.tsx`：`localCodexApiFormat` state 从 `meta.apiFormat` 或 TOML `wire_api` 推断、回退到 `openai_responses`；用户在 UI 切 `apiFormat` 时把 TOML 的 wire_api 归一为 `"responses"`（保持与新版 Codex 客户端兼容，真实路由由 `meta.apiFormat` 决定）；提交时第三方 provider 的 TOML 也强制归一一次；preset 应用、reset 流程同步更新本地 state。
+- `src/components/providers/ProviderCard.tsx`：`codexNeedsRouting` useMemo 在第三方 Codex provider 且 `apiFormat=openai_chat` 或 TOML wire_api 为 chat 类时挂"需要路由"徽标。
+- `src/hooks/useProviderActions.ts`：切换到 Codex Chat 格式的 provider 时如果代理未运行，给出 `notifications.proxyReasonOpenAIChat` 提示。
+- `src/config/codexProviderPresets.ts`：`CodexProviderPreset` 加 `apiFormat?: CodexApiFormat` 字段，preset 可显式声明默认协议。
+- `src/i18n/locales/{zh,en,ja}.json`：新增 `codex.needsRouting` 命名空间键 + `providerForm.codexApiFormatResponses` / `codexApiFormatOpenAIChat` / `codexApiFormatHint` 三键。
+
+### 验证
+
+- 前端：`pnpm exec tsc --noEmit` 0 错误；`pnpm vitest run` **184 passed / 2 skipped / 0 failed**
+- 后端：`cargo check --locked --bin cc-switch-web` 0 错误；`cargo test --lib` **813 passed / 0 failed / 0 ignored**（含 P1 5 个新增 + P2 18 个新增）
+- 改动总量：21 修改 + 3 新增（json_canonical + streaming_codex_chat + transform_codex_chat）= 24 文件，+~3300 行
+
+### 显式未跟（保留为后续工作）
+
+- **Codex 三连里 src-tauri 的 `codex_config.rs` `update_codex_toml_field` 扩展支持 wire_api** —— web 走前端 `setCodexWireApi` 直接写 TOML 文本路径，不依赖该后端函数。
+- **`ed33990b` codex mise detection**：上游给 `scan_cli_version` 加 mise (`~/.local/share/mise/...`) 路径。web 容器/服务器场景里 host CLI 检测意义低，跳过。
+- **Codex Chat 路由的 SSE usage 收集**：上面 P2 已说明。
+
 ## [0.7.1] - 2026-05-19
 
 新增 Linux arm64 发布产物，面向 64 位嵌入式开发板（树莓派 64 位系统、RK35xx、Allwinner 等）。

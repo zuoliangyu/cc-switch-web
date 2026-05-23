@@ -16,6 +16,10 @@ interface PricingEditModalProps {
   onClose: () => void;
 }
 
+// 价格输入步进：0.0001 USD/M tokens，支持 DeepSeek 等供应商的亚分级缓存读取价格
+// （例如 cache read $0.0028/M）。跟随上游 cc-switch 6e8ee094。
+const PRICE_INPUT_STEP = "0.0001";
+
 export function PricingEditModal({
   open,
   model,
@@ -152,7 +156,7 @@ export function PricingEditModal({
           <Input
             id="inputCost"
             type="number"
-            step="0.01"
+            step={PRICE_INPUT_STEP}
             min="0"
             value={formData.inputCost}
             onChange={(e) =>
@@ -169,7 +173,7 @@ export function PricingEditModal({
           <Input
             id="outputCost"
             type="number"
-            step="0.01"
+            step={PRICE_INPUT_STEP}
             min="0"
             value={formData.outputCost}
             onChange={(e) =>
@@ -189,7 +193,7 @@ export function PricingEditModal({
           <Input
             id="cacheReadCost"
             type="number"
-            step="0.01"
+            step={PRICE_INPUT_STEP}
             min="0"
             value={formData.cacheReadCost}
             onChange={(e) =>
@@ -209,7 +213,7 @@ export function PricingEditModal({
           <Input
             id="cacheCreationCost"
             type="number"
-            step="0.01"
+            step={PRICE_INPUT_STEP}
             min="0"
             value={formData.cacheCreationCost}
             onChange={(e) =>

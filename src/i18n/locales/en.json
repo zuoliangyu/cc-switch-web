@@ -880,6 +880,9 @@
     "apiFormatOpenAIChat": "OpenAI Chat Completions (Requires proxy)",
     "apiFormatOpenAIResponses": "OpenAI Responses API (Requires proxy)",
     "apiFormatGeminiNative": "Gemini Native generateContent (Requires proxy)",
+    "codexApiFormatResponses": "OpenAI Responses API (Native)",
+    "codexApiFormatOpenAIChat": "OpenAI Chat Completions (Requires routing)",
+    "codexApiFormatHint": "Pick the Codex API format the provider actually supports; the config stays on Responses for compatibility with the latest Codex client, and Chat Completions is auto-translated by the local proxy.",
     "authField": "Auth Field",
     "authFieldAuthToken": "ANTHROPIC_AUTH_TOKEN (Default)",
     "authFieldApiKey": "ANTHROPIC_API_KEY",
@@ -900,6 +903,9 @@
     "categoryCnOfficial": "Opensource Official",
     "categoryAggregation": "Aggregation",
     "categoryThirdParty": "Third Party"
+  },
+  "codex": {
+    "needsRouting": "Needs routing"
   },
   "copilot": {
     "authSection": "GitHub Copilot Authentication",

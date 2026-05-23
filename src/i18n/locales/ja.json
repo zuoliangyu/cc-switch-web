@@ -880,6 +880,9 @@
     "apiFormatOpenAIChat": "OpenAI Chat Completions（プロキシが必要）",
     "apiFormatOpenAIResponses": "OpenAI Responses API（プロキシが必要）",
     "apiFormatGeminiNative": "Gemini Native generateContent（プロキシが必要）",
+    "codexApiFormatResponses": "OpenAI Responses API（ネイティブ）",
+    "codexApiFormatOpenAIChat": "OpenAI Chat Completions（ルーティング必須）",
+    "codexApiFormatHint": "プロバイダが実際にサポートする Codex API 形式を選択してください。設定は最新の Codex クライアントとの互換性のため Responses のままで、Chat Completions はローカルプロキシが自動変換します。",
     "authField": "認証フィールド",
     "authFieldAuthToken": "ANTHROPIC_AUTH_TOKEN（デフォルト）",
     "authFieldApiKey": "ANTHROPIC_API_KEY",
@@ -900,6 +903,9 @@
     "categoryCnOfficial": "オープンソース公式",
     "categoryAggregation": "アグリゲーター",
     "categoryThirdParty": "サードパーティ"
+  },
+  "codex": {
+    "needsRouting": "ルーティング必須"
   },
   "copilot": {
     "authSection": "GitHub Copilot 認証",

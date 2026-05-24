@@ -90,7 +90,12 @@
     "enableTeammates": "Teammates 模式",
     "enableToolSearch": "启用 Tool Search",
     "effortHigh": "高强度思考",
-    "disableAutoUpgrade": "禁用自动升级"
+    "disableAutoUpgrade": "禁用自动升级",
+    "winEnvDetected": "检测到 Windows 环境变量占位符（{{vars}}），Claude Code 不会自动展开",
+    "winEnvUnknown": "{{vars}} 不在白名单中，将原样保留",
+    "winEnvConvert": "转为绝对路径",
+    "winEnvDone": "已展开 {{count}} 处",
+    "winEnvFailed": "转换失败：{{error}}"
   },
   "commonConfig": {
     "guideTitle": "通用配置片段说明",
@@ -697,6 +702,7 @@
   },
   "apps": {
     "claude": "Claude",
+    "claude-desktop": "Claude 桌面版",
     "codex": "Codex",
     "gemini": "Gemini",
     "opencode": "OpenCode",
@@ -799,6 +805,7 @@
     "fetchModelsNeedConfig": "请先填写 API 端点和 API Key",
     "fetchModelsNeedEndpoint": "请先填写 API 端点",
     "fetchModelsNotSupported": "该供应商不支持获取模型列表",
+    "fetchModelsEndpointNotFound": "未找到模型列表端点（已尝试根路径与子路径），请确认供应商提供 OpenAI 兼容的 /v1/models",
     "fetchModelsSuccess": "获取到 {{count}} 个模型",
     "fetchModelsTimeout": "请求超时，请检查网络连接",
     "fetchingModels": "正在获取...",
@@ -838,12 +845,20 @@
       "x-code": "XCodeAPI 为CC Switch 的用户提供特别福利，使用此链接注册后首单加赠10%的额度(联系站长领取)",
       "ctok": "官网加入CTok社群，订阅套餐。",
       "ddshub": "呆呆兽为CC Switch 的用户提供了特别福利，通过此链接注册后，首单充值可额外赠送 10% 额度（联系群主领取）！",
+      "patewayai": "PatewayAI 为 CC Switch 的用户提供了特别福利，通过此链接注册可以获得3美元额度。",
+      "claudeapi": "ClaudeAPI 为 CC Switch 的用户提供了特别福利，通过此链接注册可以领取测试额度。",
+      "claudecn": "ClaudeCN 是一家实体企业运营的企业级AI中转平台，支持企业采购流程，可对公打款、签约，服务合规有保障。",
+      "runapi": "RunAPI 为 CC Switch 的用户提供了特别福利，通过此链接注册并联系客服可领取 ¥14 免费额度。",
+      "volcengine_agentplan": "火山方舟 Agent Plan 为 CC Switch 的用户提供了专属福利：通过此链接订阅方舟AgentPlan，新客户首月40元起。",
+      "byteplus": "通过此链接注册即可获取每个模型50万tokens的免费推理额度。",
+      "doubaoseed": "豆包大模型为 CC Switch 的用户提供了专属福利：通过此链接注册即可获取豆包全系列文本模型 50万tokens推理额度以及Seedance2.0的500万tokens免费额度",
       "lionccapi": "LionCCAPI 为 CC Switch 的用户提供了特别福利，注册后添加客服微信HSQBJ088888888，发暗号cc-switch备注即可送10美金额度！",
       "shengsuanyun": "胜算云为 CC Switch 的用户提供了特别福利，使用此链接注册的新用户可获 10 元模力及首充 10% 赠送！",
       "lemondata": "Lemon Code 为 CC Switch 的用户提供了特别优惠。使用此链接注册可以获得1美元免费额度。"
     },
     "presets": {
       "ucloud": "优云智算",
+      "ucloudCoding": "优云智算Coding Plan",
       "shengsuanyun": "胜算云"
     },
     "parameterConfig": "参数配置 - {{name}} *",
@@ -883,6 +898,9 @@
     "apiFormatOpenAIChat": "OpenAI Chat Completions (需开启代理)",
     "apiFormatOpenAIResponses": "OpenAI Responses API (需开启代理)",
     "apiFormatGeminiNative": "Gemini Native generateContent (需开启代理)",
+    "codexApiFormatResponses": "OpenAI Responses API (原生)",
+    "codexApiFormatOpenAIChat": "OpenAI Chat Completions (需开启路由)",
+    "codexApiFormatHint": "选择供应商真实支持的 Codex API 格式；配置仍保持 Responses 以兼容新版 Codex，Chat Completions 会通过本地路由自动转换。",
     "authField": "认证字段",
     "authFieldAuthToken": "ANTHROPIC_AUTH_TOKEN（默认）",
     "authFieldApiKey": "ANTHROPIC_API_KEY",
@@ -903,6 +921,9 @@
     "categoryCnOfficial": "开源官方",
     "categoryAggregation": "聚合服务",
     "categoryThirdParty": "第三方"
+  },
+  "codex": {
+    "needsRouting": "需要路由"
   },
   "copilot": {
     "authSection": "GitHub Copilot 认证",
@@ -2137,6 +2158,8 @@
     "error": "{{providerName}} 检查出错: {{error}}",
     "modelNotFound": "{{providerName}} 测试模型 {{model}} 不存在或已下架",
     "modelNotFoundHint": "该模型可能已被供应商弃用。请在\"模型测试配置\"中更新默认测试模型。",
+    "quotaExceeded": "{{providerName}} Coding Plan 额度已用尽",
+    "quotaExceededHint": "百度千帆返回了 Coding Plan 超额错误。请等待 5 小时/每周/每月额度刷新，或在千帆控制台切换套餐。",
     "httpHint": {
       "400": "供应商拒绝了请求格式。健康检查的探测格式可能与实际使用不同。",
       "401": "API Key 可能无效，或供应商使用 OAuth 等认证方式。检查失败不代表实际不可用。",

@@ -156,6 +156,7 @@ const UnifiedSkillsPanel = React.forwardRef<
   const enabledCounts = useMemo(() => {
     const counts = {
       claude: 0,
+      "claude-desktop": 0,
       codex: 0,
       gemini: 0,
       opencode: 0,
@@ -1076,6 +1077,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
         skill.directory,
         {
           claude: skill.foundIn.includes("claude"),
+          "claude-desktop": skill.foundIn.includes("claude-desktop"),
           codex: skill.foundIn.includes("codex"),
           gemini: skill.foundIn.includes("gemini"),
           opencode: skill.foundIn.includes("opencode"),

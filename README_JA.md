@@ -4,41 +4,20 @@
 
 ## 概要
 
-CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web ブランチ用リポジトリです。
+CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web ブランチ用リポジトリで、CC Switch の Web 向け実装とブランチ固有のカスタマイズを管理します。
 
-このリポジトリは、CC Switch に関する Web 向け実装、関連する実験、そしてブランチ固有の調整を管理するために使用されます。
-
-現在の想定アーキテクチャは次の通りです。
+アーキテクチャと位置付け:
 
 - フロントエンド: Web
 - バックエンド: ローカル Rust サービス
 - アクセス方法: ブラウザで `http://localhost:xxxx` を開く
+- 対象: Windows、macOS、Linux、およびデスクトップのない Linux サーバー
 
-この方向は、Windows、macOS、Linux、およびデスクトップのない Linux サーバーを対象にしています。
+## 使い方
 
-## 現在のバージョン
+CC Switch Web はローカルで Rust サービスを起動し、Claude、Codex、Gemini、OpenClaw など複数の AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
 
-現在のリポジトリバージョンは `0.3.0` です。
-
-`0.3.0` ではデータベース schema を `v8` から `v10` へ引き上げ、アップストリームの `cc-switch` 3.14 系と揃えました。`~/.cc-switch/cc-switch.db` を共有した結果アップストリーム側で `v10` に移行された環境で、Web 版起動時に `データベースバージョンが新しすぎます（10）、現在のアプリは 8 までサポートしています` と表示される不具合を解消します。あわせて `v8 -> v9` のモデル価格再シード移行と、`v9 -> v10` の Hermes 対応移行を追加し、`mcp_servers` / `skills` テーブルに `enabled_hermes` 列を導入、バックエンドの `McpApps` / `SkillApps` をフロントエンド側の `hermes` フィールドと完全に揃えました。本バージョンではあわせて、プリセットの更新（Kimi K2.6 直結、DDSHub Codex プリセット）、プロキシ／セッションの修正（Codex OAuth レスポンスの強制ストリーミング、Gemini セッションの `.project_root` 読み取り）、UI 細部の仕上げ（プロバイダーアイコンのホバー名表示、オートコンパクトのラッチ解除、ツールバーアイコン幅の統一、スクロールエリアの整形）などを含みます。
-
-このリポジトリでは、`0.1.0` を Web ブランチの初回リリース基準として扱います。以前に引き継がれていた過去のリリース履歴はこのリポジトリから削除しており、より古い履歴はアップストリーム側を参照してください。
-
-## アップストリームとの関係
-
-- アップストリームプロジェクト: [cc-switch](https://github.com/farion1231/cc-switch)
-- 現在の Web リポジトリ: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
-- 作者: 左岚（[Bilibili](https://space.bilibili.com/27619688)）
-- このリポジトリは CC Switch の Web ブランチ方向に焦点を当てています
-- プロジェクトの位置付けや外部向け説明が変わった場合は、このリポジトリ内の各言語版 README を同期して更新してください
-
-## 補足
-
-元の CC Switch プロジェクト、またはアップストリームのリリース情報を確認したい場合は、上流リポジトリを直接参照してください。
-
-## 最近そろえた Web 機能と UI 更新
-
-現在の Web ブランチでは、次のデスクトップ機能をそろえ、あわせて Web UI の階層も刷新しています。
+Web ブランチで既に利用できる機能:
 
 - Claude、Codex、Gemini、OpenClaw のプロバイダーモデル取得
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
@@ -46,10 +25,61 @@ CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web �
 - 環境変数競合の検出と整理入口
 - `?deeplink=...` または手動入力した `ccswitch://...` による Deep Link 取り込み
 - About ページから GitHub の最新リリースページを開く入口
-- Provider、Settings、Skills、Sessions ページを新しいワークスペース型 UI 階層へ統一
-- 関連するフルスクリーンパネル、リポジトリ管理パネル、会話 TOC パネルも同じ Web ビジュアル言語へ更新
+- Provider、Settings、Skills、Sessions の各ページをワークスペース型 UI へ統一
 
-## 実行方法
+### クイックスタート
+
+1. フロントエンドを埋め込んだ release バイナリをビルドします。
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   （Rust `1.88+` が必要です。詳細なビルド / 開発オプションは下記「開発」セクションを参照してください。）
+
+2. バイナリを実行し、ターミナルに表示された最終アドレスを開きます。
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   リリース版ではフロントエンド静的配信と Web API が同じポートを共有し、デフォルトの優先ポートは `8890` です。ポートが使用中・権限拒否の場合は、自動的に後続ポートを試し、実際にバインドしたポートを出力します。
+
+3. ターミナルに表示されたアドレスをブラウザで開けば利用開始です。
+
+4. データ保存先: ローカル Web サービスモードでは、データは CC Switch のローカル設定ルートに保存されます。
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   ここには `settings.json`、`cc-switch.db`、バックアップ、統一 Skills ストレージなどが含まれます。旧 `config.json` は現在の Web ランタイムの主データ経路には含まれません。
+
+> Docker で実行する、またはデスクトップのないサーバーで常駐させる場合は、下記「開発」内の「Docker 実行」「Linux systemd サンプル」を参照してください。
+
+## 現在のバージョン
+
+現在のリポジトリバージョンは `0.8.0` です。バージョンごとの変更詳細、各修正と対応するアップストリーム commit、独立タスクへ繰り延べた項目は `CHANGELOG.md` および `docs-dev/web-parity-post-3.14-2026-05.md` を参照してください。
+
+このリポジトリでは `0.1.0` を Web ブランチの初回リリース基準として扱います。以前に引き継がれていた過去のリリース履歴は削除しており、より古い履歴はアップストリーム側を参照してください。
+
+## アップストリームとの関係
+
+- アップストリームプロジェクト: [cc-switch](https://github.com/farion1231/cc-switch)
+- 現在の Web リポジトリ: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- 作者: 左岚（[Bilibili](https://space.bilibili.com/27619688)）
+- このリポジトリは CC Switch の Web ブランチ方向に焦点を当てています
+- 元の CC Switch プロジェクトやアップストリームのリリース情報を確認したい場合は、上流リポジトリを直接参照してください
+- プロジェクトの位置付けや外部向け説明が変わった場合は、このリポジトリ内の各言語版 README を同期して更新してください
+
+## 開発
 
 ### コマンド早見表
 

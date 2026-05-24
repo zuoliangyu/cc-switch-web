@@ -69,10 +69,13 @@ import {
   getWebProviderHealth,
   getWebProviderUsage,
   fetchWebProviderModels,
+  fetchWebWindowsEnvPaths,
   getWebProxyConfig,
   getWebProxyConfigForApp,
   getWebProxyStatus,
   getWebProxyTakeoverStatus,
+  getWebClaudeDesktopStatus,
+  getWebClaudeDesktopDefaultRoutes,
   getWebPrompts,
   getWebProviders,
   getWebSettings,
@@ -306,7 +309,10 @@ export async function invoke<T>(
         args?.baseUrl as string,
         args?.apiKey as string,
         args?.isFullUrl as boolean | undefined,
+        args?.modelsUrl as string | undefined,
       )) as T;
+    case "get_windows_env_paths":
+      return (await fetchWebWindowsEnvPaths()) as T;
     case "testUsageScript":
       return (await testWebUsageScript(
         args?.app as AppId,
@@ -788,6 +794,10 @@ export async function invoke<T>(
       return (await getWebProxyStatus()) as T;
     case "get_proxy_takeover_status":
       return (await getWebProxyTakeoverStatus()) as T;
+    case "get_claude_desktop_status":
+      return (await getWebClaudeDesktopStatus()) as T;
+    case "get_claude_desktop_default_routes":
+      return (await getWebClaudeDesktopDefaultRoutes()) as T;
     case "set_proxy_takeover_for_app":
       return (await setWebProxyTakeoverForApp(
         args?.appType as AppId,

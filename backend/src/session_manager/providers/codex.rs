@@ -141,6 +141,10 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
         }
         if value.get("type").and_then(Value::as_str) == Some("session_meta") {
             if let Some(payload) = value.get("payload") {
+                // Codex explorer / 子代理产生的会话不应在主会话列表里展示
+                if is_subagent_source(payload.get("source")) {
+                    return None;
+                }
                 if session_id.is_none() {
                     session_id = payload
                         .get("id")
@@ -176,7 +180,10 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
             if let Some(payload) = value.get("payload") {
                 if payload.get("type").and_then(Value::as_str) == Some("message") {
                     let text = payload.get("content").map(extract_text).unwrap_or_default();
-                    if !text.trim().is_empty() {
+                    let trimmed = text.trim();
+                    // 跳过 Codex 注入的 <environment_context> 系统消息，否则会把工作目录路径
+                    // 当成"上次会话的最后一条消息"误展示。
+                    if !trimmed.is_empty() && !trimmed.starts_with("<environment_context>") {
                         summary = Some(text);
                     }
                 }
@@ -208,6 +215,13 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
         source_path: Some(path.to_string_lossy().to_string()),
         resume_command: Some(format!("codex resume {session_id}")),
     })
+}
+
+fn is_subagent_source(source: Option<&Value>) -> bool {
+    source
+        .and_then(|value| value.as_object())
+        .map(|source| source.contains_key("subagent"))
+        .unwrap_or(false)
 }
 
 fn infer_session_id_from_filename(path: &Path) -> Option<String> {
@@ -291,5 +305,44 @@ mod tests {
 
         assert_eq!(msgs[3].role, "assistant");
         assert_eq!(msgs[3].content, "Done.");
+    }
+
+    #[test]
+    fn parse_session_skips_environment_context_summary() {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("session.jsonl");
+        // 仅留一条 user 消息，且内容是 <environment_context> — summary 应保持 None
+        // 而不是被路径 / metadata 污染。
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"timestamp\":\"2026-03-06T21:50:12Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"abc-id\",\"cwd\":\"/tmp/project\"}}\n",
+                "{\"timestamp\":\"2026-03-06T21:50:13Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":\"<environment_context>\\n  <cwd>/tmp/project</cwd>\\n</environment_context>\"}}\n"
+            ),
+        )
+        .expect("write");
+
+        let meta = parse_session(&path).expect("parse");
+        assert!(
+            meta.summary.is_none(),
+            "summary should not be populated from environment_context, got {:?}",
+            meta.summary
+        );
+    }
+
+    #[test]
+    fn parse_session_skips_subagent_sessions() {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("session.jsonl");
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"timestamp\":\"2026-04-28T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"subagent-id\",\"cwd\":\"/tmp/project\",\"originator\":\"codex-tui\",\"source\":{\"subagent\":{\"thread_spawn\":{\"parent_thread_id\":\"parent-id\",\"depth\":1,\"agent_role\":\"explorer\"}}}}}\n",
+                "{\"timestamp\":\"2026-04-28T10:00:01Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":\"Inspect the project\"}}\n"
+            ),
+        )
+        .expect("write");
+
+        assert!(parse_session(&path).is_none());
     }
 }

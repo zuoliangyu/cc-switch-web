@@ -37,6 +37,21 @@ const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 6] = [
     "ANTHROPIC_SMALL_FAST_MODEL",
 ];
 
+/// Claude Live 配置接管时的 token 注入策略（跟随上游 cc-switch 61e68d75）。
+///
+/// - `PreserveExistingOrAuthToken`：普通 API key 供应商。settings 里已有的
+///   token env 字段都替换成 PROXY_MANAGED；若一个都没有则补一个
+///   `ANTHROPIC_AUTH_TOKEN`。
+/// - `ManagedAccount`：托管账号供应商（GitHub Copilot / Codex OAuth）。
+///   先把已有的所有 token env 字段全部移除（这类供应商的真实 token 由代理在
+///   出站时通过 OAuth 注入到 `Authorization` 头），仅写入 `ANTHROPIC_API_KEY`
+///   作为客户端可见的占位符，避免客户端因为没有 token 而提示缺 key。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeTakeoverAuthPolicy {
+    PreserveExistingOrAuthToken,
+    ManagedAccount,
+}
+
 #[derive(Clone)]
 pub struct ProxyService {
     db: Arc<Database>,
@@ -382,6 +397,12 @@ impl ProxyService {
     /// 这样代理才能从数据库读取到正确的认证信息。
     async fn sync_live_to_provider(&self, app_type: &AppType) -> Result<(), String> {
         let live_config = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => self.read_claude_live()?,
             AppType::Codex => self.read_codex_live()?,
             AppType::Gemini => self.read_gemini_live()?,
@@ -405,6 +426,12 @@ impl ProxyService {
         live_config: &Value,
     ) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 let provider_id =
                     crate::settings::get_effective_current_provider(&self.db, &AppType::Claude)
@@ -685,6 +712,12 @@ impl ProxyService {
     /// 备份指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
     async fn backup_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
         let (app_type_str, config) = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => ("claude", self.read_claude_live()?),
             AppType::Codex => ("codex", self.read_codex_live()?),
             AppType::Gemini => ("gemini", self.read_gemini_live()?),
@@ -732,27 +765,52 @@ impl ProxyService {
         Ok((proxy_url, proxy_codex_base_url))
     }
 
-    /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
-    async fn takeover_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
-        let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+    /// 根据 provider 类型自动选择 auth policy 并改写 Claude Live 配置。
+    ///
+    /// 跟随上游 cc-switch 61e68d75：托管账号供应商（GitHub Copilot / Codex OAuth）
+    /// 不应该在 settings 里留 `ANTHROPIC_AUTH_TOKEN` 这类 placeholder，否则
+    /// Claude Code 客户端的 auth header 选择顺序会优先用它，发到代理的请求
+    /// 就携带 `Bearer PROXY_MANAGED`，进而被 forwarder outbound guard 拒绝
+    /// 或最坏被原样转发到上游。
+    fn apply_claude_takeover_fields_for_provider(
+        live_config: &mut Value,
+        proxy_url: &str,
+        provider: &Provider,
+    ) {
+        let auth_policy = if provider.uses_managed_account_auth() {
+            ClaudeTakeoverAuthPolicy::ManagedAccount
+        } else {
+            ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken
+        };
 
-        match app_type {
-            AppType::Claude => {
-                let mut live_config = self.read_claude_live()?;
-                if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                    env.insert("ANTHROPIC_BASE_URL".to_string(), json!(&proxy_url));
-                    // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
-                    for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-                        env.remove(key);
-                    }
+        Self::apply_claude_takeover_fields_with_policy(live_config, proxy_url, auth_policy);
+    }
 
-                    let token_keys = [
-                        "ANTHROPIC_AUTH_TOKEN",
-                        "ANTHROPIC_API_KEY",
-                        "OPENROUTER_API_KEY",
-                        "OPENAI_API_KEY",
-                    ];
+    /// 真正改写 Claude Live 配置的核心：
+    /// - 设置 ANTHROPIC_BASE_URL → 本机代理
+    /// - 移除模型覆盖 env（CLAUDE_MODEL_OVERRIDE_ENV_KEYS）
+    /// - 按 policy 写 token 占位符
+    fn apply_claude_takeover_fields_with_policy(
+        live_config: &mut Value,
+        proxy_url: &str,
+        auth_policy: ClaudeTakeoverAuthPolicy,
+    ) {
+        let token_keys = [
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+        ];
 
+        if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
+            env.insert("ANTHROPIC_BASE_URL".to_string(), json!(proxy_url));
+            // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
+            for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
+                env.remove(key);
+            }
+
+            match auth_policy {
+                ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => {
                     let mut replaced_any = false;
                     for key in token_keys {
                         if env.contains_key(key) {
@@ -767,13 +825,69 @@ impl ProxyService {
                             json!(PROXY_TOKEN_PLACEHOLDER),
                         );
                     }
-                } else {
-                    live_config["env"] = json!({
-                        "ANTHROPIC_BASE_URL": &proxy_url,
-                        "ANTHROPIC_AUTH_TOKEN": PROXY_TOKEN_PLACEHOLDER
-                    });
                 }
+                ClaudeTakeoverAuthPolicy::ManagedAccount => {
+                    // 托管账号：彻底清掉历史 token env，仅写 ANTHROPIC_API_KEY 占位符。
+                    for key in token_keys {
+                        env.remove(key);
+                    }
+                    env.insert(
+                        "ANTHROPIC_API_KEY".to_string(),
+                        json!(PROXY_TOKEN_PLACEHOLDER),
+                    );
+                }
+            }
+        } else {
+            // 没有 env 字段：按 policy 选择占位符字段名建一个新的。
+            let token_key = match auth_policy {
+                ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => "ANTHROPIC_AUTH_TOKEN",
+                ClaudeTakeoverAuthPolicy::ManagedAccount => "ANTHROPIC_API_KEY",
+            };
+            live_config["env"] = json!({
+                "ANTHROPIC_BASE_URL": proxy_url,
+                token_key: PROXY_TOKEN_PLACEHOLDER,
+            });
+        }
+    }
 
+    /// 读取指定 AppType 当前生效的 provider（不存在则 Ok(None)）。
+    fn get_current_provider_for_app(&self, app_type: &AppType) -> Result<Option<Provider>, String> {
+        let Some(current_id) = crate::settings::get_effective_current_provider(&self.db, app_type)
+            .map_err(|e| format!("获取 {app_type:?} 当前供应商失败: {e}"))?
+        else {
+            return Ok(None);
+        };
+
+        self.db
+            .get_provider_by_id(&current_id, app_type.as_str())
+            .map_err(|e| format!("读取 {app_type:?} 当前供应商失败: {e}"))
+    }
+
+    /// 严格模式版本：当前 provider 不存在时返回 Err。
+    fn require_current_provider_for_app(&self, app_type: &AppType) -> Result<Provider, String> {
+        self.get_current_provider_for_app(app_type)?
+            .ok_or_else(|| format!("{app_type:?} 当前供应商不存在，无法接管 Live 配置"))
+    }
+
+    /// 接管指定应用的 Live 配置（严格模式：目标配置不存在则返回错误）
+    async fn takeover_live_config_strict(&self, app_type: &AppType) -> Result<(), String> {
+        let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
+
+        match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
+            AppType::Claude => {
+                let mut live_config = self.read_claude_live()?;
+                let claude_provider = self.require_current_provider_for_app(&AppType::Claude)?;
+                Self::apply_claude_takeover_fields_for_provider(
+                    &mut live_config,
+                    &proxy_url,
+                    &claude_provider,
+                );
                 self.write_claude_live(&live_config)?;
                 log::info!("Claude Live 配置已接管，代理地址: {proxy_url}");
             }
@@ -828,43 +942,33 @@ impl ProxyService {
         let (proxy_url, proxy_codex_base_url) = self.build_proxy_urls().await?;
 
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 if let Ok(mut live_config) = self.read_claude_live() {
-                    if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
-                        env.insert("ANTHROPIC_BASE_URL".to_string(), json!(&proxy_url));
-                        // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
-                        for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-                            env.remove(key);
-                        }
-
-                        let token_keys = [
-                            "ANTHROPIC_AUTH_TOKEN",
-                            "ANTHROPIC_API_KEY",
-                            "OPENROUTER_API_KEY",
-                            "OPENAI_API_KEY",
-                        ];
-
-                        let mut replaced_any = false;
-                        for key in token_keys {
-                            if env.contains_key(key) {
-                                env.insert(key.to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
-                                replaced_any = true;
-                            }
-                        }
-
-                        if !replaced_any {
-                            env.insert(
-                                "ANTHROPIC_AUTH_TOKEN".to_string(),
-                                json!(PROXY_TOKEN_PLACEHOLDER),
-                            );
-                        }
+                    // best-effort：拿不到 current provider 时退回老 policy，
+                    // 保证不会因为状态异常把 Live 写成 ManagedAccount 模式。
+                    let claude_provider = self
+                        .get_current_provider_for_app(&AppType::Claude)
+                        .ok()
+                        .flatten();
+                    if let Some(provider) = claude_provider.as_ref() {
+                        Self::apply_claude_takeover_fields_for_provider(
+                            &mut live_config,
+                            &proxy_url,
+                            provider,
+                        );
                     } else {
-                        live_config["env"] = json!({
-                            "ANTHROPIC_BASE_URL": &proxy_url,
-                            "ANTHROPIC_AUTH_TOKEN": PROXY_TOKEN_PLACEHOLDER
-                        });
+                        Self::apply_claude_takeover_fields_with_policy(
+                            &mut live_config,
+                            &proxy_url,
+                            ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken,
+                        );
                     }
-
                     let _ = self.write_claude_live(&live_config);
                 }
             }
@@ -915,6 +1019,12 @@ impl ProxyService {
     /// 恢复指定应用的 Live 配置（若无备份则不做任何操作）
     async fn restore_live_config_for_app(&self, app_type: &AppType) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => {
                 if let Ok(Some(backup)) = self.db.get_live_backup("claude").await {
                     let config: Value = serde_json::from_str(&backup.original_config)
@@ -1021,6 +1131,10 @@ impl ProxyService {
 
     fn write_live_config_for_app(&self, app_type: &AppType, config: &Value) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                Err("claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string())
+            }
             AppType::Claude => self.write_claude_live(config),
             AppType::Codex => self.write_codex_live(config),
             AppType::Gemini => self.write_gemini_live(config),
@@ -1037,6 +1151,8 @@ impl ProxyService {
 
     pub fn detect_takeover_in_live_config_for_app(&self, app_type: &AppType) -> bool {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现，无接管
+            AppType::ClaudeDesktop => false,
             AppType::Claude => match self.read_claude_live() {
                 Ok(config) => Self::is_claude_live_taken_over(&config),
                 Err(_) => false,
@@ -1093,6 +1209,8 @@ impl ProxyService {
         app_type: &AppType,
     ) -> Result<(), String> {
         match app_type {
+            // C-Phase0 脚手架：claude-desktop 无接管占位符可清理
+            AppType::ClaudeDesktop => Ok(()),
             AppType::Claude => self.cleanup_claude_takeover_placeholders_in_live(),
             AppType::Codex => self.cleanup_codex_takeover_placeholders_in_live(),
             AppType::Gemini => self.cleanup_gemini_takeover_placeholders_in_live(),
@@ -1267,22 +1385,44 @@ impl ProxyService {
                 .map_err(|e| format!("构建 {app_type} 有效配置失败: {e}"))?;
 
         if matches!(app_type_enum, AppType::Codex) {
-            let existing_backup = db
+            let existing_backup_value = db
                 .get_live_backup(app_type)
                 .await
-                .map_err(|e| format!("读取 {app_type} 现有备份失败: {e}"))?;
+                .map_err(|e| format!("读取 {app_type} 现有备份失败: {e}"))?
+                .map(|backup| {
+                    serde_json::from_str::<Value>(&backup.original_config)
+                        .map_err(|e| format!("解析 {app_type} 现有备份失败: {e}"))
+                })
+                .transpose()?;
 
-            if let Some(existing_backup) = existing_backup {
-                let existing_value: Value = serde_json::from_str(&existing_backup.original_config)
-                    .map_err(|e| format!("解析 {app_type} 现有备份失败: {e}"))?;
+            if let Some(existing_value) = existing_backup_value.as_ref() {
                 Self::preserve_codex_mcp_servers_in_backup(
                     &mut effective_settings,
-                    &existing_value,
+                    existing_value,
                 )?;
             }
+
+            // 归一化 backup 里 Codex config 的 model_provider，让 backup 与 live
+            // 共用同一个稳定 id（优先复用上一笔 backup 中已有的自定义 id 作为 anchor）。
+            // 这样后续 takeover restore 写回 live 时不会让 model_provider 漂移。
+            let anchor_config_text = existing_backup_value
+                .as_ref()
+                .and_then(|value| value.get("config"))
+                .and_then(|value| value.as_str());
+            crate::codex_config::normalize_codex_settings_config_model_provider(
+                &mut effective_settings,
+                anchor_config_text,
+            )
+            .map_err(|e| format!("归一化 Codex restore backup 失败: {e}"))?;
         }
 
         let backup_json = match app_type_enum {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现
+            AppType::ClaudeDesktop => {
+                return Err(
+                    "claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string(),
+                )
+            }
             AppType::Claude => serde_json::to_string(&effective_settings)
                 .map_err(|e| format!("序列化 Claude 配置失败: {e}"))?,
             AppType::Codex => serde_json::to_string(&effective_settings)

@@ -430,10 +430,12 @@ type = "stdio"
     expect(entry.id).toBe("no-apps");
     expect(entry.apps).toEqual({
       claude: false,
+      "claude-desktop": false,
       codex: false,
       gemini: false,
       opencode: false,
       openclaw: false,
+      hermes: false,
     });
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();

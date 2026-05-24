@@ -827,6 +827,7 @@ export async function fetchWebProviderModels(
   baseUrl: string,
   apiKey: string,
   isFullUrl?: boolean,
+  modelsUrl?: string,
 ): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
   return requestWithBody<import("@/lib/api/model-fetch").FetchedModel[]>(
     "/api/providers/models/fetch",
@@ -835,8 +836,27 @@ export async function fetchWebProviderModels(
       baseUrl,
       apiKey,
       isFullUrl,
+      modelsUrl,
     },
   );
+}
+
+/// 取后端进程能读到的 Windows 环境变量白名单映射，供前端展开 %USERPROFILE% 类占位符。
+export async function fetchWebWindowsEnvPaths(): Promise<
+  Record<string, string>
+> {
+  const path = "/api/settings/windows-env-paths";
+  logWebRequest("GET", path, undefined);
+  const response = await fetch(`${getWebApiBase()}${path}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    const fallback = `HTTP ${response.status} for GET ${path}`;
+    throw new Error(await getErrorMessage(response, fallback));
+  }
+  await logWebResponse("GET", path, response);
+  return (await response.json()) as Record<string, string>;
 }
 
 export async function testWebUsageScript(
@@ -990,6 +1010,37 @@ export async function getWebProxyTakeoverStatus(): Promise<ProxyTakeoverStatus> 
       error,
     );
     return getDefaultProxyTakeoverStatus();
+  }
+}
+
+export async function getWebClaudeDesktopStatus(): Promise<
+  import("@/types/claudeDesktop").ClaudeDesktopStatus
+> {
+  const { getDefaultClaudeDesktopStatus } = await import(
+    "@/types/claudeDesktop"
+  );
+  try {
+    return await requestJson("/api/claude-desktop/status");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load claude-desktop status from local service",
+      error,
+    );
+    return getDefaultClaudeDesktopStatus();
+  }
+}
+
+export async function getWebClaudeDesktopDefaultRoutes(): Promise<
+  import("@/types/claudeDesktop").ClaudeDesktopDefaultRoute[]
+> {
+  try {
+    return await requestJson("/api/claude-desktop/default-routes");
+  } catch (error) {
+    console.warn(
+      "[runtime:web] failed to load claude-desktop default routes",
+      error,
+    );
+    return [];
   }
 }
 

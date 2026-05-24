@@ -458,7 +458,7 @@ impl SkillService {
     pub fn get_app_skills_dir(app: &AppType) -> Result<PathBuf> {
         // 目录覆盖：优先使用用户在 settings.json 中配置的 override 目录
         match app {
-            AppType::Claude => {
+            AppType::Claude | AppType::ClaudeDesktop => {
                 if let Some(custom) = crate::settings::get_claude_override_dir() {
                     return Ok(custom.join("skills"));
                 }
@@ -489,7 +489,7 @@ impl SkillService {
         let home = get_home_dir();
 
         Ok(match app {
-            AppType::Claude => home.join(".claude").join("skills"),
+            AppType::Claude | AppType::ClaudeDesktop => home.join(".claude").join("skills"),
             AppType::Codex => home.join(".codex").join("skills"),
             AppType::Gemini => home.join(".gemini").join("skills"),
             AppType::OpenCode => home.join(".config").join("opencode").join("skills"),

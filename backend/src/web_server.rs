@@ -166,6 +166,9 @@ struct FetchModelsRequest {
     base_url: String,
     api_key: String,
     is_full_url: Option<bool>,
+    /// 预设级别的 `/models` 端点覆盖。命中时跳过 baseURL 推导直接使用此 URL。
+    /// 用于 DeepSeek 这类把 Anthropic 协议挂在子路径，但 `/models` 在根上的供应商。
+    models_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -829,10 +832,16 @@ async fn fetch_provider_models(
         payload.base_url,
         payload.api_key,
         payload.is_full_url,
+        payload.models_url,
     )
     .await
     .map_err(ApiError::bad_request)?;
     Ok(Json(models))
+}
+
+async fn get_windows_env_paths(
+) -> Result<Json<std::collections::HashMap<String, String>>, ApiError> {
+    Ok(Json(crate::commands::get_windows_env_paths_internal()))
 }
 
 async fn get_custom_endpoints(
@@ -2765,6 +2774,23 @@ async fn is_proxy_running(State(state): State<WebApiState>) -> Json<bool> {
     )
 }
 
+async fn get_claude_desktop_status(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::claude_desktop_config::ClaudeDesktopStatus>, ApiError> {
+    let status =
+        crate::commands::get_claude_desktop_status_internal(state.app_state.as_ref())
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!("failed to load claude-desktop status: {e}"))
+            })?;
+    Ok(Json(status))
+}
+
+async fn get_claude_desktop_default_routes(
+) -> Json<Vec<crate::claude_desktop_config::ClaudeDesktopDefaultRoute>> {
+    Json(crate::commands::get_claude_desktop_default_routes_internal())
+}
+
 async fn is_live_takeover_active(State(state): State<WebApiState>) -> Result<Json<bool>, ApiError> {
     let active = crate::commands::is_live_takeover_active_internal(state.app_state.as_ref())
         .await
@@ -3423,6 +3449,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_stream_check_config).put(set_stream_check_config),
         )
         .route("/api/settings/tool-versions", post(get_tool_versions))
+        .route("/api/settings/windows-env-paths", get(get_windows_env_paths))
         .route("/api/settings/latest-release", get(get_latest_release))
         .route("/api/settings/config-dir/:app", get(get_config_dir))
         .route("/api/omo/local-file", get(get_omo_local_file))
@@ -3712,6 +3739,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_proxy_config_for_app).put(update_proxy_config_for_app),
         )
         .route("/api/proxy/running", get(is_proxy_running))
+        .route(
+            "/api/claude-desktop/status",
+            get(get_claude_desktop_status),
+        )
+        .route(
+            "/api/claude-desktop/default-routes",
+            get(get_claude_desktop_default_routes),
+        )
         .route(
             "/api/proxy/live-takeover-active",
             get(is_live_takeover_active),

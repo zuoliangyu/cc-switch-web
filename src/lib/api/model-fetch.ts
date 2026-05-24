@@ -11,11 +11,13 @@ export async function fetchModelsForConfig(
   baseUrl: string,
   apiKey: string,
   isFullUrl?: boolean,
+  modelsUrlOverride?: string,
 ): Promise<FetchedModel[]> {
   return invoke<FetchedModel[]>("fetch_models_for_config", {
     baseUrl,
     apiKey,
     isFullUrl,
+    modelsUrl: modelsUrlOverride,
   });
 }
 
@@ -44,7 +46,11 @@ export function showFetchModelsError(
     return;
   }
   if (message.includes("HTTP 404") || message.includes("HTTP 405")) {
-    toast.error(t("providerForm.fetchModelsNotSupported"));
+    toast.error(t("providerForm.fetchModelsEndpointNotFound"));
+    return;
+  }
+  if (message.includes("All candidates failed")) {
+    toast.error(t("providerForm.fetchModelsEndpointNotFound"));
     return;
   }
   if (message.includes("timeout") || message.includes("timed out")) {

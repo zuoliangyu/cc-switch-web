@@ -25,7 +25,7 @@ describe("web runtime skill requests", () => {
     await uninstallWebSkillUnified("owner/repo:adobe-automation");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8788/api/skills/uninstall",
+      "http://127.0.0.1:8890/api/skills/uninstall",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -50,7 +50,7 @@ describe("web runtime skill requests", () => {
     await toggleWebSkillApp("owner/repo:adobe-automation", "claude", true);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8788/api/skills/apps/toggle",
+      "http://127.0.0.1:8890/api/skills/apps/toggle",
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({

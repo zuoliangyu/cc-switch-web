@@ -2,6 +2,380 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [0.8.0] - 2026-05-23
+
+跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。
+
+### P0 · 上游 B/C 类 fix（4 条小修复）
+
+- **`6e8ee094` PricingEditModal step 精度**：`src/components/usage/PricingEditModal.tsx` 四个价格输入框 `step="0.01"` → `PRICE_INPUT_STEP="0.0001"`，支持 DeepSeek 等供应商 cache read `$0.0028/M tokens` 这类亚分级价格。
+- **`bbce75fc` session_usage 子 Agent 扫描**：`backend/src/services/session_usage.rs` `collect_jsonl_files` 从两层固定深度扩展到三层，新增 `projects_dir/<项目>/<SESSION_ID>/subagents/*.jsonl` 扫描；修复 session log 模式下 Task tool 派生子 Agent 的 token 用量完全未统计的问题（proxy 模式不受影响）。
+- **`5c79cf64` gemini-native functionResponse.name + thought_signature**：`backend/src/proxy/providers/transform_gemini.rs` 两个并发 bug：(1) 长会话/会话重启后 shadow store 老化导致 `tool_result` 找不到合成 ID 的 name → 422，增加 pre-scan 整个 request body 的 assistant tool_use 块构建 `tool_name_by_id` + content-array last-resort fallback；(2) Anthropic Messages 格式不存 `thoughtSignature` 导致 Gemini 多轮 tool-use 报"missing thought_signature" → 400，新增 `build_thought_signature_map_from_shadow_turns` / `merge_thought_signatures_from_shadow`，转 `tool_use → functionCall` 时按 ID 重新挂回签名。
+- **`8786f44c` useSettings.ts language truthy guard**：`src/hooks/useSettings.ts` 把 `payload.language as Language` 强转改为 `&& payload.language` 守卫，避免 undefined 经类型断言写入 localStorage 后续读出 `"undefined"` 字符串；同时删去不再使用的 `type Language` 别名。上游同 commit 的前半（App.tsx 三个 useEffect active flag）不适用——cc-switch-web 没有 Tauri event 订阅路径，整段跳过。
+
+### P1 · 托管账号 proxy 加固（`61e68d75`，分三段）
+
+修复 GitHub Copilot / Codex OAuth 这类托管账号供应商在 Claude Live 接管时同时写入 `ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_API_KEY` 占位符的 bug——Claude Code 客户端优先用 `ANTHROPIC_AUTH_TOKEN`，会把 `Bearer PROXY_MANAGED` 发到代理；进一步如果代理的 OAuth 注入失败，占位符可能被原样转发到上游。
+
+- **`backend/src/provider.rs` 加 5 个 helper**：`provider_type()` / `claude_base_url_contains()` 私有方法 + 公开 `is_codex_oauth()` / `is_github_copilot()` / `uses_managed_account_auth()`。`is_github_copilot()` 同时识别 `provider_type="github_copilot"` 与 `ANTHROPIC_BASE_URL` 含 `githubcopilot.com` 两种信号；`uses_managed_account_auth()` 额外把 `chatgpt.com/backend-api/codex` 端点归入托管账号。配套 1 个单测覆盖所有判定路径。
+- **`backend/src/services/proxy.rs` 引入 auth policy 枚举**：新增 `ClaudeTakeoverAuthPolicy::{PreserveExistingOrAuthToken, ManagedAccount}`，把原来散在 `takeover_live_config_strict` / `takeover_live_config_best_effort` 两处的 inline takeover 代码提炼为单一 `apply_claude_takeover_fields_with_policy(live_config, proxy_url, policy)`。新增 `apply_claude_takeover_fields_for_provider(live_config, proxy_url, provider)`：依据 `provider.uses_managed_account_auth()` 选 policy。`ManagedAccount` 分支会**先清掉**全部 4 个 token env（`ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`/`OPENROUTER_API_KEY`/`OPENAI_API_KEY`），**只写 `ANTHROPIC_API_KEY: PROXY_MANAGED`** 一个占位符。两个 takeover 调用点改为先查当前 provider 再选 policy；strict 调用点用 `require_current_provider_for_app()`、best-effort 用 `get_current_provider_for_app()` Option 兜底。
+- **`backend/src/proxy/forwarder.rs` outbound guard**：出站请求实际 send 之前最后一道防线 —— `reject_proxy_placeholder_for_managed_account_upstream(url, headers)` 检查目标 URL 是 `*.githubcopilot.com` 或 `chatgpt.com/backend-api/codex` 且任意 header value 含 `PROXY_MANAGED` 字面量时直接返回 `ProxyError::AuthError`，宁可让客户端报 401 也不把占位符泄到上游。3 个单测覆盖 Copilot 上游、Codex OAuth 上游、非托管上游放行三种路径。
+
+### P2 · Codex Chat Completions 路由（`1c82b8a3` + `79d6486e` + `09f67c1b` 三连合并）
+
+让 cc-switch-web 作为协议适配代理：客户端 Codex CLI 始终通过 Responses API 跟本地代理对话，代理把请求转为 Chat Completions 发到上游、把 Chat 响应（JSON 或 SSE）翻译回 Responses 格式回给客户端。
+
+支持很多"Codex 兼容"第三方供应商——它们只暴露 OpenAI Chat Completions 端点，原本无法用 Codex CLI 接入。
+
+**新文件（直接搬运上游最终版本）**：
+- `backend/src/proxy/json_canonical.rs`（102 行）：`canonicalize_value` / `canonical_json_string` / `short_value_hash` / `short_sha256_hex` 稳定 JSON 工具，供 transform 内部生成稳定的 tool 调用键。
+- `backend/src/proxy/providers/transform_codex_chat.rs`（888 行，含三连最终改进）：双向 JSON 转换 —— Codex Responses request → Chat Completions request；Chat Completions response → Responses response。覆盖 reasoning_content / reasoning 字段 → Responses reasoning items，inline `<think>...</think>` 块切割与重组（MiniMax 风格兼容），tool_calls 与 outputs 顺序保持，length stop reason 映射等。
+- `backend/src/proxy/providers/streaming_codex_chat.rs`（1041 行）：Chat SSE → Responses SSE 流式翻译器。处理增量 delta、reasoning summary 事件、多 tool_call delta、stream_error / data-only error 终态、保持 reasoning/text/tool_calls 三种 stream 项的相对顺序。
+
+**后端路由判定与接入**：
+- `backend/src/proxy/providers/codex.rs` 加 `codex_provider_uses_chat_completions(provider)` 与 `should_convert_codex_responses_to_chat(provider, endpoint)`，四层 fallback 判定：`meta.api_format` → `settings_config.api_format` / `apiFormat` → TOML 里 `model_providers.<active>.wire_api` → `base_url` / 当前 provider 的 base_url 是否以 `/chat/completions` 结尾。配套 3 个单测。
+- `backend/src/proxy/forwarder.rs`：endpoint rewrite 路径新增 `codex_responses_to_chat` 分支，把 `/v1/responses` / `/v1/responses/compact` 改写为 `/chat/completions`；当 base_url 本身就是完整 chat endpoint 时跳过 `adapter.build_url` 拼接。request body 走 `transform_codex_chat::responses_to_chat_completions`，`force_identity_encoding` 标记同时考虑 codex_responses_to_chat。新增 `rewrite_codex_responses_endpoint_to_chat` 函数 + 2 个单测（普通路径与 compact 路径都保留 query）。
+- `backend/src/proxy/handlers.rs`：`handle_responses` / `handle_responses_compact` 两个入口都加 `should_convert_codex_responses_to_chat` 判断，命中即走新的 `handle_codex_chat_to_responses_transform`。该函数对失败响应原样透传、对流式响应走 `create_responses_sse_stream_from_chat` 翻译并经过 `create_logged_passthrough_stream` 透传、对非流式响应先 `read_decoded_body` 再 `transform_codex_chat::chat_completion_to_response` 翻译后重建响应。
+  - 已知 TODO：SSE usage 收集器没接上（web 的 `SseUsageCollector::new(start_time, callback)` 是 2 参签名，上游 src-tauri 3 参带 SSE filter）—— Codex Chat 路由跑出来的请求暂不进 usage_stats。不影响协议路由本身工作，单独立 issue 跟进。
+
+**前端 UI**：
+- `src/types.ts`：新增 `type CodexApiFormat = "openai_responses" | "openai_chat"`；`ProviderMeta.apiFormat` 注释扩展为 Claude / Codex 共用。
+- `src/utils/providerConfigUtils.ts`：`extractCodexWireApi` / `setCodexWireApi` / `isCodexChatWireApi` / `CODEX_CHAT_WIRE_API_VALUES`，从 Codex TOML 文本读写 `wire_api` 字段（支持 6 种 chat 别名）。
+- `src/components/providers/forms/CodexFormFields.tsx`：第三方 Codex provider 表单加 `apiFormat` Select（OpenAI Responses 原生 / OpenAI Chat Completions 需开启路由）+ 提示文案。
+- `src/components/providers/forms/ProviderForm.tsx`：`localCodexApiFormat` state 从 `meta.apiFormat` 或 TOML `wire_api` 推断、回退到 `openai_responses`；用户在 UI 切 `apiFormat` 时把 TOML 的 wire_api 归一为 `"responses"`（保持与新版 Codex 客户端兼容，真实路由由 `meta.apiFormat` 决定）；提交时第三方 provider 的 TOML 也强制归一一次；preset 应用、reset 流程同步更新本地 state。
+- `src/components/providers/ProviderCard.tsx`：`codexNeedsRouting` useMemo 在第三方 Codex provider 且 `apiFormat=openai_chat` 或 TOML wire_api 为 chat 类时挂"需要路由"徽标。
+- `src/hooks/useProviderActions.ts`：切换到 Codex Chat 格式的 provider 时如果代理未运行，给出 `notifications.proxyReasonOpenAIChat` 提示。
+- `src/config/codexProviderPresets.ts`：`CodexProviderPreset` 加 `apiFormat?: CodexApiFormat` 字段，preset 可显式声明默认协议。
+- `src/i18n/locales/{zh,en,ja}.json`：新增 `codex.needsRouting` 命名空间键 + `providerForm.codexApiFormatResponses` / `codexApiFormatOpenAIChat` / `codexApiFormatHint` 三键。
+
+### 验证
+
+- 前端：`pnpm exec tsc --noEmit` 0 错误；`pnpm vitest run` **184 passed / 2 skipped / 0 failed**
+- 后端：`cargo check --locked --bin cc-switch-web` 0 错误；`cargo test --lib` **813 passed / 0 failed / 0 ignored**（含 P1 5 个新增 + P2 18 个新增）
+- 改动总量：21 修改 + 3 新增（json_canonical + streaming_codex_chat + transform_codex_chat）= 24 文件，+~3300 行
+
+### 显式未跟（保留为后续工作）
+
+- **Codex 三连里 src-tauri 的 `codex_config.rs` `update_codex_toml_field` 扩展支持 wire_api** —— web 走前端 `setCodexWireApi` 直接写 TOML 文本路径，不依赖该后端函数。
+- **`ed33990b` codex mise detection**：上游给 `scan_cli_version` 加 mise (`~/.local/share/mise/...`) 路径。web 容器/服务器场景里 host CLI 检测意义低，跳过。
+- **Codex Chat 路由的 SSE usage 收集**：上面 P2 已说明。
+
+## [0.7.1] - 2026-05-19
+
+新增 Linux arm64 发布产物，面向 64 位嵌入式开发板（树莓派 64 位系统、RK35xx、Allwinner 等）。
+
+### 新增
+
+- **Linux arm64 静态二进制**：Web Package 发布流水线（打 `v*` tag 触发）在原 `linux-x64` 之外新增 `linux-arm64`（`aarch64-unknown-linux-musl`）静态链接 `tar.gz`，与 x64 一致为单文件可执行、免宿主机运行库依赖。
+- 新增独立 `Dockerfile.arm64`：arm64 用 `messense/rust-musl-cross` 在 amd64 主机**交叉编译**（不走 QEMU），几分钟出包、发版时间可控；`rquickjs-sys` 有 aarch64-musl 预置绑定，无需 bindgen。`web-package.yml` Linux 矩阵新增 arm64 项（`-f Dockerfile.arm64`、不传 `--platform`）。
+
+### 变更
+
+- **主 Dockerfile 按架构参数化**：`service-builder` 与打包阶段改为读取 BuildKit 自动注入的 `TARGETARCH`/`TARGETVARIANT`，按架构选择 Rust 目标三元组与产物标签；x64 走主 Dockerfile（官方 `rust:alpine`、原生 amd64）。`TARGETARCH` 为空/`amd64` 时行为与原先完全一致（x64 产物名、路径、CI 冒烟、docker-image 均不受影响）。
+- 最终运行镜像与打包阶段统一从 `/app/out/cc-switch-web` 取二进制（替代写死的 `x86_64-unknown-linux-musl` 路径）。
+- README 补充 ARM 开发板（`Dockerfile.arm64` 交叉）导出说明。
+
+### 已知限制
+
+- **32 位 armv7 暂不提供**：直接依赖 `rquickjs-sys 0.8.1` 未为 `armv7-unknown-linux-musleabihf` 预置 FFI 绑定（alpine 亦无 `linux/arm/v7` 镜像），交叉编译需额外 bindgen/libclang 链路，暂未纳入发布矩阵；arm64 不受影响。
+
+### 验证
+
+本地完整 Docker CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证 amd64 默认路径无回归；arm64 本地 `Dockerfile.arm64` 交叉构建验证通过后，由 tag 触发的 Web Package 流水线实际产出。
+
+## [0.7.0] - 2026-05-17
+
+移植上游 cc-switch 的 Claude Desktop 3P 子系统（C 类，分 6 阶段，每阶段独立 CI 等价验证）。
+
+### Claude Desktop 3P（后端完整 + 前端接入）
+
+- **Phase0 脚手架**：`AppId`(TS) / `AppType`(Rust，serde `rename="claude-desktop"`+alias) 新增 claude-desktop，收口前后端全部 `Record<AppId>`/`match` 站点
+- **Phase1 后端核心**：移植 cc-switch `claude_desktop_config.rs`（1561 行，唯一适配 `get_proxy_config`→`get_global_proxy_config`）；`provider.rs` 增 `ClaudeDesktopMode`/`ClaudeDesktopModelRoute` + `ProviderMeta` 两字段；`CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID` 常量
+- **Phase2 网关**：`/claude-desktop/v1/{models,messages}` 路由 + 每请求 Bearer token 鉴权；`handle_messages` 泛化为 `handle_messages_for_app`；forwarder 对 ClaudeDesktop 走 `map_proxy_request_model`（未知 route 报错，不兜底）
+- **Phase3 命令/状态**：`/api/claude-desktop/{status,default-routes}`（漂移检测：stale models / missing routes / proxy stopped / base url mismatch / missing token）
+- **Phase4/5 前端**：接入 web 既有 AppId 体系（非克隆 23 个 Tauri 组件）—— APP_IDS 启用、`claudeDesktop` 类型/api/runtime/`useClaudeDesktopStatus`(5s 轮询)、i18n × zh/en/ja；ProviderForm 经 claude 兜底支持 claude-desktop
+
+### 显式延后（架构分叉，非网关核心，单列后续）
+
+- `import_claude_desktop_providers_from_claude` 及通用 proxy 改进（model_mapper ONE_M、claude.rs GEMINI_API_KEY）—— 依赖 web 无的 OFFICIAL_SEEDS 子系统 / web 已独立实现
+- cc-switch 935 行 `claudeDesktopProviderPresets.ts`（baseUrl+modelRoutes 形态）与专属 routeId/proxy-mode 富表单 —— web 通用 ProviderForm 为 env 型，faithful 富 UI 作为后续
+
+### 验证
+
+各阶段 `cargo check --locked --bin`（CI 等价）+ `cargo test --lib` **789 passed/0 failed** + `tsc` 0 + vitest **184 passed/2 skipped**；收尾本地完整 Docker CI 模拟通过。
+
+## [0.6.1] - 2026-05-17
+
+热修：0.6.0 推送后 Web CI 的 ubuntu job 在 `docker build` 阶段失败（仅工程，无业务改动）。
+
+### 修复
+
+- **Docker 构建 pnpm 版本漂移**：Dockerfile `corepack enable` 后无 `packageManager` 锁定，corepack 拉取最新 pnpm 11.x，其依赖 Node 22 才有的 `node:sqlite`，而 `frontend-builder` 基于 `node:20-bookworm`，导致 `pnpm install --frozen-lockfile` 报 `ERR_UNKNOWN_BUILTIN_MODULE`。`package.json` 增加 `"packageManager": "pnpm@10.20.0"` 锁定（与本地一致、兼容 Node 20）。windows/macos job 不跑 docker 故未受影响。
+- 本地完整 CI 模拟（`scripts/ci-check.ps1`：静态检查 + `docker build` + 容器 + `/api/health`）验证通过。
+
+### 工程约定
+
+- 新增项目 `CLAUDE.md`：确立铁律——**每次 `git push` 前必须本地跑一遍 Docker CI 模拟**（本地单测覆盖不到 ubuntu 的 docker 链路），并锁定 pnpm/Node 工具链三处同步。
+
+## [0.6.0] - 2026-05-17
+
+同步上游 cc-switch `2026-04-24 .. 2026-05-16` 积压的 preset 改动（A 类纯预设、B 类需判断项），按"对 Web 后端有直接价值且 runtime 适用"筛过后落地；不含 claude-desktop 整子系统（C 类，另见计划文档）。
+
+### A 类 — 上游预设同步
+
+- **域名/链接迁移**：Micu/米醋 全面迁到 `www.micuapi.ai`（websiteUrl/apiKeyUrl/baseUrl/endpointCandidates，对应上游 `cb45c22b`），openclaw/opencode 模型同步升 `claude-opus-4-7`；邀请链接 `aff` 参数按运营要求改为 `cODn`（Web 专属，上游仍 `aOYQ`）
+- **endpoint/链接更新**：Kimi 官网 `/coding/docs/` → `/code/docs/`（`bcf8434c`）；CrazyRouter API 切 `cn.` 子域名（`8dabb9fa`）；DouBaoSeed 改 console 直达链接 + `api/compatible` + 设为合作方（`a0131c9a`）
+- **DeepSeek 切 V4**：`deepseek-chat`/`deepseek-reasoner` → `deepseek-v4-pro`/`deepseek-v4-flash`，含 1M 上下文与新定价（`b1f9ce46`）
+- **移除 DDSHub 合作方**：claude/codex 预设块整体移除（`99304ffc`），i18n/图标孤儿项保留与上游该提交一致
+- **新增预设**：PatewayAI / ClaudeAPI / ClaudeCN / RunAPI / RelaxyCode / 火山Agentplan / BytePlus，按上游各提交触及的文件落到 claude/codex/openclaw/opencode（`08cd5ab5` `df11df4d` `d6bbbf72` `18ffddbf` `3fd38b0a` `58cd5302` `d94eb672` `9050442b`）；web 无 claudeDesktop/hermes preset 文件，相应部分跳过
+- **i18n**：新增 7 个合作方促销文案 × zh/en/ja
+
+### B 类 — 需判断项
+
+- **compshare Coding Plan**：claude/codex/openclaw 新增独立预设（`cp.compshare.cn`，与既有 Compshare `api.modelverse.cn` 区分），复用 ucloud 图标/促销 key，新增 `providerForm.presets.ucloudCoding` i18n（`08e2b29b`）
+- **百度千帆 Coding Plan**：claude 新增预设；`useStreamCheck` 与后端 `stream_check.rs` 新增千帆 Coding Plan 额度超额（5h/周/月）检测与 `quotaExceeded` 提示 + 单测；i18n × zh/en/ja（`db66348f`）
+- **预设按数组顺序渲染**：`ProviderPresetSelector`/`ProviderForm` 去掉 category 分组，数组位置成为展示顺序唯一来源；PatewayAI/火山Agentplan/BytePlus/DouBaoSeed 移到 Shengsuanyun 之后（claude/codex/openclaw/opencode）（`ec8afd63`）
+- **图标资源**：7 个 raster 图标接入 web 自有 `src/icons/local.ts` 机制（`src/assets/icons/`），非上游 extracted/iconUrls 体系
+
+### 文档
+
+- README（zh/en/ja）重构：用户使用在前、开发在后；顶部逐版 changelog 折叠为指向 `CHANGELOG.md` 的一行
+- 新增 `docs-dev/web-parity-claude-desktop-plan-2026-05.md`：C 类（claude-desktop 整子系统，~8500 行 Tauri→Axum）分阶段实施计划
+
+### 验证
+
+`pnpm tsc` 0 错误；vitest 184 passed + 2 skipped（31 文件全过）；`vite build` 通过；后端新增 `stream_check` 千帆单测。
+
+## [0.5.1] - 2026-05-07
+
+仅工程侧补丁，无业务行为改动：vitest 测试矩阵从 0.4.0 基线 26 fail 收敛到 0 fail。
+
+### 测试夹具与 mock 修齐
+
+**类型 / 形状滞后**：
+
+- `tests/components/McpFormModal.test.tsx` apps 形状期望补 `hermes: false`（v0.3.0 引入第 6 个应用 hermes 时未同步）
+- `tests/hooks/useDirectorySettings.test.tsx` `resolvedDirs` 期望补 `openclaw` / `hermes` 两个 key
+- `tests/hooks/useSettings.test.tsx` `resetAllDirectories` 调用断言补 `openclawConfigDir` / `hermesConfigDir` 两个参数
+
+**API 改名 / 协议改动**：
+
+- `tests/components/UnifiedSkillsPanel.test.tsx` mock 把 `useInstallSkillsFromZip` 改成现行的 `useInstallSkillArchives`，并补 `useCheckSkillUpdates` / `useUpdateSkill` 两个组件用到但本测试不关心的 hook 最小返回值
+- `tests/hooks/useImportExport.test.tsx` + `useImportExport.extra.test.tsx` 整套按 Web hook 新 API 重写：`selectImportUpload(File)` 替代旧的 `openFileDialog`、`importConfigFromUpload(file)` 替代 `importConfigFromFile`、`downloadConfigExport(name)` 返回 `{blob, fileName}` 替代 `saveFileDialog + exportConfigToFile`，并加 `URL.createObjectURL` / `revokeObjectURL` stub 让 jsdom 25 能跑下载流程
+- `tests/hooks/useProviderActions.test.tsx` 断言 `updateProvider` mutation 透传 payload 改为 `{ provider, originalId }`，与 OpenCode/OpenClaw additive rename 链路一致
+- `tests/utils/webRuntimeClient.skills.test.ts` 端口 `8788` → `8890`
+
+**UI / 行为差异**：
+
+- `tests/components/SessionManagerPage.test.tsx` 删除会话搜索结果用 `getByRole heading` 替代 `getAllByText length === 2`（虚拟化列表在 jsdom 下不渲染行内文字）；「已选 N 项」改 `getAllByText`（toolbar + batch toolbar 两处都展示）
+- `tests/integration/App.test.tsx` 中 `EditProviderDialog` 的 `onSubmit` mock 与真实组件对齐成 `{ provider, originalId }` 形态，并加 `retry: 2` 容忍全套并发跑时 MSW 偶发抢占
+- `tests/hooks/useSettingsForm.test.tsx` mock `react-i18next.useTranslation` 锁定 `i18n` 引用，避免 hook re-render 时 `useTranslation` 返回新 i18n 引用导致初始化 useEffect 反复跑覆盖 `resetSettings` 的状态
+
+**Web 模式下已不适用（标记 `it.skip` 留 TODO 注释）**：
+
+- `tests/integration/SettingsDialog.test.tsx` 的 `imports configuration and triggers success callback` 端到端流：Web 端没有原生 file dialog，`selectImportFile()` 只 toast 提示，真实导入要走 `selectImportUpload(File)`，`useImportExport` 已经有等价单元覆盖
+- 同文件 `allows browsing and resetting directories`：`DirectorySettings` 的"浏览目录"按钮被 `allowBrowse` 守卫隐藏（Web 没有原生目录选择器），reset 行为有 `useDirectorySettings` 单元覆盖
+- 同文件 `loads default settings from MSW` 路径期望改为 msw 实际返回的 `/default/app`，不再是早期 Tauri 测试假定的 `/home/mock/.cc-switch`
+
+### 验证
+
+- 后端 `cargo test --lib --test-threads=1` 仍然 **775/775 全过**
+- 前端 `pnpm vitest run` **184 passed + 2 skipped = 186/186（0 fail）**，前后两次连跑稳定
+- 前端 `pnpm tsc --noEmit` 0 错误
+
+### 文档与版本
+
+- 仓库版本提升到 `0.5.1`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.5.1` 版本说明
+
+## [0.5.0] - 2026-05-07
+
+例行依赖升级 + 测试夹具修复版。
+
+### 测试夹具修复
+
+- `backend/src/session_manager/providers/openclaw.rs::tests::delete_session_updates_index_and_removes_jsonl` 测试 fixture 改用 `serde_json::json!` 构造索引数据后再 `to_string_pretty`，让 serde 自己处理路径中反斜杠的 JSON 转义，修复 Windows 临时路径含反斜杠时 `serde_json::from_str` 把 `\T` / `\U` 等当成非法 escape 失败的问题。`cargo test --lib --test-threads=1` 现在 **775/775 全过**，零 pre-existing 后端失败。
+
+### 前端依赖升级（pnpm update，仅 minor / patch 范围内升级）
+
+后端 Rust 依赖本轮不变。
+
+- `@codemirror/lang-javascript` `6.2.4 → 6.2.5`
+- `@codemirror/lint` `6.8.5 → 6.9.6`
+- `@codemirror/state` `6.5.2 → 6.6.0`
+- `@codemirror/view` `6.38.2 → 6.42.0`
+- `@radix-ui/react-label` `2.1.7 → 2.1.8`
+- `@testing-library/jest-dom` `→ 6.9.1` / `@testing-library/react` `16.3.0 → 16.3.2`
+- `@lobehub/icons-static-svg` `1.73.0 → 1.90.0`
+- `@tanstack/react-query` `5.90.3 → 5.100.9`
+- `autoprefixer` `10.4.22 → 10.5.0`
+- `code-inspector-plugin` `1.3.3 → 1.5.1`
+- `framer-motion` `12.23.25 → 12.38.0`
+- `i18next` `25.5.2 → 25.10.10` / `react-i18next` `16.0.0 → 16.6.6`
+- `msw` `2.11.6 → 2.14.3`
+- `postcss` `8.5.6 → 8.5.14`
+- `prettier` `3.6.2 → 3.8.3`
+- `react-hook-form` `7.65.0 → 7.75.0`
+- `recharts` `3.5.1 → 3.8.1`
+- `smol-toml` `1.4.2 → 1.6.1`
+- `tailwind-merge` `3.3.1 → 3.5.0`
+- `tailwindcss` `3.4.18 → 3.4.19`
+- `typescript` `5.9.2 → 5.9.3`
+- `vite` `7.3.0 → 7.3.3`
+- `zod` `4.1.12 → 4.4.3`
+
+### 显式跳过的 major 升级（评估后留待后续单独迭代）
+
+- `react` / `react-dom` 18→19、`@types/react` / `@types/react-dom` 18→19：跨大版本含 `useEffect` 行为微调与并发渲染差异，需对所有 hook / portal / suspense 链路做完整回归
+- `tailwindcss` 3→4：CSS 编译方式重写（Lightning CSS、新 `@import` 语义），影响所有样式
+- `vite` 7→8、`@vitejs/plugin-react` 4→6：构建链路与 HMR 行为变化
+- `vitest` 2→4：跨大版本 worker / mock API 行为差异
+- `typescript` 5→6：编译器选项与 lib types 兼容性
+- `i18next` 25→26、`react-i18next` 16→17：API surface 变化
+- `jsdom` 25→29：DOM API 兼容性
+- `lucide-react` 0.x→1.0：icon API 变化（虽是 0→1 不严格 SemVer，但 changelog 明确包含 breaking changes）
+
+### 验证
+
+- 后端 `cargo check`、`cargo test --lib --test-threads=1` **775/775 全过**
+- 前端 `pnpm tsc --noEmit` 0 错误
+- 前端 `pnpm vitest run` 159 / 186 通过；27 失败属于跨版本 pre-existing 测试夹具滞后问题（如 `McpFormModal` apps 形状缺 `hermes`、`SessionManagerPage` snapshot 与 `useImportExport` 测试 mock 不一致），与本轮依赖升级无直接因果（v0.4.0 基线已 26 失败），不阻塞发布；后续会专门起一笔修测试 fixture 任务
+
+### 文档与版本
+
+- 仓库版本提升到 `0.5.0`（minor bump）
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.5.0` 版本说明
+
+## [0.4.0] - 2026-05-07
+
+落地 0.3.x 系列中跨度最大的延后项 B1：跨源 usage 去重重构。涉及 `TokenUsage` 类型扩展与 `proxy_request_logs` 查询/写入/rollup 三层 SQL 改造，因为是类型层的架构变化，bump 到 minor 版本。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### 7 维指纹 usage 跨源去重（上游 `8669b408` + `2ee7cb41`）
+
+**问题背景**：proxy 实时写入与 session-log 同步使用不同的 `request_id` 生成规则——只有 Claude 走原生 Anthropic 后端时才共享 `session:{message_id}` key；Codex / Gemini / Claude-through-OpenAI compat 路径产生的 `request_id` 总是不同，主键去重根本不起作用，每笔真实请求被记录两次，dashboard 用量翻倍。
+
+**解决方案**：
+
+- `proxy/usage/parser.rs` 扩展 `TokenUsage`：新增 `pub message_id: Option<String>`（`#[serde(skip)]`），新增 `pub fn dedup_request_id() -> String` 方法（有 `message_id` 返回 `session:{id}`、否则随机 UUID），新增 `pub const SESSION_REQUEST_ID_PREFIX = "session:"` 常量。`from_claude_response` / `from_claude_stream_events` 现在会从 `body.id` / `message_start.message.id` 提取 message_id，让 Claude API 直连和 OpenRouter Claude-Anthropic 转换路径都能命中
+- `proxy/handlers.rs` 与 `proxy/response_processor.rs` 的 `request_id` 生成从 `Uuid::new_v4()` 改为 `usage.dedup_request_id()`
+- `proxy/usage/logger.rs` 的 INSERT 改为 INSERT OR REPLACE：当 proxy 与 session-log 撞上同一 `session:msg_xxx` 主键时，后到的更完整数据会替代前者
+- `services/session_usage.rs` 拼 request_id 改用 `SESSION_REQUEST_ID_PREFIX` 常量，避免硬编码
+
+**SQL 层 7 维指纹去重**：
+
+- `services/usage_stats.rs` 新增 `effective_usage_log_filter(log_alias)` SQL 片段生成器：在每个聚合查询的 WHERE 子句插入 `NOT (data_source IN ('session_log','codex_session','gemini_session') AND EXISTS (...))`，子查询用 `(app_type, input/output/cache_read/cache_creation_tokens, status_code∈[200,300), model 大小写不敏感, created_at±10min 窗口)` 7 维匹配排除已被 proxy 行覆盖的 session 行
+- 新增 `pub(crate) const SESSION_PROXY_DEDUP_WINDOW_SECONDS = 10*60`、`pub(crate) struct DedupKey`、`pub(crate) fn should_skip_session_insert(conn, request_id, &DedupKey)`、`pub(crate) fn has_matching_proxy_usage_log(conn, &DedupKey)`、`fn proxy_request_id_exists`
+- Codex/Gemini session 不暴露 `cache_creation_tokens`，传 0 时匹配器放行 proxy 任意值（避免误把不同请求当重复）
+- 三个聚合查询全部接入 filter：`get_usage_summary` / `get_provider_stats` / `get_model_stats` / `get_request_logs` / `check_provider_limits`（今日 + 本月）
+- 三个 session 写入路径在 INSERT 前调用 `should_skip_session_insert`：`session_usage.rs::insert_session_log_entry`、`session_usage_codex.rs::insert_codex_session_entry`、`session_usage_gemini.rs::insert_gemini_session_entry`（Gemini 走 UPSERT，调用 `has_matching_proxy_usage_log` 仅在指纹与 proxy 撞上时跳过，不影响同 request_id 的合法更新）
+- `database/dao/usage_rollup.rs::do_rollup_and_prune` 的聚合 SQL 同样应用 filter，确保 `usage_daily_rollups` 不会再吸收 session_log 的重复数据
+
+**配套 schema 与 transform 改动**：
+
+- `database/schema.rs` 的 `proxy_request_logs` CREATE TABLE 现在直接包含 `data_source TEXT NOT NULL DEFAULT 'proxy'`，与 migration 路径对齐，避免 memory db 测试缺列
+- `proxy/providers/transform.rs::openai_to_anthropic` 行为不变，但新增回归测试 `test_openai_to_anthropic_preserves_id_for_usage_dedup` 钉死它必须把 OpenAI `id` 透传到 Anthropic `body.id` —— 这是 Claude 走 OpenAI compat 路径能复用 `session:` 主键去重的前提
+
+**测试**：
+
+- 新增 `dedup_filter_excludes_session_rows_already_covered_by_proxy`：插入 codex/gemini 的 proxy + session 各一对、再加一条 session-only，验证 logs/summary 都正确排除被覆盖的 session 行
+- 新增 `dedup_filter_keeps_session_rows_outside_window_or_with_mismatched_tokens`：session 在时间窗口外或 token 不一致时正确保留
+- 新增 `should_skip_session_insert_returns_true_for_matching_proxy_row`：直接调用 helper 函数验证写入路径短路逻辑
+- 同步把所有 `TokenUsage { ... }` 构造点（10 处：parser 内部 + response_processor / calculator / logger / session_usage*.rs 的测试）补上 `message_id: None` 字段
+
+### B1 收口
+
+- 0.3.1 已落地的 schema 索引 `idx_request_logs_dedup_lookup` 与 0.3.2 已落地的 dashboard 覆盖索引 `idx_request_logs_app_created_at` 现在都被 B1 实际使用：filter 子查询走前者保持 index-only scan；按 app_type + 时间倒序的 dashboard 查询走后者
+- F1-rest 中 `find_model_pricing_row` 的大小写不敏感（0.3.1 已落地）+ 启动时懒 backfill `maybe_backfill_log_costs`（Web 既有）+ B1 的指纹去重，三者共同消除 dashboard 的"幽灵 zero-cost"行 + 双计行
+
+### 文档与版本
+
+- 仓库版本提升到 `0.4.0`（minor bump，因为 `TokenUsage` 是 `pub` 类型，新增 `message_id` 字段属于 ABI 变化）
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.4.0` 版本说明
+
+## [0.3.2] - 2026-05-07
+
+继续推进 0.3.1 中标记为延后的两项：上游 `a1e6c3b6` 的 Codex 切换历史稳定，以及 `f061b777` 中未被 `518d945e` 撤销的 usage perf 余项。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### Codex 切换供应商历史稳定
+
+- `backend/src/codex_config.rs` 新增 stable provider id 归一化机制：常量 `CC_SWITCH_CODEX_MODEL_PROVIDER_ID = "ccswitch"` + 内置 `CODEX_RESERVED_MODEL_PROVIDER_IDS` 白名单（`amazon-bedrock` / `openai` / `ollama` / `lmstudio` / `oss` / `ollama-chat`），辅以 `active_codex_model_provider_id`、`is_custom_codex_model_provider_id`、`stable_codex_model_provider_id_from_config`、`codex_model_provider_id_with_table_from_config` 四个 helper 与核心 `normalize_codex_live_config_model_provider_with_anchors` / `rewrite_codex_profile_model_provider_refs`。所有改动严格保留 `[mcp_servers]` / `[profiles]` 等其他段不被破坏（上游 `a1e6c3b6`）
+- `backend/src/codex_config.rs` 暴露三个公共入口：
+  - `normalize_codex_settings_config_model_provider(settings, anchor)` —— 在 provider 主导的写入边界把 `model_provider` 归一化到稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id；都不可用时回退 `ccswitch`），同步重写匹配的 `[profiles.*]` `model_provider` 引用
+  - `restore_codex_settings_config_model_provider_for_backfill(settings, template_settings)` —— backfill 路径反归一化：把 live config 的稳定 id 还原回 stored provider 模板原始 id 与对应 profile 引用
+  - `write_codex_live_atomic_with_stable_provider(auth, config_text)` —— 在 `write_codex_live_atomic` 之外多一步归一化的 provider-driven 写入入口，restore-from-backup 路径仍走老的 `write_codex_live_atomic` 保留逐字节备份
+- `backend/src/services/provider/live.rs::strip_common_config_from_live_settings` 重构：在 strip common config 之后调用新增的 `restore_live_settings_for_provider_backfill`，让 backfill 链路最终把 live 中的稳定 id 还原回模板原始 id；`write_live_snapshot` 的 Codex 分支改走 `write_codex_live_atomic_with_stable_provider`，写下去之前自动归一化
+- `backend/src/services/proxy.rs` 在更新 Codex backup 前，从 existing backup 读 `config` 作为 anchor，调用 `normalize_codex_settings_config_model_provider` 归一化 effective settings；这样 backup 与 live 共享同一稳定 id，后续 takeover restore 不会让 `model_provider` 漂移
+- 修复用户感知问题：CC Switch 切换 Codex provider 后，`codex resume` 历史看起来"换了一个"——根因是 Codex 按 `model_provider` 字段过滤 resume 历史，旧 CC Switch 在 `rightcode` / `aihubmix` 这类自定义 id 之间漂移。本次修复保证切换前后 live config 中始终是同一个稳定 id（典型场景：第一次切换从 `rightcode` → 复用为稳定 id；后续切换无论 source 是 `vendor_alpha` / `vendor_beta`，最终落到 live 的都是 `rightcode`）
+- 新增 8 条 cargo 单测覆盖：归一化保留当前自定义 id、reserved id 时使用 target、空 config no-op、profile 引用同步重写、不相关 profile 引用保留、连续多次切换稳定性、backfill 反向还原、template 用 reserved id 时 backfill no-op
+
+### Usage perf
+
+- `backend/src/database/schema.rs::create_request_logs_dedup_index_if_supported` 在去重索引之前新增 `(app_type, created_at DESC)` 覆盖索引（`idx_request_logs_app_created_at`），让 dashboard 按 app 类型 + 时间倒序聚合 / 翻页时走 index-only scan，长期累积请求日志的查询性能显著提升（上游 `f061b777`）
+- `backend/src/database/schema.rs::seed_model_pricing` 补齐 GPT-5.4（`gpt-5.4` / `gpt-5.4-mini` / `gpt-5.4-nano`，3 条）与 GPT-5.5 系列（`gpt-5.5` / `-low` / `-medium` / `-high` / `-xhigh` / `-minimal`，6 条）的默认定价；现有用户启动时通过 `ensure_model_pricing_seeded` 的 `INSERT OR IGNORE` 自动补齐，配合 0.3.1 已落地的 `find_model_pricing_row` 大小写不敏感修复，`OpenAI/GPT-5.5@HIGH` 等大小写或前缀变形的 model id 现在能直接命中 seed 并被懒 backfill 重算成本，进一步消除 dashboard 的 ghost-zero-cost 行（上游 `f061b777`）
+
+### 维持延后
+
+- B1 完整 7 维指纹去重需要先扩 Web 端 `TokenUsage` 加 `message_id` / `dedup_request_id`，再重写 `usage_stats.rs` 与 `session_usage_*.rs` 的写入 / 读取 / rollup 三层 filter，跨 7 文件的架构改动，留独立任务；`COALESCE(data_source)` 表达式索引与 `idx_request_logs_dedup_lookup` 的 drop 也跟着 B1 一起做
+- F1 的 `lib.rs run_step` refactor 与 `maybe_backfill_log_costs` 启动期 spawn 不再独立做：Web 已经采用查询时懒 backfill 策略，等价于上游修复且更稳健；`run_step` 是纯 refactor 不影响行为
+
+### 文档与版本
+
+- 仓库版本提升到 `0.3.2`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.3.2` 版本说明
+
+## [0.3.1] - 2026-05-07
+
+跟进 0.3.0 发布之后上游 `cc-switch` 累计的一批修复，按"对 Web 后端有直接价值"筛过后落地。完整跟进计划见 `docs-dev/web-parity-post-3.14-2026-05.md`。
+
+### 代理与流式
+
+- `backend/src/proxy/providers/streaming.rs` 重写 finish_reason 处理：去重重复 finish chunk + `pending_message_delta` 缓存延后到 `[DONE]` 发送，避免 OpenRouter / Kimi-K2.6 这类多次 finish 触发 Anthropic 客户端 abort（上游 `6441bc5c`）。同时在末端 message_delta 没有 usage 时兜底 `{input_tokens:0, output_tokens:0}`，避免下游解析 `output_tokens` 拿到 null（上游 `72ab8a5c`）
+- `backend/src/proxy/providers/claude.rs` 中 `extract_auth` 现在按 env 变量名推断鉴权策略：`ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer`、`ANTHROPIC_API_KEY` → `x-api-key`，与 Anthropic SDK 原生语义对齐；`get_auth_headers` 拆分 `Anthropic` 分支发 `x-api-key`；`stream_check.rs` 改为复用 `ClaudeAdapter::get_auth_headers`，去掉之前"无条件 Bearer + 条件 x-api-key 双发"导致的健康检查假阴性（上游 `bdc4c1e8`）
+- `backend/src/proxy/providers/transform.rs` / `transform_responses.rs` 在 `anthropic_to_openai` / `anthropic_to_responses` 入口剥离 system 内容首次出现的 `x-anthropic-billing-header` 行，避免每次轮换的 `cch=` token 让上游 prefix prompt cache 失效（上游 `35bce246`）
+- `backend/src/proxy/gemini_url.rs` 新增 `matches_vertex_ai_publisher_model_path` 判定，命中 `/projects/.../locations/.../publishers/google/models/...` 时跳过归一化，保留 Cloudflare AI Gateway 的 Vertex AI 完整 URL 不被压回 `/v1beta/models/*`（上游 `295dd9a9`）
+- `backend/src/proxy/providers/transform.rs` 新增 `anthropic_to_openai_with_reasoning_content` 变体，对 Kimi/Moonshot 路径保留 thinking → `reasoning_content`，通用 OpenAI compat 路径仍不带该非标准字段；`claude.rs::transform_claude_request_for_api_format` 通过 model id / `ANTHROPIC_BASE_URL` / `base_url` / `apiEndpoint` 多源识别 Moonshot/Kimi 后启用（上游 `21e2d68d`）
+- `backend/src/proxy/providers/transform_responses.rs::build_anthropic_usage_from_responses` 全面加强对 null / 缺失 / 空对象 / 部分字段的 usage 处理，新增 OpenAI 字段名 fallback（`prompt_tokens` / `completion_tokens`），保留 cache token 字段；`streaming_responses.rs` 两处调用点改为始终传入 Some+空对象兜底，修复 DashScope / 部分 Codex OAuth 场景下 VSCode 扩展崩 `Cannot read properties of null` 的问题（上游 `693c36a1`）
+
+### Provider 与会话
+
+- `backend/src/services/balance.rs::query_siliconflow` 的 `unit` 与 `plan_name` 跟随 `is_cn` 切换，`api.siliconflow.com` 国际站显示 USD / `SiliconFlow (EN)`，不再被强制标 CNY（上游 `d2556be5`）
+- `backend/src/services/coding_plan.rs` 新增 `parse_zhipu_token_tiers`，把 `data.limits[]` 按 `nextResetTime` 升序后第 0 条标 `five_hour`、第 1 条标 `weekly_limit`，老套餐自然降级到单 `five_hour`；同时把 `TOKENS_LIMIT` 类型匹配改为大小写不敏感（上游 `fafc122d`）
+- `backend/src/services/model_fetch.rs` 重写为候选 URL 列表机制：`baseURL/v1/models` → 剥离已知 Anthropic 兼容子路径（`/anthropic`、`/api/anthropic`、`/apps/anthropic`、`/step_plan` 等）后再拼 `/v1/models` / `/models`，遇 404/405 继续，遇其它非成功状态立即停止；新增 `models_url` 覆盖入口；前端 `lib/api/model-fetch.ts` 透传该字段，`lib/runtime/client/web.ts::fetchWebProviderModels` 同步加 `modelsUrl` 形参；新增三语 `providerForm.fetchModelsEndpointNotFound` 文案。修复 DeepSeek / Kimi / Zhipu GLM / MiniMax 这类把 Anthropic 协议挂在子路径而 `/models` 在根路径的供应商上模型拉取直接 404 的问题（上游 `67dbfc0a`）
+- `backend/src/proxy/providers/copilot_model_map.rs` 新增（374 行）：把客户端 dash 形式的 Claude 4.x model id（`claude-sonnet-4-6`、`claude-sonnet-4-6[1m]`）归一化为 Copilot upstream 接受的 dot 形式（`claude-sonnet-4.6`、`-1m` 后缀），对 live `/models` 列表做 exact match，找不到时按 family（haiku / sonnet / opus）+ 最高版本号 fallback；`forwarder.rs` 在 Copilot 链路上、`anthropic_to_openai` 转换前先调用 `apply_copilot_model_normalization` 与 `apply_copilot_live_model_resolution`（上游 `fcd83ee3`）
+- `backend/src/session_manager/providers/codex.rs::parse_session` 在 `session_meta` 阶段检测 `payload.source.subagent`，命中直接返回 `None`，让 Codex explorer / 子代理产生的会话不再出现在主会话列表（上游 `15497b0e`）；同时在 summary 提取阶段跳过 `<environment_context>` 开头的内容，避免工作目录路径被当成"上次会话最后一条消息"（上游 `1c692694`）
+- `src/components/providers/forms/CommonConfigEditor.tsx` 的 `effortHigh` 开关从写顶层 `effortLevel = "high"` 改为写 `env.CLAUDE_CODE_EFFORT_LEVEL = "high"`（顶层字段在 Claude Code 实际不生效）；读取阶段同时认旧顶层字段以兼容历史数据，写入时仅写 env 并清掉旧字段（参考上游 `064b339b`）
+
+### 配置写出与导入
+
+- `backend/src/config.rs::write_json_file` 现在先把数据序列化成 `Value`、递归按字母序排键、再 pretty print，确保配置切换时 `settings.json` 输出确定性，消除 HashMap 插入顺序导致的噪声 git diff（上游 `8084bfaf`）
+- `backend/src/services/mcp.rs` 五处 `persist_imported_servers` 路径不再触发 `sync_server_to_apps` 反向写回 live 配置，导入操作改为只写数据库（上游 `7965862e`）
+
+### Windows 适配
+
+- `backend/src/commands/misc.rs` 新增 `get_windows_env_paths_internal` 与 HTTP `GET /api/settings/windows-env-paths`，返回当前后端进程能读到的、白名单内（`USERPROFILE` / `APPDATA` / `LOCALAPPDATA` / `PROGRAMFILES(X86)` 等共 14 项）Windows 环境变量；前端新增 `src/lib/windowsEnvPaths.ts` 实现占位符检测与展开，`CommonConfigEditor` 在 Windows 下检测到 JSON 中含 `%USERPROFILE%` 这类占位符时弹黄色提示条，提供"转为绝对路径"一键展开按钮；三语补 `claudeConfig.winEnv*` 文案。修复 Claude Code 不会自动展开 Windows 占位符、原样落到 `settings.json` 后静默加载失败的问题（上游 `68f1f8d3`）
+- `backend/src/commands/misc.rs::try_get_version` 在非 Windows 平台优先读 `$SHELL` 并校验白名单（`sh` / `bash` / `zsh` / `fish` / `dash`），命中则用对应 shell 与 `default_flag_for_shell`，否则回退 `sh -c`；`is_valid_shell` / `default_flag_for_shell` 不再仅 Windows test 下编译，让用户在 zsh / fish 下的 PATH 与 alias 能被 `which claude` 检测到（上游 `4536b95a`）
+
+### Usage 鲁棒性
+
+- `backend/src/services/usage_stats.rs::find_model_pricing_row` 在清洗模型名后追加 `.to_ascii_lowercase()`，让 `OpenAI/GPT-5.2-Codex@LOW` 这类大小写不一致的模型 id 能命中 seed 中小写的定价记录，避免 dashboard 出现 `total_cost = 0` 的"幽灵零成本"行（提取自上游 `f061b777` 中未被 `518d945e` 撤销的非 Hermes 部分）
+- `backend/src/database/schema.rs` 新增 `idx_request_logs_dedup_lookup` 7 列覆盖索引（`app_type` / `data_source` / 4 个 token 计数 / `created_at` / `cache_creation_tokens`），由 `create_request_logs_dedup_index_if_supported` 在列就绪后自动创建，为后续完整的 7 维指纹去重重写打基础（上游 `2ee7cb41` schema 部分）
+
+### 测试
+
+- 本轮新增 ~50 条 cargo 单测覆盖以上修复，包括 SSE message_delta 去重 / 重复 finish_reason / 中途 usage-only chunk / 流截断错误路径、ANTHROPIC env 变量推断、Vertex AI URL 保留、Kimi reasoning_content 保留、DashScope usage 鲁棒性 9 例、smiconflow 国际站币种、zhipu tier 8 例、Codex `<environment_context>` 与 subagent session 跳过、`sort_json_keys` 7 例、Anthropic compat 子路径候选 URL 10 例、copilot model id 归一化与 family fallback 19 例
+
+### 延后到独立任务
+
+- B1 完整 7 维指纹去重需要先扩 Web 端 `TokenUsage` 加 `message_id` / `dedup_request_id`，再重写 `usage_stats.rs` 与 `session_usage_*.rs` 的写入 / 读取 / rollup 三层 filter，跨 7 文件的架构改动不在 0.3.1 补丁批次范围
+- C7 Codex 切换供应商历史稳定（上游 `a1e6c3b6`）涉及上游 270+ 行 `codex_config.rs` 新函数 + `provider/live.rs` + `proxy.rs` 联动 + 322 行集成测试，且 Web 端 `codex_config.rs` 已有自身实现路径，需要单独立项
+- F1 中的 perf / refactor 部分（lib.rs `run_step` helper、启动期 `maybe_backfill_log_costs` 异步 backfill、(app_type, created_at DESC) 覆盖索引、`COALESCE(data_source)` 表达式索引）跨度较大，本轮仅落了核心 zero-cost 修复
+
+### 文档与版本
+
+- 仓库版本提升到 `0.3.1`
+- `README.md` / `README_EN.md` / `README_JA.md` 同步更新 `0.3.1` 版本说明
+- 新增 `docs-dev/web-parity-post-3.14-2026-05.md` 记录本轮跟进上游 0.3.0 发布之后改动的筛选与落地计划
+
 ## [0.3.0] - 2026-04-24
 
 ### 数据库 schema

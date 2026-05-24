@@ -4,41 +4,20 @@
 
 ## Overview
 
-CC Switch Web is the web branch repository of [cc-switch](https://github.com/farion1231/cc-switch).
+CC Switch Web is the web branch repository of [cc-switch](https://github.com/farion1231/cc-switch), carrying the web-oriented implementation and branch-specific customizations of CC Switch.
 
-This repository is used to carry web-oriented work around CC Switch, including web-side implementation, related experiments, and branch-specific adjustments.
-
-The current target architecture is:
+Architecture and positioning:
 
 - Frontend: Web
 - Backend: local Rust service
 - Access pattern: browser opens `http://localhost:xxxx`
+- Targets: Windows, macOS, Linux, and headless Linux servers
 
-This direction targets Windows, macOS, Linux, and headless Linux server environments.
+## Usage
 
-## Version
+CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for multiple AI coding tools — Claude, Codex, Gemini, OpenClaw, and more — from your browser.
 
-The current repository version is `0.3.0`.
-
-`0.3.0` lifts the database schema from `v8` to `v10` to align with the upstream `cc-switch` 3.14 line, resolving the `database version is too new (10), this build only supports 8` startup error seen when `~/.cc-switch/cc-switch.db` is shared with an upstream build that already migrated to `v10`. It adds the `v8 -> v9` pricing-seed refresh migration and the `v9 -> v10` Hermes support migration, introduces `enabled_hermes` columns on `mcp_servers` and `skills`, and keeps the backend `McpApps` / `SkillApps` structs in sync with the existing `hermes` field on the frontend. This release also ships preset updates (Kimi K2.6 direct Moonshot, DDSHub Codex preset), proxy and session fixes (forced streaming for Codex OAuth responses, Gemini session `.project_root` lookup), and a round of UI polish (provider icon hover title, auto-compact latch fix, unified toolbar icon widths, scroll-area layout tweaks).
-
-This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
-
-## Relationship to Upstream
-
-- Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
-- Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
-- Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
-- This repository focuses on the Web branch direction of CC Switch
-- When project positioning or external description changes, all language README files in this repository should be updated together
-
-## Notes
-
-If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly.
-
-## Recent Web Alignment And UI Refresh
-
-The current Web branch has aligned the following desktop-side capabilities and completed a new round of Web UI refresh:
+Capabilities already available on the Web branch:
 
 - Provider form model fetching for Claude, Codex, Gemini, and OpenClaw
 - Official subscription quota display for Claude, Codex, and Gemini
@@ -46,10 +25,61 @@ The current Web branch has aligned the following desktop-side capabilities and c
 - Environment variable conflict detection and cleanup entry points
 - Deep link import via `?deeplink=...` or manual `ccswitch://...` input
 - About page entry to open the latest GitHub release page
-- Refreshed workspace-style UI hierarchy for Provider, Settings, Skills, and Sessions pages
-- Refreshed related full-screen panels, repository management panel, and session TOC panel to match the new Web visual language
+- Workspace-style UI for Provider, Settings, Skills, and Sessions pages
 
-## Run
+### Quick Start
+
+1. Build the release binary with embedded frontend assets:
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   (Rust `1.88+` required; see the "Development" section below for detailed build/dev options.)
+
+2. Run the binary, then open the final address printed in the terminal:
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   In release mode the frontend static assets and Web API share the same port, with `8890` as the default preferred port. If the port is occupied or denied, the service automatically scans forward and prints the actual port it bound to.
+
+3. Open the address printed in the terminal in your browser, and you're ready.
+
+4. Data location: in local Web service mode, data is stored under the default CC Switch local config root:
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   This includes `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+
+> To run via Docker or keep it hosted on a headless server, see "Docker" and "Linux systemd Example" under "Development" below.
+
+## Version
+
+The current repository version is `0.8.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
+
+This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
+
+## Relationship to Upstream
+
+- Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
+- Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
+- This repository focuses on the Web branch direction of CC Switch
+- If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly
+- When project positioning or external description changes, all language README files in this repository should be updated together
+
+## Development
 
 ### Quick Commands
 

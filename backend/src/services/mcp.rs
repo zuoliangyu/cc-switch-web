@@ -124,6 +124,10 @@ impl McpService {
                 // Skip for now
                 log::debug!("OpenClaw MCP support is still in development, skipping sync");
             }
+            AppType::ClaudeDesktop => {
+                // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 同步
+                log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过同步");
+            }
         }
         Ok(())
     }
@@ -152,6 +156,10 @@ impl McpService {
             AppType::OpenClaw => {
                 // OpenClaw MCP support is still in development
                 log::debug!("OpenClaw MCP support is still in development, skipping remove");
+            }
+            AppType::ClaudeDesktop => {
+                // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 移除
+                log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过移除");
             }
         }
         Ok(())
@@ -202,7 +210,8 @@ impl McpService {
 
             state.db.save_mcp_server(&to_save)?;
             existing.insert(to_save.id.clone(), to_save.clone());
-            Self::sync_server_to_apps(state, &to_save)?;
+            // 导入是读取已有配置，不应反向写回任何应用的 live 配置。
+            // 显式编辑、启用/禁用或手动同步时再执行写回。
         }
 
         Ok(new_count)

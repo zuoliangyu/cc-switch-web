@@ -32,6 +32,7 @@ export function AppVisibilitySettings({
 
   const visibleApps: VisibleApps = settings.visibleApps ?? {
     claude: true,
+    "claude-desktop": false,
     codex: true,
     gemini: true,
     opencode: true,

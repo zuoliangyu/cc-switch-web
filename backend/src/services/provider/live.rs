@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use toml_edit::{DocumentMut, Item, TableLike};
 
 use crate::app_config::AppType;
-use crate::codex_config::{get_codex_auth_path, get_codex_config_path};
+use crate::codex_config::{get_codex_auth_path, write_codex_live_atomic_with_stable_provider};
 use crate::config::{get_claude_settings_path, read_json_file, write_json_file};
 use crate::database::Database;
 use crate::error::AppError;
@@ -309,10 +309,12 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
     }
 
     match app_type {
-        AppType::Claude => match serde_json::from_str::<Value>(trimmed) {
-            Ok(source) if source.is_object() => json_is_subset(settings, &source),
-            _ => false,
-        },
+        AppType::Claude | AppType::ClaudeDesktop => {
+            match serde_json::from_str::<Value>(trimmed) {
+                Ok(source) if source.is_object() => json_is_subset(settings, &source),
+                _ => false,
+            }
+        }
         AppType::Codex => {
             let config_toml = settings.get("config").and_then(Value::as_str).unwrap_or("");
             if config_toml.trim().is_empty() {
@@ -375,7 +377,7 @@ pub(crate) fn remove_common_config_from_settings(
     }
 
     match app_type {
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             let source = serde_json::from_str::<Value>(trimmed)
                 .map_err(|e| AppError::Message(format!("Invalid Claude common config: {e}")))?;
             let mut result = settings.clone();
@@ -428,7 +430,7 @@ fn apply_common_config_to_settings(
     }
 
     match app_type {
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             let source = serde_json::from_str::<Value>(trimmed)
                 .map_err(|e| AppError::Message(format!("Invalid Claude common config: {e}")))?;
             let mut result = settings.clone();
@@ -524,29 +526,57 @@ pub(crate) fn strip_common_config_from_live_settings(
                 app_type.as_str(),
                 provider.id
             );
-            return live_settings;
+            return restore_live_settings_for_provider_backfill(app_type, provider, live_settings);
         }
     };
 
-    if !provider_uses_common_config(app_type, provider, snippet.as_deref()) {
-        return live_settings;
-    }
-
-    let Some(snippet_text) = snippet.as_deref() else {
-        return live_settings;
+    let backfill_settings = if provider_uses_common_config(app_type, provider, snippet.as_deref()) {
+        match snippet.as_deref() {
+            Some(snippet_text) => {
+                match remove_common_config_from_settings(app_type, &live_settings, snippet_text) {
+                    Ok(settings) => settings,
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to strip common config for {} provider '{}': {err}",
+                            app_type.as_str(),
+                            provider.id
+                        );
+                        live_settings
+                    }
+                }
+            }
+            None => live_settings,
+        }
+    } else {
+        live_settings
     };
 
-    match remove_common_config_from_settings(app_type, &live_settings, snippet_text) {
-        Ok(settings) => settings,
-        Err(err) => {
-            log::warn!(
-                "Failed to strip common config for {} provider '{}': {err}",
-                app_type.as_str(),
-                provider.id
-            );
-            live_settings
-        }
+    restore_live_settings_for_provider_backfill(app_type, provider, backfill_settings)
+}
+
+/// 在 backfill 阶段把 live 配置中的 stable provider id 还原回 stored 模板原始 id。
+/// 当前仅 Codex 需要，其他 app 直接透传。
+fn restore_live_settings_for_provider_backfill(
+    app_type: &AppType,
+    provider: &Provider,
+    live_settings: Value,
+) -> Value {
+    if !matches!(app_type, AppType::Codex) {
+        return live_settings;
     }
+
+    let mut settings = live_settings;
+    if let Err(err) = crate::codex_config::restore_codex_settings_config_model_provider_for_backfill(
+        &mut settings,
+        &provider.settings_config,
+    ) {
+        log::warn!(
+            "Failed to restore Codex provider id while backfilling '{}': {err}",
+            provider.id
+        );
+    }
+
+    settings
 }
 
 pub(crate) fn normalize_provider_common_config_for_storage(
@@ -589,7 +619,7 @@ pub(crate) fn normalize_provider_common_config_for_storage(
 /// Write live configuration snapshot for a provider
 pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Result<(), AppError> {
     match app_type {
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             let path = get_claude_settings_path();
             let settings = sanitize_claude_settings_for_live(&provider.settings_config);
             write_json_file(&path, &settings)?;
@@ -606,10 +636,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 AppError::Config("Codex 供应商配置缺少 'config' 字段或不是字符串".to_string())
             })?;
 
-            let auth_path = get_codex_auth_path();
-            write_json_file(&auth_path, auth)?;
-            let config_path = get_codex_config_path();
-            std::fs::write(&config_path, config_str).map_err(|e| AppError::io(&config_path, e))?;
+            // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
+            // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
+            // 让 Codex resume history 不会因为切换 provider 漂移。
+            write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
         }
         AppType::Gemini => {
             // Delegate to write_gemini_live which handles env file writing correctly
@@ -837,7 +867,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             let cfg_text = crate::codex_config::read_and_validate_codex_config_text()?;
             Ok(json!({ "auth": auth, "config": cfg_text }))
         }
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             let path = get_claude_settings_path();
             if !path.exists() {
                 return Err(AppError::localized(
@@ -946,7 +976,7 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             let config_str = crate::codex_config::read_and_validate_codex_config_text()?;
             json!({ "auth": auth, "config": config_str })
         }
-        AppType::Claude => {
+        AppType::Claude | AppType::ClaudeDesktop => {
             let settings_path = get_claude_settings_path();
             if !settings_path.exists() {
                 return Err(AppError::localized(

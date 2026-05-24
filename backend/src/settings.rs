@@ -578,6 +578,8 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
     let settings = settings_store().read().ok()?;
     match app_type {
         AppType::Claude => settings.current_provider_claude.clone(),
+        // C-Phase0 脚手架：claude-desktop 无持久化当前供应商
+        AppType::ClaudeDesktop => None,
         AppType::Codex => settings.current_provider_codex.clone(),
         AppType::Gemini => settings.current_provider_gemini.clone(),
         AppType::OpenCode => settings.current_provider_opencode.clone(),
@@ -594,6 +596,8 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
 
     match app_type {
         AppType::Claude => settings.current_provider_claude = id.map(|s| s.to_string()),
+        // C-Phase0 脚手架：claude-desktop 无持久化字段，忽略
+        AppType::ClaudeDesktop => {}
         AppType::Codex => settings.current_provider_codex = id.map(|s| s.to_string()),
         AppType::Gemini => settings.current_provider_gemini = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),

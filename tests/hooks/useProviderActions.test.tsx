@@ -155,7 +155,12 @@ describe("useProviderActions", () => {
       await result.current.updateProvider(provider);
     });
 
-    expect(updateProviderMutateAsync).toHaveBeenCalledWith(provider);
+    // updateProvider 现在转发的 payload 形态是 { provider, originalId }，
+    // originalId 用于 OpenCode/OpenClaw additive 模式下的 rename 链路。
+    expect(updateProviderMutateAsync).toHaveBeenCalledWith({
+      provider,
+      originalId: undefined,
+    });
   });
 
   it("should switch non-Claude provider directly", async () => {

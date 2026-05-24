@@ -17,6 +17,7 @@ export interface AppConfig {
 
 export const APP_IDS: AppId[] = [
   "claude",
+  "claude-desktop",
   "codex",
   "gemini",
   "opencode",
@@ -34,6 +35,13 @@ export const MCP_SKILLS_APP_IDS: AppId[] = [
 export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   claude: {
     label: "Claude",
+    icon: <ClaudeIcon size={14} />,
+    activeClass: "theme-chip-warm",
+    badgeClass: "theme-chip-warm border-0 gap-1.5",
+  },
+  // C-Phase0 脚手架：claude-desktop 目标已建型，但未加入 APP_IDS（UI 暂不暴露）
+  "claude-desktop": {
+    label: "Claude Desktop",
     icon: <ClaudeIcon size={14} />,
     activeClass: "theme-chip-warm",
     badgeClass: "theme-chip-warm border-0 gap-1.5",

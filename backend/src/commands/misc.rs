@@ -299,6 +299,37 @@ fn extract_version(raw: &str) -> String {
         .unwrap_or_else(|| raw.to_string())
 }
 
+/// Windows 环境变量白名单：仅这些 `%NAME%` 占位符会被前端读取展开。
+/// 与上游同名常量保持一致，覆盖 Claude Code 配置 JSON 里常见的路径变量。
+const WINDOWS_ENV_WHITELIST: &[&str] = &[
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "TEMP",
+    "TMP",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMDATA",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "PUBLIC",
+    "ALLUSERSPROFILE",
+];
+
+/// 把当前后端进程能读到的、白名单内的 Windows 环境变量返回给前端。
+/// 前端 `lib/windowsEnvPaths.ts` 会按此映射展开 `%USERPROFILE%` 这类占位符。
+pub fn get_windows_env_paths_internal() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for name in WINDOWS_ENV_WHITELIST {
+        if let Ok(val) = std::env::var(name) {
+            map.insert((*name).to_string(), val);
+        }
+    }
+    map
+}
+
 /// 尝试直接执行命令获取版本
 #[cfg(not(target_os = "windows"))]
 fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
@@ -314,8 +345,15 @@ fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
 
     #[cfg(not(target_os = "windows"))]
     let output = {
-        Command::new("sh")
-            .arg("-c")
+        // 优先使用 $SHELL 指定的登录 shell，使其加载用户的 PATH/alias，
+        // 否则像 fish/zsh 用户的 `which claude` 类检测会因 PATH 缺失而误判。
+        let shell = std::env::var("SHELL")
+            .ok()
+            .filter(|s| is_valid_shell(s))
+            .unwrap_or_else(|| "sh".to_string());
+        let flag = default_flag_for_shell(&shell);
+        Command::new(shell)
+            .arg(flag)
             .arg(format!("{tool} --version"))
             .output()
     };
@@ -359,7 +397,7 @@ fn is_valid_wsl_distro_name(name: &str) -> bool {
 }
 
 /// Validate that the given shell name is one of the allowed shells.
-#[cfg(all(target_os = "windows", test))]
+#[cfg(any(not(target_os = "windows"), test))]
 fn is_valid_shell(shell: &str) -> bool {
     matches!(
         shell.rsplit('/').next().unwrap_or(shell),
@@ -374,7 +412,7 @@ fn is_valid_shell_flag(flag: &str) -> bool {
 }
 
 /// Return the default invocation flag for the given shell.
-#[cfg(all(target_os = "windows", test))]
+#[cfg(any(not(target_os = "windows"), test))]
 fn default_flag_for_shell(shell: &str) -> &'static str {
     match shell.rsplit('/').next().unwrap_or(shell) {
         "dash" | "sh" => "-c",

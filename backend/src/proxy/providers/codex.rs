@@ -8,9 +8,144 @@
 use super::{AuthInfo, AuthStrategy, ProviderAdapter};
 use crate::provider::Provider;
 use crate::proxy::error::ProxyError;
+use toml::Value as TomlValue;
 
 /// Codex 适配器
 pub struct CodexAdapter;
+
+// ---------------------------------------------------------------------------
+// Codex Chat Completions 路由判定（跟随上游 cc-switch 1c82b8a3）
+//
+// Codex 客户端原生只和 OpenAI Responses API 协议对话，但很多第三方"Codex
+// 兼容"供应商实际只暴露 OpenAI Chat Completions。让代理在中间做协议转换：
+// 客户端 → Responses → 代理 → Chat Completions → 上游 → Chat → 代理 → Responses → 客户端。
+//
+// 是否需要做协议转换的四层 fallback 判定（顺序自顶向下）：
+//   1. provider.meta.api_format == "openai_chat"
+//   2. settings_config.api_format / apiFormat 字段
+//   3. settings_config.config (TOML) 里的 wire_api 字段
+//   4. base_url / settings_config.config 里的 base_url 是否以 /chat/completions 结尾
+// ---------------------------------------------------------------------------
+
+/// 该 Codex provider 的真实上游是否走 OpenAI Chat Completions，
+/// 即使本地 Codex 客户端通过 Responses 协议跟 CC Switch 对话。
+pub fn codex_provider_uses_chat_completions(provider: &Provider) -> bool {
+    if let Some(api_format) = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.api_format.as_deref())
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("api_format")
+                .and_then(|v| v.as_str())
+        })
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("apiFormat")
+                .and_then(|v| v.as_str())
+        })
+    {
+        return is_chat_wire_api(api_format);
+    }
+
+    if let Some(wire_api) = provider
+        .settings_config
+        .get("config")
+        .and_then(|v| v.as_str())
+        .and_then(extract_codex_wire_api_from_toml)
+    {
+        return is_chat_wire_api(&wire_api);
+    }
+
+    if let Some(base_url) = provider
+        .settings_config
+        .get("base_url")
+        .or_else(|| provider.settings_config.get("baseURL"))
+        .and_then(|v| v.as_str())
+    {
+        return is_chat_completions_url(base_url);
+    }
+
+    provider
+        .settings_config
+        .get("config")
+        .and_then(|v| v.as_str())
+        .and_then(extract_codex_base_url_from_toml)
+        .map(|url| is_chat_completions_url(&url))
+        .unwrap_or(false)
+}
+
+/// 判断当前 Codex 请求是否需要做 Responses→Chat 转换：
+/// 路径必须是 Responses 端点，且 provider 走 Chat Completions。
+pub fn should_convert_codex_responses_to_chat(provider: &Provider, endpoint: &str) -> bool {
+    let path = endpoint
+        .split_once('?')
+        .map_or(endpoint, |(path, _query)| path);
+
+    matches!(
+        path,
+        "/responses" | "/v1/responses" | "/responses/compact" | "/v1/responses/compact"
+    ) && codex_provider_uses_chat_completions(provider)
+}
+
+fn is_chat_wire_api(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "chat"
+            | "chat_completions"
+            | "chat-completions"
+            | "openai_chat"
+            | "openai-chat"
+            | "openai_chat_completions"
+    )
+}
+
+fn is_chat_completions_url(value: &str) -> bool {
+    value
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
+        .ends_with("/chat/completions")
+}
+
+fn extract_codex_wire_api_from_toml(config_text: &str) -> Option<String> {
+    let doc = config_text.parse::<TomlValue>().ok()?;
+
+    if let Some(active_provider) = doc.get("model_provider").and_then(|v| v.as_str()) {
+        if let Some(wire_api) = doc
+            .get("model_providers")
+            .and_then(|providers| providers.get(active_provider))
+            .and_then(|provider| provider.get("wire_api"))
+            .and_then(|v| v.as_str())
+        {
+            return Some(wire_api.to_string());
+        }
+    }
+
+    doc.get("wire_api")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+}
+
+fn extract_codex_base_url_from_toml(config_text: &str) -> Option<String> {
+    let doc = config_text.parse::<TomlValue>().ok()?;
+
+    if let Some(active_provider) = doc.get("model_provider").and_then(|v| v.as_str()) {
+        if let Some(base_url) = doc
+            .get("model_providers")
+            .and_then(|providers| providers.get(active_provider))
+            .and_then(|provider| provider.get("base_url"))
+            .and_then(|v| v.as_str())
+        {
+            return Some(base_url.to_string());
+        }
+    }
+
+    doc.get("base_url")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+}
 
 impl CodexAdapter {
     pub fn new() -> Self {
@@ -293,5 +428,57 @@ mod tests {
         // 必须从开头匹配
         assert!(!is_official_client("some codex_vscode/1.0.0"));
         assert!(!is_official_client("prefix_codex_cli_rs/1.0.0"));
+    }
+
+    #[test]
+    fn test_codex_provider_uses_chat_completions_from_active_wire_api() {
+        let provider = create_provider(json!({
+            "config": r#"
+model_provider = "chat_only"
+model = "gpt-5"
+
+[model_providers.chat_only]
+name = "Chat Only"
+base_url = "https://example.com/v1"
+wire_api = "chat"
+"#
+        }));
+
+        assert!(codex_provider_uses_chat_completions(&provider));
+        assert!(should_convert_codex_responses_to_chat(
+            &provider,
+            "/responses?stream=true"
+        ));
+        assert!(!should_convert_codex_responses_to_chat(
+            &provider,
+            "/chat/completions"
+        ));
+    }
+
+    #[test]
+    fn test_codex_provider_uses_chat_completions_from_full_chat_url() {
+        let provider = create_provider(json!({
+            "base_url": "https://example.com/v1/chat/completions"
+        }));
+
+        assert!(codex_provider_uses_chat_completions(&provider));
+        assert!(should_convert_codex_responses_to_chat(
+            &provider,
+            "/v1/responses/compact"
+        ));
+    }
+
+    #[test]
+    fn test_codex_provider_uses_chat_completions_default_responses() {
+        let provider = create_provider(json!({
+            "base_url": "https://api.openai.com/v1"
+        }));
+
+        // 默认 Responses 端点不应误判
+        assert!(!codex_provider_uses_chat_completions(&provider));
+        assert!(!should_convert_codex_responses_to_chat(
+            &provider,
+            "/responses"
+        ));
     }
 }

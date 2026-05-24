@@ -181,6 +181,8 @@ impl Database {
         )", []).map_err(|e| AppError::Database(e.to_string()))?;
 
         // 10. Proxy Request Logs 表
+        // data_source: 'proxy' = 由代理实时写入，'session_log'/'codex_session'/'gemini_session' = 离线 session 同步导入；
+        // 7 维指纹去重依赖该字段区分两类来源（参见 services/usage_stats.rs::effective_usage_log_filter）。
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_request_logs (
             request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL, model TEXT NOT NULL,
             request_model TEXT,
@@ -191,7 +193,8 @@ impl Database {
             total_cost_usd TEXT NOT NULL DEFAULT '0', latency_ms INTEGER NOT NULL, first_token_ms INTEGER,
             duration_ms INTEGER, status_code INTEGER NOT NULL, error_message TEXT, session_id TEXT,
             provider_type TEXT, is_streaming INTEGER NOT NULL DEFAULT 0,
-            cost_multiplier TEXT NOT NULL DEFAULT '1.0', created_at INTEGER NOT NULL
+            cost_multiplier TEXT NOT NULL DEFAULT '1.0', created_at INTEGER NOT NULL,
+            data_source TEXT NOT NULL DEFAULT 'proxy'
         )", []).map_err(|e| AppError::Database(e.to_string()))?;
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_provider ON proxy_request_logs(provider_id, app_type)", [])
@@ -637,6 +640,7 @@ impl Database {
             "data_source",
             "TEXT NOT NULL DEFAULT 'proxy'",
         )?;
+        Self::create_request_logs_dedup_index_if_supported(conn)?;
 
         // model_pricing 表
         conn.execute(
@@ -1263,6 +1267,17 @@ impl Database {
                 "0.30",
                 "3.75",
             ),
+            // GPT-5.5 系列（GPT-5.5 family default pricing 用于补 dashboard ghost-zero-cost 行）
+            ("gpt-5.5", "GPT-5.5", "5", "30", "0.50", "0"),
+            ("gpt-5.5-low", "GPT-5.5", "5", "30", "0.50", "0"),
+            ("gpt-5.5-medium", "GPT-5.5", "5", "30", "0.50", "0"),
+            ("gpt-5.5-high", "GPT-5.5", "5", "30", "0.50", "0"),
+            ("gpt-5.5-xhigh", "GPT-5.5", "5", "30", "0.50", "0"),
+            ("gpt-5.5-minimal", "GPT-5.5", "5", "30", "0.50", "0"),
+            // GPT-5.4 系列
+            ("gpt-5.4", "GPT-5.4", "2.50", "15", "0.25", "0"),
+            ("gpt-5.4-mini", "GPT-5.4 Mini", "0.75", "4.50", "0.075", "0"),
+            ("gpt-5.4-nano", "GPT-5.4 Nano", "0.20", "1.25", "0.02", "0"),
             // GPT-5.2 系列
             ("gpt-5.2", "GPT-5.2", "1.75", "14", "0.175", "0"),
             ("gpt-5.2-low", "GPT-5.2", "1.75", "14", "0.175", "0"),
@@ -1636,6 +1651,51 @@ impl Database {
             }
         }
         Ok(false)
+    }
+
+    fn create_request_logs_dedup_index_if_supported(
+        conn: &Connection,
+    ) -> Result<(), AppError> {
+        if !Self::table_exists(conn, "proxy_request_logs")? {
+            return Ok(());
+        }
+
+        // dashboard 范围查询的覆盖索引：按 (app_type, created_at DESC) 聚合 / 翻页时
+        // 走 index-only scan 而不是退化成全表扫，对长期累计的请求日志特别明显。
+        let has_app_type = Self::has_column(conn, "proxy_request_logs", "app_type")?;
+        let has_created_at = Self::has_column(conn, "proxy_request_logs", "created_at")?;
+        if has_app_type && has_created_at {
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_request_logs_app_created_at
+                 ON proxy_request_logs(app_type, created_at DESC)",
+                [],
+            )
+            .map_err(|e| AppError::Database(format!("创建使用量应用时间索引失败: {e}")))?;
+        }
+
+        let required_columns = [
+            "app_type",
+            "data_source",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "created_at",
+            "cache_creation_tokens",
+        ];
+        for column in required_columns {
+            if !Self::has_column(conn, "proxy_request_logs", column)? {
+                return Ok(());
+            }
+        }
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_request_logs_dedup_lookup
+             ON proxy_request_logs(app_type, data_source, input_tokens, output_tokens,
+                                   cache_read_tokens, created_at, cache_creation_tokens)",
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("创建使用量去重索引失败: {e}")))?;
+        Ok(())
     }
 
     fn add_column_if_missing(

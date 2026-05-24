@@ -61,8 +61,19 @@ vi.mock("@/hooks/useSkills", () => ({
   useImportSkillsFromApps: () => ({
     mutateAsync: importSkillsMock,
   }),
-  useInstallSkillsFromZip: () => ({
+  useInstallSkillArchives: () => ({
     mutateAsync: installFromZipMock,
+  }),
+  // skill update 检查类 hook 被组件用到但本测试不关心其行为，给最小返回值。
+  useCheckSkillUpdates: () => ({
+    data: undefined,
+    refetch: vi.fn(),
+    isFetching: false,
+    isLoading: false,
+  }),
+  useUpdateSkill: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
   }),
 }));
 

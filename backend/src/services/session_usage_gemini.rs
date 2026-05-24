@@ -254,6 +254,25 @@ fn insert_gemini_session_entry(
     // 合并 thoughts 到 output（思考 token 按输出计费）
     let output_tokens = tokens.output + tokens.thoughts;
 
+    // 跨源去重：Gemini session 日志不暴露 cache_creation_tokens，传 0；
+    // DedupKey 内部对 codex/gemini 的 cache_creation = 0 会放行 proxy 任意值。
+    // Gemini 走 UPSERT，因此跳过的是"指纹和 proxy 撞上"的场景；同 request_id 更新由
+    // 下面的 ON CONFLICT 处理（重读 Gemini 会话日志会带回新 token 计数）。
+    if crate::services::usage_stats::has_matching_proxy_usage_log(
+        &conn,
+        &crate::services::usage_stats::DedupKey {
+            app_type: "gemini",
+            model,
+            input_tokens: tokens.input,
+            output_tokens,
+            cache_read_tokens: tokens.cached,
+            cache_creation_tokens: 0,
+            created_at,
+        },
+    )? {
+        return Ok(false);
+    }
+
     // 计算费用
     let usage = TokenUsage {
         input_tokens: tokens.input,
@@ -261,6 +280,7 @@ fn insert_gemini_session_entry(
         cache_read_tokens: tokens.cached,
         cache_creation_tokens: 0,
         model: Some(model.to_string()),
+        message_id: None,
     };
 
     let pricing = find_gemini_pricing(&conn, model);

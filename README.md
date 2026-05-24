@@ -4,25 +4,71 @@
 
 ## 项目说明
 
-CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web 分支仓库。
+CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web 分支仓库，用于承载 CC Switch 的 Web 方向实现与分支定制。
 
-当前仓库用于承载 CC Switch 的 Web 方向相关工作，包括 Web 端实现、相关实验以及分支上的定制化调整。
-
-当前目标架构为：
+架构与定位：
 
 - 前端：Web
 - 后端：本地 Rust 服务
 - 访问方式：浏览器访问 `http://localhost:xxxx`
+- 适用场景：Windows、macOS、Linux，以及无桌面的 Linux 服务器
 
-这个方向面向 Windows、macOS、Linux 以及无桌面的 Linux 服务器场景。
+## 如何使用
+
+CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude、Codex、Gemini、OpenClaw 等多个 AI 编码工具的供应商配置，一键切换。
+
+当前 Web 分支已具备的能力：
+
+- Claude、Codex、Gemini、OpenClaw 的供应商模型拉取
+- Claude、Codex、Gemini 的官方订阅额度展示
+- ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
+- 环境变量冲突检测与清理入口
+- 通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
+- About 页面可直接打开 GitHub 最新发布页
+- Provider、Settings、Skills、Sessions 已统一为工作台式界面
+
+### 快速运行
+
+1. 构建嵌入前端资源的 release 二进制：
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   （需要 Rust `1.88+`；详细构建/开发选项见下方「开发」一节）
+
+2. 运行二进制，然后打开终端中打印出的最终地址：
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   发布态下前端静态资源与 Web API 共用同一个端口，默认首选 `8890`。如端口被占用或无权限绑定，程序会自动尝试后续端口并输出最终监听地址。
+
+3. 在浏览器打开终端输出的地址即可使用。
+
+4. 数据存放位置：本地 Web 服务模式下，数据默认写入 CC Switch 的本地配置根目录：
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+
+> 想用 Docker 跑、或在无桌面服务器上长期托管，见下方「开发」中的 Docker 运行与 Linux systemd 示例。
 
 ## 当前版本
 
-当前仓库版本为 `0.3.0`。
+当前仓库版本为 `0.8.0`。逐版变更明细、每条修复对应的上游 commit、被延后到独立任务的项，见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
 
-`0.3.0` 将发布包的数据库 schema 从 `v8` 提升到 `v10`，与上游 `cc-switch` 3.14 系列对齐，解决共享 `~/.cc-switch/cc-switch.db` 后被上游升到 `v10` 时 Web 端启动报 `数据库版本过新（10），当前应用仅支持 8` 的问题。新增 `v8 -> v9` 模型定价种子刷新迁移与 `v9 -> v10` Hermes 支持列迁移，`mcp_servers` / `skills` 两表加入 `enabled_hermes` 列，前后端类型对齐 `hermes` 字段。本版本同时包含一批预设升级（Kimi K2.6 直连、DDSHub Codex 预设）、代理与会话修复（Codex OAuth 响应强制流式、Gemini 会话读取 `.project_root`）、以及 UI 细节收敛（供应商图标 title、自动紧凑粘死修复、工具栏等宽、滚动容器对齐等）。
-
-当前仓库现在以 `0.1.0` 作为 Web 分支的初始发布基线。此前继承的历史发布记录已从本仓库移除，如需查看更早历史，请以上游项目记录为准。
+仓库以 `0.1.0` 作为 Web 分支的初始发布基线，此前继承的历史发布记录已移除，更早历史请以上游项目为准。
 
 ## 与上游项目的关系
 
@@ -30,26 +76,10 @@ CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web �
 - 当前 Web 仓库：[zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
 - 作者：左岚（[哔哩哔哩](https://space.bilibili.com/27619688)）
 - 当前仓库聚焦于 CC Switch 的 Web 分支方向
+- 如需查看原始 CC Switch 项目或上游发布信息，请直接访问上游仓库
 - 如果项目定位或对外描述发生变化，仓库内各语言版本 README 需要同步更新
 
-## 说明
-
-如果你要查看原始的 CC Switch 项目或上游发布信息，请直接访问上游仓库。
-
-## 最近对齐的 Web 能力与界面升级
-
-当前 Web 分支已经补齐了以下桌面端能力，并完成了一轮 Web 界面层级升级：
-
-- Claude、Codex、Gemini、OpenClaw 的供应商模型拉取
-- Claude、Codex、Gemini 的官方订阅额度展示
-- ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
-- 环境变量冲突检测与清理入口
-- 支持通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
-- About 页面新增打开 GitHub 最新发布页的入口
-- Provider、Settings、Skills、Sessions 页面已统一为新的工作台式界面层级
-- 相关全屏面板、仓库管理面板与会话目录面板也已同步到新的 Web 视觉语言
-
-## 运行方式
+## 开发
 
 ### 命令速查
 
@@ -255,7 +285,29 @@ release/docker-linux/cc-switch-web-linux-x64/
 
 目录内只包含单文件可执行程序 `cc-switch-web`，解压后直接运行即可。
 
-当前导出的 Linux 二进制为 `x86_64-unknown-linux-musl` 静态链接版本，可尽量减少宿主机运行库差异导致的问题。
+#### ARM / 嵌入式开发板
+
+如果目标是 64 位 ARM 开发板（aarch64 / arm64，如树莓派 3/4/5 的 64 位系统、
+RK35xx、各类 Allwinner 板等），用单独的 `Dockerfile.arm64`
+（`messense/rust-musl-cross` 在 amd64 主机交叉编译，不走 QEMU，几分钟即可，
+无需 binfmt），不要传 `--platform`：
+
+```bash
+docker buildx build -f Dockerfile.arm64 --target package-linux-tar \
+  --output type=local,dest=release/docker-linux .
+# -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
+```
+
+打 `v*` tag 触发的 Web Package 发布流水线会自动产出
+`linux-x64` / `linux-arm64` 两份 `tar.gz`。
+
+> 32 位 armv7 暂不提供：直接依赖 `rquickjs-sys` 未为
+> `armv7-unknown-linux-musleabihf` 预置 FFI 绑定，交叉编译需额外的
+> bindgen/libclang 链路，暂未纳入发布矩阵。
+
+当前导出的 Linux 二进制均为静态链接（musl）版本——x64 为
+`x86_64-unknown-linux-musl`，arm64 为 `aarch64-unknown-linux-musl`，
+可尽量减少宿主机运行库差异导致的问题。
 
 ### Windows 本地导出产物
 

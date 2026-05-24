@@ -17,6 +17,7 @@ import type {
   ProviderTestConfig,
   ProviderProxyConfig,
   ClaudeApiFormat,
+  CodexApiFormat,
   ClaudeApiKeyField,
 } from "@/types";
 import {
@@ -45,7 +46,9 @@ import { OpenClawFormFields } from "./OpenClawFormFields";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 import {
   applyTemplateValues,
+  extractCodexWireApi,
   hasApiKeyField,
+  setCodexWireApi,
 } from "@/utils/providerConfigUtils";
 import { mergeProviderMeta } from "@/utils/providerMetaUtils";
 import { getCodexCustomTemplate } from "@/config/codexTemplates";
@@ -104,6 +107,26 @@ type PresetEntry = {
     | GeminiProviderPreset
     | OpenCodeProviderPreset
     | OpenClawProviderPreset;
+};
+
+// 跟随上游 cc-switch 1c82b8a3：把 TOML wire_api 字符串归一为 CodexApiFormat。
+const codexApiFormatFromWireApi = (
+  wireApi: string | undefined,
+): CodexApiFormat | undefined => {
+  switch (wireApi?.trim().toLowerCase()) {
+    case "chat":
+    case "chat_completions":
+    case "chat-completions":
+    case "openai_chat":
+    case "openai-chat":
+      return "openai_chat";
+    case "responses":
+    case "openai_responses":
+    case "openai-responses":
+      return "openai_responses";
+    default:
+      return undefined;
+  }
 };
 
 interface ProviderFormProps {
@@ -385,6 +408,7 @@ export function ProviderForm({
     codexModelName,
     codexAuthError,
     setCodexAuth,
+    setCodexConfig,
     handleCodexApiKeyChange,
     handleCodexBaseUrlChange,
     handleCodexModelNameChange,
@@ -392,15 +416,53 @@ export function ProviderForm({
     resetCodexConfig,
   } = useCodexConfigState({ initialData });
 
+  // Codex API 格式（跟随上游 cc-switch 1c82b8a3）：优先 meta.apiFormat，
+  // 其次从 TOML config 里的 wire_api 推断，回退到 openai_responses。
+  const [localCodexApiFormat, setLocalCodexApiFormat] = useState<CodexApiFormat>(
+    () => {
+      if (initialData?.meta?.apiFormat === "openai_chat") return "openai_chat";
+      if (initialData?.meta?.apiFormat === "openai_responses")
+        return "openai_responses";
+      return (
+        codexApiFormatFromWireApi(
+          extractCodexWireApi(
+            typeof initialData?.settingsConfig?.config === "string"
+              ? initialData.settingsConfig.config
+              : "",
+          ),
+        ) ?? "openai_responses"
+      );
+    },
+  );
+
   const { configError: codexConfigError, debouncedValidate } =
     useCodexTomlValidation();
 
   const handleCodexConfigChange = useCallback(
     (value: string) => {
       originalHandleCodexConfigChange(value);
+      // 用户改 TOML 时如果手工写了 wire_api，把表单的 apiFormat 也同步过来
+      const nextFormat = codexApiFormatFromWireApi(extractCodexWireApi(value));
+      if (nextFormat) {
+        setLocalCodexApiFormat(nextFormat);
+      }
       debouncedValidate(value);
     },
     [originalHandleCodexConfigChange, debouncedValidate],
+  );
+
+  // 用户在 UI 上切 apiFormat：保留 TOML 的 wire_api 为 "responses"（兼容新版 Codex
+  // 客户端的 Responses 协议），真实路由由 meta.apiFormat 与代理判定。
+  const handleCodexApiFormatChange = useCallback(
+    (format: CodexApiFormat) => {
+      setLocalCodexApiFormat(format);
+      setCodexConfig((prev) => {
+        const updated = setCodexWireApi(prev, "responses");
+        debouncedValidate(updated);
+        return updated;
+      });
+    },
+    [setCodexConfig, debouncedValidate],
   );
 
   useEffect(() => {
@@ -893,9 +955,16 @@ export function ProviderForm({
     if (appId === "codex") {
       try {
         const authJson = JSON.parse(codexAuth);
+        // 跟随上游 cc-switch 1c82b8a3：第三方 Codex provider 保存时把 TOML 的
+        // wire_api 归一为 "responses"——客户端始终用 Responses 协议跟代理对话，
+        // 真实路由是否转 Chat 由 meta.apiFormat 决定。
+        const normalizedCodexConfig =
+          category !== "official" && (codexConfig ?? "").trim()
+            ? setCodexWireApi(codexConfig ?? "", "responses")
+            : (codexConfig ?? "");
         const configObj = {
           auth: authJson,
-          config: codexConfig ?? "",
+          config: normalizedCodexConfig,
         };
         settingsConfig = JSON.stringify(configObj);
       } catch (err) {
@@ -1079,7 +1148,9 @@ export function ProviderForm({
       apiFormat:
         appId === "claude" && category !== "official"
           ? localApiFormat
-          : undefined,
+          : appId === "codex" && category !== "official"
+            ? localCodexApiFormat
+            : undefined,
       apiKeyField:
         appId === "claude" &&
         category !== "official" &&
@@ -1094,23 +1165,6 @@ export function ProviderForm({
 
     await onSubmit(payload);
   };
-
-  const groupedPresets = useMemo(() => {
-    return presetEntries.reduce<Record<string, PresetEntry[]>>((acc, entry) => {
-      const category = entry.preset.category ?? "others";
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(entry);
-      return acc;
-    }, {});
-  }, [presetEntries]);
-
-  const categoryKeys = useMemo(() => {
-    return Object.keys(groupedPresets).filter(
-      (key) => key !== "custom" && groupedPresets[key]?.length,
-    );
-  }, [groupedPresets]);
 
   const shouldShowSpeedTest =
     category !== "official" && category !== "cloud_provider";
@@ -1200,6 +1254,10 @@ export function ProviderForm({
       if (appId === "codex") {
         const template = getCodexCustomTemplate();
         resetCodexConfig(template.auth, template.config);
+        setLocalCodexApiFormat(
+          codexApiFormatFromWireApi(extractCodexWireApi(template.config)) ??
+            "openai_responses",
+        );
       }
       if (appId === "gemini") {
         resetGeminiConfig({}, {});
@@ -1233,6 +1291,11 @@ export function ProviderForm({
       const config = preset.config ?? "";
 
       resetCodexConfig(auth, config);
+      setLocalCodexApiFormat(
+        preset.apiFormat ??
+          codexApiFormatFromWireApi(extractCodexWireApi(config)) ??
+          "openai_responses",
+      );
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
@@ -1363,8 +1426,7 @@ export function ProviderForm({
         {!initialData && (
           <ProviderPresetSelector
             selectedPresetId={selectedPresetId}
-            groupedPresets={groupedPresets}
-            categoryKeys={categoryKeys}
+            presetEntries={presetEntries}
             presetCategoryLabels={presetCategoryLabels}
             onPresetChange={handlePresetChange}
             onUniversalPresetSelect={onUniversalPresetSelect}
@@ -1603,6 +1665,8 @@ export function ProviderForm({
             }
             autoSelect={endpointAutoSelect}
             onAutoSelectChange={setEndpointAutoSelect}
+            apiFormat={localCodexApiFormat}
+            onApiFormatChange={handleCodexApiFormatChange}
             shouldShowModelField={category !== "official"}
             modelName={codexModelName}
             onModelNameChange={handleCodexModelNameChange}

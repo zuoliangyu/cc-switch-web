@@ -96,7 +96,7 @@ interface ProvidersResponse {
   currentProviderId: string;
 }
 
-const DEFAULT_WEB_API_BASE = "http://127.0.0.1:8890";
+const DEFAULT_WEB_API_BASE = "";
 
 const AUTH_TOKEN_KEY = "cc-switch-auth-token";
 

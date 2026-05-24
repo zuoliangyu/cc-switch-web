@@ -4,7 +4,7 @@ import { cargoCmd, runOrExit } from "./lib/process.mjs";
 const mode = (process.argv[2] || "w").toLowerCase();
 
 function printUsage() {
-  console.log("Usage: pnpm build -- <w|d>");
+  console.log("Usage: pnpm build <w|d>");
   console.log("  w: local release build (frontend bundle + embedded Rust binary)");
   console.log("  d: Docker image build");
 }

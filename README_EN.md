@@ -88,7 +88,7 @@ This repository treats `0.1.0` as its initial Web release baseline; previous inh
 | Local development (`w`) | `pnpm dev` |
 | Docker foreground development (`d`) | `pnpm dev -- d` |
 | Local release build (`w`) | `pnpm build` |
-| Docker image build (`d`) | `pnpm build -- d` |
+| Docker image build (`d`) | `pnpm build d` |
 | Project check | `.\scripts\check.ps1` |
 | Local CI check | `.\scripts\ci-check.ps1` |
 | Export artifacts on Windows | `.\scripts\package-artifacts.ps1` |
@@ -159,7 +159,7 @@ Script entry layout:
    Equivalent explicit form:
 
    ```bash
-   pnpm build -- w
+   pnpm build w
    ```
 
    On Windows, you can also run:
@@ -200,7 +200,7 @@ Script entry layout:
 1. Build the Docker image:
 
    ```bash
-   pnpm build -- d
+   pnpm build d
    ```
 
    On Windows, you can also run:

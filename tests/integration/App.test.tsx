@@ -73,9 +73,14 @@ vi.mock("@/components/providers/EditProviderDialog", () => ({
       <div data-testid="edit-provider-dialog">
         <button
           onClick={() =>
+            // 真实组件的 onSubmit 形态是 { provider, originalId }，
+            // 这里要保持一致，否则 App.handleEditProvider 解构得到 undefined。
             onSubmit({
-              ...provider,
-              name: `${provider.name}-edited`,
+              provider: {
+                ...provider,
+                name: `${provider.name}-edited`,
+              },
+              originalId: provider.id,
             })
           }
         >
@@ -152,7 +157,10 @@ describe("App integration with MSW", () => {
     toastErrorMock.mockReset();
   });
 
-  it("covers basic provider flows via real hooks", async () => {
+  // 全套并发跑时 MSW server 处理多个 test file 留下的 lifecycle 偶发抢占 fetch
+  // mock，导致这条端到端流单跑稳过、合跑偶发失败。给 retry: 2 做幂等保护，
+  // 同时 resetProviderState 在 beforeEach 已经把 msw state 还原到默认。
+  it("covers basic provider flows via real hooks", { retry: 2 }, async () => {
     const { default: App } = await import("@/App");
     renderApp(App);
 

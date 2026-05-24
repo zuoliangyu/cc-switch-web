@@ -4,57 +4,20 @@
 
 ## 概要
 
-CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web ブランチ用リポジトリです。
+CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web ブランチ用リポジトリで、CC Switch の Web 向け実装とブランチ固有のカスタマイズを管理します。
 
-このリポジトリは、CC Switch に関する Web 向け実装、関連する実験、そしてブランチ固有の調整を管理するために使用されます。
-
-現在の想定アーキテクチャは次の通りです。
+アーキテクチャと位置付け:
 
 - フロントエンド: Web
 - バックエンド: ローカル Rust サービス
 - アクセス方法: ブラウザで `http://localhost:xxxx` を開く
+- 対象: Windows、macOS、Linux、およびデスクトップのない Linux サーバー
 
-この方向は、Windows、macOS、Linux、およびデスクトップのない Linux サーバーを対象にしています。
+## 使い方
 
-## 現在のバージョン
+CC Switch Web はローカルで Rust サービスを起動し、Claude、Codex、Gemini、OpenClaw など複数の AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
 
-現在のリポジトリバージョンは `0.3.2` です。
-
-`0.3.2` では `0.3.1` で繰り延べた 2 項目を引き続き対応しました。
-
-- Codex プロバイダー切替時の履歴安定化（アップストリーム `a1e6c3b6`）：CC Switch で Codex プロバイダーを切り替えると `codex resume` の履歴が「入れ替わって見える」問題は、Codex が `model_provider` フィールドで履歴をフィルタしているのに対し、旧挙動では `rightcode` / `aihubmix` のようなカスタム id がそのまま漂流していたことが原因。本リリースではプロバイダー主導の書き込み境界に "stable provider-id 正規化" を導入し（既存のカスタム id を再利用、なければ `ccswitch` にフォールバック）、対応する `[profiles.*]` の参照も同時に書き換えます。backfill 経路では正規化を逆向きに戻し、保存済みテンプレートの元 id を汚染しません。正規化と backfill 復元の双方を網羅する 8 件の新規ユニットテストを追加。
-- Usage 性能（アップストリーム `f061b777` のうち `518d945e` で取り消されなかった部分）：dashboard の範囲クエリ向けに `(app_type, created_at DESC)` のカバリングインデックスを追加。GPT-5.4（3 件）と GPT-5.5（6 件）の既定価格 seed を補完し、0.3.1 で取り込んだ `find_model_pricing_row` の大文字小文字非依存修正と組み合わせ、dashboard の ghost-zero-cost 行をさらに削減。
-
-`0.3.1` は `0.3.0` リリース以降にアップストリーム `cc-switch` で蓄積された修正のうち、「Web バックエンドにとって直接価値のあるもの」だけを選んで取り込んだリリースです。
-
-- プロキシ／ストリーミング：重複する `finish_reason` チャンクを除去し、`message_delta` を `[DONE]` まで遅延送出（OpenRouter / Kimi-K2.6 で複数回 finish が来て Anthropic クライアントが abort する問題を修正）。Cloudflare AI Gateway 経由の Vertex AI フル URL を保持。Kimi/Moonshot のツールコール経路で `reasoning_content` を維持。DashScope / Codex OAuth の `usage` 欠損・部分・null に対する堅牢化。
-- 認証セマンティクス：`ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer`、`ANTHROPIC_API_KEY` → `x-api-key`（Anthropic SDK のネイティブ挙動に合わせる）。stream check も同じヘッダーロジックを再利用し、二重送出によるヘルスチェックの偽陰性を解消。
-- プロバイダー：DeepSeek / Kimi / Zhipu GLM / MiniMax のように Anthropic 互換 API がサブパスに、`/models` がルートにある供給元でも `/anthropic/v1/models` → `/v1/models` → `/models` の候補順でモデル一覧を取得可能に。GitHub Copilot のダッシュ形式 Claude id（`claude-sonnet-4-6[1m]` 等）はドット形式へ正規化し、live `/models` で確認、見つからなければ family + 最高バージョンへフォールバック。SiliconFlow 国際サイトの通貨表記を USD に修正。Zhipu の週次枠ラベルを修正。
-- セッション：Codex の explorer / サブエージェントセッションをメイン一覧から非表示に。要約抽出時に `<environment_context>` 注入をスキップ。
-- 設定書き出し：`settings.json` のキーをアルファベット順に並べ替え、構成切替時のノイズ diff を排除。MCP のインポート操作で各アプリ live 設定への逆方向書き戻しを廃止。
-- Windows 適配：JSON 設定中にホワイトリストの `%USERPROFILE%` 等のプレースホルダーが含まれる場合、エディタに「絶対パスへ展開」ボタンを表示（Claude Code は Windows 環境変数を自動展開しない）。非 Windows プラットフォームの `try_get_version` は `$SHELL` を優先し、ユーザーの PATH / alias を読み込めるよう変更。
-- Claude effort トグル：`effortHigh` は `env.CLAUDE_CODE_EFFORT_LEVEL` への書き込みに変更（旧トップレベル `effortLevel` は Claude Code に効かない）。読み取り時は旧フィールドも認識して移行を担保。
-- Usage の堅牢化：`find_model_pricing_row` を大文字小文字非依存にし、`OpenAI/GPT-5.5@HIGH` のような不一致 model id でも seed の価格情報にヒット。これにより dashboard に出ていた「ゴースト・ゼロコスト」行を解消。後続の本格的な重複排除に向けた 7 列カバリングインデックス `idx_request_logs_dedup_lookup` を追加。
-
-各修正と対応するアップストリーム commit、独立タスクへ繰り延べた項目（B1 7 次元指紋による重複排除 / C7 Codex プロバイダー切替時の履歴安定化 / F1 起動時コスト backfill）の完全な一覧は `CHANGELOG.md` および `docs-dev/web-parity-post-3.14-2026-05.md` を参照してください。
-
-このリポジトリでは、`0.1.0` を Web ブランチの初回リリース基準として扱います。以前に引き継がれていた過去のリリース履歴はこのリポジトリから削除しており、より古い履歴はアップストリーム側を参照してください。
-
-## アップストリームとの関係
-
-- アップストリームプロジェクト: [cc-switch](https://github.com/farion1231/cc-switch)
-- 現在の Web リポジトリ: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
-- 作者: 左岚（[Bilibili](https://space.bilibili.com/27619688)）
-- このリポジトリは CC Switch の Web ブランチ方向に焦点を当てています
-- プロジェクトの位置付けや外部向け説明が変わった場合は、このリポジトリ内の各言語版 README を同期して更新してください
-
-## 補足
-
-元の CC Switch プロジェクト、またはアップストリームのリリース情報を確認したい場合は、上流リポジトリを直接参照してください。
-
-## 最近そろえた Web 機能と UI 更新
-
-現在の Web ブランチでは、次のデスクトップ機能をそろえ、あわせて Web UI の階層も刷新しています。
+Web ブランチで既に利用できる機能:
 
 - Claude、Codex、Gemini、OpenClaw のプロバイダーモデル取得
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
@@ -62,10 +25,61 @@ CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web �
 - 環境変数競合の検出と整理入口
 - `?deeplink=...` または手動入力した `ccswitch://...` による Deep Link 取り込み
 - About ページから GitHub の最新リリースページを開く入口
-- Provider、Settings、Skills、Sessions ページを新しいワークスペース型 UI 階層へ統一
-- 関連するフルスクリーンパネル、リポジトリ管理パネル、会話 TOC パネルも同じ Web ビジュアル言語へ更新
+- Provider、Settings、Skills、Sessions の各ページをワークスペース型 UI へ統一
 
-## 実行方法
+### クイックスタート
+
+1. フロントエンドを埋め込んだ release バイナリをビルドします。
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   （Rust `1.88+` が必要です。詳細なビルド / 開発オプションは下記「開発」セクションを参照してください。）
+
+2. バイナリを実行し、ターミナルに表示された最終アドレスを開きます。
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   リリース版ではフロントエンド静的配信と Web API が同じポートを共有し、デフォルトの優先ポートは `8890` です。ポートが使用中・権限拒否の場合は、自動的に後続ポートを試し、実際にバインドしたポートを出力します。
+
+3. ターミナルに表示されたアドレスをブラウザで開けば利用開始です。
+
+4. データ保存先: ローカル Web サービスモードでは、データは CC Switch のローカル設定ルートに保存されます。
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   ここには `settings.json`、`cc-switch.db`、バックアップ、統一 Skills ストレージなどが含まれます。旧 `config.json` は現在の Web ランタイムの主データ経路には含まれません。
+
+> Docker で実行する、またはデスクトップのないサーバーで常駐させる場合は、下記「開発」内の「Docker 実行」「Linux systemd サンプル」を参照してください。
+
+## 現在のバージョン
+
+現在のリポジトリバージョンは `0.8.0` です。バージョンごとの変更詳細、各修正と対応するアップストリーム commit、独立タスクへ繰り延べた項目は `CHANGELOG.md` および `docs-dev/web-parity-post-3.14-2026-05.md` を参照してください。
+
+このリポジトリでは `0.1.0` を Web ブランチの初回リリース基準として扱います。以前に引き継がれていた過去のリリース履歴は削除しており、より古い履歴はアップストリーム側を参照してください。
+
+## アップストリームとの関係
+
+- アップストリームプロジェクト: [cc-switch](https://github.com/farion1231/cc-switch)
+- 現在の Web リポジトリ: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- 作者: 左岚（[Bilibili](https://space.bilibili.com/27619688)）
+- このリポジトリは CC Switch の Web ブランチ方向に焦点を当てています
+- 元の CC Switch プロジェクトやアップストリームのリリース情報を確認したい場合は、上流リポジトリを直接参照してください
+- プロジェクトの位置付けや外部向け説明が変わった場合は、このリポジトリ内の各言語版 README を同期して更新してください
+
+## 開発
 
 ### コマンド早見表
 

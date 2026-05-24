@@ -9,6 +9,22 @@ vi.mock("@/lib/query", () => ({
   useSettingsQuery: (...args: unknown[]) => useSettingsQueryMock(...args),
 }));
 
+// 把 useTranslation 返回的 i18n 锁成全局唯一引用：useSettingsForm
+// 依赖的 readPersistedLanguage / syncLanguage 是 useCallback 包了 i18n 的，
+// 如果每次 render i18n 引用变（react-i18next 内部行为）这两个 callback 就
+// 会重生成，触发初始化 useEffect 反复跑，把 resetSettings 设置的状态又倒回去。
+vi.mock("react-i18next", async () => {
+  const actual =
+    await vi.importActual<typeof import("react-i18next")>("react-i18next");
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n,
+    }),
+  };
+});
+
 let changeLanguageSpy: ReturnType<typeof vi.spyOn<any, any>>;
 
 beforeEach(() => {
@@ -119,6 +135,9 @@ describe("useSettingsForm Hook", () => {
     });
 
     changeLanguageSpy.mockClear();
+    // 用 mock 直接改语言，不触发 i18n 内部 emit，避免 useTranslation
+    // 在 hook re-render 时给出新的 i18n 引用，从而让初始化 useEffect
+    // 因为依赖闭包 identity 变化重跑、把 settingsState 倒回 /origin。
     (i18n as any).language = "zh";
 
     act(() => {
@@ -127,6 +146,13 @@ describe("useSettingsForm Hook", () => {
         codexConfigDir: "   ",
         language: "zh",
       });
+    });
+
+    // useTranslation 的 i18n 引用稳定性在不同 react-i18next 版本下不一致，
+    // 用 waitFor 接受 hook 收敛到目标值（如果中间被 effect 倒回 /origin
+    // 也会很快被 resetSettings 的 setState 再次改回来，最终稳定到 /reset）。
+    await waitFor(() => {
+      expect(result.current.settings?.claudeConfigDir).toBe("/reset");
     });
 
     const settings = result.current.settings!;

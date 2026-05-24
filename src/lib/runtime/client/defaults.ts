@@ -9,6 +9,7 @@ import type {
 
 const visibleApps: VisibleApps = {
   claude: true,
+  "claude-desktop": false,
   codex: true,
   gemini: true,
   opencode: true,
@@ -53,6 +54,7 @@ export const getDefaultProxyStatus = (): ProxyStatus => ({
 
 export const getDefaultProxyTakeoverStatus = (): ProxyTakeoverStatus => ({
   claude: false,
+  "claude-desktop": false,
   codex: false,
   gemini: false,
   opencode: false,

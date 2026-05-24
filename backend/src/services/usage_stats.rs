@@ -117,6 +117,134 @@ pub struct RequestLogDetail {
     pub data_source: Option<String>,
 }
 
+/// session 日志与 proxy 日志做"指纹去重"时允许的时间窗口（秒）。
+/// 同一笔请求被两条路径记录时，时间戳通常只差几十秒；±10 分钟窗口足够覆盖
+/// session log 写入延迟，又不至于让相邻请求被误判为同一笔。
+pub(crate) const SESSION_PROXY_DEDUP_WINDOW_SECONDS: i64 = 10 * 60;
+
+/// 在聚合查询里排除"已被 proxy 行覆盖的 session 行"的 SQL 片段。
+///
+/// 7 维指纹：`(app_type, input_tokens, output_tokens, cache_read_tokens,
+/// cache_creation_tokens, model[case-insensitive], created_at[±窗口])`
+/// + 仅 2xx 状态。`cache_creation_tokens` 在 codex/gemini session 上不暴露，
+/// 这两个 app 的 session 行只要其它字段都对得上就放过 proxy 任意值。
+pub(crate) fn effective_usage_log_filter(log_alias: &str) -> String {
+    format!(
+        "NOT (
+            {log_alias}.data_source IN ('session_log', 'codex_session', 'gemini_session')
+            AND EXISTS (
+                SELECT 1
+                FROM proxy_request_logs proxy_dedup
+                WHERE proxy_dedup.data_source = 'proxy'
+                  AND proxy_dedup.app_type = {log_alias}.app_type
+                  AND proxy_dedup.status_code >= 200
+                  AND proxy_dedup.status_code < 300
+                  AND proxy_dedup.input_tokens = {log_alias}.input_tokens
+                  AND proxy_dedup.output_tokens = {log_alias}.output_tokens
+                  AND proxy_dedup.cache_read_tokens = {log_alias}.cache_read_tokens
+                  AND (
+                      proxy_dedup.cache_creation_tokens = {log_alias}.cache_creation_tokens
+                      OR (
+                          {log_alias}.cache_creation_tokens = 0
+                          AND {log_alias}.data_source IN ('codex_session', 'gemini_session')
+                      )
+                  )
+                  AND proxy_dedup.created_at BETWEEN
+                      {log_alias}.created_at - {SESSION_PROXY_DEDUP_WINDOW_SECONDS}
+                      AND {log_alias}.created_at + {SESSION_PROXY_DEDUP_WINDOW_SECONDS}
+                  AND (
+                      LOWER(proxy_dedup.model) = LOWER({log_alias}.model)
+                      OR LOWER(proxy_dedup.model) = 'unknown'
+                      OR LOWER({log_alias}.model) = 'unknown'
+                  )
+            )
+        )"
+    )
+}
+
+/// 跨源去重指纹键。
+///
+/// `cache_creation_tokens`：Codex / Gemini session 日志不暴露该字段，调用方传 0
+/// 表示"未知"，匹配器会放行 proxy 侧任意 `cache_creation_tokens` 值。
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DedupKey<'a> {
+    pub app_type: &'a str,
+    pub model: &'a str,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cache_read_tokens: u32,
+    pub cache_creation_tokens: u32,
+    pub created_at: i64,
+}
+
+/// session 日志写入前的统一去重判定。
+///
+/// 命中以下任一条件即跳过插入：
+/// 1. `request_id` 已存在（主键碰撞，最常见的是 Claude 原生路径已经用了 `session:{msg_id}`）；
+/// 2. 时间窗口内存在与 `key` 匹配的 proxy 日志（指纹去重，覆盖 Codex / Gemini /
+///    Claude-through-OpenAI 这类 request_id 不共享的路径）。
+pub(crate) fn should_skip_session_insert(
+    conn: &Connection,
+    request_id: &str,
+    key: &DedupKey,
+) -> Result<bool, AppError> {
+    if proxy_request_id_exists(conn, request_id)? {
+        return Ok(true);
+    }
+    has_matching_proxy_usage_log(conn, key)
+}
+
+fn proxy_request_id_exists(conn: &Connection, request_id: &str) -> Result<bool, AppError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM proxy_request_logs WHERE request_id = ?1)",
+        params![request_id],
+        |row| row.get::<_, bool>(0),
+    )
+    .map_err(|e| AppError::Database(format!("查询 request_id 失败: {e}")))
+}
+
+pub(crate) fn has_matching_proxy_usage_log(
+    conn: &Connection,
+    key: &DedupKey,
+) -> Result<bool, AppError> {
+    let allow_missing_cache_creation =
+        matches!(key.app_type, "codex" | "gemini") && key.cache_creation_tokens == 0;
+
+    conn.query_row(
+        "SELECT EXISTS (
+            SELECT 1
+            FROM proxy_request_logs l
+            WHERE l.data_source = 'proxy'
+              AND l.app_type = ?1
+              AND l.status_code >= 200
+              AND l.status_code < 300
+              AND l.input_tokens = ?3
+              AND l.output_tokens = ?4
+              AND l.cache_read_tokens = ?5
+              AND (l.cache_creation_tokens = ?6 OR ?9 = 1)
+              AND l.created_at BETWEEN ?7 - ?8 AND ?7 + ?8
+              AND (
+                  LOWER(l.model) = LOWER(?2)
+                  OR LOWER(l.model) = 'unknown'
+                  OR LOWER(?2) = 'unknown'
+              )
+        )",
+        params![
+            key.app_type,
+            key.model,
+            key.input_tokens as i64,
+            key.output_tokens as i64,
+            key.cache_read_tokens as i64,
+            key.cache_creation_tokens as i64,
+            key.created_at,
+            SESSION_PROXY_DEDUP_WINDOW_SECONDS,
+            allow_missing_cache_creation as i64,
+        ],
+        |row| row.get::<_, bool>(0),
+    )
+    .map_err(|e| AppError::Database(format!("查询重复代理用量日志失败: {e}")))
+}
+
 impl Database {
     /// 获取使用量汇总
     pub fn get_usage_summary(
@@ -127,28 +255,25 @@ impl Database {
     ) -> Result<UsageSummary, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let (where_clause, params_vec) =
-            if start_date.is_some() || end_date.is_some() || app_type.is_some() {
-                let mut conditions = Vec::new();
-                let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        // 7 维指纹 filter 必须挂在每个聚合查询上，否则 session_log 行会和 proxy 行重复计入。
+        let mut conditions: Vec<String> = vec![effective_usage_log_filter("l")];
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
-                if let Some(start) = start_date {
-                    conditions.push("created_at >= ?");
-                    params.push(Box::new(start));
-                }
-                if let Some(end) = end_date {
-                    conditions.push("created_at <= ?");
-                    params.push(Box::new(end));
-                }
-                if let Some(value) = app_type {
-                    conditions.push("app_type = ?");
-                    params.push(Box::new(value.to_string()));
-                }
+        if let Some(start) = start_date {
+            conditions.push("l.created_at >= ?".to_string());
+            params.push(Box::new(start));
+        }
+        if let Some(end) = end_date {
+            conditions.push("l.created_at <= ?".to_string());
+            params.push(Box::new(end));
+        }
+        if let Some(value) = app_type {
+            conditions.push("l.app_type = ?".to_string());
+            params.push(Box::new(value.to_string()));
+        }
 
-                (format!("WHERE {}", conditions.join(" AND ")), params)
-            } else {
-                (String::new(), Vec::new())
-            };
+        let where_clause = format!("WHERE {}", conditions.join(" AND "));
+        let params_vec = params;
 
         let (rollup_where, rollup_params) =
             if start_date.is_some() || end_date.is_some() || app_type.is_some() {
@@ -185,13 +310,13 @@ impl Database {
             FROM
                 (SELECT
                     COUNT(*) as total_requests,
-                    COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0) as total_cost,
-                    COALESCE(SUM(input_tokens), 0) as total_input_tokens,
-                    COALESCE(SUM(output_tokens), 0) as total_output_tokens,
-                    COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation_tokens,
-                    COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens,
-                    COALESCE(SUM(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END), 0) as success_count
-                 FROM proxy_request_logs {where_clause}) d,
+                    COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0) as total_cost,
+                    COALESCE(SUM(l.input_tokens), 0) as total_input_tokens,
+                    COALESCE(SUM(l.output_tokens), 0) as total_output_tokens,
+                    COALESCE(SUM(l.cache_creation_tokens), 0) as total_cache_creation_tokens,
+                    COALESCE(SUM(l.cache_read_tokens), 0) as total_cache_read_tokens,
+                    COALESCE(SUM(CASE WHEN l.status_code >= 200 AND l.status_code < 300 THEN 1 ELSE 0 END), 0) as success_count
+                 FROM proxy_request_logs l {where_clause}) d,
                 (SELECT
                     COALESCE(SUM(request_count), 0) as total_requests,
                     COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0) as total_cost,
@@ -273,24 +398,26 @@ impl Database {
         }
 
         let app_type_filter = if app_type.is_some() {
-            "AND app_type = ?4"
+            "AND l.app_type = ?4"
         } else {
             ""
         };
 
+        let effective_filter = effective_usage_log_filter("l");
         let sql = format!(
             "
             SELECT
-                CAST((created_at - ?1) / ?3 AS INTEGER) as bucket_idx,
+                CAST((l.created_at - ?1) / ?3 AS INTEGER) as bucket_idx,
                 COUNT(*) as request_count,
-                COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0) as total_cost,
-                COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
-                COALESCE(SUM(input_tokens), 0) as total_input_tokens,
-                COALESCE(SUM(output_tokens), 0) as total_output_tokens,
-                COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation_tokens,
-                COALESCE(SUM(cache_read_tokens), 0) as total_cache_read_tokens
-            FROM proxy_request_logs
-            WHERE created_at >= ?1 AND created_at <= ?2 {app_type_filter}
+                COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0) as total_cost,
+                COALESCE(SUM(l.input_tokens + l.output_tokens), 0) as total_tokens,
+                COALESCE(SUM(l.input_tokens), 0) as total_input_tokens,
+                COALESCE(SUM(l.output_tokens), 0) as total_output_tokens,
+                COALESCE(SUM(l.cache_creation_tokens), 0) as total_cache_creation_tokens,
+                COALESCE(SUM(l.cache_read_tokens), 0) as total_cache_read_tokens
+            FROM proxy_request_logs l
+            WHERE l.created_at >= ?1 AND l.created_at <= ?2 {app_type_filter}
+              AND {effective_filter}
             GROUP BY bucket_idx
             ORDER BY bucket_idx ASC"
         );
@@ -442,25 +569,21 @@ impl Database {
     ) -> Result<Vec<ProviderStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let mut detail_conditions = Vec::new();
+        let mut detail_conditions: Vec<String> = vec![effective_usage_log_filter("l")];
         let mut detail_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         if let Some(start) = start_date {
-            detail_conditions.push("l.created_at >= ?");
+            detail_conditions.push("l.created_at >= ?".to_string());
             detail_params.push(Box::new(start));
         }
         if let Some(end) = end_date {
-            detail_conditions.push("l.created_at <= ?");
+            detail_conditions.push("l.created_at <= ?".to_string());
             detail_params.push(Box::new(end));
         }
         if let Some(value) = app_type {
-            detail_conditions.push("l.app_type = ?");
+            detail_conditions.push("l.app_type = ?".to_string());
             detail_params.push(Box::new(value.to_string()));
         }
-        let detail_where = if detail_conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", detail_conditions.join(" AND "))
-        };
+        let detail_where = format!("WHERE {}", detail_conditions.join(" AND "));
 
         let mut rollup_conditions: Vec<String> = Vec::new();
         let mut rollup_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -567,25 +690,21 @@ impl Database {
     ) -> Result<Vec<ModelStats>, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let mut detail_conditions = Vec::new();
+        let mut detail_conditions: Vec<String> = vec![effective_usage_log_filter("l")];
         let mut detail_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         if let Some(start) = start_date {
-            detail_conditions.push("created_at >= ?");
+            detail_conditions.push("l.created_at >= ?".to_string());
             detail_params.push(Box::new(start));
         }
         if let Some(end) = end_date {
-            detail_conditions.push("created_at <= ?");
+            detail_conditions.push("l.created_at <= ?".to_string());
             detail_params.push(Box::new(end));
         }
         if let Some(value) = app_type {
-            detail_conditions.push("app_type = ?");
+            detail_conditions.push("l.app_type = ?".to_string());
             detail_params.push(Box::new(value.to_string()));
         }
-        let detail_where = if detail_conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", detail_conditions.join(" AND "))
-        };
+        let detail_where = format!("WHERE {}", detail_conditions.join(" AND "));
 
         let mut rollup_conditions: Vec<String> = Vec::new();
         let mut rollup_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -615,13 +734,13 @@ impl Database {
                 SUM(total_tokens) as total_tokens,
                 SUM(total_cost) as total_cost
             FROM (
-                SELECT model,
+                SELECT l.model as model,
                     COUNT(*) as request_count,
-                    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
-                    COALESCE(SUM(CAST(total_cost_usd AS REAL)), 0) as total_cost
-                FROM proxy_request_logs
+                    COALESCE(SUM(l.input_tokens + l.output_tokens), 0) as total_tokens,
+                    COALESCE(SUM(CAST(l.total_cost_usd AS REAL)), 0) as total_cost
+                FROM proxy_request_logs l
                 {detail_where}
-                GROUP BY model
+                GROUP BY l.model
                 UNION ALL
                 SELECT model,
                     COALESCE(SUM(request_count), 0),
@@ -676,39 +795,35 @@ impl Database {
     ) -> Result<PaginatedLogs, AppError> {
         let conn = lock_conn!(self.conn);
 
-        let mut conditions = Vec::new();
+        let mut conditions: Vec<String> = vec![effective_usage_log_filter("l")];
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
         if let Some(ref app_type) = filters.app_type {
-            conditions.push("l.app_type = ?");
+            conditions.push("l.app_type = ?".to_string());
             params.push(Box::new(app_type.clone()));
         }
         if let Some(ref provider_name) = filters.provider_name {
-            conditions.push("p.name LIKE ?");
+            conditions.push("p.name LIKE ?".to_string());
             params.push(Box::new(format!("%{provider_name}%")));
         }
         if let Some(ref model) = filters.model {
-            conditions.push("l.model LIKE ?");
+            conditions.push("l.model LIKE ?".to_string());
             params.push(Box::new(format!("%{model}%")));
         }
         if let Some(status) = filters.status_code {
-            conditions.push("l.status_code = ?");
+            conditions.push("l.status_code = ?".to_string());
             params.push(Box::new(status as i64));
         }
         if let Some(start) = filters.start_date {
-            conditions.push("l.created_at >= ?");
+            conditions.push("l.created_at >= ?".to_string());
             params.push(Box::new(start));
         }
         if let Some(end) = filters.end_date {
-            conditions.push("l.created_at <= ?");
+            conditions.push("l.created_at <= ?".to_string());
             params.push(Box::new(end));
         }
 
-        let where_clause = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
+        let where_clause = format!("WHERE {}", conditions.join(" AND "));
 
         // 获取总数
         let count_sql = format!(
@@ -894,39 +1009,49 @@ impl Database {
             })
             .unwrap_or((None, None));
 
+        let effective_filter = effective_usage_log_filter("l");
+
         // 计算今日使用量 (detail logs + rollup)
+        let daily_sql = format!(
+            "SELECT COALESCE(SUM(cost), 0) FROM (
+                SELECT CAST(l.total_cost_usd AS REAL) as cost
+                FROM proxy_request_logs l
+                WHERE l.provider_id = ? AND l.app_type = ?
+                  AND date(datetime(l.created_at, 'unixepoch', 'localtime')) = date('now', 'localtime')
+                  AND {effective_filter}
+                UNION ALL
+                SELECT CAST(total_cost_usd AS REAL)
+                FROM usage_daily_rollups
+                WHERE provider_id = ? AND app_type = ?
+                  AND date = date('now', 'localtime')
+            )"
+        );
         let daily_usage: f64 = conn
             .query_row(
-                "SELECT COALESCE(SUM(cost), 0) FROM (
-                    SELECT CAST(total_cost_usd AS REAL) as cost
-                    FROM proxy_request_logs
-                    WHERE provider_id = ? AND app_type = ?
-                      AND date(datetime(created_at, 'unixepoch', 'localtime')) = date('now', 'localtime')
-                    UNION ALL
-                    SELECT CAST(total_cost_usd AS REAL)
-                    FROM usage_daily_rollups
-                    WHERE provider_id = ? AND app_type = ?
-                      AND date = date('now', 'localtime')
-                )",
+                &daily_sql,
                 params![provider_id, app_type, provider_id, app_type],
                 |row| row.get(0),
             )
             .unwrap_or(0.0);
 
         // 计算本月使用量 (detail logs + rollup)
+        let monthly_sql = format!(
+            "SELECT COALESCE(SUM(cost), 0) FROM (
+                SELECT CAST(l.total_cost_usd AS REAL) as cost
+                FROM proxy_request_logs l
+                WHERE l.provider_id = ? AND l.app_type = ?
+                  AND strftime('%Y-%m', datetime(l.created_at, 'unixepoch', 'localtime')) = strftime('%Y-%m', 'now', 'localtime')
+                  AND {effective_filter}
+                UNION ALL
+                SELECT CAST(total_cost_usd AS REAL)
+                FROM usage_daily_rollups
+                WHERE provider_id = ? AND app_type = ?
+                  AND strftime('%Y-%m', date) = strftime('%Y-%m', 'now', 'localtime')
+            )"
+        );
         let monthly_usage: f64 = conn
             .query_row(
-                "SELECT COALESCE(SUM(cost), 0) FROM (
-                    SELECT CAST(total_cost_usd AS REAL) as cost
-                    FROM proxy_request_logs
-                    WHERE provider_id = ? AND app_type = ?
-                      AND strftime('%Y-%m', datetime(created_at, 'unixepoch', 'localtime')) = strftime('%Y-%m', 'now', 'localtime')
-                    UNION ALL
-                    SELECT CAST(total_cost_usd AS REAL)
-                    FROM usage_daily_rollups
-                    WHERE provider_id = ? AND app_type = ?
-                      AND strftime('%Y-%m', date) = strftime('%Y-%m', 'now', 'localtime')
-                )",
+                &monthly_sql,
                 params![provider_id, app_type, provider_id, app_type],
                 |row| row.get(0),
             )
@@ -1288,6 +1413,264 @@ mod tests {
             result.is_some(),
             "大小写不一致的模型 OpenAI/GPT-5.2-Codex@LOW 应能命中 gpt-5.2-codex-low"
         );
+
+        Ok(())
+    }
+
+    /// 插入测试用 proxy_request_logs 行，参数列表精简到本组测试需要的列。
+    #[allow(clippy::too_many_arguments)]
+    fn insert_dedup_test_log(
+        conn: &Connection,
+        request_id: &str,
+        app_type: &str,
+        provider_id: &str,
+        model: &str,
+        data_source: &str,
+        created_at: i64,
+        input_tokens: u32,
+        output_tokens: u32,
+        cache_read_tokens: u32,
+        cache_creation_tokens: u32,
+        status_code: i64,
+        total_cost_usd: &str,
+    ) -> Result<(), AppError> {
+        conn.execute(
+            "INSERT INTO proxy_request_logs (
+                request_id, provider_id, app_type, model,
+                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                total_cost_usd, latency_ms, status_code, created_at, data_source
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                request_id,
+                provider_id,
+                app_type,
+                model,
+                input_tokens as i64,
+                output_tokens as i64,
+                cache_read_tokens as i64,
+                cache_creation_tokens as i64,
+                total_cost_usd,
+                100i64,
+                status_code,
+                created_at,
+                data_source,
+            ],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    #[test]
+    fn dedup_filter_excludes_session_rows_already_covered_by_proxy() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            // codex / gemini 各一条 proxy + 一条 session（session 应被 filter 排除）
+            insert_dedup_test_log(
+                &conn,
+                "codex-proxy",
+                "codex",
+                "openai",
+                "gpt-5.4",
+                "proxy",
+                10_000,
+                100,
+                20,
+                10,
+                0,
+                200,
+                "0.10",
+            )?;
+            insert_dedup_test_log(
+                &conn,
+                "codex-session-dup",
+                "codex",
+                "_codex_session",
+                "gpt-5.4",
+                "codex_session",
+                10_120, // 在 ±10min 窗口内
+                100,
+                20,
+                10,
+                0, // session 不带 cache_creation：filter 内部对 codex/gemini 放行 proxy 任意值
+                200,
+                "0.10",
+            )?;
+            insert_dedup_test_log(
+                &conn,
+                "gemini-proxy",
+                "gemini",
+                "google",
+                "gemini-2.5-flash",
+                "proxy",
+                10_500,
+                200,
+                50,
+                0,
+                0,
+                200,
+                "0.05",
+            )?;
+            insert_dedup_test_log(
+                &conn,
+                "gemini-session-dup",
+                "gemini",
+                "_gemini_session",
+                "gemini-2.5-flash",
+                "gemini_session",
+                10_400,
+                200,
+                50,
+                0,
+                0,
+                200,
+                "0.05",
+            )?;
+            // 仅 session、没有匹配 proxy 行，应该保留
+            insert_dedup_test_log(
+                &conn,
+                "codex-session-only",
+                "codex",
+                "_codex_session",
+                "gpt-5.4",
+                "codex_session",
+                20_000,
+                300,
+                30,
+                0,
+                0,
+                200,
+                "0.20",
+            )?;
+        }
+
+        let logs = db.get_request_logs(&LogFilters::default(), 0, 20)?;
+        let request_ids: Vec<&str> = logs
+            .data
+            .iter()
+            .map(|log| log.request_id.as_str())
+            .collect();
+        assert_eq!(logs.total, 3, "session-dup 行应被 filter 排除");
+        assert!(request_ids.contains(&"codex-proxy"));
+        assert!(request_ids.contains(&"gemini-proxy"));
+        assert!(request_ids.contains(&"codex-session-only"));
+        assert!(!request_ids.contains(&"codex-session-dup"));
+        assert!(!request_ids.contains(&"gemini-session-dup"));
+
+        // summary 计数也要排除被覆盖的 session 行
+        let summary = db.get_usage_summary(None, None, None)?;
+        assert_eq!(summary.total_requests, 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn dedup_filter_keeps_session_rows_outside_window_or_with_mismatched_tokens(
+    ) -> Result<(), AppError> {
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            insert_dedup_test_log(
+                &conn,
+                "proxy-base",
+                "codex",
+                "openai",
+                "gpt-5.4",
+                "proxy",
+                10_000,
+                100,
+                20,
+                10,
+                0,
+                200,
+                "0.10",
+            )?;
+            // 时间窗口外（超过 10 分钟），不应被 dedup 命中
+            insert_dedup_test_log(
+                &conn,
+                "session-outside-window",
+                "codex",
+                "_codex_session",
+                "gpt-5.4",
+                "codex_session",
+                10_000 + 600 + 1,
+                100,
+                20,
+                10,
+                0,
+                200,
+                "0.10",
+            )?;
+            // token 不匹配，不应被 dedup 命中
+            insert_dedup_test_log(
+                &conn,
+                "session-token-mismatch",
+                "codex",
+                "_codex_session",
+                "gpt-5.4",
+                "codex_session",
+                10_120,
+                999,
+                20,
+                10,
+                0,
+                200,
+                "0.10",
+            )?;
+        }
+
+        let logs = db.get_request_logs(&LogFilters::default(), 0, 20)?;
+        let request_ids: Vec<&str> = logs
+            .data
+            .iter()
+            .map(|log| log.request_id.as_str())
+            .collect();
+        assert!(request_ids.contains(&"proxy-base"));
+        assert!(request_ids.contains(&"session-outside-window"));
+        assert!(request_ids.contains(&"session-token-mismatch"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_skip_session_insert_returns_true_for_matching_proxy_row() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            insert_dedup_test_log(
+                &conn,
+                "proxy-id-1",
+                "codex",
+                "openai",
+                "gpt-5.4",
+                "proxy",
+                10_000,
+                100,
+                20,
+                10,
+                0,
+                200,
+                "0.10",
+            )?;
+        }
+
+        let conn = lock_conn!(db.conn);
+        let key = DedupKey {
+            app_type: "codex",
+            model: "gpt-5.4",
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_tokens: 10,
+            cache_creation_tokens: 0,
+            created_at: 10_120,
+        };
+        assert!(should_skip_session_insert(&conn, "fresh-id", &key)?);
+
+        let mismatched = DedupKey {
+            input_tokens: 999,
+            ..key
+        };
+        assert!(!should_skip_session_insert(&conn, "fresh-id", &mismatched)?);
 
         Ok(())
     }

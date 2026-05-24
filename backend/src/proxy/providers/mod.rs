@@ -23,9 +23,11 @@ pub(crate) mod gemini_schema;
 pub mod gemini_shadow;
 pub mod models;
 pub mod streaming;
+pub mod streaming_codex_chat;
 pub mod streaming_gemini;
 pub mod streaming_responses;
 pub mod transform;
+pub mod transform_codex_chat;
 pub mod transform_gemini;
 pub mod transform_responses;
 
@@ -40,7 +42,7 @@ pub use claude::{
     claude_api_format_needs_transform, get_claude_api_format,
     transform_claude_request_for_api_format, ClaudeAdapter,
 };
-pub use codex::CodexAdapter;
+pub use codex::{should_convert_codex_responses_to_chat, CodexAdapter};
 pub use gemini::GeminiAdapter;
 
 /// 供应商类型枚举
@@ -97,7 +99,8 @@ impl ProviderType {
     /// 根据配置中的 base_url、auth_mode、api_key 格式等信息推断具体的供应商类型
     pub fn from_app_type_and_config(app_type: &AppType, provider: &Provider) -> Self {
         match app_type {
-            AppType::Claude => {
+            // C-Phase0：claude-desktop 为 Claude 同族，推断逻辑复用 Claude
+            AppType::Claude | AppType::ClaudeDesktop => {
                 if get_claude_api_format(provider) == "gemini_native" {
                     let adapter = ClaudeAdapter::new();
                     return match adapter.extract_auth(provider).map(|auth| auth.strategy) {
@@ -225,7 +228,7 @@ impl std::str::FromStr for ProviderType {
 /// 根据 AppType 获取对应的适配器
 pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
     match app_type {
-        AppType::Claude => Box::new(ClaudeAdapter::new()),
+        AppType::Claude | AppType::ClaudeDesktop => Box::new(ClaudeAdapter::new()),
         AppType::Codex => Box::new(CodexAdapter::new()),
         AppType::Gemini => Box::new(GeminiAdapter::new()),
         AppType::OpenCode => {

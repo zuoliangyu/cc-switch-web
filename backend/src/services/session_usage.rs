@@ -104,7 +104,14 @@ pub fn sync_claude_session_logs(db: &Database) -> Result<SessionSyncResult, AppE
     Ok(result)
 }
 
-/// 收集目录下所有 .jsonl 文件
+/// 收集目录下所有 .jsonl 文件（含子 agent 文件）
+///
+/// 扫描三层固定深度，不使用递归，避免死循环：
+///   projects_dir/项目目录/*.jsonl                          (主会话)
+///   projects_dir/项目目录/SESSION_ID/subagents/*.jsonl      (子 agent)
+///
+/// 跟随上游 cc-switch bbce75fc：原两层版本会漏掉 Task tool 派生的子 Agent
+/// JSONL 日志，导致 session log 模式下子 Agent 的独立 token 用量完全未计入费用。
 fn collect_jsonl_files(projects_dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
@@ -123,7 +130,23 @@ fn collect_jsonl_files(projects_dir: &Path) -> Vec<PathBuf> {
             for sub_entry in sub_entries.flatten() {
                 let sub_path = sub_entry.path();
                 if sub_path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                    // 主会话 JSONL 文件
                     files.push(sub_path);
+                } else if sub_path.is_dir() {
+                    // 扫描子 agent 目录: 项目/SESSION_ID/subagents/*.jsonl
+                    let subagents_dir = sub_path.join("subagents");
+                    if subagents_dir.is_dir() {
+                        if let Ok(agent_entries) = fs::read_dir(&subagents_dir) {
+                            for agent_entry in agent_entries.flatten() {
+                                let agent_path = agent_entry.path();
+                                if agent_path.extension().and_then(|e| e.to_str())
+                                    == Some("jsonl")
+                                {
+                                    files.push(agent_path);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -278,7 +301,11 @@ fn sync_single_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppEr
             continue;
         }
 
-        let request_id = format!("session:{}", msg.message_id);
+        let request_id = format!(
+            "{}{}",
+            crate::proxy::usage::parser::SESSION_REQUEST_ID_PREFIX,
+            msg.message_id
+        );
 
         // 跳过 output_tokens 为 0 的无意义条目
         if msg.output_tokens == 0 {
@@ -342,19 +369,6 @@ fn insert_session_log_entry(
 ) -> Result<bool, AppError> {
     let conn = lock_conn!(db.conn);
 
-    // 检查是否已存在
-    let exists: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM proxy_request_logs WHERE request_id = ?1",
-            rusqlite::params![request_id],
-            |row| row.get::<_, i64>(0).map(|c| c > 0),
-        )
-        .unwrap_or(false);
-
-    if exists {
-        return Ok(false);
-    }
-
     // 解析时间戳
     let created_at = msg
         .timestamp
@@ -372,6 +386,23 @@ fn insert_session_log_entry(
                 .unwrap_or(0)
         });
 
+    // 跨源去重：request_id 命中（Claude 原生路径常见）或 7 维指纹命中代理日志（其它）→ 跳过
+    if crate::services::usage_stats::should_skip_session_insert(
+        &conn,
+        request_id,
+        &crate::services::usage_stats::DedupKey {
+            app_type: "claude",
+            model: &msg.model,
+            input_tokens: msg.input_tokens,
+            output_tokens: msg.output_tokens,
+            cache_read_tokens: msg.cache_read_tokens,
+            cache_creation_tokens: msg.cache_creation_tokens,
+            created_at,
+        },
+    )? {
+        return Ok(false);
+    }
+
     // 计算费用
     let usage = TokenUsage {
         input_tokens: msg.input_tokens,
@@ -379,6 +410,7 @@ fn insert_session_log_entry(
         cache_read_tokens: msg.cache_read_tokens,
         cache_creation_tokens: msg.cache_creation_tokens,
         model: Some(msg.model.clone()),
+        message_id: None,
     };
 
     let pricing = find_model_pricing_for_session(&conn, &msg.model);
@@ -630,5 +662,29 @@ mod tests {
 
         messages.insert("msg_1".to_string(), final_entry);
         assert_eq!(messages.get("msg_1").unwrap().output_tokens, 1349);
+    }
+
+    #[test]
+    fn test_collect_jsonl_files_includes_subagents() {
+        // 跟随上游 cc-switch bbce75fc：
+        // 验证 collect_jsonl_files 同时收集主会话 .jsonl 与子 Agent .jsonl。
+        let tmp = tempfile::tempdir().expect("temp dir should be created");
+        let projects_root = tmp.path();
+        let project = projects_root.join("project");
+        let session_dir = project.join("test-session");
+        let subagents_dir = session_dir.join("subagents");
+        fs::create_dir_all(&subagents_dir).unwrap();
+
+        fs::write(project.join("main.jsonl"), "{}").unwrap();
+        fs::write(subagents_dir.join("agent-abc.jsonl"), "{}").unwrap();
+
+        let files = collect_jsonl_files(projects_root);
+        assert_eq!(files.len(), 2);
+        let paths: Vec<String> = files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        assert!(paths.iter().any(|p| p.contains("main.jsonl")));
+        assert!(paths.iter().any(|p| p.contains("agent-abc.jsonl")));
     }
 }

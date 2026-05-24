@@ -233,6 +233,10 @@ impl StreamCheckService {
         let test_prompt = &config.test_prompt;
 
         let result = match app_type {
+            // C-Phase0 脚手架：claude-desktop 运行时尚未实现（Phase 0 下不可达）
+            AppType::ClaudeDesktop => {
+                unreachable!("claude-desktop 运行时尚未实现（C-Phase0 脚手架）")
+            }
             AppType::Claude => {
                 Self::check_claude_stream(
                     &client,
@@ -742,6 +746,15 @@ impl StreamCheckService {
         }
 
         let lower = body.to_lowercase();
+        let qianfan_quota_indicators = [
+            "coding_plan_hour_quota_exceeded",
+            "coding_plan_week_quota_exceeded",
+            "coding_plan_month_quota_exceeded",
+        ];
+        if qianfan_quota_indicators.iter().any(|s| lower.contains(s)) {
+            return Some("quotaExceeded");
+        }
+
         if !lower.contains("model") {
             return None;
         }
@@ -1153,8 +1166,10 @@ impl StreamCheckService {
         config: &StreamCheckConfig,
     ) -> String {
         match app_type {
-            AppType::Claude => Self::extract_env_model(provider, "ANTHROPIC_MODEL")
-                .unwrap_or_else(|| config.claude_model.clone()),
+            AppType::Claude | AppType::ClaudeDesktop => {
+                Self::extract_env_model(provider, "ANTHROPIC_MODEL")
+                    .unwrap_or_else(|| config.claude_model.clone())
+            }
             AppType::Codex => {
                 Self::extract_codex_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
@@ -1458,6 +1473,22 @@ mod tests {
             StreamCheckService::detect_error_category(404, generic_404),
             None
         );
+    }
+
+    #[test]
+    fn test_detect_qianfan_coding_plan_quota_errors() {
+        let cases = [
+            r#"{"error":{"code":"coding_plan_hour_quota_exceeded","message":"hour quota exceeded"}}"#,
+            r#"{"error":{"code":"coding_plan_week_quota_exceeded","message":"week quota exceeded"}}"#,
+            r#"{"error":{"code":"coding_plan_month_quota_exceeded","message":"month quota exceeded"}}"#,
+        ];
+
+        for body in cases {
+            assert_eq!(
+                StreamCheckService::detect_error_category(429, body),
+                Some("quotaExceeded")
+            );
+        }
     }
 
     #[test]

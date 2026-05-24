@@ -440,19 +440,6 @@ fn insert_codex_session_entry(
 ) -> Result<bool, AppError> {
     let conn = lock_conn!(db.conn);
 
-    // 检查是否已存在
-    let exists: bool = conn
-        .query_row(
-            "SELECT COUNT(*) FROM proxy_request_logs WHERE request_id = ?1",
-            rusqlite::params![request_id],
-            |row| row.get::<_, i64>(0).map(|c| c > 0),
-        )
-        .unwrap_or(false);
-
-    if exists {
-        return Ok(false);
-    }
-
     // 解析时间戳
     let created_at = timestamp
         .and_then(|ts| {
@@ -467,6 +454,24 @@ fn insert_codex_session_entry(
                 .unwrap_or(0)
         });
 
+    // 跨源去重：Codex session 日志不暴露 cache_creation_tokens，传 0；
+    // DedupKey 内部对 codex/gemini 的 cache_creation = 0 会放行 proxy 任意值。
+    if crate::services::usage_stats::should_skip_session_insert(
+        &conn,
+        request_id,
+        &crate::services::usage_stats::DedupKey {
+            app_type: "codex",
+            model,
+            input_tokens: delta.input,
+            output_tokens: delta.output,
+            cache_read_tokens: delta.cached_input,
+            cache_creation_tokens: 0,
+            created_at,
+        },
+    )? {
+        return Ok(false);
+    }
+
     // 计算费用
     let usage = TokenUsage {
         input_tokens: delta.input,
@@ -474,6 +479,7 @@ fn insert_codex_session_entry(
         cache_read_tokens: delta.cached_input,
         cache_creation_tokens: 0,
         model: Some(model.to_string()),
+        message_id: None,
     };
 
     let pricing = find_codex_pricing(&conn, model);

@@ -75,6 +75,10 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
     }
 
     let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
+        // C-Phase0 脚手架：claude-desktop 配置目录尚未实现
+        AppType::ClaudeDesktop => {
+            return Err("claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string())
+        }
         AppType::Claude => config::get_claude_config_dir(),
         AppType::Codex => codex_config::get_codex_config_dir(),
         AppType::Gemini => crate::gemini_config::get_gemini_dir(),
@@ -93,6 +97,10 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
     }
 
     let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
+        // C-Phase0 脚手架：claude-desktop 配置目录尚未实现
+        AppType::ClaudeDesktop => {
+            return Err("claude-desktop 运行时尚未实现（C-Phase0 脚手架）".to_string())
+        }
         AppType::Claude => config::get_default_claude_config_dir(),
         AppType::Codex => codex_config::get_default_codex_config_dir(),
         AppType::Gemini => crate::gemini_config::get_default_gemini_dir(),

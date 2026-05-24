@@ -61,6 +61,7 @@ const createDefaultProviders = (): ProvidersByApp => ({
       createdAt: Date.now(),
     },
   },
+  "claude-desktop": {},
   opencode: {},
   openclaw: {},
   hermes: {},
@@ -68,6 +69,7 @@ const createDefaultProviders = (): ProvidersByApp => ({
 
 const createDefaultCurrent = (): CurrentProviderState => ({
   claude: "claude-1",
+  "claude-desktop": "",
   codex: "codex-1",
   gemini: "gemini-1",
   opencode: "",

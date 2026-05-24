@@ -63,6 +63,7 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
 
   const [enabledApps, setEnabledApps] = useState<{
     claude: boolean;
+    "claude-desktop": boolean;
     codex: boolean;
     gemini: boolean;
     opencode: boolean;
@@ -74,6 +75,7 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
     }
     return {
       claude: defaultEnabledApps.includes("claude"),
+      "claude-desktop": defaultEnabledApps.includes("claude-desktop"),
       codex: defaultEnabledApps.includes("codex"),
       gemini: defaultEnabledApps.includes("gemini"),
       opencode: defaultEnabledApps.includes("opencode"),

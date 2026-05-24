@@ -4,57 +4,20 @@
 
 ## Overview
 
-CC Switch Web is the web branch repository of [cc-switch](https://github.com/farion1231/cc-switch).
+CC Switch Web is the web branch repository of [cc-switch](https://github.com/farion1231/cc-switch), carrying the web-oriented implementation and branch-specific customizations of CC Switch.
 
-This repository is used to carry web-oriented work around CC Switch, including web-side implementation, related experiments, and branch-specific adjustments.
-
-The current target architecture is:
+Architecture and positioning:
 
 - Frontend: Web
 - Backend: local Rust service
 - Access pattern: browser opens `http://localhost:xxxx`
+- Targets: Windows, macOS, Linux, and headless Linux servers
 
-This direction targets Windows, macOS, Linux, and headless Linux server environments.
+## Usage
 
-## Version
+CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for multiple AI coding tools — Claude, Codex, Gemini, OpenClaw, and more — from your browser.
 
-The current repository version is `0.3.2`.
-
-`0.3.2` follows up on the two items deferred in `0.3.1`:
-
-- Codex provider-switch history stability (upstream `a1e6c3b6`): after switching Codex providers via CC Switch, `codex resume` previously appeared to "lose" history because Codex filters resume sessions by `model_provider`, and the old behavior let that field drift between custom ids like `rightcode` and `aihubmix`. This release introduces a stable provider-id normalization at provider-driven write boundaries (prefer reusing an existing custom id, otherwise fall back to `ccswitch`), and rewrites matching `[profiles.*]` references in lockstep. Backfill paths reverse the normalization back to the stored template's original id to avoid contaminating it. Comes with 8 new unit tests covering both normalization and backfill restoration.
-- Usage perf (the parts of upstream `f061b777` not reverted by `518d945e`): a new `(app_type, created_at DESC)` covering index for dashboard range queries; default pricing seeds for GPT-5.4 (3 entries) and GPT-5.5 (6 entries), which combine with the 0.3.1 case-insensitive `find_model_pricing_row` fix to further eliminate dashboard ghost-zero-cost rows.
-
-`0.3.1` ports a curated batch of fixes accumulated upstream since the `0.3.0` release, filtered for "direct value to the Web backend":
-
-- Proxy streaming: dedupe duplicate `finish_reason` chunks and defer `message_delta` until `[DONE]` (fixes OpenRouter / Kimi-K2.6 emitting multiple finish reasons and aborting Anthropic clients); preserve full Cloudflare AI Gateway Vertex AI URLs; keep `reasoning_content` on Kimi/Moonshot tool-call paths; harden DashScope / Codex OAuth `usage` parsing against null and partial fields.
-- Auth semantics: `ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer`, `ANTHROPIC_API_KEY` → `x-api-key`, matching the Anthropic SDK; stream check now reuses the same header logic and no longer emits both, removing health-check false negatives.
-- Providers: DeepSeek / Kimi / Zhipu GLM / MiniMax (Anthropic-compat on a subpath but `/models` at the root) can now fetch model lists via candidate ordering `/anthropic/v1/models` → `/v1/models` → `/models`; GitHub Copilot dash-form Claude ids (`claude-sonnet-4-6[1m]`) get normalized to dot form and resolved against the live `/models` list with family fallback; SiliconFlow international site shows USD; Zhipu weekly tier label fixed.
-- Sessions: Codex explorer / sub-agent sessions are hidden from the main list; summary extraction skips `<environment_context>` injections.
-- Config: `settings.json` keys are written in alphabetical order so config switches no longer churn diffs; MCP imports no longer write back to live app configs.
-- Windows: when JSON config contains whitelisted `%USERPROFILE%`-style placeholders, the editor offers a one-click "expand to absolute paths" action (Claude Code does not auto-expand Windows env vars); non-Windows `try_get_version` now prefers `$SHELL` to load the user's PATH/alias.
-- Claude effort toggle: `effortHigh` now writes `env.CLAUDE_CODE_EFFORT_LEVEL` (the legacy top-level `effortLevel` field is not honored by Claude Code); reading still falls back to the legacy field for migration.
-- Usage robustness: `find_model_pricing_row` is case-insensitive, fixing "ghost zero-cost" rows for model ids like `OpenAI/GPT-5.5@HIGH`; new 7-column covering index `idx_request_logs_dedup_lookup` lays the groundwork for full dedup work coming later.
-
-See `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md` for the per-fix upstream commit references and the items deferred to follow-up tasks (B1 full 7-dim fingerprint dedup / C7 Codex provider-switch history stability / F1 startup cost backfill).
-
-This repository now treats `0.1.0` as its initial Web release baseline. Previous inherited release history has been removed from this repository and should be considered part of the upstream project history.
-
-## Relationship to Upstream
-
-- Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
-- Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
-- Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
-- This repository focuses on the Web branch direction of CC Switch
-- When project positioning or external description changes, all language README files in this repository should be updated together
-
-## Notes
-
-If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly.
-
-## Recent Web Alignment And UI Refresh
-
-The current Web branch has aligned the following desktop-side capabilities and completed a new round of Web UI refresh:
+Capabilities already available on the Web branch:
 
 - Provider form model fetching for Claude, Codex, Gemini, and OpenClaw
 - Official subscription quota display for Claude, Codex, and Gemini
@@ -62,10 +25,61 @@ The current Web branch has aligned the following desktop-side capabilities and c
 - Environment variable conflict detection and cleanup entry points
 - Deep link import via `?deeplink=...` or manual `ccswitch://...` input
 - About page entry to open the latest GitHub release page
-- Refreshed workspace-style UI hierarchy for Provider, Settings, Skills, and Sessions pages
-- Refreshed related full-screen panels, repository management panel, and session TOC panel to match the new Web visual language
+- Workspace-style UI for Provider, Settings, Skills, and Sessions pages
 
-## Run
+### Quick Start
+
+1. Build the release binary with embedded frontend assets:
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   (Rust `1.88+` required; see the "Development" section below for detailed build/dev options.)
+
+2. Run the binary, then open the final address printed in the terminal:
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   In release mode the frontend static assets and Web API share the same port, with `8890` as the default preferred port. If the port is occupied or denied, the service automatically scans forward and prints the actual port it bound to.
+
+3. Open the address printed in the terminal in your browser, and you're ready.
+
+4. Data location: in local Web service mode, data is stored under the default CC Switch local config root:
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   This includes `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+
+> To run via Docker or keep it hosted on a headless server, see "Docker" and "Linux systemd Example" under "Development" below.
+
+## Version
+
+The current repository version is `0.8.0`. For per-version change details, the per-fix upstream commit references, and items deferred to follow-up tasks, see `CHANGELOG.md` and `docs-dev/web-parity-post-3.14-2026-05.md`.
+
+This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
+
+## Relationship to Upstream
+
+- Upstream project: [cc-switch](https://github.com/farion1231/cc-switch)
+- Current Web repository: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- Author: 左岚 ([Bilibili](https://space.bilibili.com/27619688))
+- This repository focuses on the Web branch direction of CC Switch
+- If you are looking for the original CC Switch project or upstream release information, please visit the upstream repository directly
+- When project positioning or external description changes, all language README files in this repository should be updated together
+
+## Development
 
 ### Quick Commands
 

@@ -15,9 +15,10 @@ use super::{
     handler_context::RequestContext,
     providers::{
         get_adapter, get_claude_api_format, streaming::create_anthropic_sse_stream,
+        streaming_codex_chat::create_responses_sse_stream_from_chat,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
         streaming_responses::create_anthropic_sse_stream_from_responses, transform,
-        transform_gemini, transform_responses,
+        transform_codex_chat, transform_gemini, transform_responses,
     },
     response_processor::{
         create_logged_passthrough_stream, process_response, read_decoded_body,
@@ -59,7 +60,7 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
 // Claude API 处理器（包含格式转换逻辑）
 // ============================================================================
 
-/// 处理 /v1/messages 请求（Claude API）
+/// 处理 /v1/messages 请求（Claude API）—— 薄包装，复用通用实现
 ///
 /// Claude 处理器包含独特的格式转换逻辑：
 /// - 过去用于 OpenRouter 的 OpenAI Chat Completions 兼容接口（Anthropic ↔ OpenAI 转换）
@@ -67,6 +68,80 @@ pub async fn get_status(State(state): State<ProxyState>) -> Result<Json<ProxySta
 pub async fn handle_messages(
     State(state): State<ProxyState>,
     request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    handle_messages_for_app(state, request, AppType::Claude, "Claude", "claude", None).await
+}
+
+/// Claude Desktop 3P 本地 gateway：`POST /claude-desktop/v1/messages`
+pub async fn handle_claude_desktop_messages(
+    State(state): State<ProxyState>,
+    request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    validate_claude_desktop_gateway_auth(&state, request.headers())?;
+    handle_messages_for_app(
+        state,
+        request,
+        AppType::ClaudeDesktop,
+        "Claude Desktop",
+        "claude-desktop",
+        Some("/claude-desktop"),
+    )
+    .await
+}
+
+/// Claude Desktop 3P 本地 gateway：`GET /claude-desktop/v1/models`
+pub async fn handle_claude_desktop_models(
+    State(state): State<ProxyState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, ProxyError> {
+    validate_claude_desktop_gateway_auth(&state, &headers)?;
+    let providers = state
+        .provider_router
+        .select_providers("claude-desktop")
+        .await
+        .map_err(|e| ProxyError::DatabaseError(e.to_string()))?;
+    let provider = providers.first().ok_or(ProxyError::NoAvailableProvider)?;
+    let response = crate::claude_desktop_config::model_list_response(provider)
+        .map_err(|e| ProxyError::ConfigError(e.to_string()))?;
+    Ok(Json(response))
+}
+
+/// 校验 Claude Desktop 本地 gateway 的 Bearer token（每请求验证）。
+fn validate_claude_desktop_gateway_auth(
+    state: &ProxyState,
+    headers: &axum::http::HeaderMap,
+) -> Result<(), ProxyError> {
+    let expected = crate::claude_desktop_config::get_or_create_gateway_token(state.db.as_ref())
+        .map_err(|e| ProxyError::AuthError(e.to_string()))?;
+    let Some(value) = headers.get(axum::http::header::AUTHORIZATION) else {
+        return Err(ProxyError::AuthError(
+            "Claude Desktop gateway 缺少 Authorization 头".to_string(),
+        ));
+    };
+    let value = value
+        .to_str()
+        .map_err(|_| ProxyError::AuthError("Authorization 头格式无效".to_string()))?;
+    let token = value
+        .strip_prefix("Bearer ")
+        .or_else(|| value.strip_prefix("bearer "))
+        .unwrap_or("")
+        .trim();
+    if token != expected {
+        return Err(ProxyError::AuthError(
+            "Claude Desktop gateway token 无效".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// `/v1/messages` 通用实现（Claude 与 Claude Desktop 共用）
+async fn handle_messages_for_app(
+    state: ProxyState,
+    request: axum::extract::Request,
+    app_type: AppType,
+    tag: &'static str,
+    app_type_str: &'static str,
+    strip_prefix: Option<&'static str>,
 ) -> Result<axum::response::Response, ProxyError> {
     let (parts, body) = request.into_parts();
     let uri = parts.uri;
@@ -81,12 +156,16 @@ pub async fn handle_messages(
         .map_err(|e| ProxyError::Internal(format!("Failed to parse request body: {e}")))?;
 
     let mut ctx =
-        RequestContext::new(&state, &body, &headers, AppType::Claude, "Claude", "claude").await?;
+        RequestContext::new(&state, &body, &headers, app_type.clone(), tag, app_type_str).await?;
 
-    let endpoint = uri
+    let raw_endpoint = uri
         .path_and_query()
         .map(|path_and_query| path_and_query.as_str())
         .unwrap_or(uri.path());
+    // Claude Desktop gateway 走 /claude-desktop 前缀，转发到上游前需剥离。
+    let endpoint = strip_prefix
+        .and_then(|prefix| raw_endpoint.strip_prefix(prefix))
+        .unwrap_or(raw_endpoint);
 
     let is_stream = body
         .get("stream")
@@ -97,7 +176,7 @@ pub async fn handle_messages(
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
         .forward_with_retry(
-            &AppType::Claude,
+            &app_type,
             endpoint,
             body.clone(),
             headers,
@@ -125,7 +204,7 @@ pub async fn handle_messages(
     let response = result.response;
 
     // 检查是否需要格式转换（OpenRouter 等中转服务）
-    let adapter = get_adapter(&AppType::Claude);
+    let adapter = get_adapter(&app_type);
     let needs_transform = adapter.needs_transform(&ctx.provider);
 
     // Claude 特有：格式转换处理
@@ -471,6 +550,12 @@ pub async fn handle_responses(
     ctx.provider = result.provider;
     let response = result.response;
 
+    // 跟随上游 cc-switch 1c82b8a3：如果该 Codex provider 的真实上游走 OpenAI
+    // Chat Completions，把上游回来的 Chat 响应/SSE 翻译回 Responses 格式再返给客户端。
+    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+        return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
+    }
+
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
 }
 
@@ -525,7 +610,106 @@ pub async fn handle_responses_compact(
     ctx.provider = result.provider;
     let response = result.response;
 
+    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+        return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
+    }
+
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
+}
+
+// ---------------------------------------------------------------------------
+// Codex Chat Completions ↔ Responses 翻译（跟随上游 cc-switch 1c82b8a3 + 79d6486e + 09f67c1b）
+//
+// 触发条件：Codex provider 配置为 `apiFormat=openai_chat` 或 base_url 直接是
+// /chat/completions，并且客户端访问的是 Responses 端点。forwarder 已经在出站
+// 时把请求 body 从 Responses 转成 Chat、把 endpoint 改写到 /chat/completions；
+// 这里负责把上游回来的 Chat 响应（JSON 或 SSE）再翻译成 Responses 格式给客户端。
+//
+// 简化点（vs 上游 src-tauri）：
+// - 暂不接入 usage 收集（先走透传），待后续在 SseUsageCollector 上补 codex 流
+//   事件解析器 + 非流式 TokenUsage 记录
+// - 没有 ActiveConnectionGuard 概念（cc-switch-web 当前 handler 不传 guard）
+// ---------------------------------------------------------------------------
+async fn handle_codex_chat_to_responses_transform(
+    response: super::hyper_client::ProxyResponse,
+    ctx: &RequestContext,
+    state: &ProxyState,
+    is_stream: bool,
+) -> Result<axum::response::Response, ProxyError> {
+    let status = response.status();
+
+    // 失败响应原样透传（让客户端看到真实上游错误）
+    if !status.is_success() {
+        return process_response(response, ctx, state, &CODEX_PARSER_CONFIG).await;
+    }
+
+    if is_stream || response.is_sse() {
+        let stream = response.bytes_stream();
+        let sse_stream = create_responses_sse_stream_from_chat(stream);
+
+        // TODO: 待补 Codex SSE usage 收集（需要在 SseUsageCollector 上加流事件过滤路径）
+        let usage_collector: Option<SseUsageCollector> = None;
+
+        let logged_stream = create_logged_passthrough_stream(
+            sse_stream,
+            ctx.tag,
+            usage_collector,
+            ctx.streaming_timeout_config(),
+        );
+
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            "Content-Type",
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
+        headers.insert(
+            "Cache-Control",
+            axum::http::HeaderValue::from_static("no-cache"),
+        );
+
+        let body = axum::body::Body::from_stream(logged_stream);
+        return Ok((headers, body).into_response());
+    }
+
+    // 非流式：读 body → 解析 Chat JSON → 转 Responses JSON → 返回
+    let body_timeout =
+        if ctx.app_config.auto_failover_enabled && ctx.app_config.non_streaming_timeout > 0 {
+            std::time::Duration::from_secs(ctx.app_config.non_streaming_timeout as u64)
+        } else {
+            std::time::Duration::ZERO
+        };
+    let (mut response_headers, status, body_bytes) =
+        read_decoded_body(response, ctx.tag, body_timeout).await?;
+    let body_str = String::from_utf8_lossy(&body_bytes);
+    let chat_response: Value = serde_json::from_slice(&body_bytes).map_err(|e| {
+        log::error!("[Codex] 解析 Chat 上游响应失败: {e}, body: {body_str}");
+        ProxyError::TransformError(format!("Failed to parse upstream chat response: {e}"))
+    })?;
+    let responses_response =
+        transform_codex_chat::chat_completion_to_response(chat_response).map_err(|e| {
+            log::error!("[Codex] Chat → Responses 响应转换失败: {e}");
+            e
+        })?;
+
+    strip_entity_headers_for_rebuilt_body(&mut response_headers);
+
+    let mut builder = axum::response::Response::builder().status(status);
+    for (key, value) in response_headers.iter() {
+        builder = builder.header(key, value);
+    }
+    builder = builder.header("content-type", "application/json");
+
+    let response_body = serde_json::to_vec(&responses_response).map_err(|e| {
+        log::error!("[Codex] 序列化 Responses 响应失败: {e}");
+        ProxyError::TransformError(format!("Failed to serialize responses response: {e}"))
+    })?;
+
+    builder
+        .body(axum::body::Body::from(response_body))
+        .map_err(|e| {
+            log::error!("[Codex] 构建 Responses 响应失败: {e}");
+            ProxyError::Internal(format!("Failed to build response: {e}"))
+        })
 }
 
 // ============================================================================
@@ -652,7 +836,10 @@ async fn log_usage(
         model
     };
 
-    let request_id = uuid::Uuid::new_v4().to_string();
+    // 使用 dedup_request_id() 让 proxy 写入与 session-log 同步共享同一 request_id
+    // （Claude API 上是 `session:msg_xxx`），主键 INSERT OR REPLACE 自动去重；
+    // 没拿到 message_id 时回退随机 UUID（与 session log 不可能撞上）。
+    let request_id = usage.dedup_request_id();
 
     if let Err(e) = logger.log_with_calculation(
         request_id,

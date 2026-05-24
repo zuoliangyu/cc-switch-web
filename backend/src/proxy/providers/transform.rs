@@ -917,6 +917,37 @@ mod tests {
     }
 
     #[test]
+    fn test_openai_to_anthropic_preserves_id_for_usage_dedup() {
+        // openai_to_anthropic 必须把 OpenAI 的 `id` 透传到 Anthropic 形态的 body.id，
+        // 这样 from_claude_response 解析时 message_id 才能命中，dedup_request_id 也才会
+        // 走 `session:` 前缀，让 Claude+OpenAI compat 路径与 session-log 共享主键。
+        let input = json!({
+            "id": "chatcmpl-claude-compatible",
+            "object": "chat.completion",
+            "model": "claude-sonnet-4-5",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Hello!"},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+
+        let result = openai_to_anthropic(input).unwrap();
+        let usage = crate::proxy::usage::parser::TokenUsage::from_claude_response(&result)
+            .expect("converted Anthropic response should parse usage");
+
+        assert_eq!(
+            usage.message_id.as_deref(),
+            Some("chatcmpl-claude-compatible")
+        );
+        assert_eq!(
+            usage.dedup_request_id(),
+            "session:chatcmpl-claude-compatible"
+        );
+    }
+
+    #[test]
     fn test_openai_to_anthropic_with_tool_calls() {
         let input = json!({
             "id": "chatcmpl-123",

@@ -8,6 +8,7 @@ export { skillsApi } from "./skills";
 export { usageApi } from "./usage";
 export { providerRuntimeApi } from "./providerRuntime";
 export { proxyApi } from "./proxy";
+export { claudeDesktopApi } from "./claudeDesktop";
 export { openclawApi } from "./openclaw";
 export { hermesApi } from "./hermes";
 export { sessionsApi } from "./sessions";

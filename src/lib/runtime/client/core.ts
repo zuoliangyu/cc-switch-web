@@ -74,6 +74,8 @@ import {
   getWebProxyConfigForApp,
   getWebProxyStatus,
   getWebProxyTakeoverStatus,
+  getWebClaudeDesktopStatus,
+  getWebClaudeDesktopDefaultRoutes,
   getWebPrompts,
   getWebProviders,
   getWebSettings,
@@ -792,6 +794,10 @@ export async function invoke<T>(
       return (await getWebProxyStatus()) as T;
     case "get_proxy_takeover_status":
       return (await getWebProxyTakeoverStatus()) as T;
+    case "get_claude_desktop_status":
+      return (await getWebClaudeDesktopStatus()) as T;
+    case "get_claude_desktop_default_routes":
+      return (await getWebClaudeDesktopDefaultRoutes()) as T;
     case "set_proxy_takeover_for_app":
       return (await setWebProxyTakeoverForApp(
         args?.appType as AppId,

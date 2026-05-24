@@ -4,41 +4,71 @@
 
 ## 项目说明
 
-CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web 分支仓库。
+CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web 分支仓库，用于承载 CC Switch 的 Web 方向实现与分支定制。
 
-当前仓库用于承载 CC Switch 的 Web 方向相关工作，包括 Web 端实现、相关实验以及分支上的定制化调整。
-
-当前目标架构为：
+架构与定位：
 
 - 前端：Web
 - 后端：本地 Rust 服务
 - 访问方式：浏览器访问 `http://localhost:xxxx`
+- 适用场景：Windows、macOS、Linux，以及无桌面的 Linux 服务器
 
-这个方向面向 Windows、macOS、Linux 以及无桌面的 Linux 服务器场景。
+## 如何使用
+
+CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude、Codex、Gemini、OpenClaw 等多个 AI 编码工具的供应商配置，一键切换。
+
+当前 Web 分支已具备的能力：
+
+- Claude、Codex、Gemini、OpenClaw 的供应商模型拉取
+- Claude、Codex、Gemini 的官方订阅额度展示
+- ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
+- 环境变量冲突检测与清理入口
+- 通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
+- About 页面可直接打开 GitHub 最新发布页
+- Provider、Settings、Skills、Sessions 已统一为工作台式界面
+
+### 快速运行
+
+1. 构建嵌入前端资源的 release 二进制：
+
+   ```bash
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+   （需要 Rust `1.88+`；详细构建/开发选项见下方「开发」一节）
+
+2. 运行二进制，然后打开终端中打印出的最终地址：
+
+   ```bash
+   # Linux/macOS
+   ./backend/target/release/cc-switch-web --backend-port 8890
+   ```
+
+   ```powershell
+   # Windows
+   .\backend\target\release\cc-switch-web.exe -b 8890
+   ```
+
+   发布态下前端静态资源与 Web API 共用同一个端口，默认首选 `8890`。如端口被占用或无权限绑定，程序会自动尝试后续端口并输出最终监听地址。
+
+3. 在浏览器打开终端输出的地址即可使用。
+
+4. 数据存放位置：本地 Web 服务模式下，数据默认写入 CC Switch 的本地配置根目录：
+
+   ```text
+   ~/.cc-switch
+   ```
+
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+
+> 想用 Docker 跑、或在无桌面服务器上长期托管，见下方「开发」中的 Docker 运行与 Linux systemd 示例。
 
 ## 当前版本
 
-当前仓库版本为 `0.3.2`。
+当前仓库版本为 `0.8.0`。逐版变更明细、每条修复对应的上游 commit、被延后到独立任务的项，见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
 
-`0.3.2` 继续推进 `0.3.1` 中标记为延后的两项：
-
-- Codex 切换供应商历史稳定（上游 `a1e6c3b6`）：CC Switch 切换 Codex provider 后 `codex resume` 看到"历史换了一个"的问题，根因是 Codex 按 `model_provider` 字段过滤会话历史，旧实现在 `rightcode` / `aihubmix` 这类自定义 id 之间漂移。本版本在 provider 主导的写入边界引入稳定 provider id 归一化机制（优先复用已有的自定义 id，否则回退 `ccswitch`），并同步重写匹配的 `[profiles.*]` 引用；backfill 路径反向还原回模板原始 id，避免反向污染。包含 8 条新单测覆盖归一化与 backfill 还原。
-- Usage perf（上游 `f061b777` 中未被 `518d945e` 撤销的部分）：dashboard 范围查询新增 `(app_type, created_at DESC)` 覆盖索引；补齐 GPT-5.4（3 条）与 GPT-5.5（6 条）默认定价 seed，配合 0.3.1 的 `find_model_pricing_row` 大小写不敏感修复，进一步消除 dashboard ghost-zero-cost 行。
-
-`0.3.1` 跟进 `0.3.0` 发布之后上游 `cc-switch` 累计的一批修复，按"对 Web 后端有直接价值"筛过后落地：
-
-- 代理流式：`message_delta` 重复 finish_reason 去重 + pending 缓存延后到 `[DONE]` 发送（修复 OpenRouter / Kimi-K2.6 多次 finish 触发 Anthropic 客户端 abort）、Vertex AI 完整 URL 保留、Kimi/Moonshot 路径保留 `reasoning_content`、DashScope/Codex OAuth `usage` 字段 null 鲁棒性
-- 鉴权语义：`ANTHROPIC_AUTH_TOKEN` → `Bearer`、`ANTHROPIC_API_KEY` → `x-api-key`，与 Anthropic SDK 原生语义对齐；stream check 复用同一份头逻辑，去掉双发导致的健康检查假阴性
-- Provider：DeepSeek / Kimi / Zhipu GLM / MiniMax 这类把 Anthropic 协议挂在子路径的供应商现在能正确拉取模型列表（候选 URL 顺序：`/anthropic/v1/models` → `/v1/models` → `/models`）；GitHub Copilot 的 dash 形式 Claude id（`claude-sonnet-4-6[1m]`）会被归一化为 dot 形式并按 live 列表 family fallback；SiliconFlow 国际站币种修正为 USD；Zhipu 周限额 tier 修正
-- 会话：Codex explorer / 子代理产生的会话从主列表隐藏；summary 不再被 `<environment_context>` 注入污染
-- 配置：`settings.json` 写出按字母序排键，消除切换时的噪声 diff；MCP 导入操作不再反向写回各应用 live 配置
-- Windows 适配：JSON 配置中检测到 `%USERPROFILE%` 等白名单占位符时，编辑器弹"转为绝对路径"一键展开（Claude Code 不会自动展开 Windows 占位符）；非 Windows 平台 `try_get_version` 优先用 `$SHELL` 加载用户 PATH/alias
-- Claude effort：`effortHigh` 开关从写顶层 `effortLevel` 改为写 `env.CLAUDE_CODE_EFFORT_LEVEL`（旧顶层字段在 Claude Code 实际不生效），读取阶段兼容历史数据
-- Usage 鲁棒性：`find_model_pricing_row` 大小写不敏感命中 seed 定价，修复 `OpenAI/GPT-5.5@HIGH` 这类大小写不一致 model id 导致 dashboard 出现 `total_cost = 0` 的幽灵零成本行；新增 `idx_request_logs_dedup_lookup` 7 列覆盖索引为后续完整去重打基础
-
-完整列表与每条修复对应的上游 commit、被延后到独立任务的项（B1 完整 7 维指纹去重 / C7 Codex 切换历史稳定 / F1 启动期成本 backfill），见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
-
-当前仓库现在以 `0.1.0` 作为 Web 分支的初始发布基线。此前继承的历史发布记录已从本仓库移除，如需查看更早历史，请以上游项目记录为准。
+仓库以 `0.1.0` 作为 Web 分支的初始发布基线，此前继承的历史发布记录已移除，更早历史请以上游项目为准。
 
 ## 与上游项目的关系
 
@@ -46,26 +76,10 @@ CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web �
 - 当前 Web 仓库：[zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
 - 作者：左岚（[哔哩哔哩](https://space.bilibili.com/27619688)）
 - 当前仓库聚焦于 CC Switch 的 Web 分支方向
+- 如需查看原始 CC Switch 项目或上游发布信息，请直接访问上游仓库
 - 如果项目定位或对外描述发生变化，仓库内各语言版本 README 需要同步更新
 
-## 说明
-
-如果你要查看原始的 CC Switch 项目或上游发布信息，请直接访问上游仓库。
-
-## 最近对齐的 Web 能力与界面升级
-
-当前 Web 分支已经补齐了以下桌面端能力，并完成了一轮 Web 界面层级升级：
-
-- Claude、Codex、Gemini、OpenClaw 的供应商模型拉取
-- Claude、Codex、Gemini 的官方订阅额度展示
-- ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
-- 环境变量冲突检测与清理入口
-- 支持通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
-- About 页面新增打开 GitHub 最新发布页的入口
-- Provider、Settings、Skills、Sessions 页面已统一为新的工作台式界面层级
-- 相关全屏面板、仓库管理面板与会话目录面板也已同步到新的 Web 视觉语言
-
-## 运行方式
+## 开发
 
 ### 命令速查
 
@@ -271,7 +285,29 @@ release/docker-linux/cc-switch-web-linux-x64/
 
 目录内只包含单文件可执行程序 `cc-switch-web`，解压后直接运行即可。
 
-当前导出的 Linux 二进制为 `x86_64-unknown-linux-musl` 静态链接版本，可尽量减少宿主机运行库差异导致的问题。
+#### ARM / 嵌入式开发板
+
+如果目标是 64 位 ARM 开发板（aarch64 / arm64，如树莓派 3/4/5 的 64 位系统、
+RK35xx、各类 Allwinner 板等），用单独的 `Dockerfile.arm64`
+（`messense/rust-musl-cross` 在 amd64 主机交叉编译，不走 QEMU，几分钟即可，
+无需 binfmt），不要传 `--platform`：
+
+```bash
+docker buildx build -f Dockerfile.arm64 --target package-linux-tar \
+  --output type=local,dest=release/docker-linux .
+# -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
+```
+
+打 `v*` tag 触发的 Web Package 发布流水线会自动产出
+`linux-x64` / `linux-arm64` 两份 `tar.gz`。
+
+> 32 位 armv7 暂不提供：直接依赖 `rquickjs-sys` 未为
+> `armv7-unknown-linux-musleabihf` 预置 FFI 绑定，交叉编译需额外的
+> bindgen/libclang 链路，暂未纳入发布矩阵。
+
+当前导出的 Linux 二进制均为静态链接（musl）版本——x64 为
+`x86_64-unknown-linux-musl`，arm64 为 `aarch64-unknown-linux-musl`，
+可尽量减少宿主机运行库差异导致的问题。
 
 ### Windows 本地导出产物
 

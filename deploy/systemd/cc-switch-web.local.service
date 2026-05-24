@@ -1,0 +1,20 @@
+[Unit]
+Description=CC Switch Web local service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/app/cc-switch-web
+Environment=HOME=/home/ubuntu
+Environment=CC_SWITCH_WEB_HOST=0.0.0.0
+Environment=CC_SWITCH_WEB_PORT=5030
+Environment=CC_SWITCH_WEB_PORT_SCAN_COUNT=1
+ExecStart=/home/ubuntu/app/cc-switch-web/cc-switch-web --host 0.0.0.0 --backend-port 5030 --port-scan-count 1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

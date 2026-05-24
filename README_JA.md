@@ -88,7 +88,7 @@ Web ブランチで既に利用できる機能:
 | ローカル開発（`w`） | `pnpm dev` |
 | Docker フォアグラウンド開発（`d`） | `pnpm dev -- d` |
 | ローカル release ビルド（`w`） | `pnpm build` |
-| Docker イメージビルド（`d`） | `pnpm build -- d` |
+| Docker イメージビルド（`d`） | `pnpm build d` |
 | プロジェクトチェック | `.\scripts\check.ps1` |
 | ローカル CI チェック | `.\scripts\ci-check.ps1` |
 | Windows 上で成果物を出力 | `.\scripts\package-artifacts.ps1` |
@@ -159,7 +159,7 @@ Web ブランチで既に利用できる機能:
    明示的な書き方:
 
    ```bash
-   pnpm build -- w
+   pnpm build w
    ```
 
    Windows では次も使えます。
@@ -200,7 +200,7 @@ Web ブランチで既に利用できる機能:
 1. Docker イメージをビルドします。
 
    ```bash
-   pnpm build -- d
+   pnpm build d
    ```
 
    Windows では次も使えます。

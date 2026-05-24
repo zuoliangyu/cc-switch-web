@@ -88,7 +88,7 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
 | 本地开发（`w`） | `pnpm dev` |
 | Docker 前台开发（`d`） | `pnpm dev -- d` |
 | 本地 release 构建（`w`） | `pnpm build` |
-| Docker 镜像构建（`d`） | `pnpm build -- d` |
+| Docker 镜像构建（`d`） | `pnpm build d` |
 | 项目检查 | `.\scripts\check.ps1` |
 | 本地 CI 检查 | `.\scripts\ci-check.ps1` |
 | Windows 本地导出产物 | `.\scripts\package-artifacts.ps1` |
@@ -159,7 +159,7 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
    显式写法：
 
    ```bash
-   pnpm build -- w
+   pnpm build w
    ```
 
    Windows 下也可以直接执行：
@@ -195,12 +195,47 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
 
    其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
+### Linux 本地生产部署
+
+当前生产部署推荐使用本地 systemd 服务，不依赖 Docker 编译。该路径固定使用：
+
+- 运行用户：`ubuntu`
+- 服务地址：`0.0.0.0:5030`
+- 数据目录：`/home/ubuntu/.cc-switch`
+- 安装目录：`/home/ubuntu/app/cc-switch-web`
+
+首次从旧 Docker 部署迁移数据时，先停止会写入旧数据的业务操作，然后执行一次性迁移脚本：
+
+```bash
+./deploy/linux/migrate-docker-data.sh
+```
+
+迁移脚本只负责把 Docker volume `cc-switch-web-data` 中的 `/data/.cc-switch` 复制到 `/home/ubuntu/.cc-switch`；如果目标目录已存在，会直接退出，不会覆盖现有数据。迁移脚本允许临时使用 Docker 读取旧 volume，但迁移完成后本地服务不再依赖 Docker。
+
+安装或更新本地服务：
+
+```bash
+./deploy/linux/install-local.sh
+```
+
+部署脚本会执行：
+
+1. `pnpm install --frozen-lockfile`
+2. `PATH="$HOME/.cargo/bin:$PATH" pnpm check`
+3. `pnpm build w`，只构建本地运行所需的前端静态资源和 Rust release 二进制
+4. 安装 `backend/target/release/cc-switch-web` 到 `/home/ubuntu/app/cc-switch-web/cc-switch-web`
+5. 安装 `deploy/systemd/cc-switch-web.local.service` 到 `/etc/systemd/system/cc-switch-web.service`
+6. 停止旧 Docker compose 服务但不删除 volume
+7. 启动 systemd 服务并检查 `http://127.0.0.1:5030/api/health`
+
+如果 `5030` 端口被非目标服务占用，部署脚本会失败，不会自动换端口。不要在本地生产部署流程中使用 `pnpm build d`、`docker build` 或 `docker buildx` 编译。
+
 ### Docker 运行
 
 1. 构建 Docker 镜像：
 
    ```bash
-   pnpm build -- d
+   pnpm build d
    ```
 
    Windows 下也可以直接执行：
@@ -361,7 +396,7 @@ docker load -i .\release\local-artifacts\docker\cc-switch-web-docker-image.tar.g
 
 ### Linux systemd 示例
 
-如果你要在无桌面的 Linux 服务器上长期托管服务，可以使用仓库中的示例文件：
+如果你要按当前本地生产部署约定托管服务，优先使用上面的 `deploy/linux/install-local.sh`。通用 systemd 示例仍保留给其他机器自行调整：
 
 `deploy/systemd/cc-switch-web.service.example`
 

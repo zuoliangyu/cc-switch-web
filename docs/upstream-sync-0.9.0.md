@@ -13,6 +13,30 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ---
 
+## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
+
+分支 `sync/upstream-0.9.0`，**19 个提交，本地未推送**。后端 904 tests / 前端 184 tests 全过，
+tsc 0 错误，**Docker CI 模拟已通过**（最后 1 个是属性级 dead_code 静音，CI-neutral）。
+
+**已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
+P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）。
+
+**判定 N/A（理由见下文各处）**：model catalog 簇、custom history bucket 簇、
+OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink、个别 web 无的 preset 条目。
+
+**下次从这里继续（按建议顺序）**：
+1. P2 剩余：`0877b9e3`/`3a154207`/`2b6ede14` 默认模型+定价刷新（跨多个分叉文件，逐一核对）、
+   Shengsuanyun(`4bb4e994`/`3d6fb894`)、合作伙伴 preset（ZenMux `c1dff066` 含后端 +
+   `e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3` + `f2935a3d` 22 个 Codex preset，需剥离 web 不支持的 modelCatalog）
+2. P1b：Claude Desktop 子系统 4 个（`0960fd71`/`05ba2801`/`864593bb`/`94cc3d10`）
+3. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
+4. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+
+每个 commit 续作方法：先 `git show <hash> --stat` 看触达文件 → 对照 web 分叉版本 → 移植 + 适配
+（drop Tauri/web 缺失部分）→ 后端 `cargo test --lib --test-threads=1` / 前端 `tsc`+`vitest` → 提交。
+
+---
+
 ## P0 · proxy/usage 核心 + Codex Chat 路由完善（强相关，必跟）
 
 ### Codex Chat 路由后续打磨

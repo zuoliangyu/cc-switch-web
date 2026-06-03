@@ -30,8 +30,8 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `f9db9913` 空 tool-call 参数强制 {}（随文件替换）
 - [x] `ead9e22b` Chat 错误响应转 Responses 信封（handle_codex_chat_error_response）
 - [x] `b4f262c7` 始终带 reasoning_tokens（随文件替换；见下方 proxy fix 区）
-- [~] `2a4651a2` with_context 响应还原已接；**上游模型保留待 P1 catalog helpers**
-- [ ] `44d9aabb` 自适应 reasoning 检测 —— 待 resolve/infer_codex_chat_reasoning_config（依赖 catalog helpers，随 P1 补）
+- [x] `2a4651a2` Chat 请求保留用户选定 catalog 模型（apply_codex_chat_upstream_model + codex_provider_catalog_model_ids，已接 forwarder）
+- [x] `44d9aabb` 自适应 reasoning 检测（resolve/infer/normalize_codex_chat_reasoning_config + infer_aggregator_platform_config，forwarder 走 responses_to_chat_completions_with_reasoning）
 - [ ] `72bc912e` Codex Chat provider 走 Stream Check（前端 + codex.rs）
 - [ ] `184cbcdc` ClaudeAPI 重分类为 aggregator 恢复 model test
 - [x] `279b9eab` 测试基线更新（直接采用上游 bundled 测试，N/A）

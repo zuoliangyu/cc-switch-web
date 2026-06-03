@@ -882,7 +882,15 @@ impl RequestForwarder {
             if restored > 0 {
                 log::debug!("[Codex] 回放了 {restored} 个缓存的 function call 到 Chat 上游请求");
             }
-            super::providers::transform_codex_chat::responses_to_chat_completions(mapped_body)?
+            // 保留用户选定的 catalog 模型、否则改写为上游模型（跟随上游 2a4651a2）；
+            // 按平台/模型解析 reasoning 配置注入 Chat 请求（跟随上游 44d9aabb）。
+            super::providers::apply_codex_chat_upstream_model(provider, &mut mapped_body);
+            let reasoning_config =
+                super::providers::resolve_codex_chat_reasoning_config(provider, &mapped_body);
+            super::providers::transform_codex_chat::responses_to_chat_completions_with_reasoning(
+                mapped_body,
+                reasoning_config.as_ref(),
+            )?
         } else if needs_transform {
             if adapter.name() == "Claude" {
                 let api_format = resolved_claude_api_format

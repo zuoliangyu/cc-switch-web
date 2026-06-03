@@ -6,8 +6,10 @@
 //! 支持检测官方 Codex 客户端 (codex_vscode, codex_cli_rs)
 
 use super::{AuthInfo, AuthStrategy, ProviderAdapter};
-use crate::provider::Provider;
+use crate::provider::{CodexChatReasoningConfig, Provider};
 use crate::proxy::error::ProxyError;
+use serde_json::Value as JsonValue;
+use std::collections::HashSet;
 use toml::Value as TomlValue;
 
 /// Codex 适配器
@@ -88,6 +90,269 @@ pub fn should_convert_codex_responses_to_chat(provider: &Provider, endpoint: &st
         path,
         "/responses" | "/v1/responses" | "/responses/compact" | "/v1/responses/compact"
     ) && codex_provider_uses_chat_completions(provider)
+}
+
+/// 提取 Codex provider 配置的真实上游模型（settings_config.model 或 TOML config.model）。
+pub fn codex_provider_upstream_model(provider: &Provider) -> Option<String> {
+    provider
+        .settings_config
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("config")
+                .and_then(|v| v.as_str())
+                .and_then(extract_codex_model_from_toml)
+        })
+}
+
+/// 读取 provider 的 modelCatalog.models[].model 集合（用户在 UI 选定的目录模型）。
+fn codex_provider_catalog_model_ids(provider: &Provider) -> HashSet<String> {
+    provider
+        .settings_config
+        .get("modelCatalog")
+        .and_then(|catalog| catalog.get("models"))
+        .and_then(|models| models.as_array())
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|model| model.get("model").and_then(|value| value.as_str()))
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Codex Chat provider：转 Chat Completions 前，确保请求用配置的上游模型。
+/// 若客户端模型已在 catalog 内则保留（用户选定优先），否则改写为上游模型（跟随上游 2a4651a2）。
+pub fn apply_codex_chat_upstream_model(
+    provider: &Provider,
+    body: &mut JsonValue,
+) -> Option<String> {
+    if !codex_provider_uses_chat_completions(provider) {
+        return None;
+    }
+
+    let catalog_model_ids = codex_provider_catalog_model_ids(provider);
+    if let Some(request_model) = body
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+    {
+        if catalog_model_ids.contains(request_model) {
+            return Some(request_model.to_string());
+        }
+    }
+
+    let upstream_model = codex_provider_upstream_model(provider)?;
+    body["model"] = JsonValue::String(upstream_model.clone());
+    Some(upstream_model)
+}
+
+/// 解析 Codex Chat reasoning 配置：优先 meta.codexChatReasoning，否则按平台/模型推断
+/// （跟随上游 44d9aabb）。
+pub fn resolve_codex_chat_reasoning_config(
+    provider: &Provider,
+    body: &JsonValue,
+) -> Option<CodexChatReasoningConfig> {
+    if let Some(config) = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.codex_chat_reasoning.clone())
+    {
+        return Some(normalize_codex_chat_reasoning_config(config));
+    }
+
+    infer_codex_chat_reasoning_config(provider, body)
+}
+
+fn normalize_codex_chat_reasoning_config(
+    mut config: CodexChatReasoningConfig,
+) -> CodexChatReasoningConfig {
+    if config.supports_effort.unwrap_or(false) && config.supports_thinking.is_none() {
+        config.supports_thinking = Some(true);
+    }
+    config
+}
+
+fn infer_codex_chat_reasoning_config(
+    provider: &Provider,
+    body: &JsonValue,
+) -> Option<CodexChatReasoningConfig> {
+    let model = body
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
+        .or_else(|| codex_provider_upstream_model(provider))
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let base_url = provider
+        .settings_config
+        .get("base_url")
+        .or_else(|| provider.settings_config.get("baseURL"))
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("config")
+                .and_then(|v| v.as_str())
+                .and_then(extract_codex_base_url_from_toml)
+        })
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let name = provider.name.to_ascii_lowercase();
+
+    // 平台优先：聚合 / 托管平台的 reasoning 接口由平台的推理框架决定，而非模型官方实现，
+    // 因此先按平台标识（仅 name + base_url，不含 model 名）判定并覆盖模型规则。
+    if let Some(config) = infer_aggregator_platform_config(&name, &base_url) {
+        return Some(config);
+    }
+
+    let haystack = format!("{name} {base_url} {model}");
+
+    if haystack.contains("deepseek") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(true),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("reasoning_effort".to_string()),
+            effort_value_mode: Some("deepseek".to_string()),
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    // StepFun：仅 step-3.5-flash-2603 这一版支持 reasoning effort（low/high 两档），
+    // 其余 step 模型不暴露 effort，故 supports_effort 仅对含 "2603" 的模型置真。
+    if haystack.contains("stepfun") || haystack.contains("step-3.5-flash-2603") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(model.contains("2603")),
+            thinking_param: Some("none".to_string()),
+            effort_param: Some("reasoning_effort".to_string()),
+            effort_value_mode: Some("low_high".to_string()),
+            output_format: Some("reasoning".to_string()),
+        });
+    }
+
+    if haystack.contains("kimi") || haystack.contains("moonshot") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("glm") || haystack.contains("zhipu") || haystack.contains("z.ai") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("qwen") || haystack.contains("dashscope") || haystack.contains("bailian") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("enable_thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("minimax") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("reasoning_split".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_details".to_string()),
+        });
+    }
+
+    if haystack.contains("mimo") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    None
+}
+
+/// 聚合 / 托管平台的 reasoning 接口由平台决定：同一模型在不同平台参数可能完全不同。
+/// 仅以平台标识（name / base_url）判定，绝不掺入 model 名（跟随上游）。
+fn infer_aggregator_platform_config(
+    name: &str,
+    base_url: &str,
+) -> Option<CodexChatReasoningConfig> {
+    let platform = format!("{name} {base_url}");
+
+    // OpenRouter：用原生归一化对象 `reasoning: { effort }`；effort 走 "openrouter" 值映射，
+    // 钳到 xhigh（max 会触发 400 Invalid option）。不发 thinking:{type}（OpenRouter 不认）。
+    if platform.contains("openrouter") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(false),
+            supports_effort: Some(true),
+            thinking_param: Some("none".to_string()),
+            effort_param: Some("reasoning.effort".to_string()),
+            effort_value_mode: Some("openrouter".to_string()),
+            output_format: Some("auto".to_string()),
+        });
+    }
+
+    // SiliconFlow：平台级统一 `enable_thinking`，思维回传 reasoning_content。
+    if platform.contains("siliconflow") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("enable_thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    None
+}
+
+/// base_url 是否只有 origin（无路径段），用于判断要不要补 /chat/completions 等路径。
+pub fn is_origin_only_url(value: &str) -> bool {
+    let trimmed = value.trim_end_matches('/');
+    match trimmed.split_once("://") {
+        Some((_scheme, rest)) => !rest.contains('/'),
+        None => !trimmed.contains('/'),
+    }
+}
+
+fn extract_codex_model_from_toml(config_text: &str) -> Option<String> {
+    let doc = config_text.parse::<TomlValue>().ok()?;
+
+    doc.get("model")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(ToString::to_string)
 }
 
 fn is_chat_wire_api(value: &str) -> bool {
@@ -480,5 +745,182 @@ wire_api = "chat"
             &provider,
             "/responses"
         ));
+    }
+
+    // ---- catalog 模型保留 + reasoning 推断（跟随上游 2a4651a2 / 44d9aabb）----
+
+    #[test]
+    fn test_apply_codex_chat_upstream_model_uses_provider_config_model() {
+        let mut provider = create_provider(json!({
+            "config": r#"
+model_provider = "deepseek"
+model = "deepseek-v4-flash"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com/v1"
+wire_api = "responses"
+"#
+        }));
+        provider.meta = Some(crate::provider::ProviderMeta {
+            api_format: Some("openai_chat".to_string()),
+            ..Default::default()
+        });
+        let mut body = json!({
+            "model": "placeholder-client-model",
+            "input": "ping"
+        });
+
+        let upstream_model = apply_codex_chat_upstream_model(&provider, &mut body);
+
+        assert_eq!(upstream_model.as_deref(), Some("deepseek-v4-flash"));
+        assert_eq!(
+            body.get("model").and_then(|v| v.as_str()),
+            Some("deepseek-v4-flash")
+        );
+    }
+
+    #[test]
+    fn test_apply_codex_chat_upstream_model_preserves_catalog_model_selection() {
+        let mut provider = create_provider(json!({
+            "config": r#"
+model_provider = "deepseek"
+model = "deepseek-v4-flash"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com/v1"
+wire_api = "responses"
+"#,
+            "modelCatalog": {
+                "models": [
+                    { "model": "deepseek-v4-flash" },
+                    { "model": "kimi-k2" }
+                ]
+            }
+        }));
+        provider.meta = Some(crate::provider::ProviderMeta {
+            api_format: Some("openai_chat".to_string()),
+            ..Default::default()
+        });
+        let mut body = json!({
+            "model": "kimi-k2",
+            "input": "ping"
+        });
+
+        let upstream_model = apply_codex_chat_upstream_model(&provider, &mut body);
+
+        assert_eq!(upstream_model.as_deref(), Some("kimi-k2"));
+        assert_eq!(body.get("model").and_then(|v| v.as_str()), Some("kimi-k2"));
+    }
+
+    #[test]
+    fn test_resolve_codex_chat_reasoning_infers_deepseek_effort_support() {
+        let provider = create_provider(json!({
+            "config": r#"
+model_provider = "deepseek"
+model = "deepseek-v4-pro"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+wire_api = "chat"
+"#
+        }));
+
+        let config =
+            resolve_codex_chat_reasoning_config(&provider, &json!({ "model": "deepseek-v4-pro" }))
+                .unwrap();
+
+        assert_eq!(config.supports_thinking, Some(true));
+        assert_eq!(config.supports_effort, Some(true));
+        assert_eq!(config.effort_value_mode.as_deref(), Some("deepseek"));
+    }
+
+    #[test]
+    fn test_resolve_codex_chat_reasoning_explicit_meta_overrides_inference() {
+        let mut provider = create_provider(json!({
+            "config": r#"
+model_provider = "deepseek"
+model = "deepseek-v4-pro"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+wire_api = "chat"
+"#
+        }));
+        provider.meta = Some(crate::provider::ProviderMeta {
+            codex_chat_reasoning: Some(CodexChatReasoningConfig {
+                supports_thinking: Some(false),
+                supports_effort: Some(false),
+                thinking_param: Some("none".to_string()),
+                effort_param: Some("none".to_string()),
+                effort_value_mode: None,
+                output_format: Some("auto".to_string()),
+            }),
+            ..Default::default()
+        });
+
+        let config =
+            resolve_codex_chat_reasoning_config(&provider, &json!({ "model": "deepseek-v4-pro" }))
+                .unwrap();
+
+        assert_eq!(config.supports_thinking, Some(false));
+        assert_eq!(config.supports_effort, Some(false));
+        assert_eq!(config.thinking_param.as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn test_resolve_codex_chat_reasoning_openrouter_platform_overrides_model() {
+        let provider = create_provider(json!({
+            "config": r#"
+model_provider = "openrouter"
+model = "deepseek/deepseek-chat-v3.1"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "chat"
+"#
+        }));
+
+        // 模型名含 "deepseek"，但平台是 OpenRouter —— 平台规则必须覆盖模型规则。
+        let config = resolve_codex_chat_reasoning_config(
+            &provider,
+            &json!({ "model": "deepseek/deepseek-chat-v3.1" }),
+        )
+        .unwrap();
+
+        assert_eq!(config.thinking_param.as_deref(), Some("none"));
+        assert_eq!(config.effort_param.as_deref(), Some("reasoning.effort"));
+        assert_eq!(config.effort_value_mode.as_deref(), Some("openrouter"));
+        assert_eq!(config.supports_effort, Some(true));
+    }
+
+    #[test]
+    fn test_resolve_codex_chat_reasoning_siliconflow_platform_overrides_minimax() {
+        let provider = create_provider(json!({
+            "config": r#"
+model_provider = "siliconflow"
+model = "MiniMaxAI/MiniMax-M2.7"
+
+[model_providers.siliconflow]
+name = "SiliconFlow"
+base_url = "https://api.siliconflow.cn/v1"
+wire_api = "chat"
+"#
+        }));
+
+        // 模型是 MiniMax（官方用 reasoning_split），但平台是 SiliconFlow —— 走平台 enable_thinking。
+        let config = resolve_codex_chat_reasoning_config(
+            &provider,
+            &json!({ "model": "MiniMaxAI/MiniMax-M2.7" }),
+        )
+        .unwrap();
+
+        assert_eq!(config.thinking_param.as_deref(), Some("enable_thinking"));
+        assert_eq!(config.supports_effort, Some(false));
+        assert_eq!(config.output_format.as_deref(), Some("reasoning_content"));
     }
 }

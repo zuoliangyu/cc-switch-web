@@ -817,6 +817,17 @@ impl RequestForwarder {
         } else {
             None
         };
+        // DeepSeek/kimi/MiMo 等 Anthropic 兼容端点要求 tool_use 历史回放 thinking 块，
+        // 出站前归一化（跟随上游 554e3b48 / e02a2763）。
+        if adapter.name() == "Claude" {
+            if let Some(api_format) = resolved_claude_api_format.as_deref() {
+                super::providers::normalize_anthropic_tool_thinking_history_for_provider(
+                    &mut mapped_body,
+                    provider,
+                    api_format,
+                );
+            }
+        }
         let needs_transform = match resolved_claude_api_format.as_deref() {
             Some(api_format) => super::providers::claude_api_format_needs_transform(api_format),
             None => adapter.needs_transform(provider),

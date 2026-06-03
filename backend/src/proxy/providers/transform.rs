@@ -389,6 +389,13 @@ fn convert_message_to_openai(
                         }
                     }
                 }
+                "redacted_thinking" if preserve_reasoning_content => {
+                    // Claude Code 把历史 thinking 加密成 redacted_thinking 块。MiMo/DeepSeek
+                    // 要求 assistant tool-call 消息带非空 reasoning_content，真实内容不可用时
+                    // 注入占位符；preserve_reasoning_content 关闭（通用 OpenAI 兼容路径）时跳过。
+                    // 跟随上游 707a5593。
+                    reasoning_parts.push("[redacted thinking]".to_string());
+                }
                 _ => {}
             }
         }
@@ -830,6 +837,27 @@ mod tests {
         assert_eq!(msg["role"], "assistant");
         assert_eq!(msg["reasoning_content"], "tool call");
         assert!(msg.get("tool_calls").is_some());
+        assert_eq!(msg["tool_calls"][0]["id"], "call_123");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_tool_use_uses_redacted_thinking_placeholder() {
+        // 跟随上游 707a5593：redacted_thinking 块在 preserve 路径下注入占位 reasoning_content。
+        let input = json!({
+            "model": "mimo-v2.5-pro",
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "assistant",
+                "content": [
+                    {"type": "redacted_thinking", "data": "opaque"},
+                    {"type": "tool_use", "id": "call_123", "name": "get_weather", "input": {"location": "Tokyo"}}
+                ]
+            }]
+        });
+
+        let result = anthropic_to_openai_with_reasoning_content(input, None, true).unwrap();
+        let msg = &result["messages"][0];
+        assert_eq!(msg["reasoning_content"], "[redacted thinking]");
         assert_eq!(msg["tool_calls"][0]["id"], "call_123");
     }
 

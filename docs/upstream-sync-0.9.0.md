@@ -38,14 +38,17 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ### proxy/usage 核心 fix
 - [ ] `9c2add9a` Claude 兼容模式流式空 tool_calls 致 block 状态重置 (#2915)
-- [ ] `554e3b48` DeepSeek Anthropic tool thinking 历史归一化 (#3203)
-- [ ] `e02a2763` thinking 归一化扩展 kimi/moonshot (#3377)
-- [ ] `707a5593` Claude Code proxy 支持 MiMo reasoning_content (#2990)
-- [ ] `b4f262c7` 始终带 output_tokens_details.reasoning_tokens (#3514)
+- [x] `554e3b48` DeepSeek Anthropic tool thinking 历史归一化 (#3203)
+- [x] `e02a2763` thinking 归一化扩展 kimi/moonshot —— 取终态 REASONING_VENDOR_HINTS SSOT (#3377)
+- [x] `707a5593` MiMo reasoning_content：claude.rs vendor 列表 + transform.rs redacted_thinking 占位（**claude_desktop_config.rs 的本地路由归一化部分延后 P1b**）(#2990)
+- [x] `b4f262c7` 始终带 reasoning_tokens —— stage1 文件替换已覆盖 (#3514)
 - [ ] `c12d20ef` proxy 安全模式替换 panic-prone unwrap/expect
 - [ ] `f4e2c28a` 富化 Codex proxy 转发错误响应上下文
 - [ ] `bc1467db` 实时 stats 刷新 + 修非 ASCII 模型名 codex sync panic (#3027)
 - [ ] `afa09e12` per-app 凭证解析（native 余额/coding-plan 查询）(#3355)
+
+> 注：测试 `openclaw_config::default_model_noop_write_skips_backup` 在并行下偶发失败
+> （共享 temp 目录竞态，与本次改动无关）；`--test-threads=1` 全绿 868 passed。
 
 ## P1 · Codex OAuth 接管 / model catalog / provider 行为
 - [ ] `95f2dd41` 第三方切换时保留 OAuth 登录态

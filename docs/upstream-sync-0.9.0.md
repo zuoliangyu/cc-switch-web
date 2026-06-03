@@ -15,9 +15,18 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**33 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误。**P0/P1/P1b/P2/P2c/P3 全部资源化完成**，**已 bump 0.9.0 + 写 CHANGELOG + Docker CI 通过**
-（实做项已提交，余 N/A/DEFER 均记录）。**唯一剩余：push（待用户手动确认）**。
+分支 `sync/upstream-0.9.0`，**34 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
+tsc 0 错误。**已 bump 0.9.0 + 写 CHANGELOG + Docker CI 通过**。
+
+> **复核补漏（用户追问"还有没有其他没做的"）**：逐条核对全部 114 commit 后发现 5 个此前未真正落定的：
+> - [N/A] `5ef72a20`（codex CLI 发现，web 不跑 codex CLI 取 bundled models）、`955904f7`（localRouting
+>   toggle 文案，web 无该 toggle）—— 确认 N/A。
+> - **真·未做、可移植（2 个 Codex 配置特性）**：`3c3d4174` Codex goal-mode toggle、`af60c7ed` remote-compaction
+>   toggle（af 依赖 3c）。web 有宿主文件（CodexConfigSection/providerConfigUtils）但 Codex 表单分叉，需适配移植。
+> - **待用户决定（promo/affiliate 链接簇）**：`910ca3b4` 移除 AICoding 伙伴（web 有该 preset）、`85552cf4`/
+>   `0e6f2b39`/`d905ed16` 赞助链接 param —— 与 promo-partner DEFER 同主题。
+
+**剩余**：① `3c3d4174`+`af60c7ed`（Codex goal/compaction 两个 toggle，可移植，待做）；② promo/affiliate 链接簇（待决策）；③ push（待用户手动确认）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -133,9 +142,16 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
   `a2ac21d0`（停止强改 model_provider）是该重设计的一环、依赖新的 "custom" 身份方案；
   单独移植会移除 web 现有的 ID 稳定化（write_codex_live_atomic_with_stable_provider）却
   无替代，故连同整簇延后。另含 deeplink/provider.rs、lib.rs 注册等 Tauri 专属部分。
-- [ ] `af60c7ed` 第三方 provider remote compaction 开关
-- [ ] `3c3d4174` provider 模板启用 Codex goals (#3089)
-- [ ] `5ef72a20` 多平台 CLI 发现 + gpt-5.5 模板兜底 (#3382) ⚠️CLI发现部分属Tauri
+- [ ] `af60c7ed` 第三方 provider remote compaction 开关 —— **真·未做，可移植**：给 Codex 配置编辑器加
+  remote-compaction 勾选（写 model_providers name="OpenAI"，官方供应商隐藏）。需 providerConfigUtils 加
+  `isCodexRemoteCompactionEnabled`/`setCodexRemoteCompaction` + CodexConfigSection 加 toggle + i18n。
+  web 有这些宿主文件且 CodexConfigSection 有 toggle 区，可移植（须适配 web 分叉的 Codex 表单）。**依赖 3c3d4174。**
+- [ ] `3c3d4174` provider 模板启用 Codex goals (#3089) —— **真·未做，可移植**：Codex 配置编辑器加 goal-mode
+  勾选（`[features].goals`），providerConfigUtils 加 `isCodexGoalModeEnabled`/`setCodexGoalMode` + i18n。
+  web Codex preset/template 本就无强制 `goals=true`，故"移除强制"部分对 web moot，只剩加 toggle。可移植。
+- [N/A] `5ef72a20` 多平台 CLI 发现 + gpt-5.5 模板兜底 (#3382) —— web 的 codex_config.rs **无**
+  `load_codex_model_template_from_bundled`/`Command::new("codex")`（不跑本地 codex CLI 取 bundled models），
+  CLI 发现是桌面 GUI 场景；web 无此路径 → N/A。
 
 ## P1b · Claude Desktop 子系统（web 0.7.0 已引入，相关）
 > **关键分诊（2026-06-03）**：web 的 Claude Desktop **前端是薄层**——只有
@@ -222,7 +238,13 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 - [x] `62928c62` AppSwitcher 文本去固定宽度防裁切 (#3161) —— web `max-w-[80px]`→`[120px]`（提交见下）
 - [N/A] `8cdaf90d` deepClone helper (#3140) —— Tauri 耦合重构（含 useTauriEvent=SKIP），纯重构无行为变更、
   跨 web 已分叉的 App.tsx，价值边际 → 暂不做
-- [N/A] `48473a5c` 德语 README / sponsor 类 `910ca3b4` `0e6f2b39` `85552cf4` `d905ed16` —— docs/README，SKIP
+- [N/A] `955904f7` Codex 本地路由 toggle 提示文案重写 —— web 的 Codex 表单无 localRouting toggle（用
+  API-format 选择器，文案分叉），`localRoutingOffHint/OnHint` key 在 web 不存在 → N/A
+- [N/A] `48473a5c` 德语 README —— docs
+- [待定/promo] **sponsor/affiliate 链接簇**：`910ca3b4`（移除 AICoding 伙伴——web **有** aicoding preset
+  于 claude/codex/gemini/openclaw/opencode + i18n，**可移除**）、`85552cf4`（ShengSuanYun 链接加 referral
+  param，web 有 shengsuanyun preset）、`0e6f2b39`（swap 赞助广告，README/i18n）、`d905ed16`（Atlas Cloud
+  UTM，web 无该伙伴 N/A）。属 affiliate/promo 维护，与 promo-partner DEFER 同主题 → **待用户决定**。
 
 ## P3b · 版本号 bump + CHANGELOG + 最终 Docker CI（收尾）
 - [x] 版本号 bump 0.8.0→**0.9.0**（`package.json` + `backend/Cargo.toml` + `backend/Cargo.lock`）+ CHANGELOG 0.9.0 条目（提交 3aa5a88）；`cargo check --locked` 通过

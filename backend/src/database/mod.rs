@@ -48,6 +48,7 @@ use std::sync::Mutex;
 pub(crate) const SCHEMA_VERSION: i32 = 10;
 
 /// Claude Desktop 官方预设供应商 ID（恢复官方配置时识别用）
+#[allow(dead_code)] // 仅被未接线的 claude_desktop_config 脚手架引用
 pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
 
 /// 安全地序列化 JSON，避免 unwrap panic

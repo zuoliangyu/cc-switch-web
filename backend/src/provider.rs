@@ -192,6 +192,7 @@ impl Provider {
 }
 
 /// 供应商管理器
+#[allow(dead_code)] // 保留的内存态管理器，web 走 DB/HTTP 路径暂未构造
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderManager {
     pub providers: IndexMap<String, Provider>,

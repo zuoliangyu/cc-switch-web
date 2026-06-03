@@ -397,6 +397,7 @@ pub fn delete_file(path: &Path) -> Result<(), AppError> {
 }
 
 /// 检查 Claude Code 配置状态
+#[allow(dead_code)] // 保留的状态结构，暂未在生产路径构造
 #[derive(Serialize, Deserialize)]
 pub struct ConfigStatus {
     pub exists: bool,

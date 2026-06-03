@@ -1,3 +1,8 @@
+// Claude Desktop 配置写入子系统（apply/restore/3P profile 写盘等）目前是**未接线的脚手架**：
+// web 的 Claude Desktop proxy 运行时尚未实现（见 services/proxy.rs 的 C-Phase0 占位），
+// 这些函数有定义、有测试覆盖，但生产路径暂未调用。整模块静音 dead_code，待 runtime 接线后移除。
+#![allow(dead_code)]
+
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::fs;

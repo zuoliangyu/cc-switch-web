@@ -144,6 +144,75 @@ fn is_custom_codex_model_provider_id(id: &str) -> bool {
             .any(|reserved| reserved.eq_ignore_ascii_case(id))
 }
 
+/// 从 Codex `auth.json` 的 `OPENAI_API_KEY` 提取 API key（跟随上游）。
+pub fn extract_codex_auth_api_key(auth: &Value) -> Option<String> {
+    auth.get("OPENAI_API_KEY")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .map(str::to_string)
+}
+
+/// 从 Codex `config.toml` 提取 `experimental_bearer_token`：优先活动自定义
+/// model_provider 表内的，回退顶层（跟随上游）。
+pub fn extract_codex_experimental_bearer_token(config_text: &str) -> Option<String> {
+    if !config_text.contains("experimental_bearer_token") {
+        return None;
+    }
+    let doc = config_text.parse::<DocumentMut>().ok()?;
+    let provider_id = active_codex_model_provider_id(&doc);
+
+    let top_level_token = || {
+        doc.get("experimental_bearer_token")
+            .and_then(|item| item.as_str())
+    };
+    let token = match provider_id.as_deref() {
+        Some(id) if is_custom_codex_model_provider_id(id) => doc
+            .get("model_providers")
+            .and_then(|item| item.as_table())
+            .and_then(|table| table.get(id))
+            .and_then(|item| item.as_table())
+            .and_then(|table| table.get("experimental_bearer_token"))
+            .and_then(|item| item.as_str())
+            .or_else(top_level_token),
+        Some(_) => top_level_token(),
+        None => top_level_token(),
+    };
+
+    token
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+}
+
+/// 综合 Codex 凭证提取：先 auth.json 的 OPENAI_API_KEY，回退 config.toml 的
+/// experimental_bearer_token（跟随上游）。
+pub fn extract_codex_api_key(auth: Option<&Value>, config_text: Option<&str>) -> Option<String> {
+    auth.and_then(extract_codex_auth_api_key)
+        .or_else(|| config_text.and_then(extract_codex_experimental_bearer_token))
+}
+
+/// 从 Codex `config.toml` 提取上游 base URL：优先活动
+/// `[model_providers.<model_provider>].base_url`，回退顶层 `base_url`（跟随上游 afa09e12）。
+pub fn extract_codex_base_url(config_text: &str) -> Option<String> {
+    let doc = config_text.parse::<toml::Value>().ok()?;
+
+    if let Some(active_provider) = doc.get("model_provider").and_then(|v| v.as_str()) {
+        if let Some(base_url) = doc
+            .get("model_providers")
+            .and_then(|providers| providers.get(active_provider))
+            .and_then(|provider| provider.get("base_url"))
+            .and_then(|v| v.as_str())
+        {
+            return Some(base_url.to_string());
+        }
+    }
+
+    doc.get("base_url")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+}
+
 fn stable_codex_model_provider_id_from_config(config_text: &str) -> Option<String> {
     let doc = config_text.parse::<DocumentMut>().ok()?;
     let provider_id = active_codex_model_provider_id(&doc)?;

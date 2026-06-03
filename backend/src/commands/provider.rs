@@ -134,7 +134,8 @@ pub(crate) async fn query_provider_usage_internal(
         is_copilot_template,
         copilot_account_id,
         template_type,
-        settings_config,
+        native_base_url,
+        native_api_key,
     ) = {
         let providers = state.db.get_all_providers(app_type.as_str())?;
 
@@ -153,11 +154,18 @@ pub(crate) async fn query_provider_usage_internal(
         let account_id = provider
             .and_then(|p| p.meta.as_ref())
             .and_then(|m| m.managed_account_id_for(TEMPLATE_TYPE_GITHUB_COPILOT));
-        let settings_config = provider
-            .map(|p| p.settings_config.clone())
+        // 按 app 类型解析 native 查询凭证，跳过"存在但为空"的占位（跟随上游 afa09e12）。
+        let (native_base_url, native_api_key) = provider
+            .map(|p| p.resolve_usage_credentials(&app_type))
             .unwrap_or_default();
 
-        (is_copilot, account_id, template_type, settings_config)
+        (
+            is_copilot,
+            account_id,
+            template_type,
+            native_base_url,
+            native_api_key,
+        )
     };
 
     if is_copilot_template {
@@ -193,23 +201,10 @@ pub(crate) async fn query_provider_usage_internal(
     }
 
     if template_type == TEMPLATE_TYPE_TOKEN_PLAN {
-        let env = settings_config.get("env");
-        let base_url = env
-            .and_then(|value| value.get("ANTHROPIC_BASE_URL"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        let api_key = env
-            .and_then(|value| {
-                value
-                    .get("ANTHROPIC_AUTH_TOKEN")
-                    .or_else(|| value.get("ANTHROPIC_API_KEY"))
-            })
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-
-        let quota = crate::services::coding_plan::get_coding_plan_quota(base_url, api_key)
-            .await
-            .map_err(|e| AppError::Message(format!("Failed to query coding plan: {e}")))?;
+        let quota =
+            crate::services::coding_plan::get_coding_plan_quota(&native_base_url, &native_api_key)
+                .await
+                .map_err(|e| AppError::Message(format!("Failed to query coding plan: {e}")))?;
 
         if !quota.success {
             return Ok(crate::provider::UsageResult {
@@ -242,21 +237,7 @@ pub(crate) async fn query_provider_usage_internal(
     }
 
     if template_type == TEMPLATE_TYPE_BALANCE {
-        let env = settings_config.get("env");
-        let base_url = env
-            .and_then(|value| value.get("ANTHROPIC_BASE_URL"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        let api_key = env
-            .and_then(|value| {
-                value
-                    .get("ANTHROPIC_AUTH_TOKEN")
-                    .or_else(|| value.get("ANTHROPIC_API_KEY"))
-            })
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-
-        return crate::services::balance::get_balance(base_url, api_key)
+        return crate::services::balance::get_balance(&native_base_url, &native_api_key)
             .await
             .map_err(|e| AppError::Message(format!("Failed to query balance: {e}")));
     }

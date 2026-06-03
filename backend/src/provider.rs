@@ -104,6 +104,91 @@ impl Provider {
             || self.is_codex_oauth()
             || self.claude_base_url_contains("chatgpt.com/backend-api/codex")
     }
+
+    /// 按 app 类型解析 native 余额/coding-plan 查询所需的 (base_url, api_key)（跟随上游 afa09e12）。
+    ///
+    /// 各 app 的凭证存放形状不同：Codex 在 `auth.OPENAI_API_KEY` + TOML `config`，
+    /// Gemini 用 Google 专属 env key，OpenClaw/OpenCode 各有扁平/嵌套形状，Claude
+    /// 系用 Anthropic env map。用 `first_non_empty` 跳过"存在但为空"的占位（preset 常
+    /// 把 ANTHROPIC_AUTH_TOKEN 种成空串），对齐前端 `a || b || c` 语义——普通
+    /// `.get().or_else()` 只跳过缺失键、不跳过空串，会提前停在空占位上。
+    pub fn resolve_usage_credentials(
+        &self,
+        app_type: &crate::app_config::AppType,
+    ) -> (String, String) {
+        use crate::app_config::AppType;
+
+        let settings = &self.settings_config;
+        let str_at =
+            |value: Option<&Value>| value.and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+        fn first_non_empty(env: Option<&Value>, keys: &[&str]) -> String {
+            let Some(env) = env else {
+                return String::new();
+            };
+            for key in keys {
+                if let Some(s) = env.get(key).and_then(|v| v.as_str()) {
+                    if !s.is_empty() {
+                        return s.to_string();
+                    }
+                }
+            }
+            String::new()
+        }
+
+        let (base_url, api_key) = match app_type {
+            // Codex 的 key 在 `auth.OPENAI_API_KEY`，base_url 在 TOML `config` 字符串里。
+            AppType::Codex => {
+                let auth = settings.get("auth");
+                let config_text = settings.get("config").and_then(|v| v.as_str());
+                let api_key =
+                    crate::codex_config::extract_codex_api_key(auth, config_text).unwrap_or_default();
+                let base_url = config_text
+                    .and_then(crate::codex_config::extract_codex_base_url)
+                    .unwrap_or_default();
+                (base_url, api_key)
+            }
+            // Gemini 用 Google 专属 env key（带 legacy GOOGLE_API_KEY 回退）。
+            AppType::Gemini => {
+                let env = settings.get("env");
+                let base_url = str_at(env.and_then(|e| e.get("GOOGLE_GEMINI_BASE_URL")));
+                let api_key = first_non_empty(env, &["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+                (base_url, api_key)
+            }
+            // OpenClaw（openclaw.json）凭证扁平在顶层，camelCase。
+            AppType::OpenClaw => (
+                str_at(settings.get("baseUrl")),
+                str_at(settings.get("apiKey")),
+            ),
+            // OpenCode（OMO）凭证嵌在 `options`（SDK options 对象）下。
+            AppType::OpenCode => {
+                let options = settings.get("options");
+                (
+                    str_at(options.and_then(|o| o.get("baseURL"))),
+                    str_at(options.and_then(|o| o.get("apiKey"))),
+                )
+            }
+            // Claude / Claude Desktop 用 Anthropic 风格 env map，保留 JS 脚本路径依赖的
+            // OpenRouter/Google key 回退。显式列出（不用 `_`）：新增 AppType 会在此编译失败。
+            AppType::Claude | AppType::ClaudeDesktop => {
+                let env = settings.get("env");
+                let base_url = str_at(env.and_then(|e| e.get("ANTHROPIC_BASE_URL")));
+                let api_key = first_non_empty(
+                    env,
+                    &[
+                        "ANTHROPIC_AUTH_TOKEN",
+                        "ANTHROPIC_API_KEY",
+                        "OPENROUTER_API_KEY",
+                        "GOOGLE_API_KEY",
+                    ],
+                );
+                (base_url, api_key)
+            }
+        };
+
+        // 与 JS 脚本路径一致地归一 base_url，避免 `{{baseUrl}}/path` 拼出双斜杠。
+        (base_url.trim_end_matches('/').to_string(), api_key)
+    }
 }
 
 /// 供应商管理器
@@ -818,6 +903,7 @@ mod tests {
         ClaudeModelConfig, CodexModelConfig, GeminiModelConfig, OpenCodeProviderConfig, Provider,
         ProviderManager, ProviderMeta, UniversalProvider,
     };
+    use crate::app_config::AppType;
     use serde_json::json;
 
     #[test]
@@ -1184,5 +1270,172 @@ mod tests {
 
         assert!(toml.contains("base_url = \"https://example.com/openai\""));
         assert!(!toml.contains("https://example.com/openai/v1"));
+    }
+
+    // ---- resolve_usage_credentials（跟随上游 afa09e12；web 无 Hermes，省略该用例）----
+
+    fn provider_with(settings_config: serde_json::Value) -> Provider {
+        Provider::with_id("p".to_string(), "P".to_string(), settings_config, None)
+    }
+
+    #[test]
+    fn resolve_credentials_claude_env() {
+        let p = provider_with(json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+                "ANTHROPIC_AUTH_TOKEN": "sk-claude",
+            }
+        }));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::Claude),
+            (
+                "https://api.deepseek.com/anthropic".to_string(),
+                "sk-claude".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_credentials_claude_openrouter_fallback() {
+        let p = provider_with(json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
+                "OPENROUTER_API_KEY": "sk-or",
+            }
+        }));
+        let (base_url, api_key) = p.resolve_usage_credentials(&AppType::Claude);
+        assert_eq!(base_url, "https://openrouter.ai/api/v1");
+        assert_eq!(api_key, "sk-or");
+    }
+
+    #[test]
+    fn resolve_credentials_codex_auth_and_toml() {
+        let p = provider_with(json!({
+            "auth": { "OPENAI_API_KEY": "sk-codex" },
+            "config": "model_provider = \"deepseek\"\n\
+                       [model_providers.deepseek]\n\
+                       base_url = \"https://api.deepseek.com\"\n",
+        }));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::Codex),
+            (
+                "https://api.deepseek.com".to_string(),
+                "sk-codex".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_credentials_gemini_env_with_google_fallback() {
+        let p = provider_with(json!({
+            "env": {
+                "GOOGLE_GEMINI_BASE_URL": "https://generativelanguage.googleapis.com",
+                "GOOGLE_API_KEY": "g-legacy",
+            }
+        }));
+        let (base_url, api_key) = p.resolve_usage_credentials(&AppType::Gemini);
+        assert_eq!(base_url, "https://generativelanguage.googleapis.com");
+        assert_eq!(api_key, "g-legacy");
+    }
+
+    #[test]
+    fn resolve_credentials_claude_skips_empty_primary_key() {
+        // preset 把 ANTHROPIC_AUTH_TOKEN 种成"存在但为空"占位；回退链必须跳过空值
+        // （对齐前端 `a || b`），而非仅跳过缺失键。这是 #3355 的核心修复。
+        let p = provider_with(json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
+                "ANTHROPIC_AUTH_TOKEN": "",
+                "ANTHROPIC_API_KEY": "",
+                "OPENROUTER_API_KEY": "sk-or",
+            }
+        }));
+        let (_, api_key) = p.resolve_usage_credentials(&AppType::Claude);
+        assert_eq!(api_key, "sk-or");
+    }
+
+    #[test]
+    fn resolve_credentials_gemini_skips_empty_primary_key() {
+        let p = provider_with(json!({
+            "env": {
+                "GOOGLE_GEMINI_BASE_URL": "https://generativelanguage.googleapis.com",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "g-real",
+            }
+        }));
+        let (_, api_key) = p.resolve_usage_credentials(&AppType::Gemini);
+        assert_eq!(api_key, "g-real");
+    }
+
+    #[test]
+    fn resolve_credentials_openclaw_camel_case() {
+        let p = provider_with(json!({
+            "baseUrl": "https://api.deepseek.com",
+            "apiKey": "sk-openclaw",
+        }));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::OpenClaw),
+            (
+                "https://api.deepseek.com".to_string(),
+                "sk-openclaw".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_credentials_opencode_options() {
+        let p = provider_with(json!({
+            "npm": "@ai-sdk/openai-compatible",
+            "options": {
+                "baseURL": "https://api.deepseek.com/v1",
+                "apiKey": "sk-opencode",
+                "setCacheKey": true,
+            }
+        }));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::OpenCode),
+            (
+                "https://api.deepseek.com/v1".to_string(),
+                "sk-opencode".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_credentials_claude_desktop_uses_env() {
+        let p = provider_with(json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+                "ANTHROPIC_AUTH_TOKEN": "sk-desktop",
+            }
+        }));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::ClaudeDesktop),
+            (
+                "https://api.deepseek.com/anthropic".to_string(),
+                "sk-desktop".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_credentials_trims_trailing_slash_on_base_url() {
+        let p = provider_with(json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic/",
+                "ANTHROPIC_AUTH_TOKEN": "sk-claude",
+            }
+        }));
+        let (base_url, _) = p.resolve_usage_credentials(&AppType::Claude);
+        assert_eq!(base_url, "https://api.deepseek.com/anthropic");
+    }
+
+    #[test]
+    fn resolve_credentials_missing_fields_yield_empty() {
+        let p = provider_with(json!({}));
+        assert_eq!(
+            p.resolve_usage_credentials(&AppType::Claude),
+            (String::new(), String::new())
+        );
     }
 }

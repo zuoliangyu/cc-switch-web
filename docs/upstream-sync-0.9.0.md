@@ -45,7 +45,7 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [ ] `c12d20ef` proxy 安全模式替换 panic-prone unwrap/expect —— **延后 hygiene pass**（纯防御无行为变更，跨 6 个 web 分叉文件）
 - [x] `f4e2c28a` 富化 Codex proxy 转发错误响应 + error_mapper 状态码对齐 IntoResponse（web 缺 StreamIdleTimeout/ProviderUnhealthy/InvalidRequest，已适配 catch-all）
 - [~] `bc1467db` **仅取非 ASCII 模型名 codex sync panic 修复**（normalize_codex_model 的 11 字节切片加 is_char_boundary+is_ascii 守卫 + 测试）；实时 stats 刷新部分依赖 Tauri usage-events，web 无 Tauri 事件，**跳过** (#3027)
-- [ ] `afa09e12` per-app 凭证解析（native 余额/coding-plan 查询）(#3355)
+- [x] `afa09e12` per-app 凭证解析（native 余额/coding-plan 查询）：新增 Provider::resolve_usage_credentials（按 app 形状取 base_url/api_key，first_non_empty 跳过空占位 = #3355 核心修复）+ codex_config 4 个提取 helper；commands/provider.rs 接线 + 11 测试（web 无 Hermes，省该用例；前端 UsageScriptModal.tsx 仅 JS 侧重构，`||` 本就跳空，不必跟）(#3355)
 
 > 注：测试 `openclaw_config::default_model_noop_write_skips_backup` 在并行下偶发失败
 > （共享 temp 目录竞态，与本次改动无关）；`--test-threads=1` 全绿 868 passed。

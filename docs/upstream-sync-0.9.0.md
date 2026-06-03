@@ -59,9 +59,10 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `d66030be` Codex 自定义工具 native input events —— streaming/transform_codex_chat 与上游 main 0 分叉，已含
 - [x] `41433cfa` provider 切换后 Codex 重启提示（useProviderActions + en/ja/zh，web 无 zh-TW）
 
-**② 前端可做（web 有 CodexConfigEditor.tsx）—— 待做**
-- [ ] `a04e72a2` 修编辑对话框遮蔽 live OAuth（App.tsx + EditProviderDialog + CodexConfigEditor）
-- [ ] `aeaa016c` takeover 提示文案对齐（CodexConfigEditor + i18n）
+**② 前端 —— 需专注会话（web 组件树分叉）**
+- [ ] `a04e72a2` 修编辑对话框遮蔽 live OAuth（display-only，非数据丢失）—— web 的 isProxyTakeover
+  只 thread 到 App 层、未下传到 ProviderForm/CodexConfigEditor，需补完分叉的多组件 prop 透传 + 通知
+- [ ] `aeaa016c` takeover 提示文案/样式对齐（Alert→amber div + 改 3 个 i18n key 值）—— 纯样式，低价值
 
 **③ 后端 —— 待专注会话**
 - [ ] `e25682d3` 托管账号 takeover model 字段取自目标 provider —— Claude 接管细化，但 web 缺 `build_claude_takeover_model_fields` 锚点，需先对齐 web 的接管模型字段结构

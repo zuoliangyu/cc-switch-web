@@ -1394,6 +1394,14 @@ mod tests {
             result.is_some(),
             "带前缀+冒号后缀的模型应清洗后匹配到 kimi-k2-0905"
         );
+        // 新增 seed 行 claude-opus-4-8（短横线格式）应能被前缀清洗后精确命中。
+        // 注：web 的 find_model_pricing_row 不做点号→横线归一化（上游该增强未同步），
+        // 故只断言短横线形 anthropic/claude-opus-4-8，不断言点号形。
+        let result = find_model_pricing_row(&conn, "anthropic/claude-opus-4-8")?;
+        assert!(
+            result.is_some(),
+            "带前缀的 anthropic/claude-opus-4-8 应能匹配到 seed 行 claude-opus-4-8"
+        );
 
         // 清洗：@ 替换为 -（seed_model_pricing 已预置 gpt-5.2-codex-low）
         let result = find_model_pricing_row(&conn, "gpt-5.2-codex@low")?;

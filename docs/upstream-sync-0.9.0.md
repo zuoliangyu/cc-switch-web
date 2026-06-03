@@ -32,7 +32,7 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `b4f262c7` 始终带 reasoning_tokens（随文件替换；见下方 proxy fix 区）
 - [x] `2a4651a2` Chat 请求保留用户选定 catalog 模型（apply_codex_chat_upstream_model + codex_provider_catalog_model_ids，已接 forwarder）
 - [x] `44d9aabb` 自适应 reasoning 检测（resolve/infer/normalize_codex_chat_reasoning_config + infer_aggregator_platform_config，forwarder 走 responses_to_chat_completions_with_reasoning）
-- [ ] `72bc912e` Codex Chat provider 走 Stream Check —— codex.rs 的 is_origin_only_url 已随 catalog 提交落地；**stream_check.rs +182 探测重写待做**（resolve_codex_endpoint_urls + Chat-shaped probe）
+- [x] `72bc912e` Codex Chat provider 走 Stream Check —— stream_check.rs：uses_chat 时打 /chat/completions + Chat-shaped body + reasoning_effort 仅 o-series；resolve_codex_endpoint_urls 统一 URL 构造（origin 优先 /v1）；build_url 改用 is_origin_only_url。+8 测试
 - [x] `184cbcdc` ClaudeAPI 重分类为 aggregator 恢复 model test（claudeProviderPresets.ts；web 无独立 Desktop presets 文件，N/A 那半）
 - [x] `279b9eab` 测试基线更新（直接采用上游 bundled 测试，N/A）
 
@@ -63,15 +63,18 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [ ] `59683363` Chat 第三方代理下保留 Codex 工具插件
 - [ ] `d66030be` Codex 自定义工具 native input events 流式 ⚠️评估桌面特有
 - [ ] `aeaa016c` / `b7499fc8` takeover 提示文案/label 刷新（前端）
-- [ ] `8bf16602` provider 切换始终更新 model catalog JSON (#3360)
-- [ ] `0fbba426` 修 live-config backfill 清空 catalog
-- [ ] `d5328e52` 修 takeover-off 恢复丢失 catalog
-- [ ] `ad8bdf16` live read active provider 时保留 catalog
-- [ ] `791ced00` catalog WYSIWYG + 配置整合
-- [ ] `9b957820` 修 catalog 无限渲染循环（前端）
-- [ ] `7811383b` model_catalog_json 用相对文件名 (#3614)
-- [ ] `b44f83f7` + `b15d9dfa` + `fc0433f2` 第三方统一进 "custom" history bucket / 路由键
-- [ ] `a2ac21d0` 停止强改用户的 model_provider 字段
+- [N/A] **model catalog 簇全部跳过** `8bf16602` `0fbba426` `d5328e52` `ad8bdf16` `791ced00` `9b957820` `7811383b`
+  —— web 从未实现 Codex `model_catalog_json` 物理文件特性（codex_config 无
+  `get_codex_model_catalog_path` / `CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME`），
+  前端 Codex 表单也无 modelCatalog UI。这些全是对该特性的 bug 修复（takeover/
+  live-read 时文件被清空、无限渲染等），web 无此特性故无此 bug。若将来要做 Codex
+  自定义模型目录，需先整体移植基础特性（独立工作，非本次同步范围）。
+- [N/A] **custom history bucket 簇全部跳过** `b44f83f7` `b15d9dfa` `fc0433f2` `a2ac21d0`
+  —— 核心是新文件 `codex_history_migration.rs`（~985 行），迁移 Codex CLI **本地 resume
+  历史** 在路由键变更时的归属；web 是服务器、不管理单用户的 Codex CLI 历史，无此文件。
+  `a2ac21d0`（停止强改 model_provider）是该重设计的一环、依赖新的 "custom" 身份方案；
+  单独移植会移除 web 现有的 ID 稳定化（write_codex_live_atomic_with_stable_provider）却
+  无替代，故连同整簇延后。另含 deeplink/provider.rs、lib.rs 注册等 Tauri 专属部分。
 - [ ] `af60c7ed` 第三方 provider remote compaction 开关
 - [ ] `3c3d4174` provider 模板启用 Codex goals (#3089)
 - [ ] `5ef72a20` 多平台 CLI 发现 + gpt-5.5 模板兜底 (#3382) ⚠️CLI发现部分属Tauri

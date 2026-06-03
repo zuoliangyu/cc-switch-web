@@ -533,11 +533,8 @@ impl ProviderAdapter for CodexAdapter {
         // 检查 base_url 是否已经包含 /v1
         let already_has_v1 = base_trimmed.ends_with("/v1");
 
-        // 检查是否是纯 origin（没有路径部分）
-        let origin_only = match base_trimmed.split_once("://") {
-            Some((_scheme, rest)) => !rest.contains('/'),
-            None => !base_trimmed.contains('/'),
-        };
+        // 纯 origin（无路径段）检测——与 Stream Check 共用同一判定（跟随上游 72bc912e）。
+        let origin_only = is_origin_only_url(base_trimmed);
 
         let mut url = if already_has_v1 {
             // 已经有 /v1，直接拼接

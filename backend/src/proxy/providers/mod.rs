@@ -46,7 +46,7 @@ pub use claude::{
     transform_claude_request_for_api_format, ClaudeAdapter,
 };
 pub use codex::{
-    apply_codex_chat_upstream_model, codex_provider_upstream_model, is_origin_only_url,
+    apply_codex_chat_upstream_model, codex_provider_uses_chat_completions, is_origin_only_url,
     resolve_codex_chat_reasoning_config, should_convert_codex_responses_to_chat, CodexAdapter,
 };
 pub use gemini::GeminiAdapter;

@@ -2448,14 +2448,14 @@
       "writing": "Writing"
     },
     "categoryTooltip": {
-      "visualEngineering": "Frontend and visual engineering category for UI/UX design, styling, animation and interface implementation. Defaults to Gemini 3 Pro model.",
+      "visualEngineering": "Frontend and visual engineering category for UI/UX design, styling, animation and interface implementation. Defaults to Gemini 3.5 Flash model.",
       "ultrabrain": "Deep logical reasoning category for complex architectural decisions requiring extensive analysis. Defaults to GPT-5.3 Codex ultra-high reasoning variant.",
       "deep": "Deep autonomous problem-solving category with goal-oriented execution. Conducts thorough research before action, suitable for difficult problems requiring deep understanding.",
-      "artistry": "Highly creative and artistic task category that inspires novel ideas and creative solutions. Defaults to Gemini 3 Pro max variant.",
+      "artistry": "Highly creative and artistic task category that inspires novel ideas and creative solutions. Defaults to Gemini 3.5 Flash high variant.",
       "quick": "Lightweight task category for single-file modifications, typo fixes, and simple adjustments. Defaults to Claude Haiku 4.5 fast model.",
       "unspecifiedLow": "Uncategorized low-effort task category for tasks that don't fit other categories with small workload. Defaults to Claude Sonnet 4.5.",
       "unspecifiedHigh": "Uncategorized high-effort task category for tasks that don't fit other categories with large workload. Defaults to Claude Opus 4.8 max variant.",
-      "writing": "Writing category for documentation, prose and technical writing. Defaults to Gemini 3 Flash fast generation model."
+      "writing": "Writing category for documentation, prose and technical writing. Defaults to Kimi K2.5 model."
     },
     "slimAgentDesc": {
       "orchestrator": "Orchestrator",

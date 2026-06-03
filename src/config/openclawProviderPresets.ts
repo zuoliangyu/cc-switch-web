@@ -271,8 +271,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       api: "openai-completions",
       models: [
         {
-          id: "glm-5",
-          name: "GLM-5",
+          id: "glm-5.1",
+          name: "GLM-5.1",
           contextWindow: 128000,
           cost: { input: 0.001, output: 0.001 },
         },
@@ -295,8 +295,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       },
     },
     suggestedDefaults: {
-      model: { primary: "zhipu/glm-5" },
-      modelCatalog: { "zhipu/glm-5": { alias: "GLM" } },
+      model: { primary: "zhipu/glm-5.1" },
+      modelCatalog: { "zhipu/glm-5.1": { alias: "GLM" } },
     },
   },
   {
@@ -309,8 +309,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       api: "openai-completions",
       models: [
         {
-          id: "glm-5",
-          name: "GLM-5",
+          id: "glm-5.1",
+          name: "GLM-5.1",
           contextWindow: 128000,
           cost: { input: 0.001, output: 0.001 },
         },
@@ -333,8 +333,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       },
     },
     suggestedDefaults: {
-      model: { primary: "zhipu-en/glm-5" },
-      modelCatalog: { "zhipu-en/glm-5": { alias: "GLM" } },
+      model: { primary: "zhipu-en/glm-5.1" },
+      modelCatalog: { "zhipu-en/glm-5.1": { alias: "GLM" } },
     },
   },
   {
@@ -871,10 +871,10 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
           cost: { input: 1.75, output: 14, cacheRead: 0.175 },
         },
         {
-          id: "google/gemini-3-flash-preview",
-          name: "Gemini 3 Flash Preview",
+          id: "google/gemini-3.5-flash",
+          name: "Gemini 3.5 Flash",
           contextWindow: 1000000,
-          cost: { input: 0.5, output: 3, cacheRead: 0.05 },
+          cost: { input: 1.5, output: 9, cacheRead: 0.15 },
         },
         {
           id: "qwen/qwen3-coder-480b",
@@ -897,13 +897,13 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
         primary: "therouter/anthropic/claude-sonnet-4.6",
         fallbacks: [
           "therouter/openai/gpt-5.2",
-          "therouter/google/gemini-3-flash-preview",
+          "therouter/google/gemini-3.5-flash",
         ],
       },
       modelCatalog: {
         "therouter/anthropic/claude-sonnet-4.6": { alias: "Sonnet" },
         "therouter/openai/gpt-5.2": { alias: "GPT-5.2" },
-        "therouter/google/gemini-3-flash-preview": {
+        "therouter/google/gemini-3.5-flash": {
           alias: "Gemini Flash",
         },
         "therouter/openai/gpt-5.3-codex": { alias: "Codex" },
@@ -921,8 +921,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       api: "openai-completions",
       models: [
         {
-          id: "ZhipuAI/GLM-5",
-          name: "GLM-5",
+          id: "ZhipuAI/GLM-5.1",
+          name: "GLM-5.1",
           contextWindow: 128000,
           cost: { input: 0.001, output: 0.001 },
         },
@@ -945,8 +945,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       },
     },
     suggestedDefaults: {
-      model: { primary: "modelscope/ZhipuAI/GLM-5" },
-      modelCatalog: { "modelscope/ZhipuAI/GLM-5": { alias: "GLM" } },
+      model: { primary: "modelscope/ZhipuAI/GLM-5.1" },
+      modelCatalog: { "modelscope/ZhipuAI/GLM-5.1": { alias: "GLM" } },
     },
   },
   {
@@ -1031,8 +1031,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       api: "openai-completions",
       models: [
         {
-          id: "zai-org/glm-5",
-          name: "GLM-5",
+          id: "zai-org/glm-5.1",
+          name: "GLM-5.1",
           contextWindow: 202800,
           cost: { input: 1, output: 3.2, cacheRead: 0.2 },
         },
@@ -1049,9 +1049,9 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       },
     },
     suggestedDefaults: {
-      model: { primary: "novita/zai-org/glm-5" },
+      model: { primary: "novita/zai-org/glm-5.1" },
       modelCatalog: {
-        "novita/zai-org/glm-5": { alias: "GLM-5" },
+        "novita/zai-org/glm-5.1": { alias: "GLM-5.1" },
       },
     },
   },
@@ -1811,7 +1811,7 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       api: "openai-completions",
       models: [
         {
-          id: "gpt-5.4",
+          id: "gpt-5.5",
           name: "GPT-5.4",
           contextWindow: 400000,
         },
@@ -1830,10 +1830,10 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
     },
     suggestedDefaults: {
       model: {
-        primary: "lemondata/gpt-5.4",
+        primary: "lemondata/gpt-5.5",
       },
       modelCatalog: {
-        "lemondata/gpt-5.4": { alias: "GPT-5.4" },
+        "lemondata/gpt-5.5": { alias: "GPT-5.4" },
       },
     },
   },
@@ -1863,8 +1863,8 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
           name: "gpt-5.3-codex",
         },
         {
-          id: "gpt-5.4",
-          name: "gpt-5.4",
+          id: "gpt-5.5",
+          name: "gpt-5.5",
         },
         {
           id: "gpt-5.2-codex",
@@ -1889,11 +1889,11 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
     suggestedDefaults: {
       model: {
         primary: "eflowcode/gpt-5.3-codex",
-        fallbacks: ["eflowcode/gpt-5.4", "eflowcode/gpt-5.2-codex"],
+        fallbacks: ["eflowcode/gpt-5.5", "eflowcode/gpt-5.2-codex"],
       },
       modelCatalog: {
         "eflowcode/gpt-5.3-codex": { alias: "gpt-5.3-codex" },
-        "eflowcode/gpt-5.4": { alias: "gpt-5.4" },
+        "eflowcode/gpt-5.5": { alias: "gpt-5.5" },
         "eflowcode/gpt-5.2-codex": { alias: "gpt-5.2-codex" },
         "eflowcode/gpt-5.2": { alias: "gpt-5.2" },
       },

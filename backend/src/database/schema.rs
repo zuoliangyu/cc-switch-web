@@ -1422,6 +1422,23 @@ impl Database {
                 "0.125",
                 "0",
             ),
+            // Gemini 3.5 / 3.1 系列（上游 3a154207）
+            (
+                "gemini-3.5-flash",
+                "Gemini 3.5 Flash",
+                "1.50",
+                "9.00",
+                "0.15",
+                "0",
+            ),
+            (
+                "gemini-3.1-flash-lite",
+                "Gemini 3.1 Flash Lite",
+                "0.25",
+                "1.50",
+                "0.025",
+                "0",
+            ),
             // Gemini 3 系列
             (
                 "gemini-3-pro-preview",
@@ -1465,6 +1482,16 @@ impl Database {
                 "0.02",
                 "0",
             ),
+            (
+                "step-3.5-flash-2603",
+                "Step 3.5 Flash 2603",
+                "0.10",
+                "0.30",
+                "0.02",
+                "0",
+            ),
+            // Grok 系列（上游 3a154207，USD）
+            ("grok-build-0.1", "Grok Build 0.1", "1", "2", "0.20", "0"),
             // ====== 国产模型 (CNY/1M tokens) ======
             // Doubao (字节跳动)
             (

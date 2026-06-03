@@ -37,7 +37,7 @@ export const OMO_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Hephaestus",
     descKey: "omo.agentDesc.hephaestus",
     tooltipKey: "omo.agentTooltip.hephaestus",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
     group: "main",
   },
   {
@@ -61,7 +61,7 @@ export const OMO_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Oracle",
     descKey: "omo.agentDesc.oracle",
     tooltipKey: "omo.agentTooltip.oracle",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
     group: "sub",
   },
   {
@@ -69,7 +69,7 @@ export const OMO_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Librarian",
     descKey: "omo.agentDesc.librarian",
     tooltipKey: "omo.agentTooltip.librarian",
-    recommended: "gemini-3-flash",
+    recommended: "gemini-3.5-flash",
     group: "sub",
   },
   {
@@ -77,7 +77,7 @@ export const OMO_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Explore",
     descKey: "omo.agentDesc.explore",
     tooltipKey: "omo.agentTooltip.explore",
-    recommended: "grok-code-fast-1",
+    recommended: "grok-build-0.1",
     group: "sub",
   },
   {
@@ -101,7 +101,7 @@ export const OMO_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Momus",
     descKey: "omo.agentDesc.momus",
     tooltipKey: "omo.agentTooltip.momus",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
     group: "sub",
   },
   {
@@ -119,28 +119,28 @@ export const OMO_BUILTIN_CATEGORIES: OmoCategoryDef[] = [
     display: "Visual Engineering",
     descKey: "omo.categoryDesc.visualEngineering",
     tooltipKey: "omo.categoryTooltip.visualEngineering",
-    recommended: "gemini-3-pro",
+    recommended: "gemini-3.5-flash",
   },
   {
     key: "ultrabrain",
     display: "Ultrabrain",
     descKey: "omo.categoryDesc.ultrabrain",
     tooltipKey: "omo.categoryTooltip.ultrabrain",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
   },
   {
     key: "deep",
     display: "Deep",
     descKey: "omo.categoryDesc.deep",
     tooltipKey: "omo.categoryTooltip.deep",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
   },
   {
     key: "artistry",
     display: "Artistry",
     descKey: "omo.categoryDesc.artistry",
     tooltipKey: "omo.categoryTooltip.artistry",
-    recommended: "gemini-3-pro",
+    recommended: "gemini-3.5-flash",
   },
   {
     key: "quick",
@@ -168,7 +168,7 @@ export const OMO_BUILTIN_CATEGORIES: OmoCategoryDef[] = [
     display: "Writing",
     descKey: "omo.categoryDesc.writing",
     tooltipKey: "omo.categoryTooltip.writing",
-    recommended: "gemini-3-flash",
+    recommended: "gemini-3.5-flash",
   },
 ];
 
@@ -281,7 +281,7 @@ export const OMO_BACKGROUND_TASK_PLACEHOLDER = `{
   },
   "modelConcurrency": {
     "anthropic/claude-opus-4-8": 2,
-    "google/gemini-3-flash": 10
+    "google/gemini-3.5-flash": 10
   }
 }`;
 
@@ -327,7 +327,7 @@ export const OMO_SLIM_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Oracle",
     descKey: "omo.slimAgentDesc.oracle",
     tooltipKey: "omo.slimAgentTooltip.oracle",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
     group: "sub",
   },
   {
@@ -335,7 +335,7 @@ export const OMO_SLIM_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Librarian",
     descKey: "omo.slimAgentDesc.librarian",
     tooltipKey: "omo.slimAgentTooltip.librarian",
-    recommended: "gemini-3-flash",
+    recommended: "gemini-3.5-flash",
     group: "sub",
   },
   {
@@ -343,7 +343,7 @@ export const OMO_SLIM_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Explorer",
     descKey: "omo.slimAgentDesc.explorer",
     tooltipKey: "omo.slimAgentTooltip.explorer",
-    recommended: "grok-code-fast-1",
+    recommended: "grok-build-0.1",
     group: "sub",
   },
   {
@@ -351,7 +351,7 @@ export const OMO_SLIM_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Designer",
     descKey: "omo.slimAgentDesc.designer",
     tooltipKey: "omo.slimAgentTooltip.designer",
-    recommended: "gemini-3-pro",
+    recommended: "gemini-3.5-flash",
     group: "sub",
   },
   {
@@ -359,7 +359,7 @@ export const OMO_SLIM_BUILTIN_AGENTS: OmoAgentDef[] = [
     display: "Fixer",
     descKey: "omo.slimAgentDesc.fixer",
     tooltipKey: "omo.slimAgentTooltip.fixer",
-    recommended: "gpt-5.4",
+    recommended: "gpt-5.5",
     group: "sub",
   },
   {

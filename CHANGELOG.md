@@ -4,64 +4,40 @@
 
 ## [0.9.0] - 2026-06-03
 
-跟随上游 cc-switch 在 0.8.0 同步点（`09f67c1b`）之后到 3.16.1 的 114 个非 merge commit，逐条核对并适配
-web 分叉。逐 commit 移植/判定（done / N/A / DEFER）记录见 `docs/upstream-sync-0.9.0.md`。
+同步上游 cc-switch（截至 3.16.1）的大量改进，重点在 Codex 第三方供应商接入的稳定性、默认模型与定价更新。
 
-### P0 · proxy / usage 核心 + Codex Chat 路由完善
+### 新增
 
-- **Codex Chat→Responses 路由整体对齐上游**：3 个纯转换文件（transform_codex_chat / streaming_codex_chat /
-  json_canonical）整体换上游最新版，新增 codex_chat_common / codex_chat_history 模块 +
-  CodexChatReasoningConfig，串入 ProxyState / RequestForwarder；吸收 cache 稳定性、reasoning fallback、
-  mid-stream system 折叠、占位 reasoning_content、`stream_options.include_usage` SSE usage 收集、空 tool-call
-  参数强制 `{}`、Chat 错误转 Responses 信封、保留用户选定 catalog 模型、自适应 reasoning 检测等一系列改进
-  （上游 `74acf1e3`/`22fbe6f1`/`90b7f251`/`9d357098`/`b710c654`/`5048ed63`/`f9db9913`/`ead9e22b`/`2a4651a2`/`44d9aabb`）。
-- **Codex Chat provider 走 Stream Check**（`72bc912e`）；ClaudeAPI 重分类为 aggregator 恢复 model test（`184cbcdc`）。
-- **proxy/usage fix**：Claude 兼容模式流式空 tool_calls 修复（`9c2add9a`）、DeepSeek/Kimi/MoonShot/MiMo thinking
-  历史归一化（`554e3b48`/`e02a2763`/`707a5593`）、始终带 reasoning_tokens（`b4f262c7`）、Codex 转发错误富化 +
-  error_mapper 状态码对齐（`f4e2c28a`）、Codex 非 ASCII 模型名 panic 修复（`bc1467db` 部分）、per-app 凭证解析
-  native 余额/coding-plan 查询（`afa09e12`）。
+- **Codex 配置新增两个开关**：
+  - **Goal mode** —— 一键开启/关闭 Codex 的目标模式。
+  - **远程压缩** —— 第三方（非官方）Codex 供应商可开启，让 Codex 尝试通过兼容端点做远程上下文压缩。
+- **更多模型的定价数据**（Gemini 3.5 Flash、Gemini 3.1 Flash Lite、Step 3.5 Flash、Grok Build 0.1 等），
+  用量面板对这些模型的成本估算更完整。
 
-### P1 · catalog/reasoning helpers · Codex 切换/接管前端
+### 变更
 
-- catalog/reasoning helpers 收尾、Codex 切换重启提示（`41433cfa`）、Codex 接管编辑态 display-only 提示
-  （`a04e72a2` + `aeaa016c`）。
-- OAuth 接管后端簇、Codex model_catalog 物理文件簇、custom history bucket 簇等 **判 N/A**——均 gated 在 web
-  未实现的基础特性上。
+- **默认模型升级**（仅影响"新建供应商"时预填的默认值，不会改动你已保存的配置）：
+  - Claude Opus 默认升到 **4.8**。
+  - 各预设默认模型刷新：GPT 5.4 → **5.5**、Gemini 3.x → **3.5 Flash**、GLM‑5 → **5.1**、
+    Grok Code Fast → **Grok Build 0.1**。
+- **胜算云（Shengsuanyun）** 预设改用带厂商前缀的模型 ID（`anthropic/…`、`openai/…`、`google/…`），开箱即用。
+- 切换 Claude / Codex 供应商后的重启与接管提示更清晰。
 
-### P2 · 默认模型 / 定价 / 供应商
+### 修复 / 稳定性
 
-- **默认 Claude Opus 升 4.8**（`0877b9e3` + 折入此前漏掉的 4.7 地基 `83c3c3b4`）：presets + 定价行 +
-  thinking_optimizer adaptive + claude_desktop 4-7↔4-8 滚动期别名 + Gemini transform 合并 role:system。
-- **全 preset 默认模型/定价刷新**（`3a154207`）：gpt-5.4→5.5 / gemini-3.x→3.5-flash / glm-5→5.1 /
-  grok-code-fast-1→grok-build-0.1，新增国际定价行（gemini-3.5-flash / gemini-3.1-flash-lite /
-  step-3.5-flash-2603 / grok-build-0.1）。
-- **Shengsuanyun 用前缀模型 ID**（`3d6fb894` + `4bb4e994`）。
-- **Codex 配置编辑器两个开关**：goal-mode（`3c3d4174`，`[features].goals`）+ remote-compaction
-  （`af60c7ed`，把自定义 model_providers 段 name 写为 OpenAI，官方供应商隐藏）。
-- 后端修复：ZhiPu quota 归桶（`177eef66`）、omo Fill Recommended 反馈（`6b0dd3c4`）、自定义 usage 脚本摘要
-  （`8e21b061`）、Codex 归档会话纳入扫描/删除（`e9d84af5`）、MiniMax 余额新接口 + 定价（`43ae1e5f`）。
+- **Codex 第三方供应商（Chat Completions 路由）一系列稳定性与正确性改进**：用量统计采集、推理内容处理、
+  空工具调用与流式响应、上游错误信息透传、含非 ASCII 模型名时的崩溃等。让仅支持 Chat Completions 的
+  第三方供应商用 Codex 接入更可靠。
+- **用量 / 成本统计更准**：DeepSeek / Kimi / MoonShot / MiMo 等的思考历史归一化、推理 token 计数、
+  部分供应商的原生余额 / 套餐额度查询修复。
+- 智谱（ZhiPu）额度分桶、自定义用量脚本摘要、Codex 归档会话纳入会话扫描、MiniMax 余额查询适配新接口。
+- 顶部应用切换器的应用名过长时不再被裁切。
 
-### P1b · Claude Desktop（部分）
+### 说明
 
-- gateway 3P profile 增加 `coworkEgressAllowedHosts:["*"]`（`864593bb`）。
-- 其余 Claude Desktop form/takeover 改动（`0960fd71`/`94cc3d10`/`05ba2801`）**判 N/A**——web 的 Claude Desktop
-  前端为薄层（无 ProviderForm）、proxy 接管运行时尚未实现。
-
-### P3 · UI 杂项
-
-- AppSwitcher 展开标签 `max-w` 80→120px 防裁切（`62928c62`）。
-
-### 内部 · 构建清理
-
-- 静音 Claude Desktop 未接线脚手架（apply/restore/3P profile 写盘链等）的 29 个 dead_code 警告，
-  `cargo check --locked --bin` 警告归零；纯 lint 抑制、无行为变更，待 runtime 接线后移除。
-
-### 范围说明（N/A / DEFER）
-
-- **N/A**：deeplink 簇、繁体中文 zh-TW、工具管理子系统（~18 commit，web 工具管理为纯检测/Windows 禁用、
-  无 install/update lifecycle）、Claude Desktop 完整子系统（运行时 + form）、Tauri event/CLI 发现等桌面专属。
-- **DEFER**（需后续决策）：合作伙伴 promo preset 簇 + `f2935a3d` 22 个 Codex preset（web 图标系统为内联
-  SVG、上游用 PNG，且 promo 属 affiliate）、定价 seed 整体回填 + 国产模型 CNY/USD 币种统一。
+- 本版本逐 commit 的同步与取舍记录见 `docs/upstream-sync-0.9.0.md`。
+- 部分上游内容因当前架构暂不适用或留待后续，不在本版本范围内（如繁体中文、桌面端工具安装/更新管理、
+  若干合作伙伴推广预设）。
 
 ## [0.8.0] - 2026-05-23
 

@@ -149,6 +149,7 @@ interface ProviderFormProps {
     iconColor?: string;
   };
   showButtons?: boolean;
+  isProxyTakeover?: boolean;
 }
 
 export function ProviderForm({
@@ -162,6 +163,7 @@ export function ProviderForm({
   onSubmittingChange,
   initialData,
   showButtons = true,
+  isProxyTakeover = false,
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const isEditMode = Boolean(initialData);
@@ -1782,6 +1784,7 @@ export function ProviderForm({
               configError={codexConfigError}
               onExtract={handleCodexExtract}
               isExtracting={isCodexExtracting}
+              isProxyTakeover={isProxyTakeover}
             />
             {settingsConfigErrorField}
           </>

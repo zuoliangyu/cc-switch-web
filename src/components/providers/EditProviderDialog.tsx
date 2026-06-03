@@ -232,6 +232,7 @@ export function EditProviderDialog({
         onSubmittingChange={setIsFormSubmitting}
         initialData={initialData}
         showButtons={false}
+        isProxyTakeover={isProxyTakeover}
       />
     </FullScreenPanel>
   );

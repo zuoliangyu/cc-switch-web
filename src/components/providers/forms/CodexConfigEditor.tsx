@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CodexAuthSection, CodexConfigSection } from "./CodexConfigSections";
 import { CodexCommonConfigModal } from "./CodexCommonConfigModal";
 
@@ -32,6 +33,8 @@ interface CodexConfigEditorProps {
   onExtract?: () => void;
 
   isExtracting?: boolean;
+
+  isProxyTakeover?: boolean;
 }
 
 const CodexConfigEditor: React.FC<CodexConfigEditorProps> = ({
@@ -50,7 +53,9 @@ const CodexConfigEditor: React.FC<CodexConfigEditorProps> = ({
   configError,
   onExtract,
   isExtracting,
+  isProxyTakeover = false,
 }) => {
+  const { t } = useTranslation();
   const [isCommonConfigModalOpen, setIsCommonConfigModalOpen] = useState(false);
 
   const handleCloseCommonConfigModal = () => {
@@ -60,12 +65,21 @@ const CodexConfigEditor: React.FC<CodexConfigEditorProps> = ({
 
   return (
     <div className="space-y-6">
+      {isProxyTakeover && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {t("codexConfig.proxyTakeoverStorageNotice")}
+          </p>
+        </div>
+      )}
+
       {/* Auth JSON Section */}
       <CodexAuthSection
         value={authValue}
         onChange={onAuthChange}
         onBlur={onAuthBlur}
         error={authError}
+        isProxyTakeover={isProxyTakeover}
       />
 
       {/* Config TOML Section */}
@@ -77,6 +91,7 @@ const CodexConfigEditor: React.FC<CodexConfigEditorProps> = ({
         onEditCommonConfig={() => setIsCommonConfigModalOpen(true)}
         commonConfigError={commonConfigError}
         configError={configError}
+        isProxyTakeover={isProxyTakeover}
       />
 
       {/* Common Config Modal */}

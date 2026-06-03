@@ -349,48 +349,8 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
         }
     }
 
-    let mut tiers = Vec::new();
-    if let Some(model_remains) = body.get("model_remains").and_then(|value| value.as_array()) {
-        if let Some(item) = model_remains.first() {
-            let interval_total = item
-                .get("current_interval_total_count")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(0.0);
-            let interval_remaining = item
-                .get("current_interval_usage_count")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(0.0);
-            let end_time = item.get("end_time").and_then(|value| value.as_i64());
-
-            if interval_total > 0.0 {
-                tiers.push(QuotaTier {
-                    name: "five_hour".to_string(),
-                    utilization: ((interval_total - interval_remaining) / interval_total) * 100.0,
-                    resets_at: end_time.and_then(millis_to_iso8601),
-                });
-            }
-
-            let weekly_total = item
-                .get("current_weekly_total_count")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(0.0);
-            let weekly_remaining = item
-                .get("current_weekly_usage_count")
-                .and_then(|value| value.as_f64())
-                .unwrap_or(0.0);
-            let weekly_end = item
-                .get("weekly_end_time")
-                .and_then(|value| value.as_i64());
-
-            if weekly_total > 0.0 {
-                tiers.push(QuotaTier {
-                    name: "weekly_limit".to_string(),
-                    utilization: ((weekly_total - weekly_remaining) / weekly_total) * 100.0,
-                    resets_at: weekly_end.and_then(millis_to_iso8601),
-                });
-            }
-        }
-    }
+    // 提取纯函数便于无 mock 单元测试；新接口直接给"剩余百分比"，反转为已用百分比（跟随上游 43ae1e5f）
+    let tiers = parse_minimax_tiers(&body);
 
     SubscriptionQuota {
         tool: "coding_plan".to_string(),
@@ -402,6 +362,66 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
         error: None,
         queried_at: Some(now_millis()),
     }
+}
+
+/// 从 `/coding_plan/remains` 响应中解析 MiniMax 编程套餐的额度 tier（跟随上游 43ae1e5f）。
+///
+/// 新接口语义：`current_*_remaining_percent` 是"剩余百分比"(0-100)，
+/// `model_remains` 数组里有 `general`(编程套餐)和 `video` 等其他模型，这里只取
+/// `general`、跳过 video。5h 桶始终存在；周桶并非所有套餐都有，靠
+/// `current_weekly_status == 1` 判定激活（无周限额套餐该字段为 3，不应展示）。
+fn parse_minimax_tiers(body: &serde_json::Value) -> Vec<QuotaTier> {
+    let mut tiers = Vec::new();
+
+    let Some(model_remains) = body.get("model_remains").and_then(|v| v.as_array()) else {
+        return tiers;
+    };
+
+    // 只取 model_name == "general" 的条目，跳过 video 等非编程模型
+    let Some(item) = model_remains.iter().find(|item| {
+        item.get("model_name")
+            .and_then(|v| v.as_str())
+            .map(|s| s == "general")
+            .unwrap_or(false)
+    }) else {
+        return tiers;
+    };
+
+    // 5h 桶：剩余百分比 → 已用百分比
+    if let Some(remain_pct) = item
+        .get("current_interval_remaining_percent")
+        .and_then(|v| v.as_f64())
+    {
+        let resets_at = item
+            .get("end_time")
+            .and_then(|v| v.as_i64())
+            .and_then(millis_to_iso8601);
+        tiers.push(QuotaTier {
+            name: "five_hour".to_string(),
+            utilization: 100.0 - remain_pct,
+            resets_at,
+        });
+    }
+
+    // 周桶：仅当 status=1 时激活；status=3 等表示该套餐无周限额，跳过
+    if item.get("current_weekly_status").and_then(|v| v.as_i64()) == Some(1) {
+        if let Some(remain_pct) = item
+            .get("current_weekly_remaining_percent")
+            .and_then(|v| v.as_f64())
+        {
+            let resets_at = item
+                .get("weekly_end_time")
+                .and_then(|v| v.as_i64())
+                .and_then(millis_to_iso8601);
+            tiers.push(QuotaTier {
+                name: "weekly_limit".to_string(),
+                utilization: 100.0 - remain_pct,
+                resets_at,
+            });
+        }
+    }
+
+    tiers
 }
 
 pub async fn get_coding_plan_quota(
@@ -429,8 +449,164 @@ pub async fn get_coding_plan_quota(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_zhipu_token_tiers, ZHIPU_TIER_FIVE_HOUR, ZHIPU_TIER_WEEKLY_LIMIT};
+    use super::{
+        parse_minimax_tiers, parse_zhipu_token_tiers, ZHIPU_TIER_FIVE_HOUR, ZHIPU_TIER_WEEKLY_LIMIT,
+    };
     use serde_json::json;
+
+    // ── MiniMax（跟随上游 43ae1e5f；web 用字面量 "five_hour"/"weekly_limit"）──
+
+    #[test]
+    fn minimax_general_two_tiers_from_remaining_percent() {
+        let body = json!({
+            "model_remains": [
+                {
+                    "model_name": "general",
+                    "current_interval_remaining_percent": 98.0,
+                    "current_weekly_remaining_percent": 95.0,
+                    "current_interval_status": 1,
+                    "current_weekly_status": 1,
+                    "end_time": 1_780_329_600_000_i64,
+                    "weekly_end_time": 1_780_848_000_000_i64
+                },
+                {
+                    "model_name": "video",
+                    "current_interval_remaining_percent": 100.0,
+                    "current_weekly_remaining_percent": 100.0
+                }
+            ],
+            "base_resp": { "status_code": 0, "status_msg": "success" }
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 2);
+        assert_eq!(tiers[0].name, "five_hour");
+        assert_eq!(tiers[0].utilization, 2.0);
+        assert!(tiers[0].resets_at.is_some());
+        assert_eq!(tiers[1].name, "weekly_limit");
+        assert_eq!(tiers[1].utilization, 5.0);
+        assert!(tiers[1].resets_at.is_some());
+    }
+
+    #[test]
+    fn minimax_skips_video_and_finds_general_in_any_position() {
+        let body = json!({
+            "model_remains": [
+                {
+                    "model_name": "video",
+                    "current_interval_remaining_percent": 50.0,
+                    "current_weekly_remaining_percent": 50.0
+                },
+                {
+                    "model_name": "general",
+                    "current_interval_remaining_percent": 80.0,
+                    "current_weekly_remaining_percent": 70.0,
+                    "current_interval_status": 1,
+                    "current_weekly_status": 1
+                }
+            ]
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 2);
+        assert_eq!(tiers[0].utilization, 20.0);
+        assert_eq!(tiers[1].utilization, 30.0);
+    }
+
+    #[test]
+    fn minimax_missing_general_returns_empty() {
+        let body = json!({
+            "model_remains": [
+                {
+                    "model_name": "video",
+                    "current_interval_remaining_percent": 100.0,
+                    "current_weekly_remaining_percent": 100.0
+                }
+            ]
+        });
+        assert!(parse_minimax_tiers(&body).is_empty());
+
+        let body_empty: serde_json::Value = json!({ "model_remains": [] });
+        assert!(parse_minimax_tiers(&body_empty).is_empty());
+
+        let body_no_field = json!({});
+        assert!(parse_minimax_tiers(&body_no_field).is_empty());
+    }
+
+    #[test]
+    fn minimax_missing_percent_fields_skips_tier() {
+        let body = json!({
+            "model_remains": [{
+                "model_name": "general",
+                "current_interval_remaining_percent": 60.0,
+                "current_weekly_status": 1
+            }]
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 1);
+        assert_eq!(tiers[0].name, "five_hour");
+        assert_eq!(tiers[0].utilization, 40.0);
+    }
+
+    #[test]
+    fn minimax_negative_percent_passes_through() {
+        let body = json!({
+            "model_remains": [{
+                "model_name": "general",
+                "current_interval_remaining_percent": -5.0,
+                "current_weekly_remaining_percent": 150.0,
+                "current_interval_status": 1,
+                "current_weekly_status": 1
+            }]
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 2);
+        assert_eq!(tiers[0].utilization, 105.0);
+        assert_eq!(tiers[1].utilization, -50.0);
+    }
+
+    #[test]
+    fn minimax_weekly_status_3_skips_weekly_tier() {
+        let body = json!({
+            "model_remains": [
+                {
+                    "model_name": "general",
+                    "end_time": 1_780_365_600_000_i64,
+                    "current_interval_remaining_percent": 99,
+                    "current_interval_status": 1,
+                    "weekly_end_time": 1_780_848_000_000_i64,
+                    "current_weekly_status": 3,
+                    "current_weekly_remaining_percent": 100
+                },
+                {
+                    "model_name": "video",
+                    "current_interval_remaining_percent": 100,
+                    "current_weekly_status": 3,
+                    "current_weekly_remaining_percent": 100
+                }
+            ],
+            "base_resp": { "status_code": 0, "status_msg": "success" }
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 1);
+        assert_eq!(tiers[0].name, "five_hour");
+        assert_eq!(tiers[0].utilization, 1.0);
+        assert!(tiers[0].resets_at.is_some());
+    }
+
+    #[test]
+    fn minimax_weekly_status_2_also_skips_weekly_tier() {
+        let body = json!({
+            "model_remains": [{
+                "model_name": "general",
+                "current_interval_remaining_percent": 80.0,
+                "current_weekly_remaining_percent": 50.0,
+                "current_weekly_status": 2
+            }]
+        });
+        let tiers = parse_minimax_tiers(&body);
+        assert_eq!(tiers.len(), 1);
+        assert_eq!(tiers[0].name, "five_hour");
+        assert_eq!(tiers[0].utilization, 20.0);
+    }
 
     #[test]
     fn zhipu_new_plan_two_tiers_sorted_by_reset_time() {

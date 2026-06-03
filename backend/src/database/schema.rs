@@ -1494,6 +1494,7 @@ impl Database {
                 "0",
             ),
             // MiniMax 系列
+            ("minimax-m3", "MiniMax M3", "0.60", "2.40", "0.12", "0"),
             ("minimax-m2.1", "MiniMax M2.1", "2.10", "8.40", "0.21", "0"),
             (
                 "minimax-m2.1-lightning",

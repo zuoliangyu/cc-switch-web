@@ -15,8 +15,8 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**25 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P2 全部资源化完成**（done/N/A/DEFER）。
+分支 `sync/upstream-0.9.0`，**27 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
+tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P2 全部资源化完成**；**P1b 已分诊**（864593bb 做，余 DEFER）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -35,10 +35,14 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 > 另：`universalProviderPresets` NEWAPI 块停在旧基线（Claude `claude-sonnet-4-20250514` + gemini-2.5-pro），
 > 仅 bump 了 codex→gpt-5.5；Claude/gemini 维持旧值未刷新（同前述 stale 块，需单独决定）。
 
+**P1b 结论**：`864593bb` 已做（dfbed44）；其余 3 个主体是 web 没有的 Claude Desktop **前端 form**，
+前端 N/A、后端耦合重设计（94cc3d10）或架构不映射（0960fd71 Tauri command/seed），均 DEFER（详见 P1b 节）。
+`05ba2801`（takeover 同步 services/provider）后端待单独评估。
+
 **下次从这里继续（按建议顺序）**：
-1. P1b：Claude Desktop 子系统 4 个（`0960fd71`/`05ba2801`/`864593bb`/`94cc3d10`）—— **进行中**
-2. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
-3. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+1. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
+2. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+3. P1b 剩余：`05ba2801` 后端评估；`0960fd71`/`94cc3d10` 待 Claude Desktop 前端 form 是否引入再定
 4. DEFER 回头处理：合作伙伴 promo preset 簇（5 个，缺内联 SVG 图标 + affiliate 决策）、
    f2935a3d（22 Codex preset，可净移植）、定价 seed 整体回填 + CNY/USD 币种统一
 
@@ -133,10 +137,23 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 - [ ] `5ef72a20` 多平台 CLI 发现 + gpt-5.5 模板兜底 (#3382) ⚠️CLI发现部分属Tauri
 
 ## P1b · Claude Desktop 子系统（web 0.7.0 已引入，相关）
-- [ ] `0960fd71` Claude Desktop 官方供应商添加报错 (#3405)
-- [ ] `05ba2801` proxy takeover 时同步 Claude Desktop profile (#3157)
-- [ ] `864593bb` 修 Claude Desktop Cowork egress profile (#3172)
-- [ ] `94cc3d10` Claude Desktop 模型映射对齐 Claude Code 三角色层级
+> **关键分诊（2026-06-03）**：web 的 Claude Desktop **前端是薄层**——只有
+> `useClaudeDesktopStatus.ts` + `lib/api/claudeDesktop.ts` + `types/claudeDesktop.ts`，
+> **没有 `ClaudeDesktopProviderForm.tsx`**（上游有，且是这几个 commit 的主体）。故 form 相关
+> 前端改动全部 N/A，只有干净的后端位适用。
+- [x] `864593bb` 修 Claude Desktop Cowork egress profile —— gateway profile 加
+  `coworkEgressAllowedHosts:["*"]`（纯后端，提交 dfbed44）
+- [DEFER/部分N/A] `0960fd71` 官方供应商添加报错 (#3405) —— 前端 fix N/A（web 无 provider form）；
+  web 后端 4 个 validate/apply 已有 `is_official_provider`（按固定 id `claude-desktop-official`）
+  短路防御；上游新增 Tauri command `ensure_claude_desktop_official_provider` + seed 不映射到
+  web（HTTP 架构 + 无 seed）。web 是否真有"随机 UUID 官方 provider"bug 需追 web HTTP 加供应商
+  流程（mutations.ts 用 generateUUID，但 claude-desktop 走独立 claudeDesktopApi）。暂判低优/DEFER。
+- [ ] `05ba2801` proxy takeover 时同步 Claude Desktop profile (#3157) —— 后端
+  `services/provider/mod.rs` +175，需对照 web services/provider 结构（Tauri 化程度待查）。**未做**
+- [DEFER/部分N/A] `94cc3d10` 模型映射对齐三角色 —— 前端 form 重写 +378 **N/A**（web 无 form）；
+  后端是**耦合重设计**（删 `NON_ANTHROPIC_ROUTE_MARKERS`、重写 `is_claude_safe_model_id`、
+  map_proxy_request_model 加 role-keyword 回落 + `legacy_raw_route_upstream_model`/`claude_role_keyword`），
+  与三角色 form 强绑定；孤立移植后端会改 web 现有 route 校验语义、有回归风险。DEFER 待 form 一并评估。
 
 ## P2 · preset / 默认模型 / 供应商 / quota（前端共享，低风险）
 > **P2 进行中**。已完成：`177eef66`（ZhiPu quota five_hour 归桶，commit fc82db9）。

@@ -16,7 +16,8 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
 分支 `sync/upstream-0.9.0`，**27 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P2 + P1b 全部资源化完成**（864593bb 做，余 N/A/DEFER）。
+tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P0/P1/P1b/P2/P2c 全部资源化完成**
+（实做项已提交，余 N/A/DEFER 均记录）。**仅剩 P3 收尾**（i18n 杂项 + 版本号 bump + 最终 Docker CI）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -40,8 +41,8 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 为 C-Phase0 脚手架未实现），上游这些 form/takeover 改动在 web 不可达。待 ClaudeDesktop 运行时+form 实现后再评估。
 
 **下次从这里继续（按建议顺序）**：
-1. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection）—— **进行中**
-2. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+1. ~~P2c 工具管理~~ —— **整簇判 N/A**（web 工具管理纯检测/Windows 禁用，无 install lifecycle，见 P2c 节）
+2. **P3 收尾：i18n 杂项（繁中 `5fd3ec0d` N/A）/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI** —— **进行中**
 3. DEFER 回头处理：合作伙伴 promo preset 簇（5 个，缺内联 SVG 图标 + affiliate 决策）、
    f2935a3d（22 Codex preset，可净移植）、定价 seed 整体回填 + CNY/USD 币种统一、
    Claude Desktop 子系统（运行时+form 实现后再做 0960fd71/94cc3d10/05ba2801）
@@ -198,25 +199,22 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 
 **✅ P2 全部资源化完成**（done / N/A / DEFER 均已记录）。
 
-## P2c · 工具管理子系统扩展（misc.rs + AboutSection，按序搬）
-- [ ] `e3df8658` About 页扩成工具管理面板
-- [ ] `820c4db1` CLI 版本探测扩到 PATH + Windows 包管理器 ✅Windows
-- [ ] `768c5f9f` 忠实探测版本，不再掩盖"装了但跑不起来"
-- [ ] `ea604a18` 工具卡片显示 installed but not runnable 态
-- [ ] `ce232a14` 诊断冲突安装 + 卸载提示
-- [ ] `ee2d634d` 托管 CLI 静默安装/更新生命周期（+ lib.rs 命令注册 + settings.ts）
-- [ ] `f8b4d67b` 按工具逐个批量更新 + 操作期锁定
-- [ ] `108dda17` 优先官方安装器，npm 兜底
-- [ ] `014c82d2` 升级锚定到实际安装位置（新增 ToolInstallRow.tsx / ToolUpgradeConfirmDialog.tsx）
-- [ ] `c6fd2415` 所有锚定升级分支强制绝对路径
-- [ ] `67185974` 锚定升级扩到 Windows 原生路径 ✅Windows
-- [ ] `3a77861d` 后端生成 source-aware 卸载命令提示
-- [ ] `7cad61be` 去掉 CLI 卸载命令提示，保留冲突诊断
-- [ ] `5de0a0dc` self-update 优先链 + hermes 改原生安装器
-- [ ] `88ba908b` 统一 unix 安装器走 mktemp+bash + 修 WSL 缺原生安装器
-- [ ] `d7a34f42` 版本检查处理 prerelease 工具
-- [ ] `ee69c836` 修 Windows version probe 乱码 + 误报（改 Cargo.toml 加依赖）✅Windows
-- [ ] `d7ede248` docs：工具管理 + Hermes 手册（可选）
+## P2c · 工具管理子系统扩展（misc.rs + AboutSection）—— **整簇判 N/A**
+> **判定 N/A（2026-06-03）**：web 的工具管理是**纯检测/展示、且 Windows 上完全禁用**
+> （`commands/misc.rs::get_tool_versions` 开头 `#[cfg(windows)] return Ok(Vec::new())`，注释：
+> "completely disable tool version detection to prevent accidentally launching apps via protocol
+> handlers"）。web **没有任何 install/uninstall/upgrade/self-update 函数**——它是服务器，不在
+> 本机管理 CLI 安装。P2c 整簇是**桌面端工具管理生命周期**（安装/更新/卸载 + 管理面板 +
+> Windows 包管理器/原生路径探测），与 web 架构不符：
+> - 管理面板 + 安装/更新/卸载 lifecycle（e3df8658 AboutSection 改 462 行管理面板、ee2d634d/
+>   f8b4d67b/108dda17/014c82d2/c6fd2415/67185974/3a77861d/7cad61be/5de0a0dc/88ba908b）→ web 无此功能，N/A。
+> - 版本探测精度类（820c4db1/768c5f9f/ea604a18/ce232a14/d7a34f42/ee69c836）→ 多为 Windows 向
+>   （web Windows 禁用检测）或与"installed but not runnable"管理卡片耦合（web 无管理卡片）；
+>   非 Windows 检测改动价值边际且与子系统模型耦合 → 随簇 N/A/DEFER。
+> 若将来 web 要做工具管理面板，再整体移植此簇。
+- [N/A] 全部 18 个 commit（e3df8658 / 820c4db1 / 768c5f9f / ea604a18 / ce232a14 / ee2d634d /
+  f8b4d67b / 108dda17 / 014c82d2 / c6fd2415 / 67185974 / 3a77861d / 7cad61be / 5de0a0dc /
+  88ba908b / d7a34f42 / ee69c836 / d7ede248）—— 见上方判定。
 
 ## P3 · i18n / UI 杂项（可选，低优先）
 - [ ] `5fd3ec0d` 繁体中文本地化 (#3093)

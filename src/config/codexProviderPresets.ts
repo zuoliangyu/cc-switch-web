@@ -90,7 +90,7 @@ export const codexProviderPresets: CodexProviderPreset[] = [
     config: generateThirdPartyConfig(
       "shengsuanyun",
       "https://router.shengsuanyun.com/api/v1",
-      "gpt-5.5",
+      "openai/gpt-5.5",
     ),
     category: "aggregator",
     isPartner: true,

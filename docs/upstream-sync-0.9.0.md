@@ -15,31 +15,30 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**21 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
+分支 `sync/upstream-0.9.0`，**23 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
 tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
-**P2 默认 Opus 4.8（`0877b9e3` + 折入 `83c3c3b4` 4.7 地基，提交 220c1f0）**。
+**P2 默认 Opus 4.8（`0877b9e3` + 折入 `83c3c3b4` 4.7 地基，220c1f0）**·
+**P2 全 preset 默认模型/定价刷新（`3a154207`，名 bump + 仅新增国际定价行，881cd68；`2b6ede14` N/A）**。
 
 **判定 N/A（理由见下文各处）**：model catalog 簇、custom history bucket 簇、
 OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink、个别 web 无的 preset 条目。
 
-> ⚠️ **3a154207 重大发现（待用户定夺）**：web 的 `schema.rs` 定价 seed 远落后于 preset —
-> 缺 `glm-5/5.1`、`deepseek-v4-flash/pro`、`grok-code-fast-1`、`gemini-3.x`、`mimo-v2-pro`、
-> `qwen3-coder-flash` 等全部行（preset 却已引用 glm-5/gpt-5.4/gemini-3 → 这些用量成本算 0）。
-> 故 3a154207 的"定价修正 + repair_current_model_pricing"针对的是 web 从未 seed 的行，
-> 忠实移植 = 回填 web 基线到 3a154207 之间整条 pricing-seed 历史（独立大工程，非单 commit）。
-> 默认模型名 bump（gpt-5.4→5.5 / gemini-3.x→3.5-flash / glm-5→5.1 / grok-code-fast-1→grok-build-0.1）
-> 与 Claude 4.8 同属 product-visible 默认变更。**下次须先与用户确认 3a154207 范围**（仅 preset 名
-> bump + 新增 pricing 行？还是连带回填基线？）。
-> 另：`universalProviderPresets` NEWAPI Claude 块停在 Claude 4.0 旧基线（claude-sonnet-4-20250514），
-> 未在 220c1f0 触碰，需单独决定是否刷新。
+> 📌 **定价 seed 待回填（独立工作，已知 gap）**：3a154207 采"名 bump + 仅新增国际行"策略落地。
+> 遗留：① web `schema.rs` 国产模型段为 **CNY 计价**（上游 USD），故跳过 doubao-seed-2.0-code /
+> mimo-v2.5(/pro) / qwen3-coder-480b 等国产新增行；② 跳过对 web 从未 seed 行的定价修正
+> （deepseek-v4-flash/pro、glm-5/5.1、grok）与 repair_current_model_pricing；③ 结果：preset 现默认
+> glm-5.1 / gemini 折叠等，但 schema 无对应行 → 这些模型用量成本暂算 0（既存 gap，待整体回填时连同
+> CNY/USD 币种统一一并处理）。
+> 另：`universalProviderPresets` NEWAPI 块停在旧基线（Claude `claude-sonnet-4-20250514` + gemini-2.5-pro），
+> 仅 bump 了 codex→gpt-5.5；Claude/gemini 维持旧值未刷新（同前述 stale 块，需单独决定）。
 
 **下次从这里继续（按建议顺序）**：
-1. P2 剩余：**先决 3a154207 范围（见上 ⚠️）**；`2b6ede14`(Codex 迁移测试期望，依赖 3a154207 的 gpt-5.5)、
-   Shengsuanyun(`4bb4e994`/`3d6fb894`)、合作伙伴 preset（ZenMux `c1dff066` 含后端 +
-   `e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3` + `f2935a3d` 22 个 Codex preset，需剥离 web 不支持的 modelCatalog）
+1. P2 剩余（additive 新供应商）：Shengsuanyun(`4bb4e994`/`3d6fb894`)、合作伙伴 preset
+   （ZenMux `c1dff066` 含后端余额查询 + `e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3` +
+   `f2935a3d` 22 个 Codex preset，需剥离 web 不支持的 modelCatalog 物理文件特性）
 2. P1b：Claude Desktop 子系统 4 个（`0960fd71`/`05ba2801`/`864593bb`/`94cc3d10`）
 3. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
 4. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
@@ -159,7 +158,7 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 - [ ] `8302f1e3` APIKEY.FUN preset
 - [ ] `f2935a3d` 22 个第三方 Codex preset 接 Chat Completions 路由
 - [x] `0877b9e3` 默认 Claude Opus 升 4.8（+ 折入 `83c3c3b4` 4.7 地基；提交 220c1f0）
-- [ ] `3a154207` 全 preset 默认模型/定价更新 + `2b6ede14` 迁移测试期望
+- [x] `3a154207` 全 preset 默认模型/定价更新（名 bump + 仅新增国际定价行；881cd68）+ `2b6ede14` 迁移测试期望（web 无该测试文件，N/A）
 - [ ] `4bb4e994` + `3d6fb894` Shengsuanyun 前缀模型 ID + GPT 5.5
 - [ ] `058c9fb8` OpenCode Go preset 去模型后缀
 - [ ] `74104946` 移除 Codex 的 Kimi For Coding preset

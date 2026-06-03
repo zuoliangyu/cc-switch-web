@@ -105,6 +105,17 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [ ] `94cc3d10` Claude Desktop 模型映射对齐 Claude Code 三角色层级
 
 ## P2 · preset / 默认模型 / 供应商 / quota（前端共享，低风险）
+> **P2 进行中**。已完成：`177eef66`（ZhiPu quota five_hour 归桶，commit fc82db9）。
+> 关键发现：web 的 preset 清单与上游分叉，且 web 的 Codex preset 不用 `modelCatalog`
+> 字段，故针对具体 preset 条目的删/改 commit 多为 N/A：
+> - [N/A] `74104946` 移除 Codex "Kimi For Coding" —— web 无该条目（且其依赖 modelCatalog）
+> - [N/A] `058c9fb8` 重命名 "OpenCode Go" Claude preset —— web 无该条目
+> 待做（后端真实修复，需逐个适配 web 分叉版本）：`43ae1e5f`(MiniMax 余额新接口,+280)、
+> `e9d84af5`(含 Codex 归档会话)、`8e21b061`(usage 脚本摘要)、`6b0dd3c4`(omo 推荐模型)、
+> `e605eba2`(deeplink 导入保留 env)；默认模型/定价：`0877b9e3`(Opus 4.8,含 Claude Desktop)、
+> `3a154207`(+ `2b6ede14` 定价 schema)、`4bb4e994`+`3d6fb894`(Shengsuanyun)；
+> 新增供应商 preset（additive，但需剥离 web 不支持的 modelCatalog）：`c1dff066`(ZenMux,
+> 还含后端余额查询)、`e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3`(合作伙伴)、`f2935a3d`(22 个 Codex Chat preset)。
 - [ ] `c1dff066` ZenMux Token Plan 供应商 (#2709)
 - [ ] `e71b9091` SudoCode preset
 - [ ] `32b30e43` AtlasCloud preset

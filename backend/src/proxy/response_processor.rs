@@ -739,6 +739,9 @@ mod tests {
             gemini_shadow: Arc::new(
                 crate::proxy::providers::gemini_shadow::GeminiShadowStore::default(),
             ),
+            codex_chat_history: Arc::new(
+                crate::proxy::providers::codex_chat_history::CodexChatHistoryStore::default(),
+            ),
         }
     }
 

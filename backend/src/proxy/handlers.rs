@@ -14,8 +14,9 @@ use super::{
     },
     handler_context::RequestContext,
     providers::{
-        get_adapter, get_claude_api_format, streaming::create_anthropic_sse_stream,
-        streaming_codex_chat::create_responses_sse_stream_from_chat,
+        codex_chat_history::record_responses_sse_stream, get_adapter, get_claude_api_format,
+        streaming::create_anthropic_sse_stream,
+        streaming_codex_chat::create_responses_sse_stream_from_chat_with_context,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
         streaming_responses::create_anthropic_sse_stream_from_responses, transform,
         transform_codex_chat, transform_gemini, transform_responses,
@@ -524,6 +525,9 @@ pub async fn handle_responses(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // 在 body 被 forward 移动前，从原始 Responses 请求抓取工具上下文（自定义工具名 /
+    // namespace 映射），供 Chat→Responses 响应转换还原（跟随上游 2a4651a2）。
+    let codex_tool_context = transform_codex_chat::build_codex_tool_context_from_request(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -553,7 +557,14 @@ pub async fn handle_responses(
     // 跟随上游 cc-switch 1c82b8a3：如果该 Codex provider 的真实上游走 OpenAI
     // Chat Completions，把上游回来的 Chat 响应/SSE 翻译回 Responses 格式再返给客户端。
     if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
-        return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
+        return handle_codex_chat_to_responses_transform(
+            response,
+            &ctx,
+            &state,
+            is_stream,
+            codex_tool_context,
+        )
+        .await;
     }
 
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
@@ -584,6 +595,7 @@ pub async fn handle_responses_compact(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let codex_tool_context = transform_codex_chat::build_codex_tool_context_from_request(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -611,7 +623,14 @@ pub async fn handle_responses_compact(
     let response = result.response;
 
     if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
-        return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
+        return handle_codex_chat_to_responses_transform(
+            response,
+            &ctx,
+            &state,
+            is_stream,
+            codex_tool_context,
+        )
+        .await;
     }
 
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
@@ -625,30 +644,77 @@ pub async fn handle_responses_compact(
 // 时把请求 body 从 Responses 转成 Chat、把 endpoint 改写到 /chat/completions；
 // 这里负责把上游回来的 Chat 响应（JSON 或 SSE）再翻译成 Responses 格式给客户端。
 //
-// 简化点（vs 上游 src-tauri）：
-// - 暂不接入 usage 收集（先走透传），待后续在 SseUsageCollector 上补 codex 流
-//   事件解析器 + 非流式 TokenUsage 记录
-// - 没有 ActiveConnectionGuard 概念（cc-switch-web 当前 handler 不传 guard）
+// 与上游 src-tauri 的差异：cc-switch-web 没有 ActiveConnectionGuard 概念（不传 guard）；
+// SseUsageCollector 是 2 参签名，上游的 codex_stream_usage_event_filter 仅做事件预筛，
+// 这里 passthrough 本就只收集可解析的 data JSON，再用 from_codex_stream_events_auto 解析，
+// 功能等价。tool_context 来自原始 Responses 请求，用于响应转换还原自定义工具名 / namespace。
 // ---------------------------------------------------------------------------
 async fn handle_codex_chat_to_responses_transform(
     response: super::hyper_client::ProxyResponse,
     ctx: &RequestContext,
     state: &ProxyState,
     is_stream: bool,
+    tool_context: transform_codex_chat::CodexToolContext,
 ) -> Result<axum::response::Response, ProxyError> {
     let status = response.status();
 
-    // 失败响应原样透传（让客户端看到真实上游错误）
+    // 上游 Chat 错误体形状与 Responses 不一致（如 MiniMax 的 base_resp、自定义 detail）；
+    // 直接透传会让 Codex 客户端无法识别错误码。统一转换为 Responses 风格错误体，
+    // 保留原始 HTTP 状态码（跟随上游 ead9e22b）。
     if !status.is_success() {
-        return process_response(response, ctx, state, &CODEX_PARSER_CONFIG).await;
+        return handle_codex_chat_error_response(response, ctx, status).await;
     }
 
     if is_stream || response.is_sse() {
         let stream = response.bytes_stream();
-        let sse_stream = create_responses_sse_stream_from_chat(stream);
+        let sse_stream = create_responses_sse_stream_from_chat_with_context(stream, tool_context);
+        // 记录翻译后的 Responses SSE 历史，稳定后续请求的 cache/session 身份（跟随上游 22fbe6f1）
+        let sse_stream = record_responses_sse_stream(sse_stream, state.codex_chat_history.clone());
 
-        // TODO: 待补 Codex SSE usage 收集（需要在 SseUsageCollector 上加流事件过滤路径）
-        let usage_collector: Option<SseUsageCollector> = None;
+        // Codex SSE usage 收集（补 0.8.0 遗留 TODO，跟随上游 5048ed63）。
+        let logging_enabled = state
+            .config
+            .try_read()
+            .map(|c| c.enable_logging)
+            .unwrap_or(true);
+        let usage_collector = if logging_enabled {
+            let state = state.clone();
+            let provider_id = ctx.provider.id.clone();
+            let request_model = ctx.request_model.clone();
+            let start_time = ctx.start_time;
+            let status_code = status.as_u16();
+            Some(SseUsageCollector::new(
+                start_time,
+                move |events, first_token_ms| {
+                    let usage =
+                        TokenUsage::from_codex_stream_events_auto(&events).unwrap_or_default();
+                    let model = usage.model.clone().unwrap_or_else(|| request_model.clone());
+                    let latency_ms = start_time.elapsed().as_millis() as u64;
+
+                    let state = state.clone();
+                    let provider_id = provider_id.clone();
+                    let request_model = request_model.clone();
+
+                    tokio::spawn(async move {
+                        log_usage(
+                            &state,
+                            &provider_id,
+                            "codex",
+                            &model,
+                            &request_model,
+                            usage,
+                            latency_ms,
+                            first_token_ms,
+                            true,
+                            status_code,
+                        )
+                        .await;
+                    });
+                },
+            ))
+        } else {
+            None
+        };
 
         let logged_stream = create_logged_passthrough_stream(
             sse_stream,
@@ -671,7 +737,7 @@ async fn handle_codex_chat_to_responses_transform(
         return Ok((headers, body).into_response());
     }
 
-    // 非流式：读 body → 解析 Chat JSON → 转 Responses JSON → 返回
+    // 非流式：读 body → 解析 Chat JSON → 转 Responses JSON（带工具上下文）→ 记录历史 → 记 usage
     let body_timeout =
         if ctx.app_config.auto_failover_enabled && ctx.app_config.non_streaming_timeout > 0 {
             std::time::Duration::from_secs(ctx.app_config.non_streaming_timeout as u64)
@@ -685,11 +751,53 @@ async fn handle_codex_chat_to_responses_transform(
         log::error!("[Codex] 解析 Chat 上游响应失败: {e}, body: {body_str}");
         ProxyError::TransformError(format!("Failed to parse upstream chat response: {e}"))
     })?;
-    let responses_response =
-        transform_codex_chat::chat_completion_to_response(chat_response).map_err(|e| {
-            log::error!("[Codex] Chat → Responses 响应转换失败: {e}");
-            e
-        })?;
+    let responses_response = transform_codex_chat::chat_completion_to_response_with_context(
+        chat_response,
+        &tool_context,
+    )
+    .map_err(|e| {
+        log::error!("[Codex] Chat → Responses 响应转换失败: {e}");
+        e
+    })?;
+    state
+        .codex_chat_history
+        .record_response(&responses_response)
+        .await;
+
+    let logging_enabled = state
+        .config
+        .try_read()
+        .map(|c| c.enable_logging)
+        .unwrap_or(true);
+    if logging_enabled {
+        if let Some(usage) = TokenUsage::from_codex_response_auto(&responses_response) {
+            let model = responses_response
+                .get("model")
+                .and_then(|m| m.as_str())
+                .unwrap_or(&ctx.request_model)
+                .to_string();
+            let request_model = ctx.request_model.clone();
+            let latency_ms = ctx.start_time.elapsed().as_millis() as u64;
+            let status_code = status.as_u16();
+            let state = state.clone();
+            let provider_id = ctx.provider.id.clone();
+            tokio::spawn(async move {
+                log_usage(
+                    &state,
+                    &provider_id,
+                    "codex",
+                    &model,
+                    &request_model,
+                    usage,
+                    latency_ms,
+                    None,
+                    false,
+                    status_code,
+                )
+                .await;
+            });
+        }
+    }
 
     strip_entity_headers_for_rebuilt_body(&mut response_headers);
 
@@ -710,6 +818,72 @@ async fn handle_codex_chat_to_responses_transform(
             log::error!("[Codex] 构建 Responses 响应失败: {e}");
             ProxyError::Internal(format!("Failed to build response: {e}"))
         })
+}
+
+/// 把上游 Chat Completions 的错误响应转换为 Responses API 错误形状（跟随上游 ead9e22b）。
+///
+/// 正常响应已被改写成 Responses 形式；错误响应若仍保留 Chat 错误体（如 MiniMax 的
+/// `{"base_resp": {"status_code": 2013}}`），Codex 客户端的错误处理就无法对齐字段。
+/// 这里读取上游 body、规整成 `{"error": {message, type, code, param}}` 并保留原始状态码。
+async fn handle_codex_chat_error_response(
+    response: super::hyper_client::ProxyResponse,
+    ctx: &RequestContext,
+    status: axum::http::StatusCode,
+) -> Result<axum::response::Response, ProxyError> {
+    let body_timeout =
+        if ctx.app_config.auto_failover_enabled && ctx.app_config.non_streaming_timeout > 0 {
+            std::time::Duration::from_secs(ctx.app_config.non_streaming_timeout as u64)
+        } else {
+            std::time::Duration::ZERO
+        };
+    let (mut response_headers, _status, body_bytes) =
+        read_decoded_body(response, ctx.tag, body_timeout).await?;
+
+    // 非 JSON 上游错误体（Cloudflare HTML、纯文本 "Unauthorized" 等）若丢成 None，
+    // 客户端就看不到原始诊断信息；包成 Value::String 走转换函数的字符串分支。
+    let parsed_value: Value = match serde_json::from_slice::<Value>(&body_bytes) {
+        Ok(value) => value,
+        Err(_) => {
+            const MAX_RAW_ERROR_BYTES: usize = 1024;
+            let lossy = String::from_utf8_lossy(&body_bytes);
+            let truncated = if lossy.len() > MAX_RAW_ERROR_BYTES {
+                let mut end = MAX_RAW_ERROR_BYTES;
+                while end > 0 && !lossy.is_char_boundary(end) {
+                    end -= 1;
+                }
+                format!("{}…(truncated)", &lossy[..end])
+            } else {
+                lossy.into_owned()
+            };
+            log::warn!("[Codex] Chat 错误响应不是合法 JSON，按文本透传: {truncated}");
+            Value::String(truncated)
+        }
+    };
+
+    let responses_error = transform_codex_chat::chat_error_to_response_error(Some(&parsed_value));
+
+    strip_entity_headers_for_rebuilt_body(&mut response_headers);
+    // Builder::header 是 append 语义；不先 remove 会和上游 Content-Type 双发。
+    response_headers.remove(axum::http::header::CONTENT_TYPE);
+
+    let mut builder = axum::response::Response::builder().status(status);
+    for (key, value) in response_headers.iter() {
+        builder = builder.header(key, value);
+    }
+    builder = builder.header(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+
+    let body = serde_json::to_vec(&responses_error).map_err(|e| {
+        log::error!("[Codex] 序列化 Responses 错误体失败: {e}");
+        ProxyError::TransformError(format!("Failed to serialize responses error: {e}"))
+    })?;
+
+    builder.body(axum::body::Body::from(body)).map_err(|e| {
+        log::error!("[Codex] 构建 Responses 错误响应失败: {e}");
+        ProxyError::Internal(format!("Failed to build response: {e}"))
+    })
 }
 
 // ============================================================================

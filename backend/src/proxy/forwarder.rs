@@ -10,8 +10,8 @@ use super::{
     log_codes::fwd as log_fwd,
     provider_router::ProviderRouter,
     providers::{
-        gemini_shadow::GeminiShadowStore, get_adapter, AuthInfo, AuthStrategy, ProviderAdapter,
-        ProviderType,
+        codex_chat_history::CodexChatHistoryStore, gemini_shadow::GeminiShadowStore, get_adapter,
+        AuthInfo, AuthStrategy, ProviderAdapter, ProviderType,
     },
     thinking_budget_rectifier::{rectify_thinking_budget, should_rectify_thinking_budget},
     thinking_rectifier::{
@@ -50,6 +50,9 @@ pub struct RequestForwarder {
     status: Arc<RwLock<ProxyStatus>>,
     current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
     gemini_shadow: Arc<GeminiShadowStore>,
+    /// Codex Chat→Responses 历史缓存，请求出站前回放缓存的 function call / reasoning，
+    /// 稳定 cache/session 身份（跟随上游 22fbe6f1）
+    codex_chat_history: Arc<CodexChatHistoryStore>,
     /// 故障转移切换管理器
     failover_manager: Arc<FailoverSwitchManager>,
     /// Copilot 鉴权状态（显式注入，避免依赖旧运行时容器状态）
@@ -76,6 +79,7 @@ impl RequestForwarder {
         status: Arc<RwLock<ProxyStatus>>,
         current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
         gemini_shadow: Arc<GeminiShadowStore>,
+        codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
@@ -91,6 +95,7 @@ impl RequestForwarder {
             status,
             current_providers,
             gemini_shadow,
+            codex_chat_history,
             failover_manager,
             copilot_auth_state,
             codex_oauth_state,
@@ -855,6 +860,17 @@ impl RequestForwarder {
 
         // 转换请求体（如果需要）
         let request_body = if codex_responses_to_chat {
+            let mut mapped_body = mapped_body;
+            // 出站前回放缓存的 function call / reasoning，稳定上游 Chat 的 cache 身份
+            // （跟随上游 22fbe6f1）。reasoning 检测 / 上游模型保留（44d9aabb / 2a4651a2）
+            // 随 P1 catalog helpers 一并补齐。
+            let restored = self
+                .codex_chat_history
+                .enrich_request(&mut mapped_body)
+                .await;
+            if restored > 0 {
+                log::debug!("[Codex] 回放了 {restored} 个缓存的 function call 到 Chat 上游请求");
+            }
             super::providers::transform_codex_chat::responses_to_chat_completions(mapped_body)?
         } else if needs_transform {
             if adapter.name() == "Claude" {

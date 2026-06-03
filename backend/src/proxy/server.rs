@@ -10,7 +10,9 @@
 
 use super::{
     failover_switch::FailoverSwitchManager, handlers, log_codes::srv as log_srv,
-    provider_router::ProviderRouter, providers::gemini_shadow::GeminiShadowStore, types::*,
+    provider_router::ProviderRouter,
+    providers::{codex_chat_history::CodexChatHistoryStore, gemini_shadow::GeminiShadowStore},
+    types::*,
     ProxyError,
 };
 use crate::database::Database;
@@ -45,6 +47,8 @@ pub struct ProxyState {
     pub codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
     /// Gemini Native shadow state，用于 thoughtSignature / tool call 回放
     pub gemini_shadow: Arc<GeminiShadowStore>,
+    /// Codex Chat→Responses 历史缓存，稳定 cache/session 身份（跟随上游 22fbe6f1）
+    pub codex_chat_history: Arc<CodexChatHistoryStore>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
 }
@@ -80,6 +84,7 @@ impl ProxyServer {
             copilot_auth_state,
             codex_oauth_state,
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
+            codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             failover_manager,
         };
 

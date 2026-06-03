@@ -211,6 +211,7 @@ impl RequestContext {
             state.status.clone(),
             state.current_providers.clone(),
             state.gemini_shadow.clone(),
+            state.codex_chat_history.clone(),
             state.failover_manager.clone(),
             state.copilot_auth_state.clone(),
             state.codex_oauth_state.clone(),

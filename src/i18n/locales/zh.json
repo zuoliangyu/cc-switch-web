@@ -175,6 +175,7 @@
     "providerSaved": "供应商配置已保存",
     "providerDeleted": "供应商删除成功",
     "switchSuccess": "切换成功！",
+    "codexRestartRequired": "切换成功，请重启客户端以生效",
     "addToConfigSuccess": "已添加到配置",
     "removeFromConfigSuccess": "已从配置移除",
     "duplicateLiveIdsLoadFailed": "读取配置中的供应商标识失败，请先修复配置后再试",

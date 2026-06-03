@@ -175,6 +175,7 @@
     "providerSaved": "プロバイダー設定を保存しました",
     "providerDeleted": "プロバイダーを削除しました",
     "switchSuccess": "切り替え成功！",
+    "codexRestartRequired": "切り替えました。反映するにはクライアントを再起動してください",
     "addToConfigSuccess": "設定に追加しました",
     "removeFromConfigSuccess": "設定から削除しました",
     "duplicateLiveIdsLoadFailed": "設定内のプロバイダー識別子を読み込めませんでした。先に設定を修正してから再試行してください。",

@@ -175,6 +175,7 @@
     "providerSaved": "Provider configuration saved",
     "providerDeleted": "Provider deleted successfully",
     "switchSuccess": "Switch successful!",
+    "codexRestartRequired": "Switched successfully. Restart the client to apply changes.",
     "addToConfigSuccess": "Added to config",
     "removeFromConfigSuccess": "Removed from config",
     "duplicateLiveIdsLoadFailed": "Failed to load provider keys from app config. Fix the config first and try again.",

@@ -51,18 +51,25 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 > （共享 temp 目录竞态，与本次改动无关）；`--test-threads=1` 全绿 868 passed。
 
 ## P1 · Codex OAuth 接管 / model catalog / provider 行为
-- [ ] `95f2dd41` 第三方切换时保留 OAuth 登录态
-- [ ] `e25682d3` 托管账号 takeover model 字段取自目标 provider
-- [ ] `60a9b330` 重构 Codex live-write 路由 + 覆盖默认 auth 覆写
-- [ ] `c9cadd6e` 修 preserve 模式 takeover 清空 OAuth
-- [ ] `ce993bae` 修 provider 误分类致 takeover 清空 OAuth
-- [ ] `a04e72a2` 修编辑对话框遮蔽 live OAuth（前端）
-- [ ] `2a131a55` 加固 takeover 所有权信号 + 串行化 switch/takeover
-- [ ] `2683af57` + `3f59ab37` Codex auth preservation 设置（默认 opt-in 关）
-- [ ] `41433cfa` provider 切换后 Codex 重启提示
-- [ ] `59683363` Chat 第三方代理下保留 Codex 工具插件
-- [ ] `d66030be` Codex 自定义工具 native input events 流式 ⚠️评估桌面特有
-- [ ] `aeaa016c` / `b7499fc8` takeover 提示文案/label 刷新（前端）
+> **OAuth 接管簇三类分诊（2026-06-03）**：① 已被前期工作覆盖；② 前端可做（web 有 CodexConfigEditor）；
+> ③ 后端 feature-port / 重度分叉，需专注会话 + 重点验证（credential 敏感）。
+
+**① 已覆盖（无需再做）**
+- [x] `59683363` Chat 第三方代理下保留 Codex 工具插件 —— streaming/common 随整体替换=上游 main，handlers.rs 的 tool_context 接线已在 stage1 做
+- [x] `d66030be` Codex 自定义工具 native input events —— streaming/transform_codex_chat 与上游 main 0 分叉，已含
+- [x] `41433cfa` provider 切换后 Codex 重启提示（useProviderActions + en/ja/zh，web 无 zh-TW）
+
+**② 前端可做（web 有 CodexConfigEditor.tsx）—— 待做**
+- [ ] `a04e72a2` 修编辑对话框遮蔽 live OAuth（App.tsx + EditProviderDialog + CodexConfigEditor）
+- [ ] `aeaa016c` takeover 提示文案对齐（CodexConfigEditor + i18n）
+
+**③ 后端 —— 待专注会话**
+- [ ] `e25682d3` 托管账号 takeover model 字段取自目标 provider —— Claude 接管细化，但 web 缺 `build_claude_takeover_model_fields` 锚点，需先对齐 web 的接管模型字段结构
+- [ ] `2683af57` + `3f59ab37` + `c9cadd6e` + `ce993bae` Codex auth preservation 设置及其修复 —— **web 无该设置（settings.rs 无字段、前端无 CodexAuthSettings.tsx）= feature-port**
+- [ ] `95f2dd41` 第三方切换保留 OAuth 登录态 —— codex_config + commands/config + deeplink(Tauri)
+- [ ] `60a9b330` 重构 Codex live-write 路由 + 默认 auth 覆写
+- [ ] `2a131a55` 加固 takeover 所有权信号 + 串行化（services/provider/live.rs + proxy.rs）
+- [ ] `b7499fc8` provider label 热切换刷新（services/provider/mod.rs + proxy.rs）
 - [N/A] **model catalog 簇全部跳过** `8bf16602` `0fbba426` `d5328e52` `ad8bdf16` `791ced00` `9b957820` `7811383b`
   —— web 从未实现 Codex `model_catalog_json` 物理文件特性（codex_config 无
   `get_codex_model_catalog_path` / `CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME`），

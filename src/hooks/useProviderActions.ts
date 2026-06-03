@@ -258,12 +258,17 @@ export function useProviderActions(
           // OpenCode/OpenClaw: show "added to config" message instead of "switched"
           const isMultiProviderApp =
             activeApp === "opencode" || activeApp === "openclaw";
-          const messageKey = isMultiProviderApp
+          let messageKey = isMultiProviderApp
             ? "notifications.addToConfigSuccess"
             : "notifications.switchSuccess";
-          const defaultMessage = isMultiProviderApp
+          let defaultMessage = isMultiProviderApp
             ? "已添加到配置"
             : "切换成功！";
+          // Codex 切换后需重启客户端才生效（跟随上游 41433cfa）
+          if (activeApp === "codex") {
+            messageKey = "notifications.codexRestartRequired";
+            defaultMessage = "切换成功，请重启客户端以生效";
+          }
 
           toast.success(t(messageKey, { defaultValue: defaultMessage }), {
             closeButton: true,

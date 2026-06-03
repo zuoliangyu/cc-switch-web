@@ -1772,6 +1772,8 @@ export function ProviderForm({
             <CodexConfigEditor
               authValue={codexAuth}
               configValue={codexConfig}
+              providerName={form.watch("name")}
+              showRemoteCompaction={category !== "official"}
               onAuthChange={setCodexAuth}
               onConfigChange={handleCodexConfigChange}
               useCommonConfig={useCodexCommonConfigFlag}

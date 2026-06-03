@@ -4,6 +4,10 @@ import {
   extractCodexModelName,
   setCodexBaseUrl,
   setCodexModelName,
+  isCodexGoalModeEnabled,
+  setCodexGoalMode,
+  isCodexRemoteCompactionEnabled,
+  setCodexRemoteCompaction,
 } from "@/utils/providerConfigUtils";
 
 describe("Codex TOML utils", () => {
@@ -147,5 +151,65 @@ describe("Codex TOML utils", () => {
 
     expect(extractCodexBaseUrl(input)).toBe("https://api.example.com/v1");
     expect(extractCodexModelName(input)).toBe("gpt-5");
+  });
+});
+
+describe("Codex goal mode toggle (上游 3c3d4174)", () => {
+  it("adds [features] goals=true when enabled and removes it when disabled", () => {
+    const base = 'model_provider = "custom"\nmodel = "gpt-5.5"\n';
+    expect(isCodexGoalModeEnabled(base)).toBe(false);
+
+    const on = setCodexGoalMode(base, true);
+    expect(isCodexGoalModeEnabled(on)).toBe(true);
+    expect(on).toMatch(/\[features\]/);
+    expect(on).toMatch(/goals\s*=\s*true/);
+
+    const off = setCodexGoalMode(on, false);
+    expect(isCodexGoalModeEnabled(off)).toBe(false);
+    // 空的 [features] 段应被清理
+    expect(off).not.toMatch(/\[features\]/);
+    // 其余配置保留
+    expect(off).toMatch(/model_provider = "custom"/);
+  });
+
+  it("flips an existing goals=false to true in place", () => {
+    const input = 'model = "gpt-5.5"\n\n[features]\ngoals = false\n';
+    expect(isCodexGoalModeEnabled(input)).toBe(false);
+    const on = setCodexGoalMode(input, true);
+    expect(isCodexGoalModeEnabled(on)).toBe(true);
+  });
+});
+
+describe("Codex remote compaction toggle (上游 af60c7ed)", () => {
+  it("writes custom provider name to OpenAI when enabled and restores on disable", () => {
+    const input = [
+      'model_provider = "deepseek"',
+      'model = "deepseek-chat"',
+      "",
+      "[model_providers.deepseek]",
+      'name = "deepseek"',
+      'base_url = "https://api.deepseek.com/v1"',
+      "",
+    ].join("\n");
+
+    expect(isCodexRemoteCompactionEnabled(input)).toBe(false);
+
+    const on = setCodexRemoteCompaction(input, true);
+    expect(isCodexRemoteCompactionEnabled(on)).toBe(true);
+    expect(on).toMatch(/\[model_providers\.deepseek\][\s\S]*name = "OpenAI"/);
+
+    const off = setCodexRemoteCompaction(on, false, "deepseek");
+    expect(isCodexRemoteCompactionEnabled(off)).toBe(false);
+    expect(off).toMatch(/name = "deepseek"/);
+  });
+
+  it("is a no-op for reserved (official) provider ids like openai", () => {
+    const input =
+      'model_provider = "openai"\nmodel = "gpt-5-codex"\n\n[model_providers.openai]\nname = "openai"\n';
+    expect(isCodexRemoteCompactionEnabled(input)).toBe(false);
+    // openai 是保留 id → 无自定义段，setter 不写入 OpenAI
+    const result = setCodexRemoteCompaction(input, true);
+    expect(isCodexRemoteCompactionEnabled(result)).toBe(false);
+    expect(result).toMatch(/name = "openai"/);
   });
 });

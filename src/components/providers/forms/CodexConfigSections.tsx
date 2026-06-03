@@ -11,6 +11,10 @@ import {
   extractCodexTopLevelInt,
   setCodexTopLevelInt,
   removeCodexTopLevelField,
+  isCodexGoalModeEnabled,
+  setCodexGoalMode,
+  isCodexRemoteCompactionEnabled,
+  setCodexRemoteCompaction,
 } from "@/utils/providerConfigUtils";
 
 interface CodexAuthSectionProps {
@@ -95,6 +99,8 @@ export const CodexAuthSection: React.FC<CodexAuthSectionProps> = ({
 interface CodexConfigSectionProps {
   value: string;
   onChange: (value: string) => void;
+  providerName?: string;
+  showRemoteCompaction?: boolean;
   useCommonConfig: boolean;
   onCommonConfigToggle: (checked: boolean) => void;
   onEditCommonConfig: () => void;
@@ -109,6 +115,8 @@ interface CodexConfigSectionProps {
 export const CodexConfigSection: React.FC<CodexConfigSectionProps> = ({
   value,
   onChange,
+  providerName,
+  showRemoteCompaction = true,
   useCommonConfig,
   onCommonConfigToggle,
   onEditCommonConfig,
@@ -167,6 +175,36 @@ export const CodexConfigSection: React.FC<CodexConfigSectionProps> = ({
       compactLimit: compactLimit ?? 900000,
     };
   }, [localValue]);
+
+  const goalModeEnabled = useMemo(
+    () => isCodexGoalModeEnabled(localValue),
+    [localValue],
+  );
+
+  const remoteCompactionEnabled = useMemo(
+    () => isCodexRemoteCompactionEnabled(localValue),
+    [localValue],
+  );
+
+  const handleGoalModeToggle = useCallback(
+    (checked: boolean) => {
+      handleLocalChange(setCodexGoalMode(localValueRef.current || "", checked));
+    },
+    [handleLocalChange],
+  );
+
+  const handleRemoteCompactionToggle = useCallback(
+    (checked: boolean) => {
+      handleLocalChange(
+        setCodexRemoteCompaction(
+          localValueRef.current || "",
+          checked,
+          providerName,
+        ),
+      );
+    },
+    [handleLocalChange, providerName],
+  );
 
   // Debounce timer for compact limit input
   const compactTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -258,6 +296,29 @@ export const CodexConfigSection: React.FC<CodexConfigSectionProps> = ({
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={goalModeEnabled}
+            onChange={(e) => handleGoalModeToggle(e.target.checked)}
+            className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
+          />
+          <span>{t("codexConfig.enableGoalMode")}</span>
+        </label>
+        {showRemoteCompaction && (
+          <label
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer"
+            title={t("codexConfig.remoteCompactionHint")}
+          >
+            <input
+              type="checkbox"
+              checked={remoteCompactionEnabled}
+              onChange={(e) => handleRemoteCompactionToggle(e.target.checked)}
+              className="w-4 h-4 text-primary bg-white dark:bg-gray-800 border-border-default rounded focus:ring-ring focus:ring-2"
+            />
+            <span>{t("codexConfig.enableRemoteCompaction")}</span>
+          </label>
+        )}
         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
           <input
             type="checkbox"

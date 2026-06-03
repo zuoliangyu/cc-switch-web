@@ -51,6 +51,11 @@ web 分叉。逐 commit 移植/判定（done / N/A / DEFER）记录见 `docs/ups
 
 - AppSwitcher 展开标签 `max-w` 80→120px 防裁切（`62928c62`）。
 
+### 内部 · 构建清理
+
+- 静音 Claude Desktop 未接线脚手架（apply/restore/3P profile 写盘链等）的 29 个 dead_code 警告，
+  `cargo check --locked --bin` 警告归零；纯 lint 抑制、无行为变更，待 runtime 接线后移除。
+
 ### 范围说明（N/A / DEFER）
 
 - **N/A**：deeplink 簇、繁体中文 zh-TW、工具管理子系统（~18 commit，web 工具管理为纯检测/Windows 禁用、

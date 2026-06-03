@@ -15,9 +15,9 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**27 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P0/P1/P1b/P2/P2c 全部资源化完成**
-（实做项已提交，余 N/A/DEFER 均记录）。**仅剩 P3 收尾**（i18n 杂项 + 版本号 bump + 最终 Docker CI）。
+分支 `sync/upstream-0.9.0`，**33 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
+tsc 0 错误。**P0/P1/P1b/P2/P2c/P3 全部资源化完成**，**已 bump 0.9.0 + 写 CHANGELOG + Docker CI 通过**
+（实做项已提交，余 N/A/DEFER 均记录）。**唯一剩余：push（待用户手动确认）**。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -225,9 +225,9 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 - [N/A] `48473a5c` 德语 README / sponsor 类 `910ca3b4` `0e6f2b39` `85552cf4` `d905ed16` —— docs/README，SKIP
 
 ## P3b · 版本号 bump + CHANGELOG + 最终 Docker CI（收尾）
-- [ ] 版本号 bump（`package.json` + `backend/Cargo.toml` + `CHANGELOG.md`）—— 待用户定版本号
-- [ ] 最终 `.\scripts\ci-check.ps1`（Docker CI 模拟）—— push 前铁律
-- [ ] push
+- [x] 版本号 bump 0.8.0→**0.9.0**（`package.json` + `backend/Cargo.toml` + `backend/Cargo.lock`）+ CHANGELOG 0.9.0 条目（提交 3aa5a88）；`cargo check --locked` 通过
+- [x] 最终 `.\scripts\ci-check.ps1`（Docker CI 模拟）**通过**：static checks + docker build（编出 cc-switch-web v0.9.0 musl release）+ 容器启动 + `GET /api/health` ✅
+- [ ] **push —— 待用户手动确认**（本会话按用户选择不 push；分支已 CI-green、可推）
 
 ## ⏭️ SKIP（纯 docs/release/CI + Tauri event）
 `398f40da` `5315fa28` `04af87bc` `11edc96a` `8f83fa20` `fe3eb7e6` `47232cb0`

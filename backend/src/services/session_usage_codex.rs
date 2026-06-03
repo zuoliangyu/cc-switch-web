@@ -72,9 +72,12 @@ fn normalize_codex_model(raw: &str) -> String {
     }
 
     // Step 3: 剥离 ISO 日期后缀 -YYYY-MM-DD（正好 11 字符）
-    if name.len() > 11 {
+    // 用 is_char_boundary + is_ascii 守卫切片，避免非 ASCII 模型名在 11 字节边界
+    // 落在多字节字符中间时 panic（跟随上游 bc1467db；非 ASCII 名不可能是合法日期后缀）。
+    if name.len() > 11 && name.is_char_boundary(name.len() - 11) {
         let suffix = &name[name.len() - 11..];
-        if suffix.as_bytes()[0] == b'-'
+        if suffix.is_ascii()
+            && suffix.as_bytes()[0] == b'-'
             && suffix[1..5].chars().all(|c| c.is_ascii_digit())
             && suffix.as_bytes()[5] == b'-'
             && suffix[6..8].chars().all(|c| c.is_ascii_digit())
@@ -766,6 +769,14 @@ mod tests {
             normalize_codex_model("gpt-5.4-pro-2026-03-05"),
             "gpt-5.4-pro"
         );
+    }
+
+    #[test]
+    fn test_normalize_codex_model_non_ascii_does_not_panic() {
+        // 跟随上游 bc1467db：非 ASCII 模型名在 11 字节边界落在多字节字符中间时
+        // 不应 panic，也不应被当成日期后缀剥离。
+        assert_eq!(normalize_codex_model("文心一言-千帆大模型"), "文心一言-千帆大模型");
+        assert_eq!(normalize_codex_model("模型-2026-03-05"), "模型");
     }
 
     #[test]

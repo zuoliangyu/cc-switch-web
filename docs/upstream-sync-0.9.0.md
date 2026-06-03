@@ -44,7 +44,7 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `b4f262c7` 始终带 reasoning_tokens —— stage1 文件替换已覆盖 (#3514)
 - [ ] `c12d20ef` proxy 安全模式替换 panic-prone unwrap/expect —— **延后 hygiene pass**（纯防御无行为变更，跨 6 个 web 分叉文件）
 - [x] `f4e2c28a` 富化 Codex proxy 转发错误响应 + error_mapper 状态码对齐 IntoResponse（web 缺 StreamIdleTimeout/ProviderUnhealthy/InvalidRequest，已适配 catch-all）
-- [ ] `bc1467db` 实时 stats 刷新 + 修非 ASCII 模型名 codex sync panic (#3027)
+- [~] `bc1467db` **仅取非 ASCII 模型名 codex sync panic 修复**（normalize_codex_model 的 11 字节切片加 is_char_boundary+is_ascii 守卫 + 测试）；实时 stats 刷新部分依赖 Tauri usage-events，web 无 Tauri 事件，**跳过** (#3027)
 - [ ] `afa09e12` per-app 凭证解析（native 余额/coding-plan 查询）(#3355)
 
 > 注：测试 `openclaw_config::default_model_noop_write_skips_backup` 在并行下偶发失败

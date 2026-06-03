@@ -3,6 +3,8 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+// 对齐上游保留：web 当前转换路径未直接调用，但保留以保持文件与上游 json_canonical 一致。
+#[allow(dead_code)]
 pub(crate) fn canonicalize_value(value: Value) -> Value {
     match value {
         Value::Array(values) => Value::Array(values.into_iter().map(canonicalize_value).collect()),
@@ -87,6 +89,8 @@ pub(crate) fn canonicalize_tool_arguments(value: Option<&Value>) -> String {
     }
 }
 
+// 对齐上游保留：web 当前转换路径未直接调用，但保留以保持文件与上游 json_canonical 一致。
+#[allow(dead_code)]
 pub(crate) fn short_value_hash(value: Option<&Value>) -> String {
     let Some(value) = value else {
         return "absent".to_string();

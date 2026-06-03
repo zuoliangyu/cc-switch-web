@@ -217,11 +217,17 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
   88ba908b / d7a34f42 / ee69c836 / d7ede248）—— 见上方判定。
 
 ## P3 · i18n / UI 杂项（可选，低优先）
-- [ ] `5fd3ec0d` 繁体中文本地化 (#3093)
-- [ ] `73073454` 中文 VS Code 措辞对齐 (#3228)
-- [ ] `62928c62` AppSwitcher 文本去固定宽度防裁切 (#3161)
-- [ ] `8cdaf90d` deepClone helper（取 deepClone，useTauriEvent 跳过）(#3140)
-- [ ] `48473a5c` 德语 README / sponsor 类 `910ca3b4` `0e6f2b39` `85552cf4` `d905ed16`（按需）
+- [N/A] `5fd3ec0d` 繁体中文本地化 (#3093) —— web locales 无 zh-TW
+- [N/A] `73073454` 中文 VS Code 措辞对齐 (#3228) —— web 该 key 文案已分叉且已用 "VS Code"，无需改
+- [x] `62928c62` AppSwitcher 文本去固定宽度防裁切 (#3161) —— web `max-w-[80px]`→`[120px]`（提交见下）
+- [N/A] `8cdaf90d` deepClone helper (#3140) —— Tauri 耦合重构（含 useTauriEvent=SKIP），纯重构无行为变更、
+  跨 web 已分叉的 App.tsx，价值边际 → 暂不做
+- [N/A] `48473a5c` 德语 README / sponsor 类 `910ca3b4` `0e6f2b39` `85552cf4` `d905ed16` —— docs/README，SKIP
+
+## P3b · 版本号 bump + CHANGELOG + 最终 Docker CI（收尾）
+- [ ] 版本号 bump（`package.json` + `backend/Cargo.toml` + `CHANGELOG.md`）—— 待用户定版本号
+- [ ] 最终 `.\scripts\ci-check.ps1`（Docker CI 模拟）—— push 前铁律
+- [ ] push
 
 ## ⏭️ SKIP（纯 docs/release/CI + Tauri event）
 `398f40da` `5315fa28` `04af87bc` `11edc96a` `8f83fa20` `fe3eb7e6` `47232cb0`

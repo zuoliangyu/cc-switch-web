@@ -36,6 +36,8 @@ web 分叉。逐 commit 移植/判定（done / N/A / DEFER）记录见 `docs/ups
   grok-code-fast-1→grok-build-0.1，新增国际定价行（gemini-3.5-flash / gemini-3.1-flash-lite /
   step-3.5-flash-2603 / grok-build-0.1）。
 - **Shengsuanyun 用前缀模型 ID**（`3d6fb894` + `4bb4e994`）。
+- **Codex 配置编辑器两个开关**：goal-mode（`3c3d4174`，`[features].goals`）+ remote-compaction
+  （`af60c7ed`，把自定义 model_providers 段 name 写为 OpenAI，官方供应商隐藏）。
 - 后端修复：ZhiPu quota 归桶（`177eef66`）、omo Fill Recommended 反馈（`6b0dd3c4`）、自定义 usage 脚本摘要
   （`8e21b061`）、Codex 归档会话纳入扫描/删除（`e9d84af5`）、MiniMax 余额新接口 + 定价（`43ae1e5f`）。
 

@@ -15,18 +15,18 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**34 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误。**已 bump 0.9.0 + 写 CHANGELOG + Docker CI 通过**。
+分支 `sync/upstream-0.9.0`，**36 个提交，本地未推送**。后端 907 tests / 前端 191 tests 全过，
+tsc 0 错误。**已 bump 0.9.0 + 写 CHANGELOG + Docker CI 通过**（cef722c 后新增前端代码，push 前需重跑 Docker CI）。
 
 > **复核补漏（用户追问"还有没有其他没做的"）**：逐条核对全部 114 commit 后发现 5 个此前未真正落定的：
 > - [N/A] `5ef72a20`（codex CLI 发现，web 不跑 codex CLI 取 bundled models）、`955904f7`（localRouting
 >   toggle 文案，web 无该 toggle）—— 确认 N/A。
-> - **真·未做、可移植（2 个 Codex 配置特性）**：`3c3d4174` Codex goal-mode toggle、`af60c7ed` remote-compaction
->   toggle（af 依赖 3c）。web 有宿主文件（CodexConfigSection/providerConfigUtils）但 Codex 表单分叉，需适配移植。
+> - **✅ 已补做（2 个 Codex 配置特性）**：`3c3d4174` Codex goal-mode toggle + `af60c7ed` remote-compaction
+>   toggle（提交 cef722c）。回填了 web providerConfigUtils 缺的若干 TOML helper，接到 web 自有 CodexConfigSection。
 > - **待用户决定（promo/affiliate 链接簇）**：`910ca3b4` 移除 AICoding 伙伴（web 有该 preset）、`85552cf4`/
 >   `0e6f2b39`/`d905ed16` 赞助链接 param —— 与 promo-partner DEFER 同主题。
 
-**剩余**：① `3c3d4174`+`af60c7ed`（Codex goal/compaction 两个 toggle，可移植，待做）；② promo/affiliate 链接簇（待决策）；③ push（待用户手动确认）。
+**剩余**：① promo/affiliate 链接簇（待决策，含移除 AICoding）；② push（待用户手动确认）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -142,13 +142,12 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
   `a2ac21d0`（停止强改 model_provider）是该重设计的一环、依赖新的 "custom" 身份方案；
   单独移植会移除 web 现有的 ID 稳定化（write_codex_live_atomic_with_stable_provider）却
   无替代，故连同整簇延后。另含 deeplink/provider.rs、lib.rs 注册等 Tauri 专属部分。
-- [ ] `af60c7ed` 第三方 provider remote compaction 开关 —— **真·未做，可移植**：给 Codex 配置编辑器加
-  remote-compaction 勾选（写 model_providers name="OpenAI"，官方供应商隐藏）。需 providerConfigUtils 加
-  `isCodexRemoteCompactionEnabled`/`setCodexRemoteCompaction` + CodexConfigSection 加 toggle + i18n。
-  web 有这些宿主文件且 CodexConfigSection 有 toggle 区，可移植（须适配 web 分叉的 Codex 表单）。**依赖 3c3d4174。**
-- [ ] `3c3d4174` provider 模板启用 Codex goals (#3089) —— **真·未做，可移植**：Codex 配置编辑器加 goal-mode
-  勾选（`[features].goals`），providerConfigUtils 加 `isCodexGoalModeEnabled`/`setCodexGoalMode` + i18n。
-  web Codex preset/template 本就无强制 `goals=true`，故"移除强制"部分对 web moot，只剩加 toggle。可移植。
+- [x] `af60c7ed` 第三方 provider remote compaction 开关（提交 cef722c）—— CodexConfigSection 加
+  remote-compaction 勾选（写 model_providers name="OpenAI"，showRemoteCompaction=category!==official）；
+  providerConfigUtils 加 isCodexRemoteCompactionEnabled/setCodexRemoteCompaction + 回填 helper。
+- [x] `3c3d4174` provider 模板启用 Codex goals (#3089)（提交 cef722c）—— Codex 配置编辑器加 goal-mode
+  勾选（`[features].goals`）；providerConfigUtils 加 isCodexGoalModeEnabled/setCodexGoalMode；
+  web Codex preset/template 本无强制 goals=true，"移除强制"部分 moot。+4 round-trip 测试。
 - [N/A] `5ef72a20` 多平台 CLI 发现 + gpt-5.5 模板兜底 (#3382) —— web 的 codex_config.rs **无**
   `load_codex_model_template_from_bundled`/`Command::new("codex")`（不跑本地 codex CLI 取 bundled models），
   CLI 发现是桌面 GUI 场景；web 无此路径 → N/A。

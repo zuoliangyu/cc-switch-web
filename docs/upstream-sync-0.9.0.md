@@ -15,8 +15,8 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 
 ## 📍 进度快照 / 续作锚点（最后更新：本次会话末）
 
-分支 `sync/upstream-0.9.0`，**23 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
-tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。
+分支 `sync/upstream-0.9.0`，**25 个提交，本地未推送**。后端 907 tests / 前端 187 tests 全过，
+tsc 0 错误（Docker CI 模拟待最终收尾时再跑）。**P2 全部资源化完成**（done/N/A/DEFER）。
 
 **已完成**：P0 全部 · P1 全部可同步项（catalog/reasoning、Stream Check、OAuth 前端）·
 P2 全部后端修复（ZhiPu quota、omo 反馈、usage 脚本+摘要、归档会话、MiniMax 余额）·
@@ -36,12 +36,11 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 > 仅 bump 了 codex→gpt-5.5；Claude/gemini 维持旧值未刷新（同前述 stale 块，需单独决定）。
 
 **下次从这里继续（按建议顺序）**：
-1. P2 剩余（additive 新供应商）：Shengsuanyun(`4bb4e994`/`3d6fb894`)、合作伙伴 preset
-   （ZenMux `c1dff066` 含后端余额查询 + `e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3` +
-   `f2935a3d` 22 个 Codex preset，需剥离 web 不支持的 modelCatalog 物理文件特性）
-2. P1b：Claude Desktop 子系统 4 个（`0960fd71`/`05ba2801`/`864593bb`/`94cc3d10`）
-3. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
-4. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+1. P1b：Claude Desktop 子系统 4 个（`0960fd71`/`05ba2801`/`864593bb`/`94cc3d10`）—— **进行中**
+2. **P2c：工具管理子系统 ~18 commit**（最大块，misc.rs + AboutSection，建议独立会话）
+3. P3：i18n（繁中 `5fd3ec0d` 等）/docs/版本号 bump（package.json + Cargo.toml + CHANGELOG）/最终 Docker CI
+4. DEFER 回头处理：合作伙伴 promo preset 簇（5 个，缺内联 SVG 图标 + affiliate 决策）、
+   f2935a3d（22 Codex preset，可净移植）、定价 seed 整体回填 + CNY/USD 币种统一
 
 每个 commit 续作方法：先 `git show <hash> --stat` 看触达文件 → 对照 web 分叉版本 → 移植 + 适配
 （drop Tauri/web 缺失部分）→ 后端 `cargo test --lib --test-threads=1` / 前端 `tsc`+`vitest` → 提交。
@@ -151,23 +150,31 @@ OAuth 接管后端簇（均 gated on web 未实现的基础特性）、deeplink�
 > `3a154207`(+ `2b6ede14` 定价 schema)、`4bb4e994`+`3d6fb894`(Shengsuanyun)；
 > 新增供应商 preset（additive，但需剥离 web 不支持的 modelCatalog）：`c1dff066`(ZenMux,
 > 还含后端余额查询)、`e71b9091`/`32b30e43`/`9ef14190`/`8302f1e3`(合作伙伴)、`f2935a3d`(22 个 Codex Chat preset)。
-- [ ] `c1dff066` ZenMux Token Plan 供应商 (#2709)
-- [ ] `e71b9091` SudoCode preset
-- [ ] `32b30e43` AtlasCloud preset
-- [ ] `9ef14190` APINebula preset
-- [ ] `8302f1e3` APIKEY.FUN preset
-- [ ] `f2935a3d` 22 个第三方 Codex preset 接 Chat Completions 路由
+> **合作伙伴 promo preset 簇 + f2935a3d 判定 DEFER/N/A（2026-06-03，用户定夺）**：
+> web 图标系统是**内联 SVG only**（`icons[key] || ""`，无 PNG/iconUrls 路径；web 自有
+> 新增伙伴 micu/sssaicode/ctok 等均手写内联 SVG）。上游 5 个 promo 伙伴
+> （SudoCode/AtlasCloud/APINebula/APIKEY.FUN/ZenMux）图标是 PNG，web 无法引用，且属
+> affiliate 推广 → 全部跳过（要做需先备内联 SVG + 决定是否纳入 affiliate）。f2935a3d
+> （22 个 Codex 中文供应商 preset，复用现有图标、可净移植）经用户决定一并暂跳。
+- [DEFER] `c1dff066` ZenMux Token Plan 供应商 (#2709)（PNG 图标 + 后端 coding-plan；affiliate）
+- [DEFER] `e71b9091` SudoCode preset（PNG 图标）
+- [DEFER] `32b30e43` AtlasCloud preset（PNG 图标）
+- [DEFER] `9ef14190` APINebula preset（PNG 图标）
+- [DEFER] `8302f1e3` APIKEY.FUN preset（PNG 图标）
+- [DEFER] `f2935a3d` 22 个第三方 Codex preset 接 Chat Completions 路由（可净移植，用户暂跳）
 - [x] `0877b9e3` 默认 Claude Opus 升 4.8（+ 折入 `83c3c3b4` 4.7 地基；提交 220c1f0）
 - [x] `3a154207` 全 preset 默认模型/定价更新（名 bump + 仅新增国际定价行；881cd68）+ `2b6ede14` 迁移测试期望（web 无该测试文件，N/A）
-- [ ] `4bb4e994` + `3d6fb894` Shengsuanyun 前缀模型 ID + GPT 5.5
-- [ ] `058c9fb8` OpenCode Go preset 去模型后缀
-- [ ] `74104946` 移除 Codex 的 Kimi For Coding preset
-- [ ] `6b0dd3c4` omo 推荐模型同步 + Fill Recommended 反馈
-- [ ] `177eef66` ZhiPu quota 层级排序
-- [ ] `43ae1e5f` MiniMax 余额新接口 + 默认定价 (#3518)
-- [ ] `8e21b061` 修自定义 usage 脚本摘要 (#3129)
-- [ ] `e9d84af5` session 含 Codex 归档会话 (#2861)
-- [ ] `e605eba2` deeplink 导入 Claude provider 保留自定义 env (#2928)
+- [x] `4bb4e994` + `3d6fb894` Shengsuanyun 前缀模型 ID + GPT 5.5（5664744）
+- [N/A] `058c9fb8` OpenCode Go preset 去模型后缀 —— web 无该条目
+- [N/A] `74104946` 移除 Codex 的 Kimi For Coding preset —— web 无该条目
+- [x] `6b0dd3c4` omo 推荐模型同步 + Fill Recommended 反馈（4c20295）
+- [x] `177eef66` ZhiPu quota 层级排序（fc82db9）
+- [x] `43ae1e5f` MiniMax 余额新接口 + 默认定价（7346d77）
+- [x] `8e21b061` 修自定义 usage 脚本摘要（facb90b）
+- [x] `e9d84af5` session 含 Codex 归档会话（4d46b2c）
+- [N/A] `e605eba2` deeplink 导入 Claude provider 保留自定义 env —— web 无 deeplink 模块
+
+**✅ P2 全部资源化完成**（done / N/A / DEFER 均已记录）。
 
 ## P2c · 工具管理子系统扩展（misc.rs + AboutSection，按序搬）
 - [ ] `e3df8658` About 页扩成工具管理面板

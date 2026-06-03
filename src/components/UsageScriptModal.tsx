@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Provider, UsageScript, UsageData } from "@/types";
+import { formatUsageDataSummary } from "@/utils/usageDisplay";
 import { usageApi, settingsApi, type AppId } from "@/lib/api";
 import { copilotGetUsage, copilotGetUsageForAccount } from "@/lib/api/copilot";
 import { useSettingsQuery } from "@/lib/query";
@@ -413,10 +414,13 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         const result = await subscriptionApi.getBalance(baseUrl, apiKey);
         if (result.success && result.data && result.data.length > 0) {
           const summary = result.data
-            .map((item) => {
-              const name = item.planName ? `[${item.planName}] ` : "";
-              return `${name}${t("usage.remaining")} ${item.remaining?.toFixed(2)} ${item.unit || ""}`;
-            })
+            .map((item) =>
+              formatUsageDataSummary(item, {
+                invalid: t("usage.invalid"),
+                remaining: t("usage.remaining"),
+                used: t("usage.used"),
+              }),
+            )
             .join(", ");
           toast.success(`${t("usageScript.testSuccess")}${summary}`, {
             duration: 3000,
@@ -509,10 +513,13 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       );
       if (result.success && result.data && result.data.length > 0) {
         const summary = result.data
-          .map((plan: UsageData) => {
-            const planInfo = plan.planName ? `[${plan.planName}]` : "";
-            return `${planInfo} ${t("usage.remaining")} ${plan.remaining} ${plan.unit}`;
-          })
+          .map((plan: UsageData) =>
+            formatUsageDataSummary(plan, {
+              invalid: t("usage.invalid"),
+              remaining: t("usage.remaining"),
+              used: t("usage.used"),
+            }),
+          )
           .join(", ");
         toast.success(`${t("usageScript.testSuccess")}${summary}`, {
           duration: 3000,

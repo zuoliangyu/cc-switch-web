@@ -24,8 +24,9 @@ pub async fn execute_usage_script(
         build_script_with_vars(script_code, api_key, base_url, access_token, user_id);
 
     // 2. 验证 base_url 的安全性（仅当提供了 base_url 时）
-    // 自定义模板模式下，用户可能不使用模板变量，而是直接在脚本中写完整 URL
-    if !base_url.is_empty() {
+    // 自定义模板模式下，用户可能不使用模板变量，而是直接在脚本中写完整 URL，
+    // provider 的 base_url 只是未使用的回退，不应对它做校验（跟随上游 8e21b061）。
+    if should_validate_base_url(base_url, is_custom_template) {
         validate_base_url(base_url)?;
     }
 
@@ -418,6 +419,12 @@ fn build_script_with_vars(
     }
 
     replaced
+}
+
+/// 是否需要校验 provider 的 base_url：自定义模板下 base_url 只是未使用的回退，
+/// 用户可能在脚本里直接写完整 URL，故跳过校验（跟随上游 8e21b061）。
+fn should_validate_base_url(base_url: &str, is_custom_template: bool) -> bool {
+    !base_url.is_empty() && !is_custom_template
 }
 
 /// 验证 base_url 的基本安全性
@@ -892,5 +899,38 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_custom_template_skips_unused_base_url_validation() {
+        // 跟随上游 8e21b061：自定义脚本不应校验未使用的 provider base_url 回退。
+        assert!(
+            !should_validate_base_url("http://10.37.192.156:8090/anthropic", true),
+            "Custom scripts should not validate an unused provider base_url fallback"
+        );
+        // 自定义模板可调用与 base_url 不同源的显式公网额度端点（跳过同源检查）。
+        let result = validate_request_url(
+            "https://quota.example.com/user/balance",
+            "https://api.example.com/anthropic",
+            true,
+        );
+        assert!(
+            result.is_ok(),
+            "Custom usage scripts should be able to call an explicit different-origin endpoint"
+        );
+    }
+
+    #[test]
+    fn test_custom_template_still_blocks_private_ip_for_ssrf() {
+        // web 与上游(桌面)分叉：web 是服务器，即使自定义模板也禁止访问私有 IP（SSRF 防护）。
+        let result = validate_request_url(
+            "http://10.37.192.156:18344/user/balance",
+            "http://10.37.192.156:8090/anthropic",
+            true,
+        );
+        assert!(
+            result.is_err(),
+            "Server build must block private-IP requests even for custom scripts (SSRF)"
+        );
     }
 }

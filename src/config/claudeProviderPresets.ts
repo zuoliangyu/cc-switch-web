@@ -738,7 +738,7 @@ export const providerPresets: ProviderPreset[] = [
         ANTHROPIC_AUTH_TOKEN: "",
       },
     },
-    category: "third_party",
+    category: "aggregator",
     isPartner: true,
     partnerPromotionKey: "claudeapi",
     icon: "claudeapi",

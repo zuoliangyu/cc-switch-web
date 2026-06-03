@@ -32,8 +32,8 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `b4f262c7` 始终带 reasoning_tokens（随文件替换；见下方 proxy fix 区）
 - [x] `2a4651a2` Chat 请求保留用户选定 catalog 模型（apply_codex_chat_upstream_model + codex_provider_catalog_model_ids，已接 forwarder）
 - [x] `44d9aabb` 自适应 reasoning 检测（resolve/infer/normalize_codex_chat_reasoning_config + infer_aggregator_platform_config，forwarder 走 responses_to_chat_completions_with_reasoning）
-- [ ] `72bc912e` Codex Chat provider 走 Stream Check（前端 + codex.rs）
-- [ ] `184cbcdc` ClaudeAPI 重分类为 aggregator 恢复 model test
+- [ ] `72bc912e` Codex Chat provider 走 Stream Check —— codex.rs 的 is_origin_only_url 已随 catalog 提交落地；**stream_check.rs +182 探测重写待做**（resolve_codex_endpoint_urls + Chat-shaped probe）
+- [x] `184cbcdc` ClaudeAPI 重分类为 aggregator 恢复 model test（claudeProviderPresets.ts；web 无独立 Desktop presets 文件，N/A 那半）
 - [x] `279b9eab` 测试基线更新（直接采用上游 bundled 测试，N/A）
 
 ### proxy/usage 核心 fix

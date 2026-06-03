@@ -65,13 +65,23 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
   全链 thread；takeover 时显示 storage 提示 + 存储态 auth/config hint；App 去掉 isProxyRunning 门控
 - [x] `aeaa016c` 取终态：notice 用 amber div（非 Alert）+ 简化 3 个 i18n key 文案（en/ja/zh）
 
-**③ 后端 —— 待专注会话**
-- [ ] `e25682d3` 托管账号 takeover model 字段取自目标 provider —— Claude 接管细化，但 web 缺 `build_claude_takeover_model_fields` 锚点，需先对齐 web 的接管模型字段结构
-- [ ] `2683af57` + `3f59ab37` + `c9cadd6e` + `ce993bae` Codex auth preservation 设置及其修复 —— **web 无该设置（settings.rs 无字段、前端无 CodexAuthSettings.tsx）= feature-port**
-- [ ] `95f2dd41` 第三方切换保留 OAuth 登录态 —— codex_config + commands/config + deeplink(Tauri)
-- [ ] `60a9b330` 重构 Codex live-write 路由 + 默认 auth 覆写
-- [ ] `2a131a55` 加固 takeover 所有权信号 + 串行化（services/provider/live.rs + proxy.rs）
-- [ ] `b7499fc8` provider label 热切换刷新（services/provider/mod.rs + proxy.rs）
+**③ 后端 —— 判定 feature-port / 超出纯同步范围（gated on 缺失基础特性）**
+> 经核查 web 缺以下全部锚点：`preserve_codex_official_auth_on_switch`、
+> `attach_codex_model_catalog_from_provider`、`write_codex_live_for_provider`、
+> `build_claude_takeover_model_fields` / `push_claude_takeover_role_fields` /
+> `CLAUDE_TAKEOVER_HAIKU_MODEL`、`write_codex_takeover_live_for_provider`。
+> web 的 Codex 接管在 services/proxy.rs 内联无条件写占位符（无 preserve 路径）。
+> 下列 commit 都是对 web **从未实现的特性**（Codex 官方 auth 保留设置、Codex
+> model_catalog 文件、Claude 接管模型菜单角色字段、hot-switch 串行化）的修复/细化，
+> 忠实"移植"它们 = 实现这些新特性（含前端设置组件、安全敏感的 auth 写/清语义）。
+> 与 model catalog / history bucket 簇同理，**不属于 0.8.0→main 增量同步范围**，
+> 留作独立 feature 工作：
+- [N/A] `e25682d3`（Claude 接管模型字段；依赖 build_claude_takeover_model_fields = 模型菜单特性）
+- [N/A] `2683af57` + `3f59ab37` + `c9cadd6e` + `ce993bae`（Codex auth preservation 设置及修复 = feature）
+- [N/A] `95f2dd41`（第三方切换保留 OAuth；依赖 preserve 路径 + deeplink）
+- [N/A] `60a9b330`（live-write 路由重构；依赖 write_codex_live_for_provider 结构）
+- [N/A] `2a131a55`（switch_locks 串行化 + hot-switch 检测 = 新基础设施）
+- [N/A] `b7499fc8`（provider label 热切换刷新；依赖 2a131a55 的 hot-switch）
 - [N/A] **model catalog 簇全部跳过** `8bf16602` `0fbba426` `d5328e52` `ad8bdf16` `791ced00` `9b957820` `7811383b`
   —— web 从未实现 Codex `model_catalog_json` 物理文件特性（codex_config 无
   `get_codex_model_catalog_path` / `CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME`），

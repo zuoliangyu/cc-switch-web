@@ -1,20 +1,27 @@
 //! 错误类型到 HTTP 状态码的映射
 //!
-//! 将 ProxyError 映射到合适的 HTTP 状态码，用于日志记录
+//! 将 ProxyError 映射到合适的 HTTP 状态码，用于日志记录和手动构建错误响应
 
 use super::ProxyError;
 
 /// 将 ProxyError 映射到 HTTP 状态码
 ///
-/// 映射规则：
+/// 映射规则（与 `ProxyError::into_response` 对齐，跟随上游 f4e2c28a）：
 /// - 上游错误：直接使用上游返回的状态码
 /// - 超时：504 Gateway Timeout
 /// - 连接失败：502 Bad Gateway
 /// - 无可用 Provider：503 Service Unavailable
 /// - 重试耗尽：503 Service Unavailable
+/// - 认证错误：401 Unauthorized
+/// - 配置错误：400 Bad Request
+/// - 转换错误：422 Unprocessable Entity
 /// - 其他错误：500 Internal Server Error
 pub fn map_proxy_error_to_status(error: &ProxyError) -> u16 {
     match error {
+        // 服务状态错误：与 IntoResponse 保持一致
+        ProxyError::AlreadyRunning => 409,
+        ProxyError::NotRunning => 503,
+
         // 上游错误：使用实际状态码
         ProxyError::UpstreamError { status, .. } => *status,
 
@@ -36,11 +43,17 @@ pub fn map_proxy_error_to_status(error: &ProxyError) -> u16 {
         // 重试耗尽：503 Service Unavailable
         ProxyError::MaxRetriesExceeded => 503,
 
+        // 配置错误：400 Bad Request
+        ProxyError::ConfigError(_) => 400,
+
+        // 认证错误：401 Unauthorized
+        ProxyError::AuthError(_) => 401,
+
         // 数据库错误：500 Internal Server Error
         ProxyError::DatabaseError(_) => 500,
 
-        // 转换错误：500 Internal Server Error
-        ProxyError::TransformError(_) => 500,
+        // 转换错误：422 Unprocessable Entity
+        ProxyError::TransformError(_) => 422,
 
         // 其他未知错误：500 Internal Server Error
         _ => 500,
@@ -98,6 +111,25 @@ mod tests {
     fn test_map_no_provider_error() {
         let error = ProxyError::NoAvailableProvider;
         assert_eq!(map_proxy_error_to_status(&error), 503);
+    }
+
+    #[test]
+    fn test_map_status_matches_proxy_error_response_semantics() {
+        // 跟随上游 f4e2c28a：手动构建错误响应使用与 IntoResponse 一致的状态码。
+        assert_eq!(
+            map_proxy_error_to_status(&ProxyError::AuthError("bad token".to_string())),
+            401
+        );
+        assert_eq!(
+            map_proxy_error_to_status(&ProxyError::ConfigError("bad config".to_string())),
+            400
+        );
+        assert_eq!(
+            map_proxy_error_to_status(&ProxyError::TransformError("bad transform".to_string())),
+            422
+        );
+        assert_eq!(map_proxy_error_to_status(&ProxyError::AlreadyRunning), 409);
+        assert_eq!(map_proxy_error_to_status(&ProxyError::NotRunning), 503);
     }
 
     #[test]

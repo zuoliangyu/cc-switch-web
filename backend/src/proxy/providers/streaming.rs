@@ -329,8 +329,17 @@ pub fn create_anthropic_sse_stream<E: std::error::Error + Send + 'static>(
                                             }
                                         }
 
-                                        // 处理工具调用
-                                        if let Some(tool_calls) = &choice.delta.tool_calls {
+                                        // 处理工具调用。空 tool_calls 数组（如 MiniMax 发
+                                        // reasoning_content 流时每个 chunk 带 "tool_calls": []）
+                                        // 不应进入处理分支——否则会发 content_block_stop 并重置
+                                        // current_non_tool_block_type，把每个字符当独立 block。
+                                        // 在模式里过滤空数组，等价上游 9c2add9a 的 !is_empty() 守卫。
+                                        if let Some(tool_calls) = choice
+                                            .delta
+                                            .tool_calls
+                                            .as_ref()
+                                            .filter(|tc| !tc.is_empty())
+                                        {
                                             if let Some(index) = current_non_tool_block_index.take() {
                                                 let event = json!({
                                                     "type": "content_block_stop",

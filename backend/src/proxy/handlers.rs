@@ -490,7 +490,7 @@ pub async fn handle_chat_completions(
                 ctx.provider = provider;
             }
             log_forward_error(&state, &ctx, is_stream, &err.error);
-            return Err(err.error);
+            return build_codex_proxy_error_response(&ctx, &endpoint, &err.error);
         }
     };
 
@@ -547,7 +547,7 @@ pub async fn handle_responses(
                 ctx.provider = provider;
             }
             log_forward_error(&state, &ctx, is_stream, &err.error);
-            return Err(err.error);
+            return build_codex_proxy_error_response(&ctx, &endpoint, &err.error);
         }
     };
 
@@ -615,7 +615,7 @@ pub async fn handle_responses_compact(
                 ctx.provider = provider;
             }
             log_forward_error(&state, &ctx, is_stream, &err.error);
-            return Err(err.error);
+            return build_codex_proxy_error_response(&ctx, &endpoint, &err.error);
         }
     };
 
@@ -949,6 +949,169 @@ pub async fn handle_gemini(
     let response = result.response;
 
     process_response(response, &ctx, &state, &GEMINI_PARSER_CONFIG).await
+}
+
+// ============================================================================
+// Codex 转发错误富化（跟随上游 f4e2c28a）
+// ============================================================================
+
+/// 把转发层（非上游响应）的失败构造成富化的 Codex 错误响应。
+///
+/// 与 `handle_codex_chat_error_response`（处理上游真实错误响应、复制上游头）不同，
+/// 这里没有上游响应可参照，只产出一个 `application/json` 错误体。状态码走
+/// `map_proxy_error_to_status`，该函数已与 `ProxyError::into_response` 对齐。
+///
+/// 注意：`endpoint` 经 `endpoint_with_query` 可能携带 query（如 `?beta=true`）并被
+/// 原样写入错误体。当前 Codex 端点不在 query 里放凭证，故安全；若将来复用到
+/// query 携带密钥的端点（如 Gemini 的 `?key=`），需先脱敏再回显。
+fn build_codex_proxy_error_response(
+    ctx: &RequestContext,
+    endpoint: &str,
+    error: &ProxyError,
+) -> Result<axum::response::Response, ProxyError> {
+    let status = axum::http::StatusCode::from_u16(map_proxy_error_to_status(error))
+        .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body = codex_proxy_error_json(&ctx.provider.name, &ctx.request_model, endpoint, error);
+    let body = serde_json::to_vec(&body).map_err(|e| {
+        log::error!("[Codex] 序列化代理错误体失败: {e}");
+        ProxyError::Internal(format!("Failed to serialize proxy error: {e}"))
+    })?;
+
+    axum::response::Response::builder()
+        .status(status)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/json"),
+        )
+        .body(axum::body::Body::from(body))
+        .map_err(|e| {
+            log::error!("[Codex] 构建代理错误响应失败: {e}");
+            ProxyError::Internal(format!("Failed to build proxy error response: {e}"))
+        })
+}
+
+fn codex_proxy_error_json(
+    provider_name: &str,
+    request_model: &str,
+    endpoint: &str,
+    error: &ProxyError,
+) -> Value {
+    let (mut body, upstream_status) = match error {
+        ProxyError::UpstreamError { status, body } => {
+            let parsed_body = body
+                .as_deref()
+                .map(|body| serde_json::from_str::<Value>(body).unwrap_or_else(|_| json!(body)));
+            (
+                transform_codex_chat::chat_error_to_response_error(parsed_body.as_ref()),
+                Some(*status),
+            )
+        }
+        _ => (
+            json!({
+                "error": {
+                    "message": get_error_message(error),
+                    "type": "proxy_error",
+                    "code": codex_proxy_error_code(error),
+                    "param": Value::Null,
+                }
+            }),
+            None,
+        ),
+    };
+
+    let Some(error_obj) = body.get_mut("error").and_then(|value| value.as_object_mut()) else {
+        return body;
+    };
+
+    let cause = error_obj
+        .get("message")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
+        .filter(|message| !message.trim().is_empty())
+        .unwrap_or_else(|| get_error_message(error));
+
+    let status_fragment = upstream_status
+        .map(|status| format!("; upstream_status: HTTP {status}"))
+        .unwrap_or_default();
+    let message = format!(
+        "CC Switch local proxy failed while handling Codex endpoint {endpoint}. Provider: {provider_name}; model: {request_model}{status_fragment}; cause: {cause}"
+    );
+
+    error_obj.insert(
+        "message".to_string(),
+        Value::String(compact_error_message(&message, 1800)),
+    );
+
+    if error_obj
+        .get("type")
+        .and_then(|value| value.as_str())
+        .map(|value| value.trim().is_empty())
+        .unwrap_or(true)
+    {
+        error_obj.insert("type".to_string(), Value::String("proxy_error".to_string()));
+    }
+
+    if error_obj.get("code").map(Value::is_null).unwrap_or(true) {
+        error_obj.insert(
+            "code".to_string(),
+            Value::String(codex_proxy_error_code(error).to_string()),
+        );
+    }
+
+    if !error_obj.contains_key("param") {
+        error_obj.insert("param".to_string(), Value::Null);
+    }
+
+    error_obj.insert(
+        "provider".to_string(),
+        Value::String(provider_name.to_string()),
+    );
+    error_obj.insert("model".to_string(), Value::String(request_model.to_string()));
+    // 仅用于 Codex 本地路由；不要复用到 query 可能携带凭证的端点。
+    error_obj.insert("endpoint".to_string(), Value::String(endpoint.to_string()));
+    if let Some(status) = upstream_status {
+        error_obj.insert(
+            "upstream_status".to_string(),
+            Value::Number(serde_json::Number::from(status)),
+        );
+    }
+
+    body
+}
+
+/// 稳定的 cc_switch_* 错误码。web 的 ProxyError 枚举缺上游的 StreamIdleTimeout /
+/// ProviderUnhealthy / InvalidRequest，服务状态/绑定类错误统一归 proxy_error。
+fn codex_proxy_error_code(error: &ProxyError) -> &'static str {
+    match error {
+        ProxyError::ForwardFailed(_) => "cc_switch_forward_failed",
+        ProxyError::Timeout(_) => "cc_switch_timeout",
+        ProxyError::NoAvailableProvider => "cc_switch_no_available_provider",
+        ProxyError::AllProvidersCircuitOpen => "cc_switch_all_providers_circuit_open",
+        ProxyError::NoProvidersConfigured => "cc_switch_no_providers_configured",
+        ProxyError::MaxRetriesExceeded => "cc_switch_max_retries_exceeded",
+        ProxyError::ConfigError(_) => "cc_switch_config_error",
+        ProxyError::TransformError(_) => "cc_switch_transform_error",
+        ProxyError::AuthError(_) => "cc_switch_auth_error",
+        ProxyError::UpstreamError { .. } => "cc_switch_upstream_error",
+        ProxyError::DatabaseError(_) => "cc_switch_database_error",
+        ProxyError::Internal(_) => "cc_switch_internal_error",
+        _ => "cc_switch_proxy_error",
+    }
+}
+
+fn compact_error_message(message: &str, max_chars: usize) -> String {
+    let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.chars().count() <= max_chars {
+        return normalized;
+    }
+
+    let truncated = normalized
+        .chars()
+        .take(max_chars)
+        .collect::<String>()
+        .trim_end()
+        .to_string();
+    format!("{truncated}…(truncated)")
 }
 
 // ============================================================================

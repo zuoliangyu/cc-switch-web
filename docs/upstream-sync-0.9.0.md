@@ -37,13 +37,13 @@ Tauri command（`src-tauri/src/lib.rs` invoke_handler）↔ web `commands` 模�
 - [x] `279b9eab` 测试基线更新（直接采用上游 bundled 测试，N/A）
 
 ### proxy/usage 核心 fix
-- [ ] `9c2add9a` Claude 兼容模式流式空 tool_calls 致 block 状态重置 (#2915)
+- [x] `9c2add9a` Claude 兼容模式流式空 tool_calls 致 block 状态重置（模式里过滤空数组，零重缩进）(#2915)
 - [x] `554e3b48` DeepSeek Anthropic tool thinking 历史归一化 (#3203)
 - [x] `e02a2763` thinking 归一化扩展 kimi/moonshot —— 取终态 REASONING_VENDOR_HINTS SSOT (#3377)
 - [x] `707a5593` MiMo reasoning_content：claude.rs vendor 列表 + transform.rs redacted_thinking 占位（**claude_desktop_config.rs 的本地路由归一化部分延后 P1b**）(#2990)
 - [x] `b4f262c7` 始终带 reasoning_tokens —— stage1 文件替换已覆盖 (#3514)
-- [ ] `c12d20ef` proxy 安全模式替换 panic-prone unwrap/expect
-- [ ] `f4e2c28a` 富化 Codex proxy 转发错误响应上下文
+- [ ] `c12d20ef` proxy 安全模式替换 panic-prone unwrap/expect —— **延后 hygiene pass**（纯防御无行为变更，跨 6 个 web 分叉文件）
+- [x] `f4e2c28a` 富化 Codex proxy 转发错误响应 + error_mapper 状态码对齐 IntoResponse（web 缺 StreamIdleTimeout/ProviderUnhealthy/InvalidRequest，已适配 catch-all）
 - [ ] `bc1467db` 实时 stats 刷新 + 修非 ASCII 模型名 codex sync panic (#3027)
 - [ ] `afa09e12` per-app 凭证解析（native 余额/coding-plan 查询）(#3355)
 

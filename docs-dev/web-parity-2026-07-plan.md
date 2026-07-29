@@ -36,6 +36,11 @@
   - [x] schema、DAO、scope 快照编排与 Web API/runtime
   - [x] Profile 切换与管理页面
 - [ ] Grok Build 应用目标、配置、代理、MCP、Skills、Prompts、Session 与 Usage
+  - [x] 应用标识、配置文件、Provider、官方登录态、导入与基础 Web API
+  - [ ] MCP、Skills 与 Prompts
+  - [ ] 代理接管与协议路由
+  - [ ] Session 与 Usage
+  - [ ] 前端入口、表单与预设
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
 - [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
@@ -59,3 +64,4 @@
 - 2026-07-30：开始 P2；完成 Profiles schema v11 与 DAO，CRUD、排序、scope current 和迁移测试通过。
 - 2026-07-30：完成 Profile 服务与 Web API/runtime；支持 scope 独立快照、切走自动保存、best-effort 应用、代理接管恢复及 current 指针维护，页面适配留到下一笔提交。
 - 2026-07-30：完成 Profile 页面适配；主页面支持创建、切换、取消绑定、重命名和删除项目，设置页可隐藏入口，P2 Profiles 收口。
+- 2026-07-30：完成 Grok Build 第一阶段；新增 `grokbuild` 应用目标、配置校验与安全凭据提取、官方/自定义 Provider 读写、导入和现有 Axum Provider API 接入。

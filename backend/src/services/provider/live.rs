@@ -345,7 +345,7 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
             }
             _ => false,
         },
-        AppType::OpenCode | AppType::OpenClaw => false,
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => false,
     }
 }
 
@@ -415,7 +415,7 @@ pub(crate) fn remove_common_config_from_settings(
             }
             Ok(result)
         }
-        AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
     }
 }
 
@@ -470,7 +470,7 @@ fn apply_common_config_to_settings(
             }
             Ok(result)
         }
-        AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
     }
 }
 
@@ -645,6 +645,7 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             // Delegate to write_gemini_live which handles env file writing correctly
             write_gemini_live(provider)?;
         }
+        AppType::GrokBuild => crate::grok_config::write_grok_provider_live(provider)?,
         AppType::OpenCode => {
             // OpenCode uses additive mode - write provider to config
             use crate::opencode_config;
@@ -911,6 +912,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
                 "config": config_obj
             }))
         }
+        AppType::GrokBuild => crate::grok_config::read_grok_live_settings(),
         AppType::OpenCode => {
             use crate::opencode_config::{get_opencode_config_path, read_opencode_config};
 
@@ -957,7 +959,12 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
 
     {
         let providers = state.db.get_all_providers(app_type.as_str())?;
-        if !providers.is_empty() {
+        let has_user_provider = providers.values().any(|provider| {
+            !(matches!(app_type, AppType::GrokBuild)
+                && provider.id == crate::grok_config::OFFICIAL_PROVIDER_ID
+                && provider.category.as_deref() == Some("official"))
+        });
+        if has_user_provider {
             return Ok(false); // 已有供应商，跳过
         }
     }
@@ -1021,6 +1028,16 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
                 "env": env_obj,
                 "config": config_obj
             })
+        }
+        AppType::GrokBuild => {
+            let mut settings = crate::grok_config::read_grok_live_settings()?;
+            let config = settings
+                .get("config")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            crate::grok_config::validate_config_toml(config)?;
+            crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings)?;
+            settings
         }
         // OpenCode and OpenClaw use additive mode and are handled by early return above
         AppType::OpenCode | AppType::OpenClaw => {

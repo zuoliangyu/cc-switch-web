@@ -82,6 +82,7 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
         AppType::Claude => config::get_claude_config_dir(),
         AppType::Codex => codex_config::get_codex_config_dir(),
         AppType::Gemini => crate::gemini_config::get_gemini_dir(),
+        AppType::GrokBuild => crate::grok_config::get_grok_config_dir(),
         AppType::OpenCode => crate::opencode_config::get_opencode_dir(),
         AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
     };
@@ -104,6 +105,7 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::Claude => config::get_default_claude_config_dir(),
         AppType::Codex => codex_config::get_default_codex_config_dir(),
         AppType::Gemini => crate::gemini_config::get_default_gemini_dir(),
+        AppType::GrokBuild => config::get_home_dir().join(".grok"),
         AppType::OpenCode => crate::opencode_config::get_default_opencode_dir(),
         AppType::OpenClaw => crate::openclaw_config::get_default_openclaw_dir(),
     };

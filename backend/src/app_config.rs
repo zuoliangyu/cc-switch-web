@@ -29,6 +29,7 @@ impl McpApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
+            AppType::GrokBuild => false,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 MCP
@@ -41,6 +42,7 @@ impl McpApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
+            AppType::GrokBuild => {}
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 MCP
@@ -89,6 +91,7 @@ impl SkillApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
+            AppType::GrokBuild => false,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support Skills
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
@@ -101,6 +104,7 @@ impl SkillApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
+            AppType::GrokBuild => {}
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support Skills, ignore
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
@@ -285,6 +289,8 @@ pub struct PromptRoot {
     #[serde(default)]
     pub gemini: PromptConfig,
     #[serde(default)]
+    pub grokbuild: PromptConfig,
+    #[serde(default)]
     pub opencode: PromptConfig,
     #[serde(default)]
     pub openclaw: PromptConfig,
@@ -313,6 +319,8 @@ pub enum AppType {
     ClaudeDesktop,
     Codex,
     Gemini,
+    #[serde(alias = "grok-build", alias = "grok_build", alias = "grok")]
+    GrokBuild,
     OpenCode,
     OpenClaw,
 }
@@ -324,6 +332,7 @@ impl AppType {
             AppType::ClaudeDesktop => "claude-desktop",
             AppType::Codex => "codex",
             AppType::Gemini => "gemini",
+            AppType::GrokBuild => "grokbuild",
             AppType::OpenCode => "opencode",
             AppType::OpenClaw => "openclaw",
         }
@@ -343,6 +352,7 @@ impl AppType {
             AppType::Claude,
             AppType::Codex,
             AppType::Gemini,
+            AppType::GrokBuild,
             AppType::OpenCode,
             AppType::OpenClaw,
         ]
@@ -359,12 +369,13 @@ impl FromStr for AppType {
             "claude" => Ok(AppType::Claude),
             "codex" => Ok(AppType::Codex),
             "gemini" => Ok(AppType::Gemini),
+            "grokbuild" | "grok-build" | "grok_build" | "grok" => Ok(AppType::GrokBuild),
             "opencode" => Ok(AppType::OpenCode),
             "openclaw" => Ok(AppType::OpenClaw),
             other => Err(AppError::localized(
                 "unsupported_app",
-                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, opencode, openclaw。"),
-                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, opencode, openclaw."),
+                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, grokbuild, opencode, openclaw。"),
+                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, grokbuild, opencode, openclaw."),
             )),
         }
     }
@@ -692,6 +703,7 @@ impl MultiAppConfig {
             AppType::Claude | AppType::ClaudeDesktop => &mut config.prompts.claude.prompts,
             AppType::Codex => &mut config.prompts.codex.prompts,
             AppType::Gemini => &mut config.prompts.gemini.prompts,
+            AppType::GrokBuild => &mut config.prompts.grokbuild.prompts,
             AppType::OpenCode => &mut config.prompts.opencode.prompts,
             AppType::OpenClaw => &mut config.prompts.openclaw.prompts,
         };
@@ -733,6 +745,7 @@ impl MultiAppConfig {
                 AppType::Claude => &self.mcp.claude.servers,
                 AppType::Codex => &self.mcp.codex.servers,
                 AppType::Gemini => &self.mcp.gemini.servers,
+                AppType::GrokBuild => continue,
                 AppType::OpenCode => &self.mcp.opencode.servers,
                 AppType::OpenClaw => continue, // OpenClaw MCP is still in development, skip
                 AppType::ClaudeDesktop => continue, // C-Phase0：claude-desktop 暂不支持 MCP
@@ -1068,6 +1081,9 @@ mod tests {
             Ok(AppType::Claude)
         ));
         assert!(matches!(AppType::from_str("\tcoDeX\t"), Ok(AppType::Codex)));
+        for alias in ["grokbuild", "grok-build", "grok_build", "grok"] {
+            assert!(matches!(AppType::from_str(alias), Ok(AppType::GrokBuild)));
+        }
     }
 
     #[test]

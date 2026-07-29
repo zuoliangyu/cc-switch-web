@@ -90,7 +90,34 @@ pub(crate) fn switch_provider_by_name_internal(
 }
 
 fn import_default_config_internal(state: &AppState, app_type: AppType) -> Result<bool, AppError> {
-    let imported = ProviderService::import_default_config(state, app_type.clone())?;
+    if matches!(app_type, AppType::GrokBuild) {
+        if let Ok(settings) = crate::grok_config::read_grok_live_settings() {
+            let config = settings
+                .get("config")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            if crate::grok_config::is_official_live_config(config) {
+                ensure_grokbuild_official_provider(state)?;
+                state.db.set_current_provider(
+                    app_type.as_str(),
+                    crate::grok_config::OFFICIAL_PROVIDER_ID,
+                )?;
+                crate::settings::set_current_provider(
+                    &app_type,
+                    Some(crate::grok_config::OFFICIAL_PROVIDER_ID),
+                )?;
+                return Ok(true);
+            }
+        }
+    }
+
+    let import_result = ProviderService::import_default_config(state, app_type.clone());
+    if matches!(app_type, AppType::GrokBuild) {
+        if let Err(error) = ensure_grokbuild_official_provider(state) {
+            log::warn!("补充 Grok Official 供应商失败: {error}");
+        }
+    }
+    let imported = import_result?;
 
     if imported {
         // Extract common config snippet (mirrors old startup logic in lib.rs)
@@ -115,6 +142,32 @@ fn import_default_config_internal(state: &AppState, app_type: AppType) -> Result
     }
 
     Ok(imported)
+}
+
+fn ensure_grokbuild_official_provider(state: &AppState) -> Result<bool, AppError> {
+    if state
+        .db
+        .get_provider_by_id(
+            crate::grok_config::OFFICIAL_PROVIDER_ID,
+            AppType::GrokBuild.as_str(),
+        )?
+        .is_some()
+    {
+        return Ok(false);
+    }
+
+    let mut provider = Provider::with_id(
+        crate::grok_config::OFFICIAL_PROVIDER_ID.to_string(),
+        "Grok Official".to_string(),
+        serde_json::json!({ "config": "" }),
+        Some("https://grok.com".to_string()),
+    );
+    provider.category = Some("official".to_string());
+    provider.icon = Some("grok".to_string());
+    state
+        .db
+        .save_provider(AppType::GrokBuild.as_str(), &provider)?;
+    Ok(true)
 }
 
 pub(crate) fn import_default_config_for_app_internal(
@@ -424,3 +477,64 @@ pub(crate) fn get_claude_desktop_default_routes_internal(
 // ============================================================================
 // OpenClaw 专属命令 → 已迁移至 commands/openclaw.rs
 // ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct TestHome {
+        previous: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            crate::settings::reload_settings().expect("reload test settings");
+            Self {
+                previous,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+            crate::settings::reload_settings().expect("restore settings");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn manual_import_maps_official_grok_live_to_official_provider() {
+        let _home = TestHome::new();
+        crate::grok_config::write_grok_live_settings(&serde_json::json!({
+            "config": "[mcp_servers.echo]\ncommand = \"echo\"\n"
+        }))
+        .expect("write official live config");
+        let db = Arc::new(crate::database::Database::memory().expect("database"));
+        let state = AppState::new(db.clone());
+
+        assert!(import_default_config_for_app_internal(&state, AppType::GrokBuild).unwrap());
+        let provider = db
+            .get_provider_by_id(
+                crate::grok_config::OFFICIAL_PROVIDER_ID,
+                AppType::GrokBuild.as_str(),
+            )
+            .unwrap()
+            .expect("official provider");
+        assert_eq!(provider.category.as_deref(), Some("official"));
+        assert_eq!(
+            crate::settings::get_current_provider(&AppType::GrokBuild).as_deref(),
+            Some(crate::grok_config::OFFICIAL_PROVIDER_ID)
+        );
+    }
+}

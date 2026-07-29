@@ -261,6 +261,18 @@ impl StreamCheckService {
                 )
                 .await
             }
+            AppType::GrokBuild => {
+                Self::check_codex_stream(
+                    &client,
+                    &base_url,
+                    &auth,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                    provider,
+                )
+                .await
+            }
             AppType::Gemini => {
                 Self::check_gemini_stream(
                     &client,
@@ -1172,6 +1184,15 @@ impl StreamCheckService {
             AppType::Codex => {
                 Self::extract_codex_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
+            AppType::GrokBuild => crate::grok_config::extract_model_config(
+                provider
+                    .settings_config
+                    .get("config")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default(),
+            )
+            .map(|model| model.model)
+            .unwrap_or_else(|| config.codex_model.clone()),
             AppType::Gemini => Self::extract_env_model(provider, "GEMINI_MODEL")
                 .unwrap_or_else(|| config.gemini_model.clone()),
             AppType::OpenCode => {

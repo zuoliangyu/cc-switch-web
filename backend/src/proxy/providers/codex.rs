@@ -220,7 +220,11 @@ pub fn codex_provider_upstream_model(provider: &Provider) -> Option<String> {
                 .settings_config
                 .get("config")
                 .and_then(|value| value.as_str())
-                .and_then(extract_codex_model_from_toml)
+                .and_then(|config| {
+                    crate::grok_config::extract_model_config(config)
+                        .map(|model| model.model)
+                        .or_else(|| extract_codex_model_from_toml(config))
+                })
         })
 }
 
@@ -542,6 +546,11 @@ impl CodexAdapter {
             {
                 return Some(key.to_string());
             }
+            if let Some(config_str) = config.as_str() {
+                if let Some((_, key)) = crate::grok_config::extract_credentials(config_str) {
+                    return Some(key);
+                }
+            }
         }
 
         None
@@ -586,6 +595,9 @@ impl ProviderAdapter for CodexAdapter {
 
             // 尝试解析 TOML 字符串格式
             if let Some(config_str) = config.as_str() {
+                if let Some(url) = crate::grok_config::extract_base_url(config_str) {
+                    return Ok(url);
+                }
                 if let Some(start) = config_str.find("base_url = \"") {
                     let rest = &config_str[start + 12..];
                     if let Some(end) = rest.find('"') {
@@ -741,6 +753,34 @@ mod tests {
 
         let auth = adapter.extract_auth(&provider).unwrap();
         assert_eq!(auth.api_key, "sk-env-key-12345678");
+    }
+
+    #[test]
+    fn grok_build_toml_exposes_upstream_connection() {
+        let adapter = CodexAdapter::new();
+        let provider = create_provider(json!({
+            "config": r#"[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "upstream-grok-model"
+base_url = "https://relay.example.com/v1/"
+name = "Example Relay"
+api_key = "grok-secret"
+api_backend = "responses"
+context_window = 500000
+"#
+        }));
+
+        assert_eq!(
+            adapter.extract_base_url(&provider).unwrap(),
+            "https://relay.example.com/v1"
+        );
+        assert_eq!(adapter.extract_auth(&provider).unwrap().api_key, "grok-secret");
+        assert_eq!(
+            codex_provider_upstream_model(&provider).as_deref(),
+            Some("upstream-grok-model")
+        );
     }
 
     #[test]

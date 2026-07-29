@@ -116,6 +116,9 @@ impl McpService {
             AppType::Gemini => {
                 mcp::sync_single_server_to_gemini(&server.id, &server.server)?;
             }
+            AppType::GrokBuild => {
+                log::debug!("Grok Build MCP 将在下一阶段启用，当前跳过同步");
+            }
             AppType::OpenCode => {
                 mcp::sync_single_server_to_opencode(&server.id, &server.server)?;
             }
@@ -150,6 +153,9 @@ impl McpService {
             AppType::Claude => mcp::remove_server_from_claude(id)?,
             AppType::Codex => mcp::remove_server_from_codex(id)?,
             AppType::Gemini => mcp::remove_server_from_gemini(id)?,
+            AppType::GrokBuild => {
+                log::debug!("Grok Build MCP 将在下一阶段启用，当前跳过移除");
+            }
             AppType::OpenCode => {
                 mcp::remove_server_from_opencode(id)?;
             }

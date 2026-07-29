@@ -11,6 +11,7 @@ mod database;
 mod error;
 mod gemini_config;
 mod gemini_mcp;
+mod grok_config;
 mod hermes_config;
 mod mcp;
 mod model_capabilities;

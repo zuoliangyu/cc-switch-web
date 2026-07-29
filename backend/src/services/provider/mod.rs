@@ -54,6 +54,7 @@ pub struct SwitchResult {
 mod tests {
     use super::*;
     use serde_json::json;
+    use serial_test::serial;
 
     struct TestHome {
         previous: Option<std::ffi::OsString>,
@@ -114,6 +115,51 @@ mod tests {
             ProviderService::extract_credentials(&provider, &AppType::Claude).unwrap();
         assert_eq!(api_key, "token");
         assert_eq!(base_url, "https://claude.example");
+    }
+
+    #[test]
+    #[serial]
+    fn grokbuild_provider_crud_accepts_custom_and_official_configs() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
+        );
+        let state = AppState::new(db);
+        let custom = Provider::with_id(
+            "grok-custom".into(),
+            "Grok Custom".into(),
+            json!({
+                "config": r#"[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://example.com/v1"
+name = "Example"
+api_key = "secret"
+api_backend = "responses"
+context_window = 500000
+"#
+            }),
+            None,
+        );
+        ProviderService::add(&state, AppType::GrokBuild, custom, true)
+            .expect("add custom provider");
+
+        let mut official = Provider::with_id(
+            "grokbuild-official".into(),
+            "Grok Official".into(),
+            json!({ "config": "" }),
+            None,
+        );
+        official.category = Some("official".into());
+        ProviderService::add(&state, AppType::GrokBuild, official, true)
+            .expect("add official provider");
+
+        let providers = ProviderService::list(&state, AppType::GrokBuild).unwrap();
+        assert!(providers.contains_key("grok-custom"));
+        assert!(providers.contains_key("grokbuild-official"));
     }
 
     #[test]
@@ -1081,6 +1127,7 @@ impl ProviderService {
             }
             AppType::Codex => Self::extract_codex_common_config(&provider.settings_config),
             AppType::Gemini => Self::extract_gemini_common_config(&provider.settings_config),
+            AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
         }
@@ -1097,6 +1144,7 @@ impl ProviderService {
             }
             AppType::Codex => Self::extract_codex_common_config(settings_config),
             AppType::Gemini => Self::extract_gemini_common_config(settings_config),
+            AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
         }
@@ -1607,6 +1655,30 @@ impl ProviderService {
                 use crate::gemini_config::validate_gemini_settings;
                 validate_gemini_settings(&provider.settings_config)?
             }
+            AppType::GrokBuild => {
+                let settings = provider.settings_config.as_object().ok_or_else(|| {
+                    AppError::localized(
+                        "provider.grokbuild.settings.not_object",
+                        "Grok Build 配置必须是 JSON 对象",
+                        "Grok Build configuration must be a JSON object",
+                    )
+                })?;
+                let config = settings
+                    .get("config")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.config.missing",
+                            "Grok Build 配置缺少 config 字段",
+                            "Grok Build configuration is missing the config field",
+                        )
+                    })?;
+                if provider.category.as_deref() == Some("official") {
+                    crate::grok_config::validate_config_toml_syntax(config)?;
+                } else {
+                    crate::grok_config::validate_config_toml(config)?;
+                }
+            }
             AppType::OpenCode => {
                 // OpenCode uses a different config structure: { npm, options, models }
                 // Basic validation - must be an object
@@ -1764,6 +1836,28 @@ impl ProviderService {
                     .cloned()
                     .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_string());
 
+                Ok((api_key, base_url))
+            }
+            AppType::GrokBuild => {
+                let config = provider
+                    .settings_config
+                    .get("config")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.config.missing",
+                            "Grok Build 配置缺少 config 字段",
+                            "Grok Build configuration is missing the config field",
+                        )
+                    })?;
+                let (base_url, api_key) = crate::grok_config::extract_credentials(config)
+                    .ok_or_else(|| {
+                        AppError::localized(
+                            "provider.grokbuild.credentials.missing",
+                            "Grok Build 配置缺少 Base URL 或 API Key",
+                            "Grok Build configuration is missing the base URL or API key",
+                        )
+                    })?;
                 Ok((api_key, base_url))
             }
             AppType::OpenCode => {

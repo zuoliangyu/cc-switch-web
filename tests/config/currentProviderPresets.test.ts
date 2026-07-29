@@ -4,7 +4,10 @@ import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
 import { grokBuildProviderPresets } from "@/config/grokBuildProviderPresets";
 import { openclawProviderPresets } from "@/config/openclawProviderPresets";
-import { opencodeProviderPresets } from "@/config/opencodeProviderPresets";
+import {
+  OPENCODE_PRESET_MODEL_VARIANTS,
+  opencodeProviderPresets,
+} from "@/config/opencodeProviderPresets";
 import { localIconList } from "@/icons/local";
 import en from "@/i18n/locales/en.json";
 import ja from "@/i18n/locales/ja.json";
@@ -116,5 +119,52 @@ describe("current provider presets", () => {
       "TheRouter",
       "自定义",
     ]);
+  });
+
+  it("matches current OpenCode providers and model capabilities", () => {
+    const names = opencodeProviderPresets.map((preset) => preset.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "ZetaAPI",
+        "APINebula",
+        "FennoAI",
+        "Unity2.ai",
+        "SubRouter",
+        "APIKEY.FUN",
+        "Code0",
+        "OpenCode Go",
+        "CherryIN",
+      ]),
+    );
+    for (const retired of [
+      "Kimi k2.6",
+      "X-Code API",
+      "CTok.ai",
+      "LionCCAPI",
+      "LemonData",
+      "OpenAI Compatible",
+    ]) {
+      expect(names).not.toContain(retired);
+    }
+    expect(
+      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/openai"].map(
+        (model) => model.id,
+      ),
+    ).toContain("gpt-5.6-sol");
+    expect(
+      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/google"].map(
+        (model) => model.id,
+      ),
+    ).toContain("gemini-3.6-flash");
+    expect(
+      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/amazon-bedrock"].map(
+        (model) => model.id,
+      ),
+    ).toContain("global.anthropic.claude-opus-5");
+    for (const locale of [zh, en, ja]) {
+      expect(locale.providerForm.partnerPromotion.fenno).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.opencode_go).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.zetaapi).toBeTruthy();
+    }
   });
 });

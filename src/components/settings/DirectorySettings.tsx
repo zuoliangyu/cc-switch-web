@@ -17,6 +17,7 @@ interface DirectorySettingsProps {
   claudeDir?: string;
   codexDir?: string;
   geminiDir?: string;
+  grokDir?: string;
   opencodeDir?: string;
   openclawDir?: string;
   hermesDir?: string;
@@ -36,6 +37,7 @@ export function DirectorySettings({
   claudeDir,
   codexDir,
   geminiDir,
+  grokDir,
   opencodeDir,
   openclawDir,
   hermesDir,
@@ -51,7 +53,9 @@ export function DirectorySettings({
       {showAppConfigDir && (
         <section className="space-y-4">
           <header className="space-y-1">
-            <h3 className="text-sm font-medium">{t("settings.appConfigDir")}</h3>
+            <h3 className="text-sm font-medium">
+              {t("settings.appConfigDir")}
+            </h3>
             <p className="text-xs text-muted-foreground">
               {t("settings.appConfigDirDescription")}
             </p>
@@ -133,6 +137,18 @@ export function DirectorySettings({
           onChange={(val) => onDirectoryChange("gemini", val)}
           onBrowse={() => onBrowseDirectory("gemini")}
           onReset={() => onResetDirectory("gemini")}
+        />
+
+        <DirectoryInput
+          allowBrowse={allowBrowse}
+          label={t("settings.grokConfigDir")}
+          description={undefined}
+          value={grokDir}
+          resolvedValue={resolvedDirs.grokbuild}
+          placeholder={t("settings.browsePlaceholderGrok")}
+          onChange={(val) => onDirectoryChange("grokbuild", val)}
+          onBrowse={() => onBrowseDirectory("grokbuild")}
+          onReset={() => onResetDirectory("grokbuild")}
         />
 
         <DirectoryInput

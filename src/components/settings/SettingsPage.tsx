@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -401,7 +407,9 @@ export function SettingsPage({
                         defaultValue:
                           "高级设置聚合了配置目录、导入导出、备份、云同步、日志和模型测试等偏运维能力。",
                       })}
-                      icon={<Database className="h-5 w-5 theme-tertiary-text" />}
+                      icon={
+                        <Database className="h-5 w-5 theme-tertiary-text" />
+                      }
                     />
                     <Accordion
                       type="multiple"
@@ -437,6 +445,7 @@ export function SettingsPage({
                             claudeDir={settings.claudeConfigDir}
                             codexDir={settings.codexConfigDir}
                             geminiDir={settings.geminiConfigDir}
+                            grokDir={settings.grokConfigDir}
                             opencodeDir={settings.opencodeConfigDir}
                             openclawDir={settings.openclawConfigDir}
                             hermesDir={settings.hermesConfigDir}
@@ -619,9 +628,7 @@ export function SettingsPage({
             </div>
 
             {activeTab === "advanced" && settings && (
-              <div
-                className="sticky bottom-0 flex-shrink-0 border-t border-border-default bg-background/90 py-4 backdrop-blur-xl"
-              >
+              <div className="sticky bottom-0 flex-shrink-0 border-t border-border-default bg-background/90 py-4 backdrop-blur-xl">
                 <div className="flex items-center justify-end gap-3 px-1 sm:px-2">
                   <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? (

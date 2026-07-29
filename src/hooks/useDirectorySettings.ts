@@ -9,6 +9,7 @@ type DirectoryKey =
   | "claude"
   | "codex"
   | "gemini"
+  | "grokbuild"
   | "opencode"
   | "openclaw"
   | "hermes";
@@ -18,6 +19,7 @@ export interface ResolvedDirectories {
   claude: string;
   codex: string;
   gemini: string;
+  grokbuild: string;
   opencode: string;
   openclaw: string;
   hermes: string;
@@ -49,6 +51,7 @@ export interface UseDirectorySettingsResult {
     claudeDir?: string,
     codexDir?: string,
     geminiDir?: string,
+    grokDir?: string,
     opencodeDir?: string,
     openclawDir?: string,
     hermesDir?: string,
@@ -78,6 +81,7 @@ export function useDirectorySettings({
     claude: "",
     codex: "",
     gemini: "",
+    grokbuild: "",
     opencode: "",
     openclaw: "",
     hermes: "",
@@ -89,6 +93,7 @@ export function useDirectorySettings({
     claude: "",
     codex: "",
     gemini: "",
+    grokbuild: "",
     opencode: "",
     openclaw: "",
     hermes: "",
@@ -108,6 +113,7 @@ export function useDirectorySettings({
           claudeDir,
           codexDir,
           geminiDir,
+          grokDir,
           opencodeDir,
           openclawDir,
           hermesDir,
@@ -115,6 +121,7 @@ export function useDirectorySettings({
           defaultClaudeDir,
           defaultCodexDir,
           defaultGeminiDir,
+          defaultGrokDir,
           defaultOpencodeDir,
           defaultOpenclawDir,
           defaultHermesDir,
@@ -124,6 +131,7 @@ export function useDirectorySettings({
           settingsApi.getConfigDir("claude"),
           settingsApi.getConfigDir("codex"),
           settingsApi.getConfigDir("gemini"),
+          settingsApi.getConfigDir("grokbuild"),
           settingsApi.getConfigDir("opencode"),
           settingsApi.getConfigDir("openclaw"),
           settingsApi.getConfigDir("hermes"),
@@ -131,6 +139,7 @@ export function useDirectorySettings({
           settingsApi.getDefaultConfigDir("claude"),
           settingsApi.getDefaultConfigDir("codex"),
           settingsApi.getDefaultConfigDir("gemini"),
+          settingsApi.getDefaultConfigDir("grokbuild"),
           settingsApi.getDefaultConfigDir("opencode"),
           settingsApi.getDefaultConfigDir("openclaw"),
           settingsApi.getDefaultConfigDir("hermes"),
@@ -145,6 +154,7 @@ export function useDirectorySettings({
           claude: defaultClaudeDir ?? "",
           codex: defaultCodexDir ?? "",
           gemini: defaultGeminiDir ?? "",
+          grokbuild: defaultGrokDir ?? "",
           opencode: defaultOpencodeDir ?? "",
           openclaw: defaultOpenclawDir ?? "",
           hermes: defaultHermesDir ?? "",
@@ -161,6 +171,7 @@ export function useDirectorySettings({
           claude: claudeDir || defaultsRef.current.claude,
           codex: codexDir || defaultsRef.current.codex,
           gemini: geminiDir || defaultsRef.current.gemini,
+          grokbuild: grokDir || defaultsRef.current.grokbuild,
           opencode: opencodeDir || defaultsRef.current.opencode,
           openclaw: openclawDir || defaultsRef.current.openclaw,
           hermes: hermesDir || defaultsRef.current.hermes,
@@ -196,11 +207,13 @@ export function useDirectorySettings({
               ? { codexConfigDir: sanitized }
               : key === "gemini"
                 ? { geminiConfigDir: sanitized }
-                : key === "opencode"
-                  ? { opencodeConfigDir: sanitized }
-                  : key === "openclaw"
-                    ? { openclawConfigDir: sanitized }
-                    : { hermesConfigDir: sanitized },
+                : key === "grokbuild"
+                  ? { grokConfigDir: sanitized }
+                  : key === "opencode"
+                    ? { opencodeConfigDir: sanitized }
+                    : key === "openclaw"
+                      ? { openclawConfigDir: sanitized }
+                      : { hermesConfigDir: sanitized },
         );
       }
 
@@ -228,11 +241,13 @@ export function useDirectorySettings({
             ? "codex"
             : app === "gemini"
               ? "gemini"
-              : app === "opencode"
-                ? "opencode"
-                : app === "openclaw"
-                  ? "openclaw"
-                  : "hermes",
+              : app === "grokbuild"
+                ? "grokbuild"
+                : app === "opencode"
+                  ? "opencode"
+                  : app === "openclaw"
+                    ? "openclaw"
+                    : "hermes",
         value,
       );
     },
@@ -264,14 +279,16 @@ export function useDirectorySettings({
         app === "claude"
           ? "claude"
           : app === "codex"
-          ? "codex"
-          : app === "gemini"
-            ? "gemini"
-            : app === "opencode"
-              ? "opencode"
-              : app === "openclaw"
-                ? "openclaw"
-                : "hermes";
+            ? "codex"
+            : app === "gemini"
+              ? "gemini"
+              : app === "grokbuild"
+                ? "grokbuild"
+                : app === "opencode"
+                  ? "opencode"
+                  : app === "openclaw"
+                    ? "openclaw"
+                    : "hermes";
       if (!defaultsRef.current[key]) {
         try {
           const fallback = await settingsApi.getDefaultConfigDir(app);
@@ -314,6 +331,7 @@ export function useDirectorySettings({
       claudeDir?: string,
       codexDir?: string,
       geminiDir?: string,
+      grokDir?: string,
       opencodeDir?: string,
       openclawDir?: string,
       hermesDir?: string,
@@ -325,6 +343,7 @@ export function useDirectorySettings({
         claude: claudeDir ?? defaultsRef.current.claude,
         codex: codexDir ?? defaultsRef.current.codex,
         gemini: geminiDir ?? defaultsRef.current.gemini,
+        grokbuild: grokDir ?? defaultsRef.current.grokbuild,
         opencode: opencodeDir ?? defaultsRef.current.opencode,
         openclaw: openclawDir ?? defaultsRef.current.openclaw,
         hermes: hermesDir ?? defaultsRef.current.hermes,

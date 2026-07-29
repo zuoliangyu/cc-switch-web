@@ -31,6 +31,7 @@
 - Grok Build 支持统一 MCP、Skills 与 Prompts：MCP 投影到 `config.toml` 且不会污染 Provider 快照，Skill 同步到 `.grok/skills`，启用 Prompt 写入 `.grok/AGENTS.md`。
 - Grok Build 支持独立代理接管与故障转移队列，通过 `/grokbuild/v1` 复用 Responses/Chat/Anthropic 协议桥；官方登录态禁止接管，备份与恢复会拒绝代理占位符并保留 MCP。
 - Grok Build Session 支持扫描活跃与归档会话、读取消息并在严格路径和 ID 校验后删除会话目录。
+- 前端新增 Grok Build 应用入口，并接入可见性与配置目录设置、MCP/Skills/Prompts、Session、Usage 筛选及代理接管和故障转移队列。
 
 ## [0.8.0] - 2026-05-23
 

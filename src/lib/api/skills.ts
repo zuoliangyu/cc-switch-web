@@ -7,6 +7,7 @@ export type AppType =
   | "claude"
   | "codex"
   | "gemini"
+  | "grokbuild"
   | "opencode"
   | "openclaw"
   | "hermes";
@@ -17,6 +18,7 @@ export interface SkillApps {
   "claude-desktop": boolean;
   codex: boolean;
   gemini: boolean;
+  grokbuild?: boolean;
   opencode: boolean;
   openclaw: boolean;
   hermes: boolean;
@@ -194,9 +196,7 @@ export const skillsApi = {
   },
 
   /** 迁移 Skill 存储位置 */
-  async migrateStorage(
-    target: SkillStorageLocation,
-  ): Promise<MigrationResult> {
+  async migrateStorage(target: SkillStorageLocation): Promise<MigrationResult> {
     return await invoke("migrate_skill_storage", { target });
   },
 
@@ -237,4 +237,3 @@ export const skillsApi = {
     });
   },
 };
-

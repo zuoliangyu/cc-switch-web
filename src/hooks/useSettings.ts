@@ -104,6 +104,7 @@ export function useSettings(): UseSettingsResult {
       sanitizeDir(data?.claudeConfigDir),
       sanitizeDir(data?.codexConfigDir),
       sanitizeDir(data?.geminiConfigDir),
+      sanitizeDir(data?.grokConfigDir),
       sanitizeDir(data?.opencodeConfigDir),
       sanitizeDir(data?.openclawConfigDir),
       sanitizeDir(data?.hermesConfigDir),
@@ -129,15 +130,14 @@ export function useSettings(): UseSettingsResult {
         const sanitizedClaudeDir = sanitizeDir(mergedSettings.claudeConfigDir);
         const sanitizedCodexDir = sanitizeDir(mergedSettings.codexConfigDir);
         const sanitizedGeminiDir = sanitizeDir(mergedSettings.geminiConfigDir);
+        const sanitizedGrokDir = sanitizeDir(mergedSettings.grokConfigDir);
         const sanitizedOpencodeDir = sanitizeDir(
           mergedSettings.opencodeConfigDir,
         );
         const sanitizedOpenclawDir = sanitizeDir(
           mergedSettings.openclawConfigDir,
         );
-        const sanitizedHermesDir = sanitizeDir(
-          mergedSettings.hermesConfigDir,
-        );
+        const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
         const { webdavSync: _ignoredWebdavSync, ...restSettings } =
           mergedSettings;
 
@@ -146,6 +146,7 @@ export function useSettings(): UseSettingsResult {
           claudeConfigDir: sanitizedClaudeDir,
           codexConfigDir: sanitizedCodexDir,
           geminiConfigDir: sanitizedGeminiDir,
+          grokConfigDir: sanitizedGrokDir,
           opencodeConfigDir: sanitizedOpencodeDir,
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
@@ -265,19 +266,19 @@ export function useSettings(): UseSettingsResult {
         const sanitizedClaudeDir = sanitizeDir(mergedSettings.claudeConfigDir);
         const sanitizedCodexDir = sanitizeDir(mergedSettings.codexConfigDir);
         const sanitizedGeminiDir = sanitizeDir(mergedSettings.geminiConfigDir);
+        const sanitizedGrokDir = sanitizeDir(mergedSettings.grokConfigDir);
         const sanitizedOpencodeDir = sanitizeDir(
           mergedSettings.opencodeConfigDir,
         );
         const sanitizedOpenclawDir = sanitizeDir(
           mergedSettings.openclawConfigDir,
         );
-        const sanitizedHermesDir = sanitizeDir(
-          mergedSettings.hermesConfigDir,
-        );
+        const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
         const previousAppDir = initialAppConfigDir;
         const previousClaudeDir = sanitizeDir(data?.claudeConfigDir);
         const previousCodexDir = sanitizeDir(data?.codexConfigDir);
         const previousGeminiDir = sanitizeDir(data?.geminiConfigDir);
+        const previousGrokDir = sanitizeDir(data?.grokConfigDir);
         const previousOpencodeDir = sanitizeDir(data?.opencodeConfigDir);
         const { webdavSync: _ignoredWebdavSync, ...restSettings } =
           mergedSettings;
@@ -287,6 +288,7 @@ export function useSettings(): UseSettingsResult {
           claudeConfigDir: sanitizedClaudeDir,
           codexConfigDir: sanitizedCodexDir,
           geminiConfigDir: sanitizedGeminiDir,
+          grokConfigDir: sanitizedGrokDir,
           opencodeConfigDir: sanitizedOpencodeDir,
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
@@ -380,11 +382,13 @@ export function useSettings(): UseSettingsResult {
         const claudeDirChanged = sanitizedClaudeDir !== previousClaudeDir;
         const codexDirChanged = sanitizedCodexDir !== previousCodexDir;
         const geminiDirChanged = sanitizedGeminiDir !== previousGeminiDir;
+        const grokDirChanged = sanitizedGrokDir !== previousGrokDir;
         const opencodeDirChanged = sanitizedOpencodeDir !== previousOpencodeDir;
         if (
           claudeDirChanged ||
           codexDirChanged ||
           geminiDirChanged ||
+          grokDirChanged ||
           opencodeDirChanged
         ) {
           const syncResult = await syncCurrentProvidersLiveSafe();

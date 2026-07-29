@@ -231,6 +231,7 @@ const mergeMcpApps = (apps: string | undefined) => {
     "claude-desktop": targets.includes("claude-desktop"),
     codex: targets.includes("codex"),
     gemini: targets.includes("gemini"),
+    grokbuild: targets.includes("grokbuild"),
     opencode: targets.includes("opencode"),
     openclaw: targets.includes("openclaw"),
     hermes: targets.includes("hermes"),
@@ -244,7 +245,9 @@ const importMcp = async (
     throw new Error("mcp deeplink 缺少 config");
   }
   const decoded = decodeBase64Utf8(request.config);
-  const config = JSON.parse(decoded) as { mcpServers?: Record<string, unknown> };
+  const config = JSON.parse(decoded) as {
+    mcpServers?: Record<string, unknown>;
+  };
   const servers = config.mcpServers ?? {};
   if (Object.keys(servers).length === 0) {
     throw new Error("deeplink 中未找到 MCP 服务器配置");
@@ -266,10 +269,10 @@ const importMcp = async (
             apps: {
               claude: current.apps.claude || targetApps.claude,
               "claude-desktop":
-                current.apps["claude-desktop"] ||
-                targetApps["claude-desktop"],
+                current.apps["claude-desktop"] || targetApps["claude-desktop"],
               codex: current.apps.codex || targetApps.codex,
               gemini: current.apps.gemini || targetApps.gemini,
+              grokbuild: current.apps.grokbuild || targetApps.grokbuild,
               opencode: current.apps.opencode || targetApps.opencode,
               openclaw: current.apps.openclaw || targetApps.openclaw,
               hermes: current.apps.hermes || targetApps.hermes,

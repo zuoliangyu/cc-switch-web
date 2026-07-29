@@ -17,6 +17,7 @@ const DATA_SOURCE_ICONS: Record<string, ReactNode> = {
   codex_db: <Database className="h-3.5 w-3.5" />,
   codex_session: <FileText className="h-3.5 w-3.5" />,
   gemini_session: <FileText className="h-3.5 w-3.5" />,
+  grok_session: <FileText className="h-3.5 w-3.5" />,
 };
 
 export function DataSourceBar({ refreshIntervalMs }: DataSourceBarProps) {
@@ -36,7 +37,9 @@ export function DataSourceBar({ refreshIntervalMs }: DataSourceBarProps) {
     try {
       const result = await usageApi.syncSessionUsage();
       if (result.imported > 0) {
-        toast.success(t("usage.sessionSync.imported", { count: result.imported }));
+        toast.success(
+          t("usage.sessionSync.imported", { count: result.imported }),
+        );
         queryClient.invalidateQueries({ queryKey: usageKeys.all });
       } else {
         toast.info(t("usage.sessionSync.upToDate"));

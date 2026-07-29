@@ -59,6 +59,7 @@ import {
 type ProviderFilter =
   | "all"
   | "codex"
+  | "grokbuild"
   | "claude"
   | "opencode"
   | "openclaw"
@@ -710,6 +711,16 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 <span>Codex</span>
                               </div>
                             </SelectItem>
+                            <SelectItem value="grokbuild">
+                              <div className="flex items-center gap-2">
+                                <ProviderIcon
+                                  icon="grok"
+                                  name="Grok Build"
+                                  size={14}
+                                />
+                                <span>Grok Build</span>
+                              </div>
+                            </SelectItem>
                             <SelectItem value="claude">
                               <div className="flex items-center gap-2">
                                 <ProviderIcon
@@ -1155,26 +1166,28 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               className="relative"
                               style={{ height: virtualizer.getTotalSize() }}
                             >
-                              {virtualizer.getVirtualItems().map((virtualRow) => (
-                                <div
-                                  key={virtualRow.key}
-                                  data-index={virtualRow.index}
-                                  ref={virtualizer.measureElement}
-                                  className="absolute left-0 top-0 w-full"
-                                  style={{
-                                    transform: `translateY(${virtualRow.start}px)`,
-                                  }}
-                                >
-                                  <SessionMessageItem
-                                    message={messages[virtualRow.index]}
-                                    isActive={
-                                      activeMessageIndex === virtualRow.index
-                                    }
-                                    searchQuery={search}
-                                    onCopy={handleMessageCopy}
-                                  />
-                                </div>
-                              ))}
+                              {virtualizer
+                                .getVirtualItems()
+                                .map((virtualRow) => (
+                                  <div
+                                    key={virtualRow.key}
+                                    data-index={virtualRow.index}
+                                    ref={virtualizer.measureElement}
+                                    className="absolute left-0 top-0 w-full"
+                                    style={{
+                                      transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                  >
+                                    <SessionMessageItem
+                                      message={messages[virtualRow.index]}
+                                      isActive={
+                                        activeMessageIndex === virtualRow.index
+                                      }
+                                      searchQuery={search}
+                                      onCopy={handleMessageCopy}
+                                    />
+                                  </div>
+                                ))}
                             </div>
                           )}
                         </div>

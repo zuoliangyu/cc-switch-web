@@ -143,7 +143,7 @@ export function useProviderActions(
         provider.meta?.providerType === "github_copilot";
       // 跟随上游 cc-switch 1c82b8a3：Codex provider 走 Chat 协议也需要代理路由
       const isCodexChatFormat =
-        activeApp === "codex" &&
+        (activeApp === "codex" || activeApp === "grokbuild") &&
         (provider.meta?.apiFormat === "openai_chat" ||
           (typeof (provider.settingsConfig as Record<string, any>)?.config ===
             "string" &&
@@ -153,7 +153,7 @@ export function useProviderActions(
               ),
             )));
       const isCodexAnthropicFormat =
-        activeApp === "codex" &&
+        (activeApp === "codex" || activeApp === "grokbuild") &&
         (provider.meta?.apiFormat === "anthropic" ||
           (typeof (provider.settingsConfig as Record<string, any>)?.config ===
             "string" &&
@@ -211,7 +211,9 @@ export function useProviderActions(
           });
         } else if (
           provider.meta?.isFullUrl &&
-          (activeApp === "claude" || activeApp === "codex")
+          (activeApp === "claude" ||
+            activeApp === "codex" ||
+            activeApp === "grokbuild")
         ) {
           proxyRequiredReason = t("notifications.proxyReasonFullUrl", {
             defaultValue: "开启了完整 URL 连接模式",

@@ -34,7 +34,9 @@ export function FailoverToggle({ className, activeApp }: FailoverToggleProps) {
       ? "Claude"
       : activeApp === "codex"
         ? "Codex"
-        : "Gemini";
+        : activeApp === "grokbuild"
+          ? "Grok Build"
+          : "Gemini";
 
   const tooltipText = isEnabled
     ? t("failover.tooltip.enabled", {

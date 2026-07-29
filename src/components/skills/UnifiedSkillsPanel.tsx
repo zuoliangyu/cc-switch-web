@@ -96,7 +96,9 @@ function formatArchiveFileSize(size: number): string {
   return `${size} B`;
 }
 
-function summarizeArchiveFailures(results: SkillArchiveInstallResult[]): string {
+function summarizeArchiveFailures(
+  results: SkillArchiveInstallResult[],
+): string {
   return results
     .slice(0, 3)
     .map((result) => result.fileName)
@@ -159,6 +161,7 @@ const UnifiedSkillsPanel = React.forwardRef<
       "claude-desktop": 0,
       codex: 0,
       gemini: 0,
+      grokbuild: 0,
       opencode: 0,
       openclaw: 0,
       hermes: 0,
@@ -357,8 +360,9 @@ const UnifiedSkillsPanel = React.forwardRef<
 
       if (failedResults.length === 0) {
         if (installedCount === 1) {
-          const installed = results.find((result) => result.installed.length > 0)
-            ?.installed[0];
+          const installed = results.find(
+            (result) => result.installed.length > 0,
+          )?.installed[0];
           toast.success(
             t("skills.installFromZip.successSingle", {
               name: installed?.name ?? "",
@@ -397,28 +401,34 @@ const UnifiedSkillsPanel = React.forwardRef<
       console.error("[skills] archive install failures", failedResults);
 
       if (installedCount > 0) {
-        toast.success(t("skills.installFromZip.partialSuccess", {
-          count: installedCount,
-        }), {
-          description: t("skills.installFromZip.partialSuccessDescription", {
-            count: failedResults.length,
-            files: summarizeArchiveFailures(failedResults),
+        toast.success(
+          t("skills.installFromZip.partialSuccess", {
+            count: installedCount,
           }),
-          closeButton: true,
-        });
+          {
+            description: t("skills.installFromZip.partialSuccessDescription", {
+              count: failedResults.length,
+              files: summarizeArchiveFailures(failedResults),
+            }),
+            closeButton: true,
+          },
+        );
         setArchiveDialogOpen(false);
         setArchiveFiles([]);
         return;
       }
 
-      toast.error(t("skills.installFromZip.failed", {
-        count: failedResults.length,
-      }), {
-        description: t("skills.installFromZip.failedDescription", {
-          files: summarizeArchiveFailures(failedResults),
+      toast.error(
+        t("skills.installFromZip.failed", {
+          count: failedResults.length,
         }),
-        closeButton: true,
-      });
+        {
+          description: t("skills.installFromZip.failedDescription", {
+            files: summarizeArchiveFailures(failedResults),
+          }),
+          closeButton: true,
+        },
+      );
     } catch (error) {
       toast.error(t("skills.installFailed"), { description: String(error) });
     }
@@ -946,7 +956,10 @@ const InstallSkillsFromZipDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" zIndex="alert">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] flex flex-col"
+        zIndex="alert"
+      >
         <DialogHeader>
           <DialogTitle>{t("skills.installFromZip.dialogTitle")}</DialogTitle>
           <DialogDescription>
@@ -1010,7 +1023,10 @@ const InstallSkillsFromZipDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
                       className="flex items-center gap-3 rounded-xl border border-border-default bg-background/80 px-4 py-3"
                     >
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                        <FileArchive size={16} className="text-muted-foreground" />
+                        <FileArchive
+                          size={16}
+                          className="text-muted-foreground"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-foreground">
@@ -1040,7 +1056,12 @@ const InstallSkillsFromZipDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isInstalling}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isInstalling}
+          >
             {t("common.cancel")}
           </Button>
           <Button
@@ -1080,6 +1101,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
           "claude-desktop": skill.foundIn.includes("claude-desktop"),
           codex: skill.foundIn.includes("codex"),
           gemini: skill.foundIn.includes("gemini"),
+          grokbuild: skill.foundIn.includes("grokbuild"),
           opencode: skill.foundIn.includes("opencode"),
           openclaw: false,
           hermes: skill.foundIn.includes("hermes"),
@@ -1106,6 +1128,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
           claude: false,
           codex: false,
           gemini: false,
+          grokbuild: false,
           opencode: false,
           openclaw: false,
         },
@@ -1148,6 +1171,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
                           claude: false,
                           codex: false,
                           gemini: false,
+                          grokbuild: false,
                           opencode: false,
                           openclaw: false,
                         }
@@ -1160,6 +1184,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
                               claude: false,
                               codex: false,
                               gemini: false,
+                              grokbuild: false,
                               opencode: false,
                               openclaw: false,
                             }),

@@ -12,6 +12,7 @@ const visibleApps: VisibleApps = {
   "claude-desktop": false,
   codex: true,
   gemini: true,
+  grokbuild: true,
   opencode: true,
   openclaw: true,
   hermes: true,

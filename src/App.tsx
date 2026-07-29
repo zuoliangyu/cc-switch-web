@@ -22,12 +22,7 @@ import {
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
-import {
-  hermesApi,
-  providersApi,
-  settingsApi,
-  type AppId,
-} from "@/lib/api";
+import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { useHermesHealth, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -96,6 +91,7 @@ const VALID_APPS: AppId[] = [
   "claude",
   "codex",
   "gemini",
+  "grokbuild",
   "opencode",
   "openclaw",
   "hermes",
@@ -157,6 +153,7 @@ function App() {
     "claude-desktop": false,
     codex: true,
     gemini: true,
+    grokbuild: true,
     opencode: true,
     openclaw: true,
     hermes: true,
@@ -166,6 +163,7 @@ function App() {
     if (visibleApps.claude) return "claude";
     if (visibleApps.codex) return "codex";
     if (visibleApps.gemini) return "gemini";
+    if (visibleApps.grokbuild) return "grokbuild";
     if (visibleApps.opencode) return "opencode";
     if (visibleApps.openclaw) return "openclaw";
     if (visibleApps.hermes) return "hermes";
@@ -184,6 +182,7 @@ function App() {
       currentView === "sessions" &&
       activeApp !== "claude" &&
       activeApp !== "codex" &&
+      activeApp !== "grokbuild" &&
       activeApp !== "opencode" &&
       activeApp !== "openclaw" &&
       activeApp !== "gemini"
@@ -245,7 +244,9 @@ function App() {
 
         setEnvConflicts((previous) => {
           const existingKeys = new Set(
-            previous.map((conflict) => `${conflict.varName}:${conflict.sourcePath}`),
+            previous.map(
+              (conflict) => `${conflict.varName}:${conflict.sourcePath}`,
+            ),
           );
           const nextConflicts = conflicts.filter(
             (conflict) =>
@@ -329,6 +330,7 @@ function App() {
   const hasSessionSupport =
     activeApp === "claude" ||
     activeApp === "codex" ||
+    activeApp === "grokbuild" ||
     activeApp === "opencode" ||
     activeApp === "openclaw" ||
     activeApp === "gemini";
@@ -808,16 +810,12 @@ function App() {
 
       <header
         className="fixed z-50 w-full transition-all duration-300 bg-background/80 backdrop-blur-md"
-        style={
-          {
-            top: headerTopOffset,
-            height: HEADER_HEIGHT,
-          }
-        }
+        style={{
+          top: headerTopOffset,
+          height: HEADER_HEIGHT,
+        }}
       >
-        <div
-          className="flex h-full items-center justify-between gap-2 px-6"
-        >
+        <div className="flex h-full items-center justify-between gap-2 px-6">
           <div className="flex items-center gap-1">
             {currentView !== "providers" ? (
               <div className="flex items-center gap-2">
@@ -1066,9 +1064,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  handleViewChange("workspace")
-                                }
+                                onClick={() => handleViewChange("workspace")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("workspace.manage")}
                               >
@@ -1120,9 +1116,7 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() =>
-                                  handleViewChange("hermesMemory")
-                                }
+                                onClick={() => handleViewChange("hermesMemory")}
                                 className="text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 w-8 px-2"
                                 title={t("hermes.memory.title")}
                               >

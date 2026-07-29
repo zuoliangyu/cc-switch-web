@@ -245,6 +245,7 @@ describe("McpFormModal", () => {
         claude: true,
         codex: true,
         gemini: true,
+        grokbuild: true,
       },
     });
     expect(onSave).toHaveBeenCalledTimes(1);
@@ -356,7 +357,7 @@ type = "stdio"
       enabled: true,
       description: "Old desc",
       server: { type: "stdio", command: "old" },
-      apps: { claude: true, codex: false, gemini: false },
+      apps: { claude: true, codex: false, gemini: false, grokbuild: false },
     } as McpServer;
 
     const { onSave } = renderForm({
@@ -390,6 +391,7 @@ type = "stdio"
       claude: true,
       codex: false,
       gemini: false,
+      grokbuild: false,
     });
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith();
@@ -423,6 +425,12 @@ type = "stdio"
     expect(geminiCheckbox.checked).toBe(true);
     fireEvent.click(geminiCheckbox);
 
+    const grokCheckbox = screen.getByLabelText(
+      "mcp.unifiedPanel.apps.grokbuild",
+    ) as HTMLInputElement;
+    expect(grokCheckbox.checked).toBe(true);
+    fireEvent.click(grokCheckbox);
+
     fireEvent.click(screen.getByText("common.add"));
 
     await waitFor(() => expect(upsertMock).toHaveBeenCalledTimes(1));
@@ -433,6 +441,7 @@ type = "stdio"
       "claude-desktop": false,
       codex: false,
       gemini: false,
+      grokbuild: false,
       opencode: false,
       openclaw: false,
       hermes: false,

@@ -245,6 +245,7 @@ describe("useSettings hook", () => {
       "/server/claude",
       undefined, // codexConfigDir
       undefined, // geminiConfigDir
+      undefined, // grokConfigDir
       undefined, // opencodeConfigDir
       undefined, // openclawConfigDir
       undefined, // hermesConfigDir

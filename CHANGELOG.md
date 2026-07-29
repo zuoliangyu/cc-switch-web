@@ -42,6 +42,7 @@
 - Claude 与 Claude Desktop 的 xAI OAuth Provider 接入本地代理：固定使用 xAI 官方 Responses 端点，按绑定账号动态刷新并注入 Bearer token，同时阻止代理占位符发往官方上游。
 - 设置页认证中心新增 xAI / Grok 账号管理，支持设备码登录、多账号、默认账号、移除账号，以及失效凭据提示与定时刷新。
 - Claude Code 新增 xAI (Grok) OAuth Provider 预设，固定使用官方 Responses 端点与 Grok 4.5，并支持绑定托管账号和拦截失效账号。
+- 前端开放 Claude Desktop 应用入口和专属 Provider 表单，支持 71 项预设、直连或四档模型映射、1M 声明、模型拉取，以及 GitHub Copilot / Codex / xAI 托管账号绑定。
 
 ## [0.8.0] - 2026-05-23
 

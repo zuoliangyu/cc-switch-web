@@ -2699,5 +2699,45 @@
     "expiredHint": "请运行 {{tool}} 命令刷新登录",
     "queryFailed": "查询失败",
     "refresh": "刷新"
+  },
+  "claudeDesktop": {
+    "officialNotice": "Claude Desktop 官方供应商使用应用内置的 1P 登录，无需配置 API Key 和接口地址。",
+    "mode": "模型处理方式",
+    "modeDirect": "直连",
+    "modeProxy": "需要路由",
+    "modelMappingToggle": "需要模型映射",
+    "modelMappingOffHint": "仅当供应商直接接受 Claude Desktop 可识别的三档角色 ID（claude-sonnet-* / claude-opus-* / claude-haiku-*）时才适用直连；其他模型名（含 claude-3-5-sonnet-… 等旧式 ID）请打开此开关走映射。",
+    "modelMappingOnHint": "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。开启后 CC Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。",
+    "routeMapTitle": "模型映射",
+    "routeMapHint": "为 Sonnet、Opus、Haiku 三档分别填写实际请求模型；菜单显示名可写 DeepSeek、Kimi 等品牌名。留空的档会自动沿用 Sonnet（或第一个已填档）的模型，确保子 agent 调用的 Haiku 始终可用。",
+    "routeModelLabel": "模型角色",
+    "routeRoleSonnet": "Sonnet",
+    "routeRoleOpus": "Opus",
+    "routeRoleFable": "Fable",
+    "routeRoleHaiku": "Haiku",
+    "labelOverrideLabel": "菜单显示名",
+    "upstreamModelLabel": "实际请求模型",
+    "supports1mLabel": "声明支持 1M",
+    "supports1mShort": "1M",
+    "directModelListTitle": "手动指定 Claude Desktop 模型列表（高级，可选）",
+    "directModelListCollapsedHint": "原生 Claude 模型供应商通常不用填写，Claude Desktop 会自动读取 /v1/models。",
+    "directModelListHint": "仅当供应商的 /v1/models 不可用或没有返回 Claude Desktop 可识别的 Sonnet / Opus / Haiku 模型名时填写；勾选 1M 会向 Claude Desktop 声明支持 1M 上下文。",
+    "directModelInvalid": "直连模型必须使用 Claude Desktop 可识别的 Sonnet / Opus / Haiku 模型名",
+    "addModel": "添加模型",
+    "addRoute": "添加模型",
+    "routeInvalid": "请选择模型角色并填写实际请求模型",
+    "routesRequired": "至少填写一个模型映射",
+    "statusTitle": "Claude Desktop 配置需要检查",
+    "statusUnsupported": "当前平台暂不支持 Claude Desktop 3P 配置写入。",
+    "statusStaleRawModels": "Claude Desktop profile 中存在非 Sonnet / Opus / Haiku 角色模型名，新版 Claude Desktop 可能拒绝加载；重新切换当前供应商可修复。",
+    "statusMissingRouteMappings": "当前供应商启用了模型映射，但没有有效路由；请编辑供应商并补全至少一个模型映射。",
+    "statusGatewayTokenMissing": "当前本地路由 token 尚未生成；重新切换该供应商会写入新的本地 token。",
+    "statusBaseUrlMismatch": "Claude Desktop profile 指向的地址与当前供应商不一致；当前为 {{actual}}，应为 {{expected}}。重新切换当前供应商可修复。",
+    "route": {
+      "tooltip": {
+        "active": "Claude Desktop 本地路由已开启 - {{address}}:{{port}}",
+        "inactive": "开启 Claude Desktop 本地路由，用于需要模型映射或格式转换的供应商。当前配置地址：{{address}}:{{port}}"
+      }
+    }
   }
 }

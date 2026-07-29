@@ -99,6 +99,7 @@ import {
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
+import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
 
 type PresetEntry = {
   id: string;
@@ -1997,6 +1998,9 @@ export type ProviderFormValues = ProviderFormData & {
 };
 
 export function ProviderForm(props: ProviderFormProps) {
+  if (props.appId === "claude-desktop") {
+    return <ClaudeDesktopProviderForm {...props} />;
+  }
   if (props.appId === "grokbuild") {
     return <GrokBuildProviderForm {...props} />;
   }

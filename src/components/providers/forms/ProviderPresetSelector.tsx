@@ -5,6 +5,7 @@ import { Zap, Star, Layers, Settings2 } from "lucide-react";
 import type { ProviderPreset } from "@/config/claudeProviderPresets";
 import type { CodexProviderPreset } from "@/config/codexProviderPresets";
 import type { GeminiProviderPreset } from "@/config/geminiProviderPresets";
+import type { ClaudeDesktopProviderPreset } from "@/config/claudeDesktopProviderPresets";
 import type { ProviderCategory } from "@/types";
 import {
   universalProviderPresets,
@@ -12,9 +13,15 @@ import {
 } from "@/config/universalProviderPresets";
 import { ProviderIcon } from "@/components/ProviderIcon";
 
+type SelectablePreset =
+  | ProviderPreset
+  | CodexProviderPreset
+  | GeminiProviderPreset
+  | ClaudeDesktopProviderPreset;
+
 type PresetEntry = {
   id: string;
-  preset: ProviderPreset | CodexProviderPreset | GeminiProviderPreset;
+  preset: SelectablePreset;
 };
 
 interface ProviderPresetSelectorProps {
@@ -72,9 +79,7 @@ export function ProviderPresetSelector({
     }
   };
 
-  const renderPresetIcon = (
-    preset: ProviderPreset | CodexProviderPreset | GeminiProviderPreset,
-  ) => {
+  const renderPresetIcon = (preset: SelectablePreset) => {
     const iconType = preset.theme?.icon;
     if (!iconType) return null;
 
@@ -94,7 +99,7 @@ export function ProviderPresetSelector({
 
   const getPresetButtonClass = (
     isSelected: boolean,
-    preset: ProviderPreset | CodexProviderPreset | GeminiProviderPreset,
+    preset: SelectablePreset,
   ) => {
     const baseClass =
       "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors";
@@ -111,7 +116,7 @@ export function ProviderPresetSelector({
 
   const getPresetButtonStyle = (
     isSelected: boolean,
-    preset: ProviderPreset | CodexProviderPreset | GeminiProviderPreset,
+    preset: SelectablePreset,
   ) => {
     if (!isSelected || !preset.theme?.backgroundColor) {
       return undefined;

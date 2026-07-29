@@ -9,7 +9,7 @@ import type {
 
 const visibleApps: VisibleApps = {
   claude: true,
-  "claude-desktop": false,
+  "claude-desktop": true,
   codex: true,
   gemini: true,
   grokbuild: true,

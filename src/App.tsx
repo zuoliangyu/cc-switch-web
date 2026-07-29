@@ -150,7 +150,7 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   const visibleApps: VisibleApps = settingsData?.visibleApps ?? {
     claude: true,
-    "claude-desktop": false,
+    "claude-desktop": true,
     codex: true,
     gemini: true,
     grokbuild: true,
@@ -161,6 +161,7 @@ function App() {
 
   const getFirstVisibleApp = (): AppId => {
     if (visibleApps.claude) return "claude";
+    if (visibleApps["claude-desktop"]) return "claude-desktop";
     if (visibleApps.codex) return "codex";
     if (visibleApps.gemini) return "gemini";
     if (visibleApps.grokbuild) return "grokbuild";

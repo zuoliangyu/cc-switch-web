@@ -7,13 +7,17 @@ import {
   isCodexChatWireApi,
 } from "@/utils/providerConfigUtils";
 
+export const GROKBUILD_OFFICIAL_PROVIDER_ID = "grokbuild-official";
+
 /** 供应商是否必须由当前应用的本地路由接管。 */
 export function providerNeedsRouting(
   appId: AppId,
   provider: Provider,
 ): boolean {
   if (provider.category === "official") return false;
-  if (appId !== "claude" && appId !== "codex") return false;
+  if (appId !== "claude" && appId !== "codex" && appId !== "grokbuild") {
+    return false;
+  }
   if (isOAuthProviderType(provider.meta?.providerType)) return true;
 
   const format = provider.meta?.apiFormat;

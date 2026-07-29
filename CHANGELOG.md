@@ -33,6 +33,7 @@
 - Grok Build Session 支持扫描活跃与归档会话、读取消息并在严格路径和 ID 校验后删除会话目录。
 - 前端新增 Grok Build 应用入口，并接入可见性与配置目录设置、MCP/Skills/Prompts、Session、Usage 筛选及代理接管和故障转移队列。
 - Grok Build 新增专用 Provider 表单，支持客户端档位与真实上游模型、Base URL、API Key/`env_key`、协议后端、上下文窗口和原始 TOML 双向编辑；官方登录态允许保留空配置。
+- Grok Build 新增独立 Provider 预设清单，覆盖适用的合作方、聚合站、xAI 与 OpenRouter；官方预设复用固定 seed，Chat/Messages 预设统一参与路由需求判定。
 
 ## [0.8.0] - 2026-05-23
 

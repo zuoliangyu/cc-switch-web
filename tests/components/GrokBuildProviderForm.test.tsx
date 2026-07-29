@@ -106,4 +106,33 @@ describe("GrokBuildProviderForm", () => {
     expect(payload.presetCategory).toBe("official");
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
+
+  it("应用 Grok 预设并生成对应 TOML", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <GrokBuildProviderForm
+        submitLabel="save"
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "PackyCode" }));
+    fireEvent.change(screen.getByLabelText("API Key"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "save" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const payload = onSubmit.mock.calls[0][0];
+    const parsedSettings = JSON.parse(payload.settingsConfig);
+    const parsedToml = parseToml(parsedSettings.config) as Record<string, any>;
+    expect(parsedToml.model["grok-4.5"]).toMatchObject({
+      model: "grok-4.5",
+      base_url: "https://www.packyapi.ai/v1",
+      api_key: "secret",
+    });
+    expect(payload.presetId).toBe("grokbuild-0");
+    expect(payload.presetCategory).toBe("third_party");
+  });
 });

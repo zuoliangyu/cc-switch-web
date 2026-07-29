@@ -74,6 +74,7 @@ export function useProviderActions(
         providerKey?: string;
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
       },
     ) => {
       await addProviderMutation.mutateAsync(provider);

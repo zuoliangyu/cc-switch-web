@@ -72,4 +72,19 @@ describe("providerNeedsRouting", () => {
       ),
     ).toBe(false);
   });
+
+  it("Grok Build Chat 需要路由，Responses 可直连", () => {
+    expect(
+      providerNeedsRouting(
+        "grokbuild",
+        provider({ meta: { apiFormat: "openai_chat" } }),
+      ),
+    ).toBe(true);
+    expect(
+      providerNeedsRouting(
+        "grokbuild",
+        provider({ meta: { apiFormat: "openai_responses" } }),
+      ),
+    ).toBe(false);
+  });
 });

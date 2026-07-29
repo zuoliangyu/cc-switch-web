@@ -15,7 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
-import type { ProviderMeta } from "@/types";
+import type { ProviderCategory, ProviderMeta } from "@/types";
+import {
+  grokBuildOfficialPreset,
+  grokBuildProviderPresets,
+  type GrokBuildProviderPreset,
+} from "@/config/grokBuildProviderPresets";
 import {
   buildGrokBuildConfig,
   parseGrokBuildConfig,
@@ -23,10 +28,27 @@ import {
   validateGrokBuildConfig,
   type GrokBuildConfigValues,
 } from "@/utils/grokBuildConfig";
+import {
+  extractCodexBaseUrl,
+  extractCodexModelName,
+} from "@/utils/providerConfigUtils";
+import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 import { BasicFormFields } from "./BasicFormFields";
+import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import type { ProviderFormProps, ProviderFormValues } from "./ProviderForm";
 
 type GrokBuildProviderFormProps = Omit<ProviderFormProps, "appId">;
+
+const grokPresetEntries: Array<{
+  id: string;
+  preset: GrokBuildProviderPreset;
+}> = [
+  { id: GROKBUILD_OFFICIAL_PROVIDER_ID, preset: grokBuildOfficialPreset },
+  ...grokBuildProviderPresets.map((preset, index) => ({
+    id: `grokbuild-${index}`,
+    preset,
+  })),
+];
 
 const apiFormatForBackend = (apiBackend: string): ProviderMeta["apiFormat"] => {
   if (apiBackend === "chat_completions") return "openai_chat";
@@ -43,7 +65,6 @@ export function GrokBuildProviderForm({
   showButtons = true,
 }: GrokBuildProviderFormProps) {
   const { t } = useTranslation();
-  const isOfficial = initialData?.category === "official";
   const initialConfigText =
     typeof initialData?.settingsConfig?.config === "string"
       ? initialData.settingsConfig.config
@@ -54,6 +75,16 @@ export function GrokBuildProviderForm({
   );
 
   const [profile, setProfile] = useState(initialConfig.model);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
+    initialData ? null : "custom",
+  );
+  const [category, setCategory] = useState<ProviderCategory>(
+    initialData?.category ?? "custom",
+  );
+  const [isPartner, setIsPartner] = useState(
+    initialData?.meta?.isPartner ?? false,
+  );
+  const [partnerPromotionKey, setPartnerPromotionKey] = useState<string>();
   const [upstreamModel, setUpstreamModel] = useState(
     initialConfig.upstreamModel ?? initialConfig.model,
   );
@@ -81,6 +112,16 @@ export function GrokBuildProviderForm({
     mode: "onSubmit",
   });
   const { isSubmitting } = form.formState;
+  const isOfficial = category === "official";
+
+  const presetCategoryLabels = useMemo(
+    () => ({
+      official: t("providerForm.categoryOfficial"),
+      aggregator: t("providerForm.categoryAggregation"),
+      third_party: t("providerForm.categoryThirdParty"),
+    }),
+    [t],
+  );
 
   useEffect(() => {
     onSubmittingChange?.(isSubmitting);
@@ -113,6 +154,54 @@ export function GrokBuildProviderForm({
     );
   };
 
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (presetId === "custom") {
+      setCategory("custom");
+      setIsPartner(false);
+      setPartnerPromotionKey(undefined);
+      return;
+    }
+
+    const entry = grokPresetEntries.find((item) => item.id === presetId);
+    if (!entry) return;
+    const preset = entry.preset;
+    const presetName = preset.nameKey ? String(t(preset.nameKey)) : preset.name;
+    form.setValue("name", presetName);
+    form.setValue("websiteUrl", preset.websiteUrl ?? "");
+    form.setValue("icon", preset.icon ?? "grok");
+    form.setValue("iconColor", preset.iconColor ?? "");
+    setCategory(preset.category ?? "custom");
+    setIsPartner(preset.isPartner ?? false);
+    setPartnerPromotionKey(preset.partnerPromotionKey);
+
+    if (presetId === GROKBUILD_OFFICIAL_PROVIDER_ID) {
+      setRawConfig("");
+      return;
+    }
+
+    const presetBaseUrl = extractCodexBaseUrl(preset.config) ?? "";
+    const presetModel = extractCodexModelName(preset.config) ?? profile;
+    const presetApiKey = preset.auth.OPENAI_API_KEY;
+    const presetBackend =
+      preset.apiFormat === "openai_chat" ? "chat_completions" : "responses";
+    setBaseUrl(presetBaseUrl);
+    setUpstreamModel(presetModel);
+    setApiKey(typeof presetApiKey === "string" ? presetApiKey : "");
+    setApiBackend(presetBackend);
+    setRawConfig(
+      buildGrokBuildConfig({
+        model: profile,
+        upstreamModel: presetModel,
+        baseUrl: presetBaseUrl,
+        name: presetName,
+        apiKey: typeof presetApiKey === "string" ? presetApiKey : "",
+        apiBackend: presetBackend,
+        contextWindow: Number.parseInt(contextWindow, 10),
+      }),
+    );
+  };
+
   const handleRawConfigChange = (value: string) => {
     setRawConfig(value);
     if (validateGrokBuildConfig(value)) return;
@@ -141,6 +230,7 @@ export function GrokBuildProviderForm({
         websiteUrl: values.websiteUrl?.trim() ?? "",
         notes: values.notes?.trim() ?? "",
         settingsConfig: JSON.stringify({ config: rawConfig }),
+        presetId: selectedPresetId ?? undefined,
         presetCategory: "official",
         meta: initialData?.meta,
       });
@@ -184,10 +274,13 @@ export function GrokBuildProviderForm({
       websiteUrl: values.websiteUrl?.trim() ?? "",
       notes: values.notes?.trim() ?? "",
       settingsConfig: JSON.stringify({ config: finalConfig }),
-      presetCategory: initialData?.category ?? "custom",
+      presetId: selectedPresetId ?? undefined,
+      presetCategory: category,
       meta: {
         ...(initialData?.meta ?? {}),
         apiFormat: apiFormatForBackend(apiBackend),
+        isPartner,
+        partnerPromotionKey,
       },
     };
     await onSubmit(payload);
@@ -202,6 +295,16 @@ export function GrokBuildProviderForm({
         onSubmit={form.handleSubmit(handleSubmit)}
         className="space-y-6"
       >
+        {!initialData && (
+          <ProviderPresetSelector
+            selectedPresetId={selectedPresetId}
+            presetEntries={grokPresetEntries}
+            presetCategoryLabels={presetCategoryLabels}
+            onPresetChange={handlePresetChange}
+            category={category}
+          />
+        )}
+
         <BasicFormFields form={form} />
 
         {!isOfficial && (

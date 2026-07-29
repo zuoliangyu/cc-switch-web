@@ -165,4 +165,30 @@ context_window = 500000
       },
     });
   });
+
+  it("Grok Build 官方预设走现有 seed 流程", async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+    mockFormValues = {
+      name: "Grok Official",
+      websiteUrl: "https://x.ai/grok",
+      settingsConfig: JSON.stringify({ config: "" }),
+      presetId: "grokbuild-official",
+      presetCategory: "official",
+    };
+
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="grokbuild"
+        onSubmit={handleSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+
+    await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+    expect(handleSubmit.mock.calls[0][0].ensureGrokBuildOfficialSeed).toBe(
+      true,
+    );
+  });
 });

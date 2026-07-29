@@ -859,7 +859,8 @@
     "presets": {
       "ucloud": "Compshare",
       "ucloudCoding": "Compshare Coding Plan",
-      "shengsuanyun": "Shengsuanyun"
+      "shengsuanyun": "Shengsuanyun",
+      "qiniu": "Qiniu"
     },
     "parameterConfig": "Parameter Config - {{name}} *",
     "mainModel": "Main Model (optional)",

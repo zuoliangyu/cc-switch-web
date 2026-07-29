@@ -17,8 +17,10 @@ import { UniversalProviderPanel } from "@/components/universal";
 import { providerPresets } from "@/config/claudeProviderPresets";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
 import { geminiProviderPresets } from "@/config/geminiProviderPresets";
+import { grokBuildProviderPresets } from "@/config/grokBuildProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import { extractGrokBuildBaseUrl } from "@/utils/grokBuildConfig";
+import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 import type { OpenClawSuggestedDefaults } from "@/config/openclawProviderPresets";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 
@@ -31,6 +33,7 @@ interface AddProviderDialogProps {
       providerKey?: string;
       suggestedDefaults?: OpenClawSuggestedDefaults;
       addToLive?: boolean;
+      ensureGrokBuildOfficialSeed?: boolean;
     },
   ) => Promise<void> | void;
 }
@@ -97,6 +100,7 @@ export function AddProviderDialog({
         providerKey?: string;
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
       } = {
         name: values.name.trim(),
         notes: values.notes?.trim() || undefined,
@@ -107,6 +111,14 @@ export function AddProviderDialog({
         ...(values.presetCategory ? { category: values.presetCategory } : {}),
         ...(values.meta ? { meta: values.meta } : {}),
       };
+
+      if (
+        appId === "grokbuild" &&
+        values.presetCategory === "official" &&
+        values.presetId === GROKBUILD_OFFICIAL_PROVIDER_ID
+      ) {
+        providerData.ensureGrokBuildOfficialSeed = true;
+      }
 
       // OpenCode/OpenClaw: pass providerKey for ID generation
       if (
@@ -174,6 +186,12 @@ export function AddProviderDialog({
                 preset.endpointCandidates.forEach(addUrl);
               }
             }
+          } else if (appId === "grokbuild") {
+            const presetIndex = parseInt(
+              values.presetId.replace("grokbuild-", ""),
+            );
+            const preset = grokBuildProviderPresets[presetIndex];
+            preset?.endpointCandidates?.forEach(addUrl);
           }
         }
 

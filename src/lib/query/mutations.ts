@@ -8,6 +8,7 @@ import type { Provider, SessionMeta, Settings } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
+import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 
 export const useAddProviderMutation = (appId: AppId) => {
   const queryClient = useQueryClient();
@@ -18,8 +19,27 @@ export const useAddProviderMutation = (appId: AppId) => {
       providerInput: Omit<Provider, "id"> & {
         providerKey?: string;
         addToLive?: boolean;
+        ensureGrokBuildOfficialSeed?: boolean;
       },
     ) => {
+      const {
+        providerKey: _providerKey,
+        addToLive,
+        ensureGrokBuildOfficialSeed,
+        ...rest
+      } = providerInput;
+
+      if (appId === "grokbuild" && ensureGrokBuildOfficialSeed) {
+        await providersApi.importDefault(appId);
+        const officialProvider = (await providersApi.getAll(appId))[
+          GROKBUILD_OFFICIAL_PROVIDER_ID
+        ];
+        if (!officialProvider) {
+          throw new Error("Grok Build official provider was not created");
+        }
+        return officialProvider;
+      }
+
       let id: string;
 
       if (appId === "opencode" || appId === "openclaw") {
@@ -38,8 +58,6 @@ export const useAddProviderMutation = (appId: AppId) => {
       } else {
         id = generateUUID();
       }
-
-      const { providerKey: _providerKey, addToLive, ...rest } = providerInput;
 
       const newProvider: Provider = {
         ...rest,

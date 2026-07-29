@@ -859,7 +859,8 @@
     "presets": {
       "ucloud": "优云智算",
       "ucloudCoding": "优云智算Coding Plan",
-      "shengsuanyun": "胜算云"
+      "shengsuanyun": "胜算云",
+      "qiniu": "七牛云"
     },
     "parameterConfig": "参数配置 - {{name}} *",
     "mainModel": "主模型 (可选)",

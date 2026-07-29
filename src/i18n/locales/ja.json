@@ -859,7 +859,8 @@
     "presets": {
       "ucloud": "Compshare",
       "ucloudCoding": "Compshare Coding Plan",
-      "shengsuanyun": "胜算云"
+      "shengsuanyun": "胜算云",
+      "qiniu": "Qiniu"
     },
     "parameterConfig": "パラメーター設定 - {{name}} *",
     "mainModel": "メインモデル（任意）",

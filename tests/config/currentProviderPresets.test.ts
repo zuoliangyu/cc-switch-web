@@ -167,4 +167,40 @@ describe("current provider presets", () => {
       expect(locale.providerForm.partnerPromotion.zetaapi).toBeTruthy();
     }
   });
+
+  it("matches current OpenClaw provider catalog", () => {
+    const names = openclawProviderPresets.map((preset) => preset.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "Kimi",
+        "ZetaAPI",
+        "APINebula",
+        "FennoAI",
+        "Unity2.ai",
+        "SubRouter",
+        "Code0",
+        "NekoCode",
+        "AtlasCloud",
+        "CCSub",
+        "Qiniu",
+        "CherryIN",
+      ]),
+    );
+    for (const retired of [
+      "Kimi k2.6",
+      "CTok.ai",
+      "LionCCAPI",
+      "LemonData",
+      "OpenAI Compatible",
+    ]) {
+      expect(names).not.toContain(retired);
+    }
+    for (const locale of [zh, en, ja]) {
+      expect(locale.providerForm.partnerPromotion.atlascloud).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.ccsub).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.nekocode).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.sudocode).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.teamorouter).toBeTruthy();
+    }
+  });
 });

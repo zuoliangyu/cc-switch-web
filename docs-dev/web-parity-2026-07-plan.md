@@ -100,3 +100,4 @@
 - 2026-07-30：补齐 Gemini Code0 与 Qiniu 预设，统一使用 Gemini 3.6 Flash，接入 Code0 推广说明及 Qiniu 双 Vertex 端点和三语文案；定向预设测试与 TypeScript 类型检查通过。
 - 2026-07-30：完整同步 Gemini 23 项最终预设目录；新增 APINebula、Unity2.ai、SubRouter、APIKEY.FUN、ETok.ai、SudoCode.us、CherryIN，移除 3 个上游已下架条目，并对齐现存供应商域名、模型和备用端点。
 - 2026-07-30：完整同步 OpenCode 最终预设与模型能力目录；补齐新合作方和 OpenCode Go，默认能力对齐 GPT-5.6 Sol、Gemini 3.6 Flash、Claude Opus/Sonnet 5、GLM 5.1 与 Kimi K3。
+- 2026-07-30：完整同步 OpenClaw 最终预设目录；保存预设时按用户实际 Provider Key 重写主模型、回退模型和模型目录引用，避免内置 key 泄漏到配置。

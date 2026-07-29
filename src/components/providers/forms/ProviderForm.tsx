@@ -38,6 +38,7 @@ import {
 } from "@/config/opencodeProviderPresets";
 import {
   openclawProviderPresets,
+  rebaseOpenClawSuggestedDefaults,
   type OpenClawProviderPreset,
   type OpenClawSuggestedDefaults,
 } from "@/config/openclawProviderPresets";
@@ -1108,7 +1109,13 @@ function ProviderFormFull({
       }
       // OpenClaw: 传递预设的 suggestedDefaults 到提交数据
       if (activePreset.suggestedDefaults) {
-        payload.suggestedDefaults = activePreset.suggestedDefaults;
+        payload.suggestedDefaults =
+          appId === "openclaw" && payload.providerKey
+            ? rebaseOpenClawSuggestedDefaults(
+                activePreset.suggestedDefaults,
+                payload.providerKey,
+              )
+            : activePreset.suggestedDefaults;
       }
     }
 

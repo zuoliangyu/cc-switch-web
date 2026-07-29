@@ -23,6 +23,10 @@
 - 非 Claude 用量 ID 增加应用与供应商作用域；重复响应幂等忽略，语义冲突使用稳定哈希后缀保存，不再静默覆盖历史用量。
 - 会话用量同步改为串行后台任务；新增 `POST /api/usage/codex/rebuild`，备份数据库后可安全清理并重导 Codex session 用量。
 
+### 功能与生态
+
+- 新增项目 Profile 持久化表，支持排序、完整快照和按应用 scope 保存当前项目。
+
 ## [0.8.0] - 2026-05-23
 
 跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。

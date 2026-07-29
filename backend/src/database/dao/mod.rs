@@ -4,6 +4,7 @@
 
 mod failover;
 mod mcp;
+mod profiles;
 mod prompts;
 mod providers;
 mod proxy;

@@ -48,7 +48,9 @@
   - [x] Claude / Claude Desktop Provider 与代理路由
   - [x] Codex Provider 与原生 Responses 路由
   - [x] 账号管理 UI
-  - [ ] 订阅额度
+  - [x] Claude Code Provider 预设与托管账号绑定
+  - [ ] Claude Desktop / Codex Provider 预设与托管账号绑定
+  - [ ] xAI 订阅额度查询与展示
 - [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
 - [x] A6API 跨应用预设与 PackyCode 备用端点（`dbb26595`、`30409878`）
 - [ ] Gemini Code0 / Qiniu 默认模型更新（随完整供应商清单引入 `bfb767ae`）
@@ -88,3 +90,4 @@
 - 2026-07-30：完成 Claude / Claude Desktop xAI OAuth 代理路由；共享账号状态贯穿 Web 代理服务，固定 xAI 官方 Responses 端点并动态注入 token，增加完整 URL 绕过与 `PROXY_MANAGED` 泄漏防护；24 项定向测试和后端二进制检查通过。
 - 2026-07-30：完成 Codex xAI OAuth 原生 Responses 路由；固定官方端点与托管认证，展开并还原 namespace 工具，清理 xAI 不支持的请求字段；38 项定向测试和后端二进制检查通过。
 - 2026-07-30：完成 xAI OAuth 账号管理 UI；认证中心支持设备码登录、多账号、默认账号和失效凭据重登录提示，4 项前端定向测试和 TypeScript 类型检查通过。
+- 2026-07-30：完成 Claude Code xAI OAuth Provider 预设与托管账号绑定；固定官方 Responses 端点和 Grok 4.5，未登录或绑定账号失效时阻止保存，11 项前端定向测试和 TypeScript 类型检查通过。

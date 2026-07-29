@@ -25,7 +25,7 @@ describe("providerNeedsRouting", () => {
     ).toBe(false);
   });
 
-  it.each(["codex_oauth", "github_copilot"])(
+  it.each(["codex_oauth", "github_copilot", "xai_oauth"])(
     "托管 OAuth %s 不受 apiFormat 影响",
     (providerType) => {
       expect(

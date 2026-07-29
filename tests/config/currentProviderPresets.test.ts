@@ -6,6 +6,9 @@ import { grokBuildProviderPresets } from "@/config/grokBuildProviderPresets";
 import { openclawProviderPresets } from "@/config/openclawProviderPresets";
 import { opencodeProviderPresets } from "@/config/opencodeProviderPresets";
 import { localIconList } from "@/icons/local";
+import en from "@/i18n/locales/en.json";
+import ja from "@/i18n/locales/ja.json";
+import zh from "@/i18n/locales/zh.json";
 
 describe("current provider presets", () => {
   it("includes A6API in every supported app", () => {
@@ -53,5 +56,32 @@ describe("current provider presets", () => {
       "https://slb-v1.api.fan",
       "https://www.packyapi.com",
     ]);
+  });
+
+  it("includes current Gemini Code0 and Qiniu presets", () => {
+    expect(
+      geminiProviderPresets.find((preset) => preset.name === "Code0"),
+    ).toMatchObject({
+      baseURL: "https://code0.ai",
+      model: "gemini-3.6-flash",
+      partnerPromotionKey: "code0",
+      icon: "code0",
+    });
+    expect(
+      geminiProviderPresets.find((preset) => preset.name === "Qiniu"),
+    ).toMatchObject({
+      baseURL: "https://api.qnaigc.com/bypass/vertex",
+      model: "gemini-3.6-flash",
+      partnerPromotionKey: "qiniu",
+      endpointCandidates: [
+        "https://api.qnaigc.com/bypass/vertex",
+        "https://api.modelink.ai/bypass/vertex",
+      ],
+      icon: "qiniu",
+    });
+    for (const locale of [zh, en, ja]) {
+      expect(locale.providerForm.partnerPromotion.code0).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.qiniu).toBeTruthy();
+    }
   });
 });

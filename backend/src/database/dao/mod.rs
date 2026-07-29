@@ -16,3 +16,4 @@ mod usage_rollup;
 
 // 所有 DAO 方法都通过 Database impl 提供，无需单独导出
 pub(crate) use failover::FailoverQueueItem;
+pub(crate) use profiles::Profile;

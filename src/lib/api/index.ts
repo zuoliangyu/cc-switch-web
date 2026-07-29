@@ -4,6 +4,7 @@ export { settingsApi } from "./settings";
 export { backupsApi } from "./settings";
 export { mcpApi } from "./mcp";
 export { promptsApi } from "./prompts";
+export { profilesApi } from "./profiles";
 export { skillsApi } from "./skills";
 export { usageApi } from "./usage";
 export { providerRuntimeApi } from "./providerRuntime";

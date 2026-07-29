@@ -41,6 +41,12 @@ import type {
 } from "@/lib/api/sessions";
 import type { ProviderSortUpdate } from "@/lib/api/providers";
 import type {
+  Profile,
+  ProfilesResponse,
+  ProfileScope,
+  UpdateProfileOptions,
+} from "@/lib/api/profiles";
+import type {
   DiscoverableSkill,
   MigrationResult,
   SkillArchiveInstallResult,
@@ -2204,6 +2210,55 @@ export async function syncWebSessionUsage(): Promise<SessionSyncResult> {
 
 export async function rebuildWebCodexUsage(): Promise<SessionSyncResult> {
   return requestWithBody<SessionSyncResult>("/api/usage/codex/rebuild", "POST");
+}
+
+export async function getWebProfiles(): Promise<ProfilesResponse> {
+  return requestJson<ProfilesResponse>("/api/profiles");
+}
+
+export async function createWebProfile(
+  name: string,
+  scope: ProfileScope,
+): Promise<Profile> {
+  return requestWithBody<Profile>("/api/profiles", "POST", { name, scope });
+}
+
+export async function updateWebProfile(
+  id: string,
+  options: UpdateProfileOptions,
+): Promise<Profile> {
+  return requestWithBody<Profile>(
+    `/api/profiles/${encodeURIComponent(id)}`,
+    "PUT",
+    options,
+  );
+}
+
+export async function deleteWebProfile(id: string): Promise<void> {
+  return requestWithBody<void>(
+    `/api/profiles/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
+}
+
+export async function applyWebProfile(
+  id: string,
+  scope: ProfileScope,
+): Promise<string[]> {
+  return requestWithBody<string[]>(
+    `/api/profiles/${encodeURIComponent(id)}/apply`,
+    "POST",
+    { scope },
+  );
+}
+
+export async function clearWebCurrentProfile(
+  scope: ProfileScope,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/profiles/current/${encodeURIComponent(scope)}`,
+    "DELETE",
+  );
 }
 
 export async function getWebUsageDataSources(): Promise<DataSourceSummary[]> {

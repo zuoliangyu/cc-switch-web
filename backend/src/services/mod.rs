@@ -5,6 +5,7 @@ pub(crate) mod env_manager;
 pub(crate) mod mcp;
 pub(crate) mod model_fetch;
 pub(crate) mod omo;
+pub(crate) mod profile;
 pub(crate) mod prompt;
 pub(crate) mod provider;
 pub(crate) mod proxy;

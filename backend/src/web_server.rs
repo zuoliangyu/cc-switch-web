@@ -19,8 +19,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
 use crate::app_config::{AppType, McpServer};
-use crate::database::Database;
-use crate::database::FailoverQueueItem;
+use crate::database::{Database, FailoverQueueItem, Profile};
 use crate::prompt::Prompt;
 use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
@@ -31,6 +30,7 @@ use crate::proxy::types::{
     ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
 };
 use crate::services::omo::OmoLocalFileData;
+use crate::services::profile::{ProfilePayload, ProfileScope, ProfileService};
 use crate::services::provider::{ProviderSortUpdate, SwitchResult};
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillBackupEntry, SkillRepo,
@@ -232,6 +232,73 @@ struct ToggleSkillAppByBodyRequest {
     id: String,
     app: String,
     enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateProfileRequest {
+    name: String,
+    scope: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProfileRequest {
+    name: Option<String>,
+    resnapshot: Option<bool>,
+    scope: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApplyProfileRequest {
+    scope: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileDto {
+    id: String,
+    name: String,
+    payload: ProfilePayload,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    updated_at: Option<i64>,
+}
+
+impl From<Profile> for ProfileDto {
+    fn from(profile: Profile) -> Self {
+        let payload = serde_json::from_str(&profile.payload).unwrap_or_else(|error| {
+            log::warn!(
+                "解析 profile '{}' payload 失败，使用默认值: {error}",
+                profile.id
+            );
+            ProfilePayload::default()
+        });
+        Self {
+            id: profile.id,
+            name: profile.name,
+            payload,
+            created_at: profile.created_at,
+            updated_at: profile.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CurrentProfileIds {
+    claude: Option<String>,
+    claude_desktop: Option<String>,
+    codex: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfilesResponse {
+    profiles: Vec<ProfileDto>,
+    current_ids: CurrentProfileIds,
 }
 
 #[derive(Debug, Deserialize)]
@@ -490,6 +557,106 @@ async fn api_request_logger(request: axum::extract::Request, next: Next) -> Resp
     }
 
     response
+}
+
+fn profile_api_error(error: crate::error::AppError) -> ApiError {
+    match error {
+        crate::error::AppError::InvalidInput(_) => ApiError::bad_request(error.to_string()),
+        _ => ApiError::internal(error.to_string()),
+    }
+}
+
+async fn list_profiles(
+    State(state): State<WebApiState>,
+) -> Result<Json<ProfilesResponse>, ApiError> {
+    let profiles = ProfileService::list(state.app_state.as_ref())
+        .map_err(profile_api_error)?
+        .into_iter()
+        .map(ProfileDto::from)
+        .collect();
+    let db = &state.app_state.db;
+    let current_ids = CurrentProfileIds {
+        claude: db
+            .get_current_profile_id(ProfileScope::Claude.as_str())
+            .map_err(profile_api_error)?,
+        claude_desktop: db
+            .get_current_profile_id(ProfileScope::ClaudeDesktop.as_str())
+            .map_err(profile_api_error)?,
+        codex: db
+            .get_current_profile_id(ProfileScope::Codex.as_str())
+            .map_err(profile_api_error)?,
+    };
+    Ok(Json(ProfilesResponse {
+        profiles,
+        current_ids,
+    }))
+}
+
+async fn create_profile(
+    State(state): State<WebApiState>,
+    Json(payload): Json<CreateProfileRequest>,
+) -> Result<Json<ProfileDto>, ApiError> {
+    let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
+    ProfileService::create(state.app_state.as_ref(), &payload.name, scope)
+        .map(ProfileDto::from)
+        .map(Json)
+        .map_err(profile_api_error)
+}
+
+async fn update_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateProfileRequest>,
+) -> Result<Json<ProfileDto>, ApiError> {
+    let scope = payload
+        .scope
+        .as_deref()
+        .map(ProfileScope::parse)
+        .transpose()
+        .map_err(profile_api_error)?;
+    ProfileService::update(
+        state.app_state.as_ref(),
+        &id,
+        payload.name,
+        payload.resnapshot.unwrap_or(false),
+        scope,
+    )
+    .map(ProfileDto::from)
+    .map(Json)
+    .map_err(profile_api_error)
+}
+
+async fn delete_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    ProfileService::delete(state.app_state.as_ref(), &id).map_err(profile_api_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn clear_current_profile(
+    State(state): State<WebApiState>,
+    Path(scope): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let scope = ProfileScope::parse(&scope).map_err(profile_api_error)?;
+    state
+        .app_state
+        .db
+        .set_current_profile_id(scope.as_str(), None)
+        .map_err(profile_api_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn apply_profile(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<ApplyProfileRequest>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
+    ProfileService::apply(state.app_state.as_ref(), &id, scope)
+        .await
+        .map(Json)
+        .map_err(profile_api_error)
 }
 
 async fn get_mcp_servers(
@@ -3314,6 +3481,16 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(delete_db_backup),
         )
         .route("/api/backups/db/:filename/restore", post(restore_db_backup))
+        .route("/api/profiles", get(list_profiles).post(create_profile))
+        .route(
+            "/api/profiles/current/:scope",
+            axum::routing::delete(clear_current_profile),
+        )
+        .route("/api/profiles/:id/apply", post(apply_profile))
+        .route(
+            "/api/profiles/:id",
+            put(update_profile).delete(delete_profile),
+        )
         .route("/api/providers/:app", get(get_providers).post(add_provider))
         .route(
             "/api/providers/:app/sort-order",

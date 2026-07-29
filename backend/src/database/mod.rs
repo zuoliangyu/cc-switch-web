@@ -33,7 +33,7 @@ mod schema;
 mod tests;
 
 // Failover 队列项仅在 crate 内部 API 层使用
-pub(crate) use dao::FailoverQueueItem;
+pub(crate) use dao::{FailoverQueueItem, Profile};
 
 use crate::config::get_app_config_dir;
 use crate::error::AppError;
@@ -250,5 +250,4 @@ impl Database {
 
         Ok(rebuilt)
     }
-
 }

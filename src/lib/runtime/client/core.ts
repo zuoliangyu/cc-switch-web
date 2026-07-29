@@ -14,7 +14,9 @@ import {
   getWebSubscriptionQuota,
   getWebBalance,
   createWebDbBackup,
+  createWebProfile,
   deleteWebEnvVars,
+  deleteWebProfile,
   downloadWebConfigExport,
   deleteWebProvider,
   deleteWebDbBackup,
@@ -65,6 +67,7 @@ import {
   getWebCurrentOmoSlimProviderId,
   disableWebCurrentOmoSlim,
   getWebPricingModelSource,
+  getWebProfiles,
   getWebMcpServers,
   getWebProviderHealth,
   getWebProviderUsage,
@@ -194,8 +197,11 @@ import {
   toggleWebSkillApp,
   syncWebSessionUsage,
   rebuildWebCodexUsage,
+  applyWebProfile,
+  clearWebCurrentProfile,
   uploadWebdavSync,
   updateWebModelPricing,
+  updateWebProfile,
   updateWebProvider,
   updateWebProvidersSortOrder,
   updateWebProxyConfig,
@@ -586,6 +592,32 @@ export async function invoke<T>(
       return (await restoreWebEnvBackup(args?.backupPath as string)) as T;
     case "get_mcp_servers":
       return (await getWebMcpServers()) as T;
+    case "list_profiles":
+      return (await getWebProfiles()) as T;
+    case "create_profile":
+      return (await createWebProfile(
+        args?.name as string,
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
+    case "update_profile":
+      return (await updateWebProfile(args?.id as string, {
+        name: args?.name as string | undefined,
+        resnapshot: args?.resnapshot as boolean | undefined,
+        scope: args?.scope as
+          | import("@/lib/api/profiles").ProfileScope
+          | undefined,
+      })) as T;
+    case "delete_profile":
+      return (await deleteWebProfile(args?.id as string)) as T;
+    case "apply_profile":
+      return (await applyWebProfile(
+        args?.id as string,
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
+    case "clear_current_profile":
+      return (await clearWebCurrentProfile(
+        args?.scope as import("@/lib/api/profiles").ProfileScope,
+      )) as T;
     case "upsert_mcp_server":
       return (await upsertWebMcpServer(args?.server as any)) as T;
     case "delete_mcp_server":

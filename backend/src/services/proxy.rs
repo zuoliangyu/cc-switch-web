@@ -358,8 +358,18 @@ impl ProxyService {
             return Ok(()); // 未接管，幂等返回
         }
 
+        self.disable_takeover_for_app(&app).await
+    }
+
+    /// 无条件恢复指定应用的 Live 配置并清除接管状态。
+    ///
+    /// Profile 切换需要在 DB 标志与 Live 文件不一致时也退出旧代理环境，
+    /// 因此不能使用上面的 enabled 快速返回。
+    pub async fn disable_takeover_for_app(&self, app: &AppType) -> Result<(), String> {
+        let app_type_str = app.as_str();
+
         // 1) 恢复 Live 配置
-        self.restore_live_config_for_app(&app).await?;
+        self.restore_live_config_for_app_with_fallback(app).await?;
 
         // 2) 删除该 app 的备份（避免长期存储敏感 Token）
         self.db

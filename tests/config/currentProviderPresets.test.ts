@@ -82,6 +82,39 @@ describe("current provider presets", () => {
     for (const locale of [zh, en, ja]) {
       expect(locale.providerForm.partnerPromotion.code0).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.qiniu).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.apikeyfun).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.apinebula).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.etok).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.subrouter).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.unity2).toBeTruthy();
     }
+  });
+
+  it("matches the current Gemini provider catalog", () => {
+    expect(geminiProviderPresets.map((preset) => preset.name)).toEqual([
+      "Google Official",
+      "PackyCode",
+      "APINebula",
+      "AICodeMirror",
+      "Unity2.ai",
+      "Shengsuanyun",
+      "AIGoCode",
+      "AICoding",
+      "SubRouter",
+      "APIKEY.FUN",
+      "Code0",
+      "A6API",
+      "SSSAiCode",
+      "ETok.ai",
+      "Cubence",
+      "CrazyRouter",
+      "Qiniu",
+      "SudoCode.us",
+      "E-FlowCode",
+      "CherryIN",
+      "OpenRouter",
+      "TheRouter",
+      "自定义",
+    ]);
   });
 });

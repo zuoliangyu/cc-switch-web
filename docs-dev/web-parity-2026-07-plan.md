@@ -98,3 +98,4 @@
 - 2026-07-30：完成 Codex xAI API Key / OAuth 预设与托管账号绑定；OAuth 模式隐藏 Key、端点和格式编辑，支持按绑定账号获取模型目录，3 项定向测试、TypeScript 类型检查和后端二进制检查通过。
 - 2026-07-30：完成 Grok/xAI 订阅额度；引入上游 gRPC-web/protobuf 账单解析，xAI 托管 Provider 按绑定账号展示额度，Grok Build 官方 Provider 复用同一查询服务；14 项后端与 5 项前端定向测试通过。
 - 2026-07-30：补齐 Gemini Code0 与 Qiniu 预设，统一使用 Gemini 3.6 Flash，接入 Code0 推广说明及 Qiniu 双 Vertex 端点和三语文案；定向预设测试与 TypeScript 类型检查通过。
+- 2026-07-30：完整同步 Gemini 23 项最终预设目录；新增 APINebula、Unity2.ai、SubRouter、APIKEY.FUN、ETok.ai、SudoCode.us、CherryIN，移除 3 个上游已下架条目，并对齐现存供应商域名、模型和备用端点。

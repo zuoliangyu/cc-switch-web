@@ -91,6 +91,10 @@ impl Provider {
         self.provider_type() == Some("codex_oauth")
     }
 
+    pub fn is_xai_oauth(&self) -> bool {
+        self.provider_type() == Some("xai_oauth")
+    }
+
     pub fn is_github_copilot(&self) -> bool {
         self.provider_type() == Some("github_copilot")
             || self.claude_base_url_contains("githubcopilot.com")
@@ -102,6 +106,7 @@ impl Provider {
     pub fn uses_managed_account_auth(&self) -> bool {
         self.is_github_copilot()
             || self.is_codex_oauth()
+            || self.is_xai_oauth()
             || self.claude_base_url_contains("chatgpt.com/backend-api/codex")
     }
 }
@@ -880,7 +885,7 @@ mod tests {
     fn provider_managed_account_auth_detection_uses_type_or_known_endpoint() {
         // 跟随上游 cc-switch 61e68d75：
         // - provider_type="github_copilot" 直接命中
-        // - provider_type="codex_oauth" 直接命中
+        // - provider_type="codex_oauth" / "xai_oauth" 直接命中
         // - ANTHROPIC_BASE_URL 含 githubcopilot.com 也算 copilot
         // - ANTHROPIC_BASE_URL 含 chatgpt.com/backend-api/codex 算 codex OAuth 端点
         let mut copilot = Provider::with_id(
@@ -908,6 +913,19 @@ mod tests {
         });
         assert!(codex.is_codex_oauth());
         assert!(codex.uses_managed_account_auth());
+
+        let mut xai = Provider::with_id(
+            "xai".to_string(),
+            "xAI".to_string(),
+            json!({ "env": {} }),
+            None,
+        );
+        xai.meta = Some(ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        assert!(xai.is_xai_oauth());
+        assert!(xai.uses_managed_account_auth());
 
         let codex_endpoint = Provider::with_id(
             "codex-endpoint".to_string(),
@@ -941,6 +959,7 @@ mod tests {
         );
         assert!(!third_party.is_github_copilot());
         assert!(!third_party.is_codex_oauth());
+        assert!(!third_party.is_xai_oauth());
         assert!(!third_party.uses_managed_account_auth());
     }
 

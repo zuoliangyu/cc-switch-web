@@ -31,6 +31,7 @@ impl AppState {
             db.clone(),
             copilot_auth_state.clone(),
             codex_oauth_state.clone(),
+            xai_oauth_state.clone(),
         );
 
         Self {

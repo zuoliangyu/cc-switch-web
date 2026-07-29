@@ -9,6 +9,7 @@ use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::server::ProxyServer;
 use crate::proxy::types::*;
 use crate::services::provider::{
@@ -42,8 +43,8 @@ const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 6] = [
 /// - `PreserveExistingOrAuthToken`：普通 API key 供应商。settings 里已有的
 ///   token env 字段都替换成 PROXY_MANAGED；若一个都没有则补一个
 ///   `ANTHROPIC_AUTH_TOKEN`。
-/// - `ManagedAccount`：托管账号供应商。Codex 系使用 `ANTHROPIC_AUTH_TOKEN`，
-///   Copilot 使用 `ANTHROPIC_API_KEY`；两者都只保留一个占位符。
+/// - `ManagedAccount`：托管账号供应商。Codex/xAI 使用 `ANTHROPIC_AUTH_TOKEN`，
+///   Copilot 使用 `ANTHROPIC_API_KEY`；都只保留一个占位符。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClaudeTakeoverAuthPolicy {
     PreserveExistingOrAuthToken,
@@ -55,6 +56,7 @@ pub struct ProxyService {
     db: Arc<Database>,
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     server: Arc<RwLock<Option<ProxyServer>>>,
 }
 
@@ -67,18 +69,23 @@ impl ProxyService {
         let codex_oauth_state = Arc::new(RwLock::new(CodexOAuthManager::new(
             crate::config::get_app_config_dir(),
         )));
-        Self::new_with_auth(db, copilot_auth_state, codex_oauth_state)
+        let xai_oauth_state = Arc::new(RwLock::new(XaiOAuthManager::new(
+            crate::config::get_app_config_dir(),
+        )));
+        Self::new_with_auth(db, copilot_auth_state, codex_oauth_state, xai_oauth_state)
     }
 
     pub fn new_with_auth(
         db: Arc<Database>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+        xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     ) -> Self {
         Self {
             db,
             copilot_auth_state,
             codex_oauth_state,
+            xai_oauth_state,
             server: Arc::new(RwLock::new(None)),
         }
     }
@@ -229,6 +236,7 @@ impl ProxyService {
             self.db.clone(),
             self.copilot_auth_state.clone(),
             self.codex_oauth_state.clone(),
+            self.xai_oauth_state.clone(),
         );
         let info = server
             .start()
@@ -866,7 +874,7 @@ impl ProxyService {
 
     /// 根据 provider 类型自动选择 auth policy 并改写 Claude Live 配置。
     ///
-    /// 跟随上游 cc-switch 61e68d75：托管账号供应商（GitHub Copilot / Codex OAuth）
+    /// 跟随上游 cc-switch：托管账号供应商（GitHub Copilot / Codex OAuth / xAI OAuth）
     /// 不应该在 settings 里留 `ANTHROPIC_AUTH_TOKEN` 这类 placeholder，否则
     /// Claude Code 客户端的 auth header 选择顺序会优先用它，发到代理的请求
     /// 就携带 `Bearer PROXY_MANAGED`，进而被 forwarder outbound guard 拒绝
@@ -1964,6 +1972,7 @@ impl ProxyService {
                     self.db.clone(),
                     self.copilot_auth_state.clone(),
                     self.codex_oauth_state.clone(),
+                    self.xai_oauth_state.clone(),
                 );
             new_server
                 .start()
@@ -2164,6 +2173,46 @@ mod tests {
             Some(PROXY_TOKEN_PLACEHOLDER)
         );
         assert!(!env.contains_key("ANTHROPIC_AUTH_TOKEN"));
+    }
+
+    #[test]
+    fn xai_managed_takeover_keeps_only_auth_token() {
+        let mut provider = Provider::with_id(
+            "xai".to_string(),
+            "xAI".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.x.ai/v1"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        let mut live = json!({
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": "old-token",
+                "ANTHROPIC_API_KEY": "old-key",
+                "OPENAI_API_KEY": "old-openai-key"
+            }
+        });
+
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live["env"].as_object().expect("env object");
+        assert_eq!(
+            env.get("ANTHROPIC_AUTH_TOKEN").and_then(Value::as_str),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
+        assert_eq!(env.len(), 2);
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+        assert!(!env.contains_key("OPENAI_API_KEY"));
     }
 
     #[test]

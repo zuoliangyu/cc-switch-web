@@ -22,6 +22,7 @@ use super::{
 };
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::{app_config::AppType, provider::Provider};
 use http::Extensions;
 use serde_json::Value;
@@ -56,6 +57,8 @@ pub struct RequestForwarder {
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     /// Codex OAuth 鉴权状态
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    /// xAI OAuth 鉴权状态
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步前端状态）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -107,6 +110,7 @@ impl RequestForwarder {
         failover_manager: Arc<FailoverSwitchManager>,
         copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+        xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,
@@ -123,6 +127,7 @@ impl RequestForwarder {
             failover_manager,
             copilot_auth_state,
             codex_oauth_state,
+            xai_oauth_state,
             current_provider_id_at_start,
             session_id,
             session_client_provided,
@@ -861,7 +866,8 @@ impl RequestForwarder {
             .meta
             .as_ref()
             .and_then(|meta| meta.is_full_url)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && !provider.is_xai_oauth();
 
         // 应用模型映射（独立于格式转换）
         // Claude Desktop proxy 模式必须先把 Desktop 可见的 claude-* route
@@ -1132,6 +1138,34 @@ impl RequestForwarder {
                     Err(e) => {
                         return Err(ProxyError::AuthError(format!(
                             "Codex OAuth 认证失败: {e}"
+                        )));
+                    }
+                }
+            }
+
+            if auth.strategy == AuthStrategy::XaiOAuth {
+                let xai_auth = self.xai_oauth_state.read().await;
+                let account_id = provider
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.managed_account_id_for("xai_oauth"));
+                let token_result = match &account_id {
+                    Some(id) => xai_auth.get_valid_token_for_account(id).await,
+                    None => xai_auth.get_valid_token().await,
+                };
+
+                match token_result {
+                    Ok(token) => {
+                        auth = AuthInfo::new(token, AuthStrategy::XaiOAuth);
+                        log::debug!(
+                            "[XaiOAuth] 成功获取 access_token (account={})",
+                            account_id.as_deref().unwrap_or("default")
+                        );
+                    }
+                    Err(error) => {
+                        log::error!("[XaiOAuth] 获取 access_token 失败: {error}");
+                        return Err(ProxyError::AuthError(format!(
+                            "xAI OAuth 认证失败: {error}"
                         )));
                     }
                 }
@@ -1412,7 +1446,7 @@ impl RequestForwarder {
         }
 
         // 跟随上游 cc-switch 61e68d75：出站前最后一道防线 ——
-        // 如果发往托管账号上游（GitHub Copilot / chatgpt.com/backend-api/codex）
+        // 如果发往托管账号上游（GitHub Copilot / Codex OAuth / xAI）
         // 的请求 header 还含有 PROXY_MANAGED 字面量，说明 OAuth 注入失败，
         // 立刻拒绝，避免把占位符泄露到上游 / 留在上游日志里。
         reject_proxy_placeholder_for_managed_account_upstream(&url, &ordered_headers)?;
@@ -1457,9 +1491,9 @@ impl RequestForwarder {
             .map_err(|e| ProxyError::ForwardFailed(format!("Invalid URL '{url}': {e}")))?;
 
         // 发送请求
-        let response = if is_socks_proxy {
-            // SOCKS5 代理：只能走 reqwest（不支持 header case 保留）
-            log::debug!("[Forwarder] Using reqwest for SOCKS5 proxy");
+        let response = if is_socks_proxy || provider.is_xai_oauth() {
+            // xAI 使用标准 header 编码；SOCKS5 代理也只能走 reqwest。
+            log::debug!("[Forwarder] Using reqwest without exact header case preservation");
             let client = super::http_client::get_for_provider(proxy_config);
             let mut request = client.post(&url);
             if !self.non_streaming_timeout.is_zero() {
@@ -2042,10 +2076,10 @@ fn summarize_text_for_log(text: &str, max_chars: usize) -> String {
 // ---------------------------------------------------------------------------
 // 出站请求 PROXY_MANAGED 占位符防护（跟随上游 cc-switch 61e68d75）
 //
-// 托管账号供应商（GitHub Copilot / Codex OAuth）在 Live config 里只放
+// 托管账号供应商（GitHub Copilot / Codex OAuth / xAI OAuth）在 Live config 里只放
 // `ANTHROPIC_API_KEY=PROXY_MANAGED` 占位符；真实 token 由代理在出站时通过
 // OAuth 注入到 `Authorization` 头。如果注入流程出错（refresh token 过期等），
-// 这里是把请求实际发到 *.githubcopilot.com 或 chatgpt.com/backend-api/codex
+// 这里是把请求实际发到托管账号官方上游
 // 之前的最后一道防线 —— 任何 header value 仍然带 PROXY_MANAGED 都拒发。
 // ---------------------------------------------------------------------------
 
@@ -2075,6 +2109,7 @@ fn is_managed_account_upstream_url(url: &str) -> bool {
     host == "githubcopilot.com"
         || host.ends_with(".githubcopilot.com")
         || (host == "chatgpt.com" && uri.path().starts_with("/backend-api/codex"))
+        || (host == "api.x.ai" && uri.path().starts_with("/v1/"))
 }
 
 fn headers_contain_proxy_placeholder(headers: &http::HeaderMap) -> bool {
@@ -2296,6 +2331,16 @@ mod tests {
 
         assert!(matches!(
             err,
+            ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
+        ));
+
+        let xai_err = reject_proxy_placeholder_for_managed_account_upstream(
+            "https://api.x.ai/v1/responses",
+            &headers,
+        )
+        .expect_err("xAI placeholder should be rejected before upstream");
+        assert!(matches!(
+            xai_err,
             ProxyError::AuthError(message) if message.contains("PROXY_MANAGED")
         ));
     }

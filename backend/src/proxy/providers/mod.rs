@@ -41,6 +41,8 @@ use crate::app_config::AppType;
 use crate::provider::Provider;
 use serde::{Deserialize, Serialize};
 
+pub const XAI_API_BASE_URL: &str = "https://api.x.ai/v1";
+
 // 公开导出
 pub use adapter::ProviderAdapter;
 pub use auth::{AuthInfo, AuthStrategy};
@@ -79,13 +81,15 @@ pub enum ProviderType {
     GitHubCopilot,
     /// OpenAI Codex (ChatGPT Plus/Pro OAuth，需要 Anthropic ↔ Responses API 转换)
     CodexOAuth,
+    /// xAI Grok OAuth（需要 Anthropic ↔ Responses API 转换）
+    XaiOAuth,
 }
 
 impl ProviderType {
     #[allow(dead_code)]
     pub fn needs_transform(&self) -> bool {
         match self {
-            ProviderType::GitHubCopilot | ProviderType::CodexOAuth => true,
+            ProviderType::GitHubCopilot | ProviderType::CodexOAuth | ProviderType::XaiOAuth => true,
             ProviderType::OpenRouter => false,
             _ => false,
         }
@@ -102,6 +106,7 @@ impl ProviderType {
             ProviderType::OpenRouter => "https://openrouter.ai/api",
             ProviderType::GitHubCopilot => "https://api.githubcopilot.com",
             ProviderType::CodexOAuth => "https://chatgpt.com/backend-api/codex",
+            ProviderType::XaiOAuth => XAI_API_BASE_URL,
         }
     }
 
@@ -123,6 +128,9 @@ impl ProviderType {
                 if let Some(meta) = provider.meta.as_ref() {
                     if meta.provider_type.as_deref() == Some("codex_oauth") {
                         return ProviderType::CodexOAuth;
+                    }
+                    if meta.provider_type.as_deref() == Some("xai_oauth") {
+                        return ProviderType::XaiOAuth;
                     }
                 }
 
@@ -207,6 +215,7 @@ impl ProviderType {
             ProviderType::OpenRouter => "openrouter",
             ProviderType::GitHubCopilot => "github_copilot",
             ProviderType::CodexOAuth => "codex_oauth",
+            ProviderType::XaiOAuth => "xai_oauth",
         }
     }
 }
@@ -232,6 +241,7 @@ impl std::str::FromStr for ProviderType {
                 Ok(ProviderType::GitHubCopilot)
             }
             "codex_oauth" | "codex-oauth" | "codexoauth" => Ok(ProviderType::CodexOAuth),
+            "xai_oauth" | "xai-oauth" | "xaioauth" => Ok(ProviderType::XaiOAuth),
             _ => Err(format!("Invalid provider type: {s}")),
         }
     }
@@ -323,6 +333,10 @@ mod tests {
             "githubcopilot".parse::<ProviderType>().unwrap(),
             ProviderType::GitHubCopilot
         );
+        assert_eq!(
+            "xai_oauth".parse::<ProviderType>().unwrap(),
+            ProviderType::XaiOAuth
+        );
         assert!("invalid".parse::<ProviderType>().is_err());
     }
 
@@ -335,6 +349,7 @@ mod tests {
         assert_eq!(ProviderType::GeminiCli.as_str(), "gemini_cli");
         assert_eq!(ProviderType::OpenRouter.as_str(), "openrouter");
         assert_eq!(ProviderType::GitHubCopilot.as_str(), "github_copilot");
+        assert_eq!(ProviderType::XaiOAuth.as_str(), "xai_oauth");
     }
 
     #[test]

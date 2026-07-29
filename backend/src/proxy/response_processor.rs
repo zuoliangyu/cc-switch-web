@@ -734,6 +734,11 @@ mod tests {
                     crate::config::get_app_config_dir(),
                 ),
             )),
+            xai_oauth_state: Arc::new(RwLock::new(
+                crate::proxy::providers::xai_oauth_auth::XaiOAuthManager::new(
+                    crate::config::get_app_config_dir(),
+                ),
+            )),
             failover_manager: Arc::new(FailoverSwitchManager::new(db)),
             gemini_shadow: Arc::new(
                 crate::proxy::providers::gemini_shadow::GeminiShadowStore::default(),

@@ -246,6 +246,51 @@ fn schema_v12_adds_grokbuild_skill_and_mcp_flags() {
 }
 
 #[test]
+fn schema_v13_adds_grokbuild_proxy_row_and_preserves_existing_values() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE proxy_config (
+            app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
+            enabled INTEGER NOT NULL DEFAULT 0,
+            auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
+            max_retries INTEGER NOT NULL DEFAULT 3,
+            streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
+            streaming_idle_timeout INTEGER NOT NULL DEFAULT 120,
+            non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
+            circuit_failure_threshold INTEGER NOT NULL DEFAULT 4,
+            circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
+            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60,
+            circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
+            circuit_min_requests INTEGER NOT NULL DEFAULT 10
+        );
+        INSERT INTO proxy_config (app_type, enabled, max_retries)
+        VALUES ('codex', 1, 9);",
+    )
+    .expect("create v12 proxy table");
+    Database::set_user_version(&conn, 12).expect("set v12");
+
+    Database::create_tables_on_conn(&conn).expect("startup table initialization");
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v13");
+
+    let codex: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled, max_retries FROM proxy_config WHERE app_type = 'codex'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let grok_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM proxy_config WHERE app_type = 'grokbuild'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(codex, (1, 9));
+    assert_eq!(grok_count, 1);
+}
+
+#[test]
 fn schema_migration_from_v7_preserves_skills_columns() {
     let conn = Connection::open_in_memory().expect("open memory db");
     Database::create_tables_on_conn(&conn).expect("create tables");

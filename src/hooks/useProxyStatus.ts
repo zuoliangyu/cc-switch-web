@@ -105,7 +105,9 @@ export function useProxyStatus() {
             ? "Codex"
             : variables.appType === "gemini"
               ? "Gemini"
-              : "OpenCode";
+              : variables.appType === "grokbuild"
+                ? "Grok Build"
+                : "OpenCode";
 
       toast.success(
         variables.enabled
@@ -187,6 +189,7 @@ export function useProxyStatus() {
       takeoverStatus?.claude ||
       takeoverStatus?.codex ||
       takeoverStatus?.gemini ||
+      takeoverStatus?.grokbuild ||
       false,
 
     // 启动/停止（总开关）
@@ -212,4 +215,3 @@ export function useProxyStatus() {
       setTakeoverForAppMutation.isPending,
   };
 }
-

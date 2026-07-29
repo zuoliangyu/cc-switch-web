@@ -195,8 +195,74 @@ pub fn extract_credentials(config_toml: &str) -> Option<(String, String)> {
     Some((config.base_url, api_key))
 }
 
+pub fn extract_inline_api_key(config_toml: &str) -> Option<String> {
+    extract_model_config(config_toml)?.api_key
+}
+
 pub fn extract_base_url(config_toml: &str) -> Option<String> {
     Some(extract_model_config(config_toml)?.base_url)
+}
+
+fn update_selected_model_string(
+    config_toml: &str,
+    field: &str,
+    value: &str,
+) -> Result<String, AppError> {
+    let mut document = config_toml
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|error| {
+            AppError::localized(
+                "provider.grokbuild.config.invalid_toml",
+                format!("Grok Build config.toml 格式错误: {error}"),
+                format!("Invalid Grok Build config.toml: {error}"),
+            )
+        })?;
+    let default_model = document
+        .get("models")
+        .and_then(|item| item.get("default"))
+        .and_then(toml_edit::Item::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .ok_or_else(|| {
+            AppError::localized(
+                "provider.grokbuild.default_model.missing",
+                "Grok Build 配置缺少 models.default",
+                "Grok Build configuration is missing models.default",
+            )
+        })?
+        .to_string();
+    let selected_model = document
+        .get_mut("model")
+        .and_then(|item| item.get_mut(&default_model))
+        .and_then(toml_edit::Item::as_table_like_mut)
+        .ok_or_else(|| {
+            AppError::localized(
+                "provider.grokbuild.default_model.missing",
+                format!("Grok Build 配置缺少 [model.\"{default_model}\"]"),
+                format!("Grok Build configuration is missing [model.\"{default_model}\"]"),
+            )
+        })?;
+    selected_model.insert(field, toml_edit::value(value));
+    Ok(document.to_string())
+}
+
+pub fn apply_proxy_takeover(
+    config_toml: &str,
+    proxy_base_url: &str,
+    token_placeholder: &str,
+) -> Result<String, AppError> {
+    let updated = update_selected_model_string(config_toml, "base_url", proxy_base_url)?;
+    update_selected_model_string(&updated, "api_key", token_placeholder)
+}
+
+pub fn update_api_key(config_toml: &str, api_key: &str) -> Result<String, AppError> {
+    update_selected_model_string(config_toml, "api_key", api_key)
+}
+
+pub fn has_proxy_placeholder(config_toml: &str, token_placeholder: &str) -> bool {
+    extract_model_config(config_toml)
+        .and_then(|config| config.api_key)
+        .is_some_and(|api_key| api_key == token_placeholder)
 }
 
 pub fn strip_grok_mcp_servers_from_settings(settings: &mut Value) -> Result<(), AppError> {
@@ -311,6 +377,26 @@ context_window = 500000
             Some(("https://example.com/v1".into(), "secret".into()))
         );
         assert!(!is_official_live_config(valid_config()));
+    }
+
+    #[test]
+    fn proxy_takeover_updates_only_selected_model_route_and_key() {
+        let config = format!("{}\n[mcp_servers.echo]\ncommand = \"echo\"\n", valid_config());
+        let updated = apply_proxy_takeover(
+            &config,
+            "http://127.0.0.1:15721/grokbuild/v1",
+            "PROXY_MANAGED",
+        )
+        .expect("apply takeover");
+        let selected = extract_model_config(&updated).expect("selected model");
+
+        assert_eq!(
+            selected.base_url,
+            "http://127.0.0.1:15721/grokbuild/v1"
+        );
+        assert_eq!(selected.api_key.as_deref(), Some("PROXY_MANAGED"));
+        assert!(has_proxy_placeholder(&updated, "PROXY_MANAGED"));
+        assert!(updated.contains("[mcp_servers.echo]"));
     }
 
     #[test]

@@ -854,7 +854,7 @@ impl RequestForwarder {
     ) -> Result<(ProxyResponse, Option<String>), ProxyError> {
         // 使用适配器提取 base_url
         let base_url = adapter.extract_base_url(provider)?;
-        let codex_responses_to_anthropic = matches!(app_type, AppType::Codex)
+        let codex_responses_to_anthropic = matches!(app_type, AppType::Codex | AppType::GrokBuild)
             && super::providers::should_convert_codex_responses_to_anthropic(provider, endpoint);
 
         let is_full_url = provider
@@ -912,7 +912,7 @@ impl RequestForwarder {
         // 跟随上游 cc-switch 1c82b8a3：Codex provider 通过 wire_api=chat /
         // apiFormat=openai_chat / base_url 直指 /chat/completions 等信号决定
         // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
-        let codex_responses_to_chat = matches!(app_type, AppType::Codex)
+        let codex_responses_to_chat = matches!(app_type, AppType::Codex | AppType::GrokBuild)
             && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
         let codex_impersonate_claude_code = codex_responses_to_anthropic
             && provider
@@ -958,6 +958,11 @@ impl RequestForwarder {
         } else {
             adapter.build_url(&base_url, &effective_endpoint)
         };
+
+        // Grok Build 客户端使用稳定 profile；转发前替换为当前供应商真实模型。
+        if matches!(app_type, AppType::GrokBuild) {
+            super::providers::apply_codex_upstream_model(provider, &mut mapped_body);
+        }
 
         // 转换请求体（如果需要）
         let mut codex_anthropic_one_m = false;

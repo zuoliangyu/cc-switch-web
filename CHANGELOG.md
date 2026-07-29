@@ -23,6 +23,7 @@
 - 非 Claude 用量 ID 增加应用与供应商作用域；重复响应幂等忽略，语义冲突使用稳定哈希后缀保存，不再静默覆盖历史用量。
 - 会话用量同步改为串行后台任务；新增 `POST /api/usage/codex/rebuild`，备份数据库后可安全清理并重导 Codex session 用量。
 - Grok Build 官方态从 `updates.jsonl` 导入逐轮用量，支持沉降窗、稳定幂等键、代理接管活动去重和 CLI 自报成本优先。
+- 内置模型定价新增 Claude Opus 5、GPT-5.6 Sol/Terra/Luna（含 effort 别名）、Kimi K3 与 Grok 4.5，避免新模型用量显示为零成本。
 
 ### 功能与生态
 

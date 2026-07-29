@@ -44,7 +44,8 @@
   - [x] 专用 Provider 表单与 TOML 配置工具
   - [x] 第三方 Provider 预设
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
-- [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
+- [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
+- [ ] models.dev 定价同步
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
 
 ## 验证原则
@@ -74,3 +75,4 @@
 - 2026-07-30：完成 Grok Build 第六阶段；前端接入应用切换、目录设置、MCP/Skills/Prompts、Session、Usage 与 Proxy 入口，34 项定向测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Grok Build 第七阶段；新增专用 Provider 表单及 TOML 解析、构建、更新和校验工具，支持官方空配置与 `env_key` 保留，8 项定向测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Grok Build 第八阶段并收口；引入独立第三方预设，官方条目复用固定 seed，并补齐 Grok 路由需求判定，33 项定向测试和 TypeScript 类型检查通过。
+- 2026-07-30：补齐 Claude Opus 5、GPT-5.6、Kimi K3 与 Grok 4.5 内置价格；数据库种子定向测试通过。

@@ -1329,6 +1329,8 @@ impl Database {
     /// 注意: model_id 使用短横线格式（如 claude-haiku-4-5），与 API 返回的模型名称标准化后一致
     fn seed_model_pricing(conn: &Connection) -> Result<(), AppError> {
         let pricing_data = [
+            // Claude Opus 5（fast mode 使用独立计费，不写入默认价格）
+            ("claude-opus-5", "Claude Opus 5", "5", "25", "0.50", "6.25"),
             // Claude 4.6 系列
             (
                 "claude-opus-4-6-20260206",
@@ -1413,6 +1415,23 @@ impl Database {
                 "0.30",
                 "3.75",
             ),
+            // GPT-5.6 系列（5.6 起 cache write 按输入价 1.25 倍计费）
+            ("gpt-5.6-sol", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            (
+                "gpt-5.6-terra",
+                "GPT-5.6 Terra",
+                "2.50",
+                "15",
+                "0.25",
+                "3.125",
+            ),
+            ("gpt-5.6-luna", "GPT-5.6 Luna", "1", "6", "0.10", "1.25"),
+            ("gpt-5.6", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            ("gpt-5.6-low", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            ("gpt-5.6-medium", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            ("gpt-5.6-high", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            ("gpt-5.6-xhigh", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            ("gpt-5.6-minimal", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             // GPT-5.5 系列（GPT-5.5 family default pricing 用于补 dashboard ghost-zero-cost 行）
             ("gpt-5.5", "GPT-5.5", "5", "30", "0.50", "0"),
             ("gpt-5.5-low", "GPT-5.5", "5", "30", "0.50", "0"),
@@ -1618,6 +1637,8 @@ impl Database {
                 "0.03",
                 "0",
             ),
+            // Grok 系列
+            ("grok-4.5", "Grok 4.5", "2", "6", "0.50", "0"),
             // Grok CLI 官方 OAuth 态使用的内部模型名
             ("grok-4.5-build", "Grok 4.5 Build", "2", "6", "0.30", "0"),
             // StepFun 系列
@@ -1675,6 +1696,7 @@ impl Database {
                 "1.00",
                 "0",
             ),
+            ("kimi-k3", "Kimi K3", "3.00", "15.00", "0.30", "0"),
             // MiniMax 系列
             ("minimax-m2.1", "MiniMax M2.1", "2.10", "8.40", "0.21", "0"),
             (

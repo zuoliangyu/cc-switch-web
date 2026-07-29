@@ -802,6 +802,43 @@ fn schema_model_pricing_is_seeded_on_init() {
 }
 
 #[test]
+fn schema_model_pricing_contains_current_models() {
+    let db = Database::memory().expect("create memory db");
+    let conn = db.conn.lock().expect("lock conn");
+
+    let expected = [
+        ("claude-opus-5", "5", "25", "0.50", "6.25"),
+        ("gpt-5.6-sol", "5", "30", "0.50", "6.25"),
+        ("gpt-5.6-terra", "2.50", "15", "0.25", "3.125"),
+        ("gpt-5.6-luna", "1", "6", "0.10", "1.25"),
+        ("grok-4.5", "2", "6", "0.50", "0"),
+        ("kimi-k3", "3.00", "15.00", "0.30", "0"),
+    ];
+
+    for (model_id, input, output, cache_read, cache_creation) in expected {
+        let actual: (String, String, String, String) = conn
+            .query_row(
+                "SELECT input_cost_per_million, output_cost_per_million,
+                        cache_read_cost_per_million, cache_creation_cost_per_million
+                 FROM model_pricing WHERE model_id = ?1",
+                [model_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap_or_else(|error| panic!("missing pricing for {model_id}: {error}"));
+        assert_eq!(
+            actual,
+            (
+                input.to_string(),
+                output.to_string(),
+                cache_read.to_string(),
+                cache_creation.to_string(),
+            ),
+            "unexpected pricing for {model_id}",
+        );
+    }
+}
+
+#[test]
 fn ensure_incremental_auto_vacuum_rebuilds_existing_file_db() {
     let temp = NamedTempFile::new().expect("create temp db file");
     let path = temp.path().to_path_buf();

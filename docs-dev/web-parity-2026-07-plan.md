@@ -1,0 +1,52 @@
+# Web 端跟进上游计划（2026-07）
+
+## 基线
+
+- 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`
+- 上游本次拉取：`50270d5e..30409878`，119 个提交
+- Web 最后明确同步的上游提交：`09f67c1b`（2026-05-19）
+- Web 到当前上游完整差距：469 个提交
+- Web 基线：`a94f2e6` / `v0.8.0`
+
+本轮目标是引入所有适用于 Web 运行时的上游能力。Tauri 窗口、托盘、桌面更新器、桌面发行流程等仅桌面壳能力不移植；共享业务能力按 Web 的 Axum API、服务端文件系统和现有前端运行时适配，不直接 cherry-pick。
+
+## 执行阶段
+
+### P0：安全与数据保护
+
+- [x] SQL 导入使用 SQLite authorizer 拒绝跨文件操作和危险 PRAGMA（`c98913df`）
+- [x] Skill 仓库引用、下载、解压、目录写入/删除边界加固（`ff3bc242` 适用部分）
+- [x] Gemini 通用配置凭据过滤及历史泄漏清理（`ff3bc242` 适用部分）
+- [x] Codex MCP / OpenCode 非法配置不再 panic（`ff3bc242` 适用部分）
+- [x] 通用配置递归合并阻止原型链键（`cd17912f`）
+- [x] deeplink 风险分级、MCP 参数展示、URL-safe Base64、usage script 默认禁用（`6dbb944b`、`a443eae9`、`19bf236e`、`cfa90f39`）
+- [x] 托管账号接管仅注入一个正确的认证占位符（`c6197ae3`）
+
+### P1：代理与用量正确性
+
+- [ ] 对齐 Responses / Chat / Anthropic 请求、响应与 SSE 转换修复
+- [ ] 对齐 reasoning、tool call、tool-result media 的顺序与身份保持
+- [ ] 对齐稳定 usage key、幂等写入和 session import 单次通知
+- [ ] 对齐 Codex fork / sub-agent 用量重建与维护入口
+- [ ] 对齐 managed OAuth routing-required 判定与失败策略
+
+### P2：功能与生态
+
+- [ ] 项目档案（profiles）及 Web API / 页面适配
+- [ ] Grok Build 应用目标、配置、代理、MCP、Skills、Prompts、Session 与 Usage
+- [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
+- [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
+- [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
+
+## 验证原则
+
+- 每笔非平凡逻辑保留最小回归测试。
+- 阶段内先跑相关测试文件或测试名；全量前端、后端和 Docker 验证在阶段收口时单独确认。
+- 行为、配置或接口变化同步更新 `CHANGELOG.md`；发生版本或对外说明变化时同步检查三语 README。
+
+## 执行记录
+
+- 2026-07-30：完成现状调查，确认最新拉取 119 个提交、完整差距 469 个提交。
+- 2026-07-30：P0 实现完成。Skill 下载/解压与文件系统 sink、Gemini 凭据清理、非法配置容错、通用配置原型链、Deeplink 风险可见性与托管账号认证占位符均已落地。
+- 2026-07-30：P0 定向验证完成：前端安全测试 2 个文件、6 个用例通过，TypeScript 类型检查通过，Rust 新增安全回归测试通过。
+- 2026-07-30：开始 P1，完成 Codex Chat / Responses / Anthropic 协议转换与接线；用量链仍在适配中，按“完成一阶段、验证、提交一次”继续推进。

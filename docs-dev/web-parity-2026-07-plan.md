@@ -52,3 +52,4 @@
 - 2026-07-30：开始 P1，完成 Codex Chat / Responses / Anthropic 协议转换与接线；用量链仍在适配中，按“完成一阶段、验证、提交一次”继续推进。
 - 2026-07-30：Codex session 增量同步完成，支持 fork、sub-agent、deferred 父会话恢复和疑似重复观测；28 项定向测试通过。
 - 2026-07-30：Managed OAuth 与协议格式统一使用路由需求谓词，切换拦截改为检查当前应用 takeover；7 项前端测试和类型检查通过。
+- 2026-07-30：稳定 usage key 与幂等写入完成；同语义重放忽略、跨语义碰撞保留两行，logger 5 项和 parser 28 项测试通过。

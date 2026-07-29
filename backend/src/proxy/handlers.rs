@@ -970,10 +970,8 @@ async fn log_usage(
         model
     };
 
-    // 使用 dedup_request_id() 让 proxy 写入与 session-log 同步共享同一 request_id
-    // （Claude API 上是 `session:msg_xxx`），主键 INSERT OR REPLACE 自动去重；
-    // 没拿到 message_id 时回退随机 UUID（与 session log 不可能撞上）。
-    let request_id = usage.dedup_request_id(None);
+    let dedup_scope = (app_type != "claude").then_some((app_type, provider_id));
+    let request_id = usage.dedup_request_id(dedup_scope);
 
     if let Err(e) = logger.log_with_calculation(
         request_id,

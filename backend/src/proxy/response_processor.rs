@@ -528,9 +528,8 @@ async fn log_usage_internal(
         model
     };
 
-    // dedup_request_id：Claude 路径返回 `session:msg_xxx`，与 session-log 同步路径
-    // 共享 key，让 proxy_request_logs 主键去重生效；非 Claude / 无 message_id 回退随机 UUID。
-    let request_id = usage.dedup_request_id(None);
+    let dedup_scope = (app_type != "claude").then_some((app_type, provider_id));
+    let request_id = usage.dedup_request_id(dedup_scope);
 
     log::debug!(
         "[{app_type}] 记录请求日志: id={request_id}, provider={provider_id}, model={model}, streaming={is_streaming}, status={status_code}, latency_ms={latency_ms}, first_token_ms={first_token_ms:?}, session={}, input={}, output={}, cache_read={}, cache_creation={}",

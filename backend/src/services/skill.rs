@@ -3093,6 +3093,7 @@ mod tests {
                     claude: false,
                     codex: false,
                     gemini: false,
+                    grokbuild: false,
                     opencode: true,
                     hermes: false,
                 },
@@ -3137,6 +3138,7 @@ mod tests {
                 claude: false,
                 codex: false,
                 gemini: false,
+                grokbuild: false,
                 opencode: false,
                 hermes: false,
             },
@@ -3150,6 +3152,43 @@ mod tests {
 
         assert!(!opencode_skills_dir.join("disabled-skill").exists());
         assert!(!opencode_skills_dir.join("orphan-skill").exists());
+    }
+
+    #[test]
+    #[serial]
+    fn sync_to_grokbuild_uses_grok_skills_directory() {
+        let _home = TempHome::new();
+        let home = crate::config::get_home_dir();
+        let source = home.join(".cc-switch").join("skills").join("grok-skill");
+        write_skill(&source, "Grok Skill");
+        let db = create_test_db();
+        db.save_skill(&InstalledSkill {
+            id: "local:grok-skill".to_string(),
+            name: "Grok Skill".to_string(),
+            description: None,
+            directory: "grok-skill".to_string(),
+            repo_owner: None,
+            repo_name: None,
+            repo_branch: None,
+            readme_url: None,
+            apps: SkillApps {
+                grokbuild: true,
+                ..Default::default()
+            },
+            installed_at: 0,
+            content_hash: None,
+            updated_at: 0,
+        })
+        .expect("save skill");
+
+        SkillService::sync_to_app(&db, &AppType::GrokBuild).expect("sync Grok Build skill");
+
+        assert!(home
+            .join(".grok")
+            .join("skills")
+            .join("grok-skill")
+            .join("SKILL.md")
+            .exists());
     }
 
     #[test]
@@ -3176,6 +3215,7 @@ mod tests {
                 claude: true,
                 codex: false,
                 gemini: false,
+                grokbuild: false,
                 opencode: false,
                 hermes: false,
             },
@@ -3234,6 +3274,7 @@ mod tests {
                 claude: true,
                 codex: false,
                 gemini: false,
+                grokbuild: false,
                 opencode: false,
                 hermes: false,
             },
@@ -3306,6 +3347,7 @@ mod tests {
                 claude: true,
                 codex: false,
                 gemini: false,
+                grokbuild: false,
                 opencode: false,
                 hermes: false,
             },

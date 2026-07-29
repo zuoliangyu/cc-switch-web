@@ -13,6 +13,7 @@
 mod claude;
 mod codex;
 mod gemini;
+mod grokbuild;
 mod opencode;
 mod validation;
 
@@ -46,6 +47,7 @@ pub(crate) fn merge_imported_server(
                 claude: matches!(app, AppType::Claude),
                 codex: matches!(app, AppType::Codex),
                 gemini: matches!(app, AppType::Gemini),
+                grokbuild: matches!(app, AppType::GrokBuild),
                 opencode: matches!(app, AppType::OpenCode),
                 hermes: false,
             },
@@ -67,6 +69,9 @@ pub(crate) use codex::{
 };
 pub(crate) use gemini::{
     import_from_gemini, remove_server_from_gemini, sync_single_server_to_gemini,
+};
+pub(crate) use grokbuild::{
+    import_from_grokbuild, remove_server_from_grokbuild, sync_single_server_to_grokbuild,
 };
 pub(crate) use opencode::{
     import_from_opencode, remove_server_from_opencode, sync_single_server_to_opencode,

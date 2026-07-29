@@ -561,6 +561,16 @@ fn restore_live_settings_for_provider_backfill(
     provider: &Provider,
     live_settings: Value,
 ) -> Value {
+    if matches!(app_type, AppType::GrokBuild) {
+        let mut settings = live_settings;
+        if let Err(error) = crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings) {
+            log::warn!(
+                "Failed to strip Grok Build mcp_servers while backfilling '{}': {error}",
+                provider.id
+            );
+        }
+        return settings;
+    }
     if !matches!(app_type, AppType::Codex) {
         return live_settings;
     }
@@ -1430,5 +1440,24 @@ mod tests {
             .map(|value| value.as_str().expect("tool id should be string"))
             .collect();
         assert_eq!(values, vec!["tool2"]);
+    }
+
+    #[test]
+    fn grokbuild_backfill_does_not_persist_projected_mcp_servers() {
+        let provider = Provider::with_id(
+            "grok".to_string(),
+            "Grok".to_string(),
+            json!({ "config": "[models]\ndefault = \"grok\"\n" }),
+            None,
+        );
+        let live = json!({
+            "config": "[models]\ndefault = \"grok\"\n\n[mcp_servers.echo]\ncommand = \"echo\"\n"
+        });
+
+        let restored =
+            restore_live_settings_for_provider_backfill(&AppType::GrokBuild, &provider, live);
+        let config = restored["config"].as_str().expect("config text");
+        assert!(config.contains("default = \"grok\""));
+        assert!(!config.contains("mcp_servers"));
     }
 }

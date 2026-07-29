@@ -183,3 +183,43 @@ impl PromptService {
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    #[test]
+    #[serial]
+    fn grokbuild_prompt_writes_agents_file() {
+        let temp = tempfile::tempdir().expect("temp home");
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        crate::settings::reload_settings().expect("reload settings");
+        let db = Arc::new(crate::database::Database::memory().expect("database"));
+        let state = AppState::new(db);
+        let prompt = Prompt {
+            id: "grok-prompt".to_string(),
+            name: "Grok Prompt".to_string(),
+            content: "Use the project instructions.".to_string(),
+            description: None,
+            enabled: true,
+            created_at: None,
+            updated_at: None,
+        };
+
+        PromptService::upsert_prompt(&state, AppType::GrokBuild, "grok-prompt", prompt)
+            .expect("write prompt");
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join(".grok").join("AGENTS.md")).unwrap(),
+            "Use the project instructions."
+        );
+
+        match previous {
+            Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+            None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+        }
+        crate::settings::reload_settings().expect("restore settings");
+    }
+}

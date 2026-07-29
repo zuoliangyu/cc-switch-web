@@ -17,6 +17,8 @@ pub struct McpApps {
     #[serde(default)]
     pub gemini: bool,
     #[serde(default)]
+    pub grokbuild: bool,
+    #[serde(default)]
     pub opencode: bool,
     #[serde(default)]
     pub hermes: bool,
@@ -29,7 +31,7 @@ impl McpApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
-            AppType::GrokBuild => false,
+            AppType::GrokBuild => self.grokbuild,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 MCP
@@ -42,7 +44,7 @@ impl McpApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
-            AppType::GrokBuild => {}
+            AppType::GrokBuild => self.grokbuild = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 MCP
@@ -60,6 +62,9 @@ impl McpApps {
         }
         if self.gemini {
             apps.push(AppType::Gemini);
+        }
+        if self.grokbuild {
+            apps.push(AppType::GrokBuild);
         }
         if self.opencode {
             apps.push(AppType::OpenCode);
@@ -79,6 +84,8 @@ pub struct SkillApps {
     #[serde(default)]
     pub gemini: bool,
     #[serde(default)]
+    pub grokbuild: bool,
+    #[serde(default)]
     pub opencode: bool,
     #[serde(default)]
     pub hermes: bool,
@@ -91,7 +98,7 @@ impl SkillApps {
             AppType::Claude => self.claude,
             AppType::Codex => self.codex,
             AppType::Gemini => self.gemini,
-            AppType::GrokBuild => false,
+            AppType::GrokBuild => self.grokbuild,
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support Skills
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
@@ -104,7 +111,7 @@ impl SkillApps {
             AppType::Claude => self.claude = enabled,
             AppType::Codex => self.codex = enabled,
             AppType::Gemini => self.gemini = enabled,
-            AppType::GrokBuild => {}
+            AppType::GrokBuild => self.grokbuild = enabled,
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support Skills, ignore
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
@@ -123,6 +130,9 @@ impl SkillApps {
         if self.gemini {
             apps.push(AppType::Gemini);
         }
+        if self.grokbuild {
+            apps.push(AppType::GrokBuild);
+        }
         if self.opencode {
             apps.push(AppType::OpenCode);
         }
@@ -131,7 +141,7 @@ impl SkillApps {
 
     /// 检查是否所有应用都未启用
     pub fn is_empty(&self) -> bool {
-        !self.claude && !self.codex && !self.gemini && !self.opencode
+        !self.claude && !self.codex && !self.gemini && !self.grokbuild && !self.opencode
     }
 
     /// 仅启用指定应用（其他应用设为禁用）

@@ -37,7 +37,7 @@
   - [x] Profile 切换与管理页面
 - [ ] Grok Build 应用目标、配置、代理、MCP、Skills、Prompts、Session 与 Usage
   - [x] 应用标识、配置文件、Provider、官方登录态、导入与基础 Web API
-  - [ ] MCP、Skills 与 Prompts
+  - [x] MCP、Skills 与 Prompts
   - [ ] 代理接管与协议路由
   - [ ] Session 与 Usage
   - [ ] 前端入口、表单与预设
@@ -65,3 +65,4 @@
 - 2026-07-30：完成 Profile 服务与 Web API/runtime；支持 scope 独立快照、切走自动保存、best-effort 应用、代理接管恢复及 current 指针维护，页面适配留到下一笔提交。
 - 2026-07-30：完成 Profile 页面适配；主页面支持创建、切换、取消绑定、重命名和删除项目，设置页可隐藏入口，P2 Profiles 收口。
 - 2026-07-30：完成 Grok Build 第一阶段；新增 `grokbuild` 应用目标、配置校验与安全凭据提取、官方/自定义 Provider 读写、导入和现有 Axum Provider API 接入。
+- 2026-07-30：完成 Grok Build 第二阶段；schema v12 持久化 MCP/Skill 启用位，支持 Grok TOML MCP 投影、导入和回填剥离，Skill 与 Prompt 写入 Grok 标准目录。

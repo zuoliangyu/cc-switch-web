@@ -198,6 +198,54 @@ fn schema_migration_accepts_latest_previous_version_on_current_schema() {
 }
 
 #[test]
+fn schema_v12_adds_grokbuild_skill_and_mcp_flags() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE mcp_servers (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );
+        CREATE TABLE skills (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );",
+    )
+    .expect("create v11 tables");
+    conn.execute(
+        "INSERT INTO mcp_servers (id, enabled_codex) VALUES ('mcp-1', 1)",
+        [],
+    )
+    .expect("seed mcp");
+    conn.execute(
+        "INSERT INTO skills (id, enabled_codex) VALUES ('skill-1', 1)",
+        [],
+    )
+    .expect("seed skill");
+    Database::set_user_version(&conn, 11).expect("set v11");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v12");
+
+    assert!(Database::has_column(&conn, "mcp_servers", "enabled_grokbuild").unwrap());
+    assert!(Database::has_column(&conn, "skills", "enabled_grokbuild").unwrap());
+    let mcp: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_codex, enabled_grokbuild FROM mcp_servers WHERE id = 'mcp-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let skill: (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_codex, enabled_grokbuild FROM skills WHERE id = 'skill-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(mcp, (1, 0));
+    assert_eq!(skill, (1, 0));
+}
+
+#[test]
 fn schema_migration_from_v7_preserves_skills_columns() {
     let conn = Connection::open_in_memory().expect("open memory db");
     Database::create_tables_on_conn(&conn).expect("create tables");

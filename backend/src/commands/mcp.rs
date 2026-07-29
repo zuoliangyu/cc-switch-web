@@ -51,6 +51,7 @@ pub(crate) async fn import_mcp_from_apps_internal(state: &AppState) -> Result<us
     total += McpService::import_from_claude(state).unwrap_or(0);
     total += McpService::import_from_codex(state).unwrap_or(0);
     total += McpService::import_from_gemini(state).unwrap_or(0);
+    total += McpService::import_from_grokbuild(state).unwrap_or(0);
     total += McpService::import_from_opencode(state).unwrap_or(0);
     Ok(total)
 }

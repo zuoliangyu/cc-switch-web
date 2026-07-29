@@ -37,6 +37,9 @@ impl McpService {
         if prev_apps.gemini && !server.apps.gemini {
             Self::remove_server_from_app(state, &server.id, &AppType::Gemini)?;
         }
+        if prev_apps.grokbuild && !server.apps.grokbuild {
+            Self::remove_server_from_app(state, &server.id, &AppType::GrokBuild)?;
+        }
         if prev_apps.opencode && !server.apps.opencode {
             Self::remove_server_from_app(state, &server.id, &AppType::OpenCode)?;
         }
@@ -117,7 +120,7 @@ impl McpService {
                 mcp::sync_single_server_to_gemini(&server.id, &server.server)?;
             }
             AppType::GrokBuild => {
-                log::debug!("Grok Build MCP 将在下一阶段启用，当前跳过同步");
+                mcp::sync_single_server_to_grokbuild(&server.id, &server.server)?;
             }
             AppType::OpenCode => {
                 mcp::sync_single_server_to_opencode(&server.id, &server.server)?;
@@ -154,7 +157,7 @@ impl McpService {
             AppType::Codex => mcp::remove_server_from_codex(id)?,
             AppType::Gemini => mcp::remove_server_from_gemini(id)?,
             AppType::GrokBuild => {
-                log::debug!("Grok Build MCP 将在下一阶段启用，当前跳过移除");
+                mcp::remove_server_from_grokbuild(id)?;
             }
             AppType::OpenCode => {
                 mcp::remove_server_from_opencode(id)?;
@@ -242,6 +245,13 @@ impl McpService {
         let mut imported = ImportedMcpServers::new();
         crate::mcp::import_from_gemini(&mut imported)?;
         Self::persist_imported_servers(state, imported, AppType::Gemini)
+    }
+
+    /// 从 Grok Build 的 `[mcp_servers]` 导入 MCP。
+    pub fn import_from_grokbuild(state: &AppState) -> Result<usize, AppError> {
+        let mut imported = ImportedMcpServers::new();
+        crate::mcp::import_from_grokbuild(&mut imported)?;
+        Self::persist_imported_servers(state, imported, AppType::GrokBuild)
     }
 
     /// 从 OpenCode 导入 MCP（v3.9.2+ 新增）

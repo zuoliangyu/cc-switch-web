@@ -157,6 +157,8 @@ pub(crate) fn get_skill_repos_internal(app_state: &AppState) -> Result<Vec<Skill
 }
 
 pub(crate) fn add_skill_repo_internal(app_state: &AppState, repo: SkillRepo) -> Result<bool, String> {
+    SkillService::validate_repo_ref(&repo.owner, &repo.name, &repo.branch)
+        .map_err(|e| e.to_string())?;
     app_state
         .db
         .save_skill_repo(&repo)

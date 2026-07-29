@@ -2537,6 +2537,8 @@
     "usageScript": "Usage Query",
     "usageScriptEnabled": "Enabled",
     "usageScriptDisabled": "Disabled",
+    "usageScriptCode": "Script Code",
+    "usageScriptWarning": "This JavaScript runs when usage is queried after it is enabled. Import only if you trust the source.",
     "usageApiKey": "Usage API Key",
     "usageBaseUrl": "Usage Query URL",
     "usageAutoInterval": "Auto Query",
@@ -2555,6 +2557,11 @@
     "skillImportSuccess": "Skill repo added",
     "skillImportSuccessDescription": "Added repo: {{repo}}",
     "importError": "Deep Link import failed",
+    "risk": {
+      "envHijack": "Contains environment variables that can alter process behavior. Review them carefully.",
+      "privateEndpoint": "Contains a local, private-network, or cloud metadata endpoint. Confirm it is intended.",
+      "shellCommand": "Contains command arguments interpreted by a shell. Confirm the code source is trusted."
+    },
     "prompt": {
       "title": "Prompt Information",
       "app": "App",
@@ -2568,6 +2575,11 @@
       "targetApps": "Target Apps",
       "serverPreview": "Server Preview",
       "serverCount": "MCP Servers ({{count}})",
+      "command": "Command",
+      "args": "Args",
+      "url": "URL",
+      "env": "Environment",
+      "rawPayload": "Unparsed Raw Payload",
       "enabledWarning": "After import, configurations will be written to all specified apps immediately"
     },
     "skill": {

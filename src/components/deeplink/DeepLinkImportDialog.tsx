@@ -17,6 +17,15 @@ import {
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { decodeBase64Utf8 } from "@/lib/utils/base64";
 import {
+  classifyCommand,
+  classifyEndpoint,
+  classifyEnvKey,
+  decodeDeeplinkPayload,
+  maskValue,
+  riskI18nKey,
+  type RiskKind,
+} from "@/utils/deeplinkRisk";
+import {
   extractDeepLinkFromLocation,
   mergeDeepLinkConfig,
   parseDeepLinkConfigObject,
@@ -32,16 +41,6 @@ type ProviderConfigPreview =
   | { kind: "codex"; auth: Record<string, unknown>; tomlConfig: string }
   | { kind: "gemini"; env: Record<string, unknown> }
   | { kind: "generic"; raw: Record<string, unknown> };
-
-const maskValue = (key: string, value: string) => {
-  const sensitive = ["TOKEN", "KEY", "SECRET", "PASSWORD"].some((token) =>
-    key.toUpperCase().includes(token),
-  );
-  if (!sensitive || value.length <= 8) {
-    return value;
-  }
-  return `${value.slice(0, 8)}************`;
-};
 
 const formatPreviewValue = (value: unknown) => {
   if (typeof value === "string") {
@@ -225,34 +224,41 @@ export function DeepLinkImportDialog() {
   }, [request]);
 
   const decodedPromptContent = useMemo(() => {
-    if (!request?.content) {
-      return "";
-    }
-    try {
-      return decodeBase64Utf8(request.content);
-    } catch {
-      return "";
-    }
+    return decodeDeeplinkPayload(request?.content, decodeBase64Utf8);
   }, [request?.content]);
 
-  const mcpServerCount = useMemo(() => {
+  const mcpServers = useMemo(() => {
     if (request?.resource !== "mcp" || !parsedConfig) {
-      return 0;
+      return {};
     }
     if (
       "mcpServers" in parsedConfig &&
       parsedConfig.mcpServers &&
       typeof parsedConfig.mcpServers === "object"
     ) {
-      return Object.keys(
-        parsedConfig.mcpServers as Record<string, unknown>,
-      ).length;
+      return parsedConfig.mcpServers as Record<string, unknown>;
     }
-    if (typeof parsedConfig === "object") {
-      return Object.keys(parsedConfig).length;
-    }
-    return 0;
+    return parsedConfig;
   }, [parsedConfig, request?.resource]);
+
+  const mcpRisks = useMemo(() => {
+    const found = new Set<RiskKind>();
+    for (const spec of Object.values(mcpServers)) {
+      if (!spec || typeof spec !== "object" || Array.isArray(spec)) continue;
+      const server = spec as Record<string, unknown>;
+      const commandRisk = classifyCommand(server.command, server.args);
+      const endpointRisk = classifyEndpoint(server.url);
+      if (commandRisk) found.add(commandRisk);
+      if (endpointRisk) found.add(endpointRisk);
+      if (server.env && typeof server.env === "object") {
+        for (const key of Object.keys(server.env)) {
+          const risk = classifyEnvKey(key);
+          if (risk) found.add(risk);
+        }
+      }
+    }
+    return [...found];
+  }, [mcpServers]);
 
   const targetApps = useMemo(() => {
     if (request?.resource !== "mcp") {
@@ -263,41 +269,6 @@ export function DeepLinkImportDialog() {
       .map((app) => app.trim())
       .filter(Boolean);
   }, [request?.apps, request?.resource]);
-
-  const mcpServerSummaries = useMemo(() => {
-    if (request?.resource !== "mcp" || !parsedConfig) {
-      return [];
-    }
-
-    const servers =
-      "mcpServers" in parsedConfig &&
-      parsedConfig.mcpServers &&
-      typeof parsedConfig.mcpServers === "object"
-        ? (parsedConfig.mcpServers as Record<string, unknown>)
-        : parsedConfig;
-
-    return Object.entries(servers).map(([id, spec]) => {
-      const record =
-        spec && typeof spec === "object" && !Array.isArray(spec)
-          ? (spec as Record<string, unknown>)
-          : null;
-      const command = Array.isArray(record?.command)
-        ? record.command.join(" ")
-        : typeof record?.command === "string"
-          ? record.command
-          : null;
-      const url = typeof record?.url === "string" ? record.url : null;
-
-      return {
-        id,
-        summary: command
-          ? `Command: ${command}`
-          : url
-            ? `URL: ${url}`
-            : formatPreviewValue(spec),
-      };
-    });
-  }, [parsedConfig, request?.resource]);
 
   const providerConfigPreview = useMemo(
     () => buildProviderConfigPreview(request, parsedConfig),
@@ -474,10 +445,15 @@ export function DeepLinkImportDialog() {
                         .map((endpoint, index, items) => (
                           <div
                             key={`${endpoint}-${index}`}
-                            className={
+                            className={`${
                               index === 0 ? "font-medium" : "text-muted-foreground"
-                            }
+                            } ${
+                              classifyEndpoint(endpoint)
+                                ? "text-yellow-700 dark:text-yellow-400"
+                                : ""
+                            }`}
                           >
+                            {classifyEndpoint(endpoint) && "⚠ "}
                             {index === 0 ? "🔹 " : "└ "}
                             {endpoint}
                             {index === 0 && items.length > 1 && (
@@ -606,11 +582,28 @@ export function DeepLinkImportDialog() {
                         <InfoRow
                           label={t("deeplink.usageScript")}
                           value={
-                            request.usageEnabled !== false
+                            request.usageEnabled === true
                               ? t("deeplink.usageScriptEnabled")
                               : t("deeplink.usageScriptDisabled")
                           }
                         />
+                        {request.usageScript && (
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium text-muted-foreground">
+                              {t("deeplink.usageScriptCode")}
+                            </div>
+                            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-muted/40 p-2 font-mono text-xs">
+                              {decodeDeeplinkPayload(
+                                request.usageScript,
+                                decodeBase64Utf8,
+                              )}
+                            </pre>
+                            <div className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-300">
+                              <span aria-hidden="true">⚠️</span>
+                              <span>{t("deeplink.usageScriptWarning")}</span>
+                            </div>
+                          </div>
+                        )}
                         {request.usageApiKey &&
                           request.usageApiKey !== request.apiKey && (
                             <InfoRow
@@ -703,45 +696,109 @@ export function DeepLinkImportDialog() {
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {t("deeplink.mcp.serverCount", { count: mcpServerCount })}
+                    {t("deeplink.mcp.serverCount", {
+                      count: Object.keys(mcpServers).length,
+                    })}
                   </div>
-                  {mcpServerSummaries.length > 0 && (
+                  {Object.keys(mcpServers).length > 0 && (
                     <PreviewCard title={t("deeplink.mcp.serverPreview")}>
                       <div className="space-y-2">
-                        {mcpServerSummaries.map((server) => (
-                          <div
-                            key={server.id}
-                            className="rounded-lg border border-border bg-background/70 p-3"
-                          >
-                            <div className="text-sm font-medium">
-                              {server.id}
+                        {Object.entries(mcpServers).map(([id, spec]) => {
+                          const server =
+                            spec &&
+                            typeof spec === "object" &&
+                            !Array.isArray(spec)
+                              ? (spec as Record<string, unknown>)
+                              : null;
+                          const args = Array.isArray(server?.args)
+                            ? server.args
+                            : [];
+                          const env =
+                            server?.env && typeof server.env === "object"
+                              ? (server.env as Record<string, unknown>)
+                              : {};
+                          const commandRisk = classifyCommand(
+                            server?.command,
+                            server?.args,
+                          );
+                          return (
+                            <div
+                              key={id}
+                              className="rounded-lg border border-border bg-background/70 p-3"
+                            >
+                              <div className="mb-1 text-sm font-medium">{id}</div>
+                              <div className="space-y-1">
+                                {server?.command !== undefined && (
+                                  <McpRow
+                                    label={t("deeplink.mcp.command")}
+                                    value={formatPreviewValue(server.command)}
+                                    risk={commandRisk}
+                                  />
+                                )}
+                                {args.map((arg, index) => (
+                                  <McpRow
+                                    key={index}
+                                    label={
+                                      index === 0 ? t("deeplink.mcp.args") : ""
+                                    }
+                                    value={formatPreviewValue(arg)}
+                                    risk={commandRisk}
+                                  />
+                                ))}
+                                {server?.url !== undefined && (
+                                  <McpRow
+                                    label={t("deeplink.mcp.url")}
+                                    value={formatPreviewValue(server.url)}
+                                    risk={classifyEndpoint(server.url)}
+                                  />
+                                )}
+                                {Object.entries(env).map(([key, value], index) => (
+                                  <McpRow
+                                    key={key}
+                                    label={index === 0 ? t("deeplink.mcp.env") : ""}
+                                    value={`${key}=${maskValue(
+                                      key,
+                                      formatPreviewValue(value),
+                                    )}`}
+                                    risk={classifyEnvKey(key)}
+                                  />
+                                ))}
+                                {!server && (
+                                  <McpRow value={formatPreviewValue(spec)} label="" />
+                                )}
+                              </div>
                             </div>
-                            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                              {server.summary}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </PreviewCard>
                   )}
-                  <PreviewCard title={t("deeplink.mcp.serverPreview")}>
-                    <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
-                      {JSON.stringify(
-                        (parsedConfig?.mcpServers as
-                          | Record<string, unknown>
-                          | undefined) ??
-                          parsedConfig ??
-                          {},
-                        null,
-                        2,
-                      ).slice(0, 1600)}
-                    </pre>
-                  </PreviewCard>
-                  {request.enabled && (
-                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300">
-                      {t("deeplink.mcp.enabledWarning")}
+                  {!parsedConfig && request.config && (
+                    <PreviewCard title={t("deeplink.mcp.rawPayload")}>
+                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-yellow-700 dark:text-yellow-300">
+                        {decodeDeeplinkPayload(
+                          request.config,
+                          decodeBase64Utf8,
+                        )}
+                      </pre>
+                    </PreviewCard>
+                  )}
+                  {mcpRisks.length > 0 && (
+                    <div className="space-y-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+                      {mcpRisks.map((risk) => (
+                        <div
+                          key={risk}
+                          className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-300"
+                        >
+                          <span aria-hidden="true">⚠️</span>
+                          <span>{t(riskI18nKey(risk))}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
+                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300">
+                    {t("deeplink.mcp.enabledWarning")}
+                  </div>
                 </div>
               )}
 
@@ -848,6 +905,30 @@ function PreviewCard({
   );
 }
 
+function McpRow({
+  label,
+  value,
+  risk,
+}: {
+  label: string;
+  value: string;
+  risk?: RiskKind | null;
+}) {
+  return (
+    <div className="grid grid-cols-[4rem_1fr] gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span
+        className={`break-all font-mono ${
+          risk ? "font-semibold text-yellow-700 dark:text-yellow-400" : ""
+        }`}
+      >
+        {risk && <span aria-hidden="true">⚠ </span>}
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function ConfigEntryList({
   entries,
 }: {
@@ -857,8 +938,17 @@ function ConfigEntryList({
     <div className="space-y-1.5">
       {entries.map(([key, value]) => (
         <div key={key} className="grid grid-cols-2 gap-2 text-xs">
-          <span className="truncate font-mono text-muted-foreground">{key}</span>
-          <span className="truncate font-mono">
+          <span
+            className={`break-all font-mono ${
+              classifyEnvKey(key)
+                ? "font-semibold text-yellow-700 dark:text-yellow-400"
+                : "text-muted-foreground"
+            }`}
+          >
+            {classifyEnvKey(key) && <span aria-hidden="true">⚠ </span>}
+            {key}
+          </span>
+          <span className="break-all font-mono">
             {maskValue(key, formatPreviewValue(value))}
           </span>
         </div>

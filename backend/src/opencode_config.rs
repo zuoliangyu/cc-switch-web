@@ -22,6 +22,24 @@ pub fn get_opencode_config_path() -> PathBuf {
     get_opencode_dir().join("opencode.json")
 }
 
+fn parse_opencode_config(path: &std::path::Path, content: &str) -> Result<Value, AppError> {
+    let value: Value = json5::from_str(content).map_err(|e| {
+        AppError::Config(format!(
+            "Failed to parse OpenCode config: {}: {e}",
+            path.display()
+        ))
+    })?;
+
+    if !value.is_object() {
+        return Err(AppError::Config(format!(
+            "OpenCode 配置文件根节点必须是 JSON 对象: {}",
+            path.display()
+        )));
+    }
+
+    Ok(value)
+}
+
 pub fn read_opencode_config() -> Result<Value, AppError> {
     let path = get_opencode_config_path();
 
@@ -32,7 +50,7 @@ pub fn read_opencode_config() -> Result<Value, AppError> {
     }
 
     let content = std::fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
-    serde_json::from_str(&content).map_err(|e| AppError::json(&path, e))
+    parse_opencode_config(&path, &content)
 }
 
 pub fn write_opencode_config(config: &Value) -> Result<(), AppError> {
@@ -55,7 +73,10 @@ pub fn get_providers() -> Result<Map<String, Value>, AppError> {
 pub fn set_provider(id: &str, config: Value) -> Result<(), AppError> {
     let mut full_config = read_opencode_config()?;
 
-    if full_config.get("provider").is_none() {
+    if !full_config.get("provider").is_some_and(Value::is_object) {
+        if full_config.get("provider").is_some() {
+            log::warn!("opencode.json 的 provider 不是对象，已重置为空对象");
+        }
         full_config["provider"] = json!({});
     }
 
@@ -74,6 +95,8 @@ pub fn remove_provider(id: &str) -> Result<(), AppError> {
 
     if let Some(providers) = config.get_mut("provider").and_then(|v| v.as_object_mut()) {
         providers.remove(id);
+    } else if config.get("provider").is_some() {
+        log::warn!("opencode.json 的 provider 不是对象，无法删除供应商 '{id}'");
     }
 
     write_opencode_config(&config)
@@ -114,7 +137,10 @@ pub fn get_mcp_servers() -> Result<Map<String, Value>, AppError> {
 pub fn set_mcp_server(id: &str, config: Value) -> Result<(), AppError> {
     let mut full_config = read_opencode_config()?;
 
-    if full_config.get("mcp").is_none() {
+    if !full_config.get("mcp").is_some_and(Value::is_object) {
+        if full_config.get("mcp").is_some() {
+            log::warn!("opencode.json 的 mcp 不是对象，已重置为空对象");
+        }
         full_config["mcp"] = json!({});
     }
 
@@ -130,6 +156,8 @@ pub fn remove_mcp_server(id: &str) -> Result<(), AppError> {
 
     if let Some(mcp) = config.get_mut("mcp").and_then(|v| v.as_object_mut()) {
         mcp.remove(id);
+    } else if config.get("mcp").is_some() {
+        log::warn!("opencode.json 的 mcp 不是对象，无法删除服务器 '{id}'");
     }
 
     write_opencode_config(&config)
@@ -198,4 +226,18 @@ pub fn remove_plugin_by_prefix(prefix: &str) -> Result<(), AppError> {
     }
 
     write_opencode_config(&config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_rejects_non_object_root() {
+        let path = std::path::Path::new("opencode.json");
+        for malformed in ["[]", "42", "\"text\""] {
+            assert!(parse_opencode_config(path, malformed).is_err());
+        }
+        assert!(parse_opencode_config(path, "{ theme: 'dark' }").is_ok());
+    }
 }

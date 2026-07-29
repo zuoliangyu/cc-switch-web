@@ -5,15 +5,18 @@
  * Base64 strings are passed through URLs:
  * - Spaces (URL parsing may convert '+' to space)
  * - Missing padding ('=' characters)
- * - Different Base64 variants
+ * - Standard and URL-safe Base64 variants
  *
  * @param str - Base64 encoded string
  * @returns Decoded UTF-8 string
  */
 export function decodeBase64Utf8(str: string): string {
   try {
-    // Clean up the input: replace spaces with + (URL parsing may convert + to space)
-    let cleaned = str.trim().replace(/ /g, "+");
+    let cleaned = str
+      .trim()
+      .replace(/ /g, "+")
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
 
     // Try to decode with standard Base64 first
     try {
@@ -34,7 +37,11 @@ export function decodeBase64Utf8(str: string): string {
     console.error("Base64 decode error:", e, "Input:", str);
     // Last resort fallback using deprecated but sometimes working method
     try {
-      return decodeURIComponent(escape(atob(str.replace(/ /g, "+"))));
+      return decodeURIComponent(
+        escape(
+          atob(str.replace(/ /g, "+").replace(/-/g, "+").replace(/_/g, "/")),
+        ),
+      );
     } catch {
       // If all else fails, return original string
       return str;

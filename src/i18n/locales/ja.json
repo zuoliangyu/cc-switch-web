@@ -2537,6 +2537,8 @@
     "usageScript": "使用量クエリ",
     "usageScriptEnabled": "有効",
     "usageScriptDisabled": "無効",
+    "usageScriptCode": "スクリプトコード",
+    "usageScriptWarning": "この JavaScript は有効化後、使用量の照会時に実行されます。信頼できる提供元の場合のみインポートしてください。",
     "usageApiKey": "使用量 API キー",
     "usageBaseUrl": "使用量クエリ URL",
     "usageAutoInterval": "自動クエリ",
@@ -2555,6 +2557,11 @@
     "skillImportSuccess": "Skill リポジトリを追加しました",
     "skillImportSuccessDescription": "追加済み: {{repo}}",
     "importError": "Deep Link のインポートに失敗しました",
+    "risk": {
+      "envHijack": "プロセスの動作を変更できる環境変数が含まれています。内容を確認してください。",
+      "privateEndpoint": "ローカル、プライベートネットワーク、またはクラウドメタデータのアドレスが含まれています。意図した接続先か確認してください。",
+      "shellCommand": "シェルで解釈されるコマンド引数が含まれています。コードの提供元を確認してください。"
+    },
     "prompt": {
       "title": "プロンプト情報",
       "app": "アプリ",
@@ -2568,6 +2575,11 @@
       "targetApps": "対象アプリ",
       "serverPreview": "サーバープレビュー",
       "serverCount": "MCP サーバー（{{count}} 件）",
+      "command": "コマンド",
+      "args": "引数",
+      "url": "URL",
+      "env": "環境変数",
+      "rawPayload": "解析できない元のペイロード",
       "enabledWarning": "インポート後、指定したすべてのアプリに即座に書き込まれます"
     },
     "skill": {

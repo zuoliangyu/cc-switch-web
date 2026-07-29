@@ -55,6 +55,32 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    struct TestHome {
+        previous: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            Self {
+                previous,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
     #[test]
     fn validate_provider_settings_rejects_missing_auth() {
         let provider = Provider::with_id(
@@ -91,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn extract_codex_common_config_preserves_mcp_servers_base_url() {
+    fn extract_codex_common_config_removes_provider_and_mcp_sections() {
         let config_toml = r#"model_provider = "azure"
 model = "gpt-4"
 disable_response_storage = true
@@ -125,14 +151,148 @@ base_url = "http://localhost:8080"
             !extracted.contains("[model_providers"),
             "should remove entire model_providers table"
         );
-        assert!(
-            extracted.contains("http://localhost:8080"),
-            "should keep mcp_servers.* base_url"
+        assert!(!extracted.contains("[mcp_servers"));
+        assert!(!extracted.contains("http://localhost:8080"));
+    }
+
+    #[test]
+    fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
+        for key in [
+            "GOOGLE_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "SOME_PROXY_AUTH_TOKEN",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_PAT",
+        ] {
+            assert!(ProviderService::is_sensitive_config_key(key), "{key}");
+        }
+        for key in ["PATH", "GEMINI_TIMEOUT_MS", "MAX_THINKING_TOKENS"] {
+            assert!(!ProviderService::is_sensitive_config_key(key), "{key}");
+        }
+    }
+
+    #[test]
+    fn extract_gemini_common_config_strips_all_credentials() {
+        let settings = json!({
+            "env": {
+                "GEMINI_API_KEY": "gemini-key",
+                "GOOGLE_API_KEY": "google-key",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/path/credentials.json",
+                "SOME_PROXY_AUTH_TOKEN": "proxy-token",
+                "GOOGLE_GEMINI_BASE_URL": "https://gemini.example",
+                "GEMINI_TIMEOUT_MS": "30000"
+            }
+        });
+
+        let snippet = ProviderService::extract_gemini_common_config(&settings)
+            .expect("extract common config");
+        let value: Value = serde_json::from_str(&snippet).expect("valid json");
+
+        assert_eq!(value["GEMINI_TIMEOUT_MS"], "30000");
+        assert_eq!(value.as_object().expect("object").len(), 1);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn scrub_removes_historical_gemini_credentials_without_storing_values() {
+        let _home = TestHome::new();
+        let db = std::sync::Arc::new(crate::database::Database::memory().expect("database"));
+        let state = AppState::new(db.clone());
+        db.set_config_snippet(
+            "gemini",
+            Some(
+                json!({
+                    "GOOGLE_API_KEY": "leaked-secret",
+                    "GEMINI_TIMEOUT_MS": "30000"
+                })
+                .to_string(),
+            ),
+        )
+        .expect("snippet");
+        let provider = Provider::with_id(
+            "victim".to_string(),
+            "Victim".to_string(),
+            json!({
+                "env": {
+                    "GOOGLE_API_KEY": "leaked-secret",
+                    "GEMINI_TIMEOUT_MS": "30000"
+                }
+            }),
+            None,
         );
+        db.save_provider("gemini", &provider).expect("provider");
+
+        ProviderService::scrub_leaked_gemini_common_config(&state)
+            .await
+            .expect("scrub");
+
+        let snippet = db
+            .get_config_snippet("gemini")
+            .expect("read snippet")
+            .expect("snippet remains");
+        assert_eq!(
+            serde_json::from_str::<Value>(&snippet).expect("json"),
+            json!({ "GEMINI_TIMEOUT_MS": "30000" })
+        );
+        let cleaned = db
+            .get_provider_by_id("victim", "gemini")
+            .expect("read provider")
+            .expect("provider exists");
+        assert!(cleaned.settings_config["env"].get("GOOGLE_API_KEY").is_none());
+        let audit = db
+            .get_setting("gemini_common_config_scrub_audit_v1")
+            .expect("audit")
+            .expect("audit exists");
+        assert!(!audit.contains("leaked-secret"));
     }
 }
 
 impl ProviderService {
+    pub(crate) fn is_sensitive_config_key(name: &str) -> bool {
+        let upper = name.to_ascii_uppercase();
+        const SENSITIVE_SUFFIXES: &[&str] = &[
+            "_KEY",
+            "_API_KEY",
+            "_ACCESS_KEY",
+            "_ACCESS_KEY_ID",
+            "_KEY_ID",
+            "_PRIVATE_KEY",
+            "_APIKEY",
+            "_ACCESSKEY",
+            "_SECRETKEY",
+            "_APITOKEN",
+            "_AUTH_TOKEN",
+            "_TOKEN",
+            "_PAT",
+            "_PWD",
+            "_PASS",
+            "_PASSPHRASE",
+            "_CREDS",
+        ];
+        const SENSITIVE_EXACT: &[&str] = &[
+            "APIKEY",
+            "API_KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "CREDENTIALS",
+        ];
+        const SENSITIVE_CONTAINS: &[&str] = &[
+            "SECRET",
+            "PASSWORD",
+            "PASSWD",
+            "CREDENTIAL",
+            "PRIVATE_KEY",
+            "BEARER_TOKEN",
+        ];
+
+        SENSITIVE_EXACT.contains(&upper.as_str())
+            || SENSITIVE_SUFFIXES.iter().any(|suffix| upper.ends_with(suffix))
+            || SENSITIVE_CONTAINS
+                .iter()
+                .any(|fragment| upper.contains(fragment))
+    }
+
     fn normalize_provider_if_claude(app_type: &AppType, provider: &mut Provider) {
         if matches!(app_type, AppType::Claude) {
             let mut v = provider.settings_config.clone();
@@ -946,18 +1106,20 @@ impl ProviderService {
     fn extract_claude_common_config(settings: &Value) -> Result<String, AppError> {
         let mut config = settings.clone();
 
-        // Fields to exclude from common config
         const ENV_EXCLUDES: &[&str] = &[
-            // Auth
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            // Models (5 fields)
             "ANTHROPIC_MODEL",
             "ANTHROPIC_REASONING_MODEL",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
             "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
             "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            // Endpoint
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+            "CLAUDE_CODE_SUBAGENT_MODEL",
+            "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
             "ANTHROPIC_BASE_URL",
         ];
 
@@ -970,8 +1132,16 @@ impl ProviderService {
 
         // Remove env fields
         if let Some(env) = config.get_mut("env").and_then(|v| v.as_object_mut()) {
+            let sensitive: Vec<String> = env
+                .keys()
+                .filter(|key| Self::is_sensitive_config_key(key))
+                .cloned()
+                .collect();
             for key in ENV_EXCLUDES {
                 env.remove(*key);
+            }
+            for key in sensitive {
+                env.remove(&key);
             }
             // If env is empty after removal, remove the env object itself
             if env.is_empty() {
@@ -981,8 +1151,16 @@ impl ProviderService {
 
         // Remove top-level fields
         if let Some(obj) = config.as_object_mut() {
+            let sensitive: Vec<String> = obj
+                .keys()
+                .filter(|key| Self::is_sensitive_config_key(key))
+                .cloned()
+                .collect();
             for key in TOP_LEVEL_EXCLUDES {
                 obj.remove(*key);
+            }
+            for key in sensitive {
+                obj.remove(&key);
             }
         }
 
@@ -1017,9 +1195,25 @@ impl ProviderService {
         root.remove("model_provider");
         // Legacy/alt formats might use a top-level base_url.
         root.remove("base_url");
+        root.remove("wire_api");
 
         // Remove entire model_providers table (provider-specific configuration)
         root.remove("model_providers");
+        root.remove("mcp_servers");
+        if let Some(mcp) = root
+            .get_mut("mcp")
+            .and_then(|item| item.as_table_like_mut())
+        {
+            mcp.remove("servers");
+            if mcp.is_empty() {
+                root.remove("mcp");
+            }
+        }
+        root.remove("experimental_bearer_token");
+        root.remove("model_catalog_json");
+        if root.get("web_search").and_then(|item| item.as_str()) == Some("disabled") {
+            root.remove("web_search");
+        }
 
         // Clean up multiple empty lines (keep at most one blank line).
         let mut cleaned = String::new();
@@ -1051,7 +1245,7 @@ impl ProviderService {
         let mut snippet = serde_json::Map::new();
         if let Some(env) = env {
             for (key, value) in env {
-                if key == "GOOGLE_GEMINI_BASE_URL" || key == "GEMINI_API_KEY" {
+                if key == "GOOGLE_GEMINI_BASE_URL" || Self::is_sensitive_config_key(key) {
                     continue;
                 }
                 let Value::String(v) = value else {
@@ -1070,6 +1264,141 @@ impl ProviderService {
 
         serde_json::to_string_pretty(&Value::Object(snippet))
             .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))
+    }
+
+    pub async fn scrub_leaked_gemini_common_config(state: &AppState) -> Result<(), AppError> {
+        const FLAG: &str = "gemini_common_config_credentials_scrubbed_v1";
+        const AUDIT_KEY: &str = "gemini_common_config_scrub_audit_v1";
+        let app = AppType::Gemini;
+
+        if state.db.get_setting(FLAG)?.as_deref() == Some("true") {
+            return Ok(());
+        }
+
+        let Some(snippet_text) = state.db.get_config_snippet(app.as_str())? else {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        };
+        let Ok(Value::Object(entries)) = serde_json::from_str::<Value>(&snippet_text) else {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        };
+
+        let mut leaked = serde_json::Map::new();
+        let mut clean = serde_json::Map::new();
+        for (key, value) in entries {
+            if Self::is_sensitive_config_key(&key) {
+                leaked.insert(key, value);
+            } else {
+                clean.insert(key, value);
+            }
+        }
+        if leaked.is_empty() {
+            state.db.set_setting(FLAG, "true")?;
+            return Ok(());
+        }
+
+        let leaked_keys: Vec<String> = leaked.keys().cloned().collect();
+        let leaked_value = Value::Object(leaked);
+        let leaked_text = serde_json::to_string(&leaked_value)
+            .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?;
+
+        let providers = state.db.get_all_providers(app.as_str())?;
+        let mut pending = Vec::new();
+        for (id, provider) in providers {
+            let cleaned = live::remove_common_config_from_settings(
+                &app,
+                &provider.settings_config,
+                &leaked_text,
+            )?;
+            if cleaned != provider.settings_config {
+                pending.push((id, provider, cleaned));
+            }
+        }
+
+        let removed_env_keys = |before: &Value, after: &Value| -> Vec<String> {
+            let before_env = before.get("env").and_then(Value::as_object);
+            let after_env = after.get("env").and_then(Value::as_object);
+            match (before_env, after_env) {
+                (Some(before_env), Some(after_env)) => before_env
+                    .keys()
+                    .filter(|key| !after_env.contains_key(*key))
+                    .cloned()
+                    .collect(),
+                (Some(before_env), None) => before_env.keys().cloned().collect(),
+                _ => Vec::new(),
+            }
+        };
+        let audit = serde_json::json!({
+            "removedFromSnippet": leaked_keys,
+            "providers": pending
+                .iter()
+                .map(|(id, provider, cleaned)| serde_json::json!({
+                    "id": id,
+                    "removedKeys": removed_env_keys(&provider.settings_config, cleaned),
+                }))
+                .collect::<Vec<_>>(),
+        });
+        if state.db.get_setting(AUDIT_KEY)?.is_none() {
+            state.db.set_setting(
+                AUDIT_KEY,
+                &serde_json::to_string(&audit)
+                    .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?,
+            )?;
+        }
+
+        for (id, provider, cleaned) in pending {
+            let mut updated = provider;
+            updated.settings_config = cleaned;
+            state.db.save_provider(app.as_str(), &updated)?;
+            log::info!("已从 Gemini 供应商 '{id}' 中清除泄漏的共享凭据");
+        }
+
+        if let Some(backup) = state.db.get_live_backup(app.as_str()).await? {
+            let original: Value = serde_json::from_str(&backup.original_config)
+                .map_err(|e| AppError::Message(format!("解析 Gemini 代理接管备份失败: {e}")))?;
+            let cleaned =
+                live::remove_common_config_from_settings(&app, &original, &leaked_text)?;
+            if cleaned != original {
+                state
+                    .db
+                    .save_live_backup(
+                        app.as_str(),
+                        &serde_json::to_string(&cleaned).map_err(|e| {
+                            AppError::Message(format!("Serialization failed: {e}"))
+                        })?,
+                    )
+                    .await?;
+            }
+        }
+
+        let leaked_env: std::collections::HashMap<String, String> = leaked_value
+            .as_object()
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(key, value)| {
+                        value.as_str().map(|text| (key.clone(), text.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        crate::gemini_config::remove_gemini_env_entries(&leaked_env)?;
+
+        if clean.is_empty() {
+            state.db.set_config_snippet(app.as_str(), None)?;
+        } else {
+            state.db.set_config_snippet(
+                app.as_str(),
+                Some(
+                    serde_json::to_string_pretty(&Value::Object(clean))
+                        .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?,
+                ),
+            )?;
+        }
+
+        state.db.set_setting(FLAG, "true")?;
+        log::warn!("Gemini 通用配置中的历史凭据污染已完成一次性清理");
+        Ok(())
     }
 
     /// Extract common config for OpenCode (JSON format)

@@ -2,6 +2,18 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [Unreleased]
+
+### 安全与数据保护
+
+- SQL 备份导入增加 SQLite authorizer，拒绝跨文件操作、虚拟表和危险 PRAGMA。
+- Skill 仓库坐标、归档下载与解压增加路径穿越、压缩炸弹、symlink 自递归和目录字段校验；临时目录改为自动清理。
+- Gemini 通用配置不再保存凭据，并在启动时清理供应商、代理备份和 `.env` 中的历史污染。
+- Codex MCP 与 OpenCode 遇到非法配置结构时归一化或报错，不再覆盖原配置或 panic。
+- 通用配置合并拒绝 `__proto__`、`constructor`、`prototype` 原型链键。
+- Deeplink 确认页完整显示 MCP 参数和用量脚本，标记高风险命令、环境变量及私网端点，支持 URL-safe Base64；导入用量脚本默认关闭。
+- 托管账号接管按类型只写入一个正确的 Claude 认证占位符。
+
 ## [0.8.0] - 2026-05-23
 
 跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。

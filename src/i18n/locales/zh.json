@@ -2537,6 +2537,8 @@
     "usageScript": "用量查询",
     "usageScriptEnabled": "已启用",
     "usageScriptDisabled": "未启用",
+    "usageScriptCode": "脚本代码",
+    "usageScriptWarning": "这是一段 JavaScript 代码，启用后会在查询用量时执行。请确认来源可信后再导入。",
     "usageApiKey": "用量 API Key",
     "usageBaseUrl": "用量查询地址",
     "usageAutoInterval": "自动查询",
@@ -2555,6 +2557,11 @@
     "skillImportSuccess": "Skill 仓库已添加",
     "skillImportSuccessDescription": "已添加仓库：{{repo}}",
     "importError": "Deep Link 导入失败",
+    "risk": {
+      "envHijack": "包含可劫持进程行为的环境变量，请仔细核对。",
+      "privateEndpoint": "包含本机、内网或云元数据地址，请确认这是预期目标。",
+      "shellCommand": "包含由 Shell 解释执行的命令参数，请确认代码来源可信。"
+    },
     "prompt": {
       "title": "提示词信息",
       "app": "应用",
@@ -2568,6 +2575,11 @@
       "targetApps": "目标应用",
       "serverPreview": "服务器预览",
       "serverCount": "MCP Servers ({{count}} 个)",
+      "command": "命令",
+      "args": "参数",
+      "url": "URL",
+      "env": "环境变量",
+      "rawPayload": "无法解析的原始载荷",
       "enabledWarning": "导入后将立即写入所有指定应用的配置文件"
     },
     "skill": {

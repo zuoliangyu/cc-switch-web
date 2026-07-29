@@ -55,6 +55,39 @@ const ensureHttpUrl = (value: string, fieldName: string) => {
   }
 };
 
+const ensureValidSkillRepoRef = (repo: string, branch: string) => {
+  const parts = repo.split("/");
+  const [owner, name] = parts;
+  const validOwner =
+    parts.length === 2 &&
+    owner.length > 0 &&
+    owner.length <= 39 &&
+    /^[A-Za-z0-9-]+$/.test(owner);
+  const validName =
+    name?.length > 0 &&
+    name.length <= 100 &&
+    name !== "." &&
+    name !== ".." &&
+    /^[A-Za-z0-9._-]+$/.test(name);
+  const validBranch =
+    branch.length <= 255 &&
+    !branch.startsWith("/") &&
+    !branch.endsWith("/") &&
+    !branch.includes("//") &&
+    !branch.includes("@{") &&
+    !/[\u0000-\u0020\u007f~^:?*\[\\#%]/.test(branch) &&
+    branch.split("/").every(
+      (segment) =>
+        segment.length > 0 &&
+        !segment.startsWith(".") &&
+        !segment.endsWith(".") &&
+        !segment.endsWith(".lock"),
+    );
+  if (!validOwner || !validName || !validBranch) {
+    throw new Error(`skill 仓库坐标不合法：${repo}@${branch || "main"}`);
+  }
+};
+
 const inferHomepageFromEndpoint = (endpoint: string): string | undefined => {
   try {
     const url = new URL(endpoint);
@@ -405,11 +438,7 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
       break;
     case "skill":
       if (!request.repo) throw new Error("skill deeplink 缺少 repo 参数");
-      if (request.repo.split("/").length !== 2) {
-        throw new Error(
-          `skill repo 格式错误，应为 owner/name，当前为 ${request.repo}`,
-        );
-      }
+      ensureValidSkillRepoRef(request.repo, request.branch || "main");
       request.app = "claude";
       break;
   }

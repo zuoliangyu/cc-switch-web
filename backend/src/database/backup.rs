@@ -14,6 +14,28 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 const CC_SWITCH_SQL_EXPORT_HEADER: &str = "-- CC Switch SQLite 导出";
+const IMPORT_ALLOWED_PRAGMAS: &[&str] = &["foreign_keys", "user_version"];
+
+fn import_authorizer(context: rusqlite::hooks::AuthContext<'_>) -> rusqlite::hooks::Authorization {
+    use rusqlite::hooks::{AuthAction, Authorization};
+
+    let escapes_temp_db = match context.action {
+        AuthAction::Attach { .. } | AuthAction::Detach { .. } => true,
+        AuthAction::CreateVtable { .. } | AuthAction::DropVtable { .. } => true,
+        AuthAction::Unknown { .. } => true,
+        AuthAction::Pragma { pragma_name, .. } => !IMPORT_ALLOWED_PRAGMAS
+            .iter()
+            .any(|allowed| pragma_name.eq_ignore_ascii_case(allowed)),
+        _ => false,
+    };
+
+    if escapes_temp_db {
+        log::warn!("SQL 导入拒绝了越界语句: {:?}", context.action);
+        Authorization::Deny
+    } else {
+        Authorization::Allow
+    }
+}
 
 /// Tables whose data rows are skipped when exporting for WebDAV sync.
 const SYNC_SKIP_TABLES: &[&str] = &[
@@ -92,9 +114,12 @@ impl Database {
         let temp_conn =
             Connection::open(&temp_path).map_err(|e| AppError::Database(e.to_string()))?;
 
-        temp_conn
-            .execute_batch(sql_content)
-            .map_err(|e| AppError::Database(format!("执行 SQL 导入失败: {e}")))?;
+        temp_conn.authorizer(Some(import_authorizer));
+        let batch_result = temp_conn.execute_batch(sql_content);
+        temp_conn.authorizer(
+            None::<fn(rusqlite::hooks::AuthContext<'_>) -> rusqlite::hooks::Authorization>,
+        );
+        batch_result.map_err(|e| AppError::Database(format!("执行 SQL 导入失败: {e}")))?;
 
         // 补齐缺失表/索引并进行基础校验
         Self::create_tables_on_conn(&temp_conn)?;
@@ -664,10 +689,71 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::Database;
+    use super::{Database, CC_SWITCH_SQL_EXPORT_HEADER};
     use crate::error::AppError;
     use crate::settings::{update_settings, AppSettings};
     use serial_test::serial;
+
+    #[test]
+    fn import_rejects_cross_file_statements() -> Result<(), AppError> {
+        let temp = tempfile::tempdir().expect("create temp dir");
+
+        for (label, statement) in [
+            (
+                "attach",
+                format!(
+                    "ATTACH DATABASE '{}' AS evil;",
+                    temp.path().join("attach.sqlite").display()
+                ),
+            ),
+            (
+                "vacuum-into",
+                format!(
+                    "VACUUM INTO '{}';",
+                    temp.path().join("vacuum.sqlite").display()
+                ),
+            ),
+        ] {
+            let malicious = format!("{CC_SWITCH_SQL_EXPORT_HEADER}\n{statement}\n");
+            let db = Database::memory()?;
+            assert!(
+                db.import_sql_string(&malicious).is_err(),
+                "{label} must be rejected"
+            );
+            assert_eq!(
+                std::fs::read_dir(temp.path()).expect("read temp dir").count(),
+                0,
+                "{label} must not create a file"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn import_accepts_genuine_export() -> Result<(), AppError> {
+        let source = Database::memory()?;
+        {
+            let conn = crate::database::lock_conn!(source.conn);
+            conn.execute(
+                "INSERT INTO providers (id, app_type, name, settings_config, meta)
+                 VALUES ('p1', 'claude', 'Provider One', '{}', '{}')",
+                [],
+            )?;
+        }
+
+        let target = Database::memory()?;
+        target.import_sql_string(&source.export_sql_string()?)?;
+        let conn = crate::database::lock_conn!(target.conn);
+        let name: String = conn.query_row(
+            "SELECT name FROM providers WHERE id = 'p1' AND app_type = 'claude'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(name, "Provider One");
+
+        Ok(())
+    }
 
     #[test]
     fn sync_import_preserves_local_only_tables() -> Result<(), AppError> {

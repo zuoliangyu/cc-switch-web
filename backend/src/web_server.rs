@@ -3163,6 +3163,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup periodic maintenance failed: {err}");
     }
     let app_state = Arc::new(AppState::new(db));
+    if let Err(err) =
+        crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(
+            app_state.as_ref(),
+        )
+        .await
+    {
+        log::warn!("startup Gemini common-config credential scrub failed: {err}");
+    }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
     let state = WebApiState {
         copilot_auth_state: app_state.copilot_auth_state.clone(),

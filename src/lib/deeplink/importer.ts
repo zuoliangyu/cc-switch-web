@@ -42,7 +42,7 @@ const buildUsageScript = (
   }
 
   return {
-    enabled: request.usageEnabled ?? Boolean(request.usageScript),
+    enabled: request.usageEnabled ?? false,
     language: "javascript",
     code: request.usageScript ? decodeBase64Utf8(request.usageScript) : "",
     timeout: 10,

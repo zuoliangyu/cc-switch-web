@@ -380,7 +380,7 @@ impl SseUsageCollector {
 // ============================================================================
 
 /// 创建使用量收集器
-fn create_usage_collector(
+pub(crate) fn create_usage_collector(
     ctx: &RequestContext,
     state: &ProxyState,
     status_code: u16,

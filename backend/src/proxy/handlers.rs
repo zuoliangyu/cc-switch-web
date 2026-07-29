@@ -22,11 +22,12 @@ use super::{
         streaming_codex_chat::create_responses_sse_stream_from_chat,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
         streaming_responses::create_anthropic_sse_stream_from_responses, transform,
-        transform_codex_anthropic, transform_codex_chat, transform_gemini, transform_responses,
+        transform_codex_anthropic, transform_codex_chat, transform_codex_responses_namespace,
+        transform_gemini, transform_responses,
     },
     response_processor::{
-        create_logged_passthrough_stream, process_response, read_decoded_body,
-        strip_entity_headers_for_rebuilt_body, SseUsageCollector,
+        create_logged_passthrough_stream, create_usage_collector, process_response,
+        read_decoded_body, strip_entity_headers_for_rebuilt_body, SseUsageCollector,
     },
     server::ProxyState,
     types::*,
@@ -553,6 +554,7 @@ async fn handle_responses_for_app(
         .unwrap_or(false);
     let codex_tool_context =
         transform_codex_chat::build_codex_tool_context_from_request(&body);
+    let namespace_restore_map = transform_codex_responses_namespace::namespace_restore_map(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -591,6 +593,17 @@ async fn handle_responses_for_app(
             &state,
             is_stream,
             codex_tool_context,
+        )
+        .await;
+    }
+    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider)
+        && !namespace_restore_map.is_empty()
+    {
+        return handle_codex_responses_namespace_restore(
+            response,
+            &ctx,
+            &state,
+            namespace_restore_map,
         )
         .await;
     }
@@ -649,6 +662,7 @@ async fn handle_responses_compact_for_app(
         .unwrap_or(false);
     let codex_tool_context =
         transform_codex_chat::build_codex_tool_context_from_request(&body);
+    let namespace_restore_map = transform_codex_responses_namespace::namespace_restore_map(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -688,8 +702,85 @@ async fn handle_responses_compact_for_app(
         )
         .await;
     }
+    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider)
+        && !namespace_restore_map.is_empty()
+    {
+        return handle_codex_responses_namespace_restore(
+            response,
+            &ctx,
+            &state,
+            namespace_restore_map,
+        )
+        .await;
+    }
 
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
+}
+
+async fn handle_codex_responses_namespace_restore(
+    response: super::hyper_client::ProxyResponse,
+    ctx: &RequestContext,
+    state: &ProxyState,
+    restore_map: std::collections::HashMap<
+        String,
+        transform_codex_responses_namespace::NamespacedName,
+    >,
+) -> Result<axum::response::Response, ProxyError> {
+    let status = response.status();
+    if !status.is_success() {
+        return process_response(response, ctx, state, &CODEX_PARSER_CONFIG).await;
+    }
+
+    if response.is_sse() {
+        let mut builder = axum::response::Response::builder().status(status);
+        for (key, value) in response.headers() {
+            builder = builder.header(key, value);
+        }
+
+        let stream = transform_codex_responses_namespace::create_namespace_restore_sse_stream(
+            response.bytes_stream(),
+            restore_map,
+        );
+        let usage_collector =
+            create_usage_collector(ctx, state, status.as_u16(), &CODEX_PARSER_CONFIG);
+        let stream = create_logged_passthrough_stream(
+            stream,
+            ctx.tag,
+            Some(usage_collector),
+            ctx.streaming_timeout_config(),
+        );
+        return builder
+            .body(axum::body::Body::from_stream(stream))
+            .map_err(|e| ProxyError::Internal(format!("Failed to build streaming response: {e}")));
+    }
+
+    let body_timeout =
+        if ctx.app_config.auto_failover_enabled && ctx.app_config.non_streaming_timeout > 0 {
+            std::time::Duration::from_secs(ctx.app_config.non_streaming_timeout as u64)
+        } else {
+            std::time::Duration::ZERO
+        };
+    let (mut headers, status, body) = read_decoded_body(response, ctx.tag, body_timeout).await?;
+    let body = match serde_json::from_slice::<Value>(&body) {
+        Ok(mut value) => {
+            transform_codex_responses_namespace::restore_response_namespaces(
+                &mut value,
+                &restore_map,
+            );
+            Bytes::from(serde_json::to_vec(&value).map_err(|e| {
+                ProxyError::TransformError(format!("Failed to serialize namespace response: {e}"))
+            })?)
+        }
+        Err(_) => body,
+    };
+    strip_entity_headers_for_rebuilt_body(&mut headers);
+    process_response(
+        super::hyper_client::ProxyResponse::buffered(status, headers, body),
+        ctx,
+        state,
+        &CODEX_PARSER_CONFIG,
+    )
+    .await
 }
 
 // ---------------------------------------------------------------------------

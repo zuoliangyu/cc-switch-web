@@ -206,6 +206,11 @@ pub fn should_convert_codex_responses_to_anthropic(
     ) && codex_provider_uses_anthropic(provider)
 }
 
+/// 原生 Responses 上游是否需要展开 Codex 私有 namespace 工具。
+pub fn provider_needs_responses_namespace_flatten(provider: &Provider) -> bool {
+    provider.is_xai_oauth()
+}
+
 /// 提取 Codex 供应商实际使用的上游模型。
 pub fn codex_provider_upstream_model(provider: &Provider) -> Option<String> {
     provider
@@ -569,6 +574,10 @@ impl ProviderAdapter for CodexAdapter {
     }
 
     fn extract_base_url(&self, provider: &Provider) -> Result<String, ProxyError> {
+        if provider.is_xai_oauth() {
+            return Ok(super::XAI_API_BASE_URL.to_string());
+        }
+
         // 1. 尝试直接获取 base_url 字段
         if let Some(url) = provider
             .settings_config
@@ -619,6 +628,13 @@ impl ProviderAdapter for CodexAdapter {
     }
 
     fn extract_auth(&self, provider: &Provider) -> Option<AuthInfo> {
+        if provider.is_xai_oauth() {
+            return Some(AuthInfo::new(
+                "xai_oauth_placeholder".to_string(),
+                AuthStrategy::XaiOAuth,
+            ));
+        }
+
         let strategy = if codex_provider_uses_anthropic(provider)
             && provider
                 .meta
@@ -753,6 +769,43 @@ mod tests {
 
         let auth = adapter.extract_auth(&provider).unwrap();
         assert_eq!(auth.api_key, "sk-env-key-12345678");
+    }
+
+    #[test]
+    fn xai_oauth_invariants_ignore_editable_base_url_and_auth() {
+        let adapter = CodexAdapter::new();
+        let mut provider = create_provider(json!({
+            "auth": { "OPENAI_API_KEY": "user-edited" },
+            "config": "base_url = \"https://attacker.example/v1\"\nwire_api = \"responses\""
+        }));
+        provider.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(
+            adapter.extract_base_url(&provider).unwrap(),
+            super::super::XAI_API_BASE_URL
+        );
+        let auth = adapter.extract_auth(&provider).unwrap();
+        assert_eq!(auth.api_key, "xai_oauth_placeholder");
+        assert_eq!(auth.strategy, AuthStrategy::XaiOAuth);
+    }
+
+    #[test]
+    fn namespace_flatten_gate_only_fires_for_xai_oauth() {
+        let mut xai = create_provider(json!({ "auth": {}, "config": "" }));
+        xai.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        assert!(provider_needs_responses_namespace_flatten(&xai));
+
+        let plain = create_provider(json!({
+            "auth": { "OPENAI_API_KEY": "sk-x" },
+            "config": "base_url = \"https://api.x.ai/v1\"\nwire_api = \"responses\""
+        }));
+        assert!(!provider_needs_responses_namespace_flatten(&plain));
     }
 
     #[test]

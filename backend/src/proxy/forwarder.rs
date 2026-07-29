@@ -760,7 +760,7 @@ impl RequestForwarder {
                         .await;
 
                     // 分类错误
-                    let category = self.categorize_proxy_error(&e);
+                    let category = Self::categorize_proxy_error(&e, provider);
 
                     match category {
                         ErrorCategory::Retryable => {
@@ -972,7 +972,7 @@ impl RequestForwarder {
 
         // 转换请求体（如果需要）
         let mut codex_anthropic_one_m = false;
-        let request_body = if codex_responses_to_chat {
+        let mut request_body = if codex_responses_to_chat {
             let explicit_prompt_cache_key = mapped_body
                 .get("prompt_cache_key")
                 .and_then(Value::as_str)
@@ -1050,6 +1050,19 @@ impl RequestForwarder {
         } else {
             mapped_body
         };
+
+        if matches!(app_type, AppType::Codex | AppType::GrokBuild)
+            && !codex_responses_to_chat
+            && !codex_responses_to_anthropic
+            && super::providers::provider_needs_responses_namespace_flatten(provider)
+        {
+            super::providers::transform_codex_responses_namespace::flatten_request_namespaces(
+                &mut request_body,
+            )?;
+            super::providers::transform_codex_responses_xai_sanitize::sanitize_xai_responses_request(
+                &mut request_body,
+            );
+        }
 
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
@@ -1661,7 +1674,11 @@ impl RequestForwarder {
         }
     }
 
-    fn categorize_proxy_error(&self, error: &ProxyError) -> ErrorCategory {
+    fn categorize_proxy_error(error: &ProxyError, provider: &Provider) -> ErrorCategory {
+        if provider.is_xai_oauth() && matches!(error, ProxyError::AuthError(_)) {
+            return ErrorCategory::NonRetryable;
+        }
+
         match error {
             // 网络和上游错误：都应该尝试下一个供应商
             ProxyError::Timeout(_) => ErrorCategory::Retryable,
@@ -2153,6 +2170,34 @@ mod tests {
         assert_eq!(code, log_fwd::PROVIDER_FAILED_RETRY);
         assert!(message.contains("继续尝试下一个 (1/3)"));
         assert!(message.contains("请求超时"));
+    }
+
+    #[test]
+    fn xai_oauth_token_auth_failures_are_not_retryable() {
+        let mut provider =
+            Provider::with_id("xai".to_string(), "xAI OAuth".to_string(), json!({}), None);
+        provider.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::AuthError("xAI OAuth 认证失败".to_string()),
+                &provider,
+            ),
+            ErrorCategory::NonRetryable
+        );
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::UpstreamError {
+                    status: 401,
+                    body: None,
+                },
+                &provider,
+            ),
+            ErrorCategory::Retryable
+        );
     }
 
     #[test]

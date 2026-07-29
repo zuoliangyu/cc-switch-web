@@ -89,6 +89,10 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     sessions
 }
 
+pub(crate) fn grokbuild_session_roots() -> Vec<PathBuf> {
+    grokbuild::session_roots()
+}
+
 pub fn load_messages(provider_id: &str, source_path: &str) -> Result<Vec<SessionMessage>, String> {
     // OpenCode SQLite sessions use a "sqlite:" prefixed source_path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {

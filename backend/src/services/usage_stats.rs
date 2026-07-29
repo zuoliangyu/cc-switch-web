@@ -246,6 +246,25 @@ pub(crate) fn has_matching_proxy_usage_log(
     .map_err(|e| AppError::Database(format!("查询重复代理用量日志失败: {e}")))
 }
 
+/// Grok 会话事件是逐轮聚合值，无法和代理逐请求行按 token 指纹匹配。
+/// 时间窗口内存在 Grok 代理记录即视为接管态，避免同一轮重复计费。
+pub(crate) fn has_recent_grokbuild_proxy_activity(
+    conn: &Connection,
+    created_at: i64,
+) -> Result<bool, AppError> {
+    conn.query_row(
+        "SELECT EXISTS (
+            SELECT 1 FROM proxy_request_logs
+            WHERE data_source = 'proxy'
+              AND app_type = 'grokbuild'
+              AND created_at BETWEEN ?1 - ?2 AND ?1 + ?2
+        )",
+        params![created_at, SESSION_PROXY_DEDUP_WINDOW_SECONDS],
+        |row| row.get::<_, bool>(0),
+    )
+    .map_err(|e| AppError::Database(format!("查询 Grok 接管活动失败: {e}")))
+}
+
 pub(crate) fn has_suspected_codex_session_duplicate(
     conn: &Connection,
     request_id: &str,

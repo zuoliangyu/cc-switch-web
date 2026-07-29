@@ -1618,6 +1618,8 @@ impl Database {
                 "0.03",
                 "0",
             ),
+            // Grok CLI 官方 OAuth 态使用的内部模型名
+            ("grok-4.5-build", "Grok 4.5 Build", "2", "6", "0.30", "0"),
             // StepFun 系列
             (
                 "step-3.5-flash",

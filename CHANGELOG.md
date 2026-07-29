@@ -22,6 +22,7 @@
 - 托管 OAuth、Codex Chat/Anthropic 和完整 URL 供应商统一标记为需要当前应用路由接管，切换时不再只检查代理进程是否启动。
 - 非 Claude 用量 ID 增加应用与供应商作用域；重复响应幂等忽略，语义冲突使用稳定哈希后缀保存，不再静默覆盖历史用量。
 - 会话用量同步改为串行后台任务；新增 `POST /api/usage/codex/rebuild`，备份数据库后可安全清理并重导 Codex session 用量。
+- Grok Build 官方态从 `updates.jsonl` 导入逐轮用量，支持沉降窗、稳定幂等键、代理接管活动去重和 CLI 自报成本优先。
 
 ### 功能与生态
 
@@ -29,6 +30,7 @@
 - 新增 Grok Build 后端应用目标、`~/.grok/config.toml` 配置读写、Provider CRUD/切换/导入和连接检查；官方登录态允许空配置，自定义供应商强制校验模型与凭据，声明的 `env_key` 未设置时不会借用 `XAI_API_KEY`。
 - Grok Build 支持统一 MCP、Skills 与 Prompts：MCP 投影到 `config.toml` 且不会污染 Provider 快照，Skill 同步到 `.grok/skills`，启用 Prompt 写入 `.grok/AGENTS.md`。
 - Grok Build 支持独立代理接管与故障转移队列，通过 `/grokbuild/v1` 复用 Responses/Chat/Anthropic 协议桥；官方登录态禁止接管，备份与恢复会拒绝代理占位符并保留 MCP。
+- Grok Build Session 支持扫描活跃与归档会话、读取消息并在严格路径和 ID 校验后删除会话目录。
 
 ## [0.8.0] - 2026-05-23
 

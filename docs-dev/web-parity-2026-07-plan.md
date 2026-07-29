@@ -39,7 +39,7 @@
   - [x] 应用标识、配置文件、Provider、官方登录态、导入与基础 Web API
   - [x] MCP、Skills 与 Prompts
   - [x] 代理接管与协议路由
-  - [ ] Session 与 Usage
+  - [x] Session 与 Usage
   - [ ] 前端入口、表单与预设
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
 - [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
@@ -67,3 +67,5 @@
 - 2026-07-30：完成 Grok Build 第一阶段；新增 `grokbuild` 应用目标、配置校验与安全凭据提取、官方/自定义 Provider 读写、导入和现有 Axum Provider API 接入。
 - 2026-07-30：完成 Grok Build 第二阶段；schema v12 持久化 MCP/Skill 启用位，支持 Grok TOML MCP 投影、导入和回填剥离，Skill 与 Prompt 写入 Grok 标准目录。
 - 2026-07-30：完成 Grok Build 第三阶段；schema v13 增加独立代理配置，接入 `/grokbuild/v1` Responses 路由、协议桥、接管/恢复与热切换备份，并拒绝官方态和代理占位符污染。
+- 2026-07-30：完成 Grok Build 第四阶段；接入活跃与归档 Session 扫描、消息读取和严格边界删除，5 项定向测试通过。
+- 2026-07-30：完成 Grok Build 第五阶段；官方态用量从 `updates.jsonl` 导入，支持沉降窗、稳定幂等键、代理活动去重和 CLI 自报成本，6 项定向测试通过。

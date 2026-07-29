@@ -44,6 +44,7 @@ pub fn sync_gemini_usage(db: &Database) -> Result<SessionSyncResult, AppError> {
         skipped: 0,
         files_scanned: files.len() as u32,
         errors: vec![],
+        ..Default::default()
     };
 
     if files.is_empty() {
@@ -288,7 +289,7 @@ fn insert_gemini_session_entry(
     let (input_cost, output_cost, cache_read_cost, cache_creation_cost, total_cost) = match pricing
     {
         Some(p) => {
-            let cost = CostCalculator::calculate(&usage, &p, multiplier);
+            let cost = CostCalculator::calculate_for_app("gemini", &usage, &p, multiplier);
             (
                 cost.input_cost.to_string(),
                 cost.output_cost.to_string(),

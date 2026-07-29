@@ -14,6 +14,12 @@
 - Deeplink 确认页完整显示 MCP 参数和用量脚本，标记高风险命令、环境变量及私网端点，支持 URL-safe Base64；导入用量脚本默认关闭。
 - 托管账号接管按类型只写入一个正确的 Claude 认证占位符。
 
+### 代理与用量
+
+- 对齐 Codex Chat、Responses 与 Anthropic 的请求、响应和 SSE 转换，补齐 reasoning、tool call、媒体降级、缓存路由及 Claude Code 模拟。
+- Codex session 用量同步支持 fork、sub-agent、延迟父会话恢复和疑似重复观测，游标改用纳秒 mtime。
+- 按应用区分缓存 token 语义，避免 Codex、Gemini 和 Grok Build 重复计算缓存输入成本。
+
 ## [0.8.0] - 2026-05-23
 
 跟随上游 cc-switch 在 0.7.1 之后的 8 个 commit：4 条 B/C 类 bug 修复（P0）、1 条托管账号 proxy 加固（P1）、3 条 Codex Chat Completions 路由特性（P2）。

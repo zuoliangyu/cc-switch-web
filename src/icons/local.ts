@@ -11,8 +11,10 @@ import runapiLogo from "@/assets/icons/runapi.jpg";
 import relaxcodeLogo from "@/assets/icons/relaxcode.png";
 import huoshanLogo from "@/assets/icons/huoshan.png";
 import byteplusLogo from "@/assets/icons/byteplus.png";
+import a6apiLogo from "@/assets/icons/a6-icon.png";
 
 const localIcons: Record<string, string> = {
+  a6api: a6apiLogo,
   dds: ddsLogo,
   eflowcode: eflowcodeLogo,
   lemondata: lemondataLogo,

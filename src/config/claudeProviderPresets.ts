@@ -541,23 +541,40 @@ export const providerPresets: ProviderPreset[] = [
   },
   {
     name: "PackyCode",
-    websiteUrl: "https://www.packyapi.com",
-    apiKeyUrl: "https://www.packyapi.com/register?aff=cc-switch",
+    websiteUrl: "https://www.packyapi.ai",
+    apiKeyUrl: "https://www.packyapi.ai/register?aff=cc-switch",
     settingsConfig: {
       env: {
-        ANTHROPIC_BASE_URL: "https://www.packyapi.com",
+        ANTHROPIC_BASE_URL: "https://www.packyapi.ai",
         ANTHROPIC_AUTH_TOKEN: "",
       },
     },
     // 请求地址候选（用于地址管理/测速）
     endpointCandidates: [
+      "https://www.packyapi.ai",
+      "https://cf.api.fan",
+      "https://slb-v1.api.fan",
       "https://www.packyapi.com",
-      "https://api-slb.packyapi.com",
     ],
     category: "third_party",
     isPartner: true,
     partnerPromotionKey: "packycode",
     icon: "packycode",
+  },
+  {
+    name: "A6API",
+    websiteUrl: "https://www.a6api.com",
+    apiKeyUrl: "https://a6api.com/register?aff=AqNr",
+    settingsConfig: {
+      env: {
+        ANTHROPIC_BASE_URL: "https://api.a6api.com",
+        ANTHROPIC_AUTH_TOKEN: "",
+      },
+    },
+    category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "a6api",
+    icon: "a6api",
   },
   {
     name: "Cubence",

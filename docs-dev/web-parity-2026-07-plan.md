@@ -45,6 +45,8 @@
   - [x] 第三方 Provider 预设
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
 - [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
+- [x] A6API 跨应用预设与 PackyCode 备用端点（`dbb26595`、`30409878`）
+- [ ] Gemini Code0 / Qiniu 默认模型更新（随完整供应商清单引入 `bfb767ae`）
 - [ ] models.dev 定价同步
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
 
@@ -76,3 +78,4 @@
 - 2026-07-30：完成 Grok Build 第七阶段；新增专用 Provider 表单及 TOML 解析、构建、更新和校验工具，支持官方空配置与 `env_key` 保留，8 项定向测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Grok Build 第八阶段并收口；引入独立第三方预设，官方条目复用固定 seed，并补齐 Grok 路由需求判定，33 项定向测试和 TypeScript 类型检查通过。
 - 2026-07-30：补齐 Claude Opus 5、GPT-5.6、Kimi K3 与 Grok 4.5 内置价格；数据库种子定向测试通过。
+- 2026-07-30：A6API 预设覆盖六个支持应用并复用 Web 本地图标注册；PackyCode 对齐新主域名和三组备用端点。目标 Gemini 尚无 Code0/Qiniu，相关默认模型更新并入后续完整供应商清单同步。

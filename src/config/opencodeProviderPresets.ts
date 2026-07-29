@@ -1097,13 +1097,13 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
 
   {
     name: "PackyCode",
-    websiteUrl: "https://www.packyapi.com",
-    apiKeyUrl: "https://www.packyapi.com/register?aff=cc-switch",
+    websiteUrl: "https://www.packyapi.ai",
+    apiKeyUrl: "https://www.packyapi.ai/register?aff=cc-switch",
     settingsConfig: {
       npm: "@ai-sdk/anthropic",
       name: "PackyCode",
       options: {
-        baseURL: "https://www.packyapi.com/v1",
+        baseURL: "https://www.packyapi.ai/v1",
         apiKey: "",
         setCacheKey: true,
       },
@@ -1116,6 +1116,34 @@ export const opencodeProviderPresets: OpenCodeProviderPreset[] = [
     isPartner: true,
     partnerPromotionKey: "packycode",
     icon: "packycode",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+  },
+  {
+    name: "A6API",
+    websiteUrl: "https://www.a6api.com",
+    apiKeyUrl: "https://a6api.com/register?aff=AqNr",
+    settingsConfig: {
+      npm: "@ai-sdk/openai-compatible",
+      name: "A6API",
+      options: {
+        baseURL: "https://api.a6api.com/v1",
+        apiKey: "",
+        setCacheKey: true,
+      },
+      models: {
+        "gpt-5.6-sol": { name: "GPT-5.6 Sol" },
+      },
+    },
+    category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "a6api",
+    icon: "a6api",
     templateValues: {
       apiKey: {
         label: "API Key",

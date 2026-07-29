@@ -1140,10 +1140,10 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
   // ========== Third Party Partners ==========
   {
     name: "PackyCode",
-    websiteUrl: "https://www.packyapi.com",
-    apiKeyUrl: "https://www.packyapi.com/register?aff=cc-switch",
+    websiteUrl: "https://www.packyapi.ai",
+    apiKeyUrl: "https://www.packyapi.ai/register?aff=cc-switch",
     settingsConfig: {
-      baseUrl: "https://www.packyapi.com",
+      baseUrl: "https://www.packyapi.ai",
       apiKey: "",
       api: "anthropic-messages",
       models: [
@@ -1180,6 +1180,42 @@ export const openclawProviderPresets: OpenClawProviderPreset[] = [
       modelCatalog: {
         "packycode/claude-opus-4-6": { alias: "Opus" },
         "packycode/claude-sonnet-4-6": { alias: "Sonnet" },
+      },
+    },
+  },
+  {
+    name: "A6API",
+    websiteUrl: "https://www.a6api.com",
+    apiKeyUrl: "https://a6api.com/register?aff=AqNr",
+    settingsConfig: {
+      baseUrl: "https://api.a6api.com/v1",
+      apiKey: "",
+      api: "openai-completions",
+      models: [
+        {
+          id: "gpt-5.6-sol",
+          name: "GPT-5.6 Sol",
+          contextWindow: 400000,
+        },
+      ],
+    },
+    category: "aggregator",
+    isPartner: true,
+    partnerPromotionKey: "a6api",
+    icon: "a6api",
+    templateValues: {
+      apiKey: {
+        label: "API Key",
+        placeholder: "",
+        editorValue: "",
+      },
+    },
+    suggestedDefaults: {
+      model: {
+        primary: "a6api/gpt-5.6-sol",
+      },
+      modelCatalog: {
+        "a6api/gpt-5.6-sol": { alias: "GPT-5.6 Sol" },
       },
     },
   },

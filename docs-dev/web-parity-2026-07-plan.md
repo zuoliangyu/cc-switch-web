@@ -24,11 +24,11 @@
 
 ### P1：代理与用量正确性
 
-- [ ] 对齐 Responses / Chat / Anthropic 请求、响应与 SSE 转换修复
-- [ ] 对齐 reasoning、tool call、tool-result media 的顺序与身份保持
+- [x] 对齐 Responses / Chat / Anthropic 请求、响应与 SSE 转换修复
+- [x] 对齐 reasoning、tool call、tool-result media 的顺序与身份保持
 - [ ] 对齐稳定 usage key、幂等写入和 session import 单次通知
 - [ ] 对齐 Codex fork / sub-agent 用量重建与维护入口
-- [ ] 对齐 managed OAuth routing-required 判定与失败策略
+- [x] 对齐 managed OAuth routing-required 判定与失败策略
 
 ### P2：功能与生态
 
@@ -50,3 +50,5 @@
 - 2026-07-30：P0 实现完成。Skill 下载/解压与文件系统 sink、Gemini 凭据清理、非法配置容错、通用配置原型链、Deeplink 风险可见性与托管账号认证占位符均已落地。
 - 2026-07-30：P0 定向验证完成：前端安全测试 2 个文件、6 个用例通过，TypeScript 类型检查通过，Rust 新增安全回归测试通过。
 - 2026-07-30：开始 P1，完成 Codex Chat / Responses / Anthropic 协议转换与接线；用量链仍在适配中，按“完成一阶段、验证、提交一次”继续推进。
+- 2026-07-30：Codex session 增量同步完成，支持 fork、sub-agent、deferred 父会话恢复和疑似重复观测；28 项定向测试通过。
+- 2026-07-30：Managed OAuth 与协议格式统一使用路由需求谓词，切换拦截改为检查当前应用 takeover；7 项前端测试和类型检查通过。

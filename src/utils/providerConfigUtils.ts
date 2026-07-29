@@ -8,11 +8,7 @@ const isPlainObject = (value: unknown): value is Record<string, any> => {
   return Object.prototype.toString.call(value) === "[object Object]";
 };
 
-const FORBIDDEN_MERGE_KEYS = new Set([
-  "__proto__",
-  "constructor",
-  "prototype",
-]);
+const FORBIDDEN_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 const sanitizeSnippet = (value: any): any => {
   if (Array.isArray(value)) return value.map(sanitizeSnippet);
@@ -604,9 +600,9 @@ const isOtherProviderSection = (
 ): boolean =>
   Boolean(
     sectionName &&
-      sectionName !== targetSectionName &&
-      (sectionName === "model_providers" ||
-        sectionName.startsWith("model_providers.")),
+    sectionName !== targetSectionName &&
+    (sectionName === "model_providers" ||
+      sectionName.startsWith("model_providers.")),
   );
 
 const getRecoverableBaseUrlAssignments = (
@@ -658,6 +654,17 @@ export const isCodexChatWireApi = (
   wireApi: string | undefined | null,
 ): boolean =>
   CODEX_CHAT_WIRE_API_VALUES.has((wireApi ?? "").trim().toLowerCase());
+
+export const isCodexAnthropicWireApi = (
+  wireApi: string | undefined | null,
+): boolean =>
+  [
+    "anthropic",
+    "anthropic_messages",
+    "anthropic-messages",
+    "messages",
+    "claude",
+  ].includes((wireApi ?? "").trim().toLowerCase());
 
 // 从 Codex 的 TOML 配置文本中提取 wire_api（支持单/双引号）
 export const extractCodexWireApi = (

@@ -20,8 +20,11 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import {
   extractCodexWireApi,
+  isCodexAnthropicWireApi,
   isCodexChatWireApi,
 } from "@/utils/providerConfigUtils";
+import { isOAuthProviderType } from "@/config/constants";
+import { providerNeedsRouting } from "@/utils/providerCapabilities";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -149,13 +152,32 @@ export function useProviderActions(
                 (provider.settingsConfig as Record<string, any>).config,
               ),
             )));
+      const isCodexAnthropicFormat =
+        activeApp === "codex" &&
+        (provider.meta?.apiFormat === "anthropic" ||
+          (typeof (provider.settingsConfig as Record<string, any>)?.config ===
+            "string" &&
+            isCodexAnthropicWireApi(
+              extractCodexWireApi(
+                (provider.settingsConfig as Record<string, any>).config,
+              ),
+            )));
+
+      const routingReady =
+        activeApp === "claude-desktop"
+          ? isProxyRunning === true
+          : isProxyTakeover === true;
 
       // Determine why this provider requires the proxy
       let proxyRequiredReason: string | null = null;
-      if (!isProxyRunning && provider.category !== "official") {
+      if (!routingReady && providerNeedsRouting(activeApp, provider)) {
         if (isCopilotProvider) {
           proxyRequiredReason = t("notifications.proxyReasonCopilot", {
             defaultValue: "使用 GitHub Copilot 作为 Claude 供应商",
+          });
+        } else if (isOAuthProviderType(provider.meta?.providerType)) {
+          proxyRequiredReason = t("notifications.proxyReasonManagedOAuth", {
+            defaultValue: "使用托管 OAuth 登录（令牌由本地路由注入）",
           });
         } else if (
           provider.meta?.apiFormat === "openai_chat" &&
@@ -168,6 +190,11 @@ export function useProviderActions(
           proxyRequiredReason = t("notifications.proxyReasonOpenAIChat", {
             defaultValue: "使用 OpenAI Chat 接口格式",
           });
+        } else if (isCodexAnthropicFormat) {
+          proxyRequiredReason = t(
+            "notifications.proxyReasonAnthropicMessages",
+            { defaultValue: "使用 Anthropic Messages 接口格式" },
+          );
         } else if (
           provider.meta?.apiFormat === "openai_responses" &&
           activeApp === "claude"

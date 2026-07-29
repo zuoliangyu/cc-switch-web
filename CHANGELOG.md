@@ -19,6 +19,7 @@
 - 对齐 Codex Chat、Responses 与 Anthropic 的请求、响应和 SSE 转换，补齐 reasoning、tool call、媒体降级、缓存路由及 Claude Code 模拟。
 - Codex session 用量同步支持 fork、sub-agent、延迟父会话恢复和疑似重复观测，游标改用纳秒 mtime。
 - 按应用区分缓存 token 语义，避免 Codex、Gemini 和 Grok Build 重复计算缓存输入成本。
+- 托管 OAuth、Codex Chat/Anthropic 和完整 URL 供应商统一标记为需要当前应用路由接管，切换时不再只检查代理进程是否启动。
 
 ## [0.8.0] - 2026-05-23
 

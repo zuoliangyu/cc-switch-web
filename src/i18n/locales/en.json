@@ -699,6 +699,16 @@
     "openclaw": "OpenClaw",
     "hermes": "Hermes"
   },
+  "grokBuild": {
+    "profile": "Client model profile",
+    "upstreamModel": "Upstream model",
+    "baseUrl": "API endpoint",
+    "apiBackend": "API backend",
+    "contextWindow": "Context window",
+    "contextWindowInvalid": "Context window must be a positive integer",
+    "rawConfig": "config.toml",
+    "invalidToml": "Invalid config.toml: {{error}}"
+  },
   "sessionManager": {
     "title": "Session Manager",
     "subtitle": "Manage Claude Code, Codex, Gemini CLI, Grok Build, OpenCode and OpenClaw sessions",

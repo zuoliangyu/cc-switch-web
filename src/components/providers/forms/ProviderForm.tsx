@@ -98,6 +98,7 @@ import {
 } from "./helpers/opencodeFormUtils";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
+import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
 
 type PresetEntry = {
   id: string;
@@ -129,7 +130,7 @@ const codexApiFormatFromWireApi = (
   }
 };
 
-interface ProviderFormProps {
+export interface ProviderFormProps {
   appId: AppId;
   providerId?: string;
   submitLabel: string;
@@ -151,7 +152,7 @@ interface ProviderFormProps {
   showButtons?: boolean;
 }
 
-export function ProviderForm({
+function ProviderFormFull({
   appId,
   providerId,
   submitLabel,
@@ -1935,3 +1936,10 @@ export type ProviderFormValues = ProviderFormData & {
   providerKey?: string; // OpenCode/OpenClaw: user-defined provider key
   suggestedDefaults?: OpenClawSuggestedDefaults; // OpenClaw: suggested default model configuration
 };
+
+export function ProviderForm(props: ProviderFormProps) {
+  if (props.appId === "grokbuild") {
+    return <GrokBuildProviderForm {...props} />;
+  }
+  return <ProviderFormFull {...props} />;
+}

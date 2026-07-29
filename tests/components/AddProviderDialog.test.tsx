@@ -125,4 +125,44 @@ describe("AddProviderDialog", () => {
       },
     });
   });
+
+  it("从 Grok Build config.toml 提取自定义端点", async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+    mockFormValues = {
+      name: "Grok Relay",
+      websiteUrl: "",
+      settingsConfig: JSON.stringify({
+        config: `[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://grok.example.com/v1"
+name = "Grok Relay"
+api_key = "secret"
+api_backend = "responses"
+context_window = 500000
+`,
+      }),
+    };
+
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="grokbuild"
+        onSubmit={handleSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+
+    await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+    expect(handleSubmit.mock.calls[0][0].meta?.custom_endpoints).toEqual({
+      "https://grok.example.com/v1": {
+        url: "https://grok.example.com/v1",
+        addedAt: expect.any(Number),
+        lastUsed: undefined,
+      },
+    });
+  });
 });

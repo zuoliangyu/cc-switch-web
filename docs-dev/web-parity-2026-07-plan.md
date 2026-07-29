@@ -41,7 +41,8 @@
   - [x] 代理接管与协议路由
   - [x] Session 与 Usage
   - [x] 前端应用入口与现有功能页面接入
-  - [ ] 专用 Provider 表单与预设
+  - [x] 专用 Provider 表单与 TOML 配置工具
+  - [ ] 第三方 Provider 预设
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
 - [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
@@ -71,3 +72,4 @@
 - 2026-07-30：完成 Grok Build 第四阶段；接入活跃与归档 Session 扫描、消息读取和严格边界删除，5 项定向测试通过。
 - 2026-07-30：完成 Grok Build 第五阶段；官方态用量从 `updates.jsonl` 导入，支持沉降窗、稳定幂等键、代理活动去重和 CLI 自报成本，6 项定向测试通过。
 - 2026-07-30：完成 Grok Build 第六阶段；前端接入应用切换、目录设置、MCP/Skills/Prompts、Session、Usage 与 Proxy 入口，34 项定向测试和 TypeScript 类型检查通过。
+- 2026-07-30：完成 Grok Build 第七阶段；新增专用 Provider 表单及 TOML 解析、构建、更新和校验工具，支持官方空配置与 `env_key` 保留，8 项定向测试和 TypeScript 类型检查通过。

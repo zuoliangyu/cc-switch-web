@@ -32,9 +32,9 @@
 
 ### P2：功能与生态
 
-- [ ] 项目档案（profiles）及 Web API / 页面适配
+- [x] 项目档案（profiles）及 Web API / 页面适配
   - [x] schema、DAO、scope 快照编排与 Web API/runtime
-  - [ ] Profile 切换与管理页面
+  - [x] Profile 切换与管理页面
 - [ ] Grok Build 应用目标、配置、代理、MCP、Skills、Prompts、Session 与 Usage
 - [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
 - [ ] models.dev 定价同步、Grok/Kimi/Opus 5/GPT-5.6 定价与预设
@@ -58,3 +58,4 @@
 - 2026-07-30：会话同步改为全局串行后台任务，新增 Codex 备份、清理、重导维护 API；P1 收口。
 - 2026-07-30：开始 P2；完成 Profiles schema v11 与 DAO，CRUD、排序、scope current 和迁移测试通过。
 - 2026-07-30：完成 Profile 服务与 Web API/runtime；支持 scope 独立快照、切走自动保存、best-effort 应用、代理接管恢复及 current 指针维护，页面适配留到下一笔提交。
+- 2026-07-30：完成 Profile 页面适配；主页面支持创建、切换、取消绑定、重命名和删除项目，设置页可隐藏入口，P2 Profiles 收口。

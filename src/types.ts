@@ -267,6 +267,8 @@ export interface Settings {
   streamCheckConfirmed?: boolean;
   // Whether to show the failover toggle independently on the main page
   enableFailoverToggle?: boolean;
+  // Whether to show the project Profile switcher on the main page
+  showProfileSwitcher?: boolean;
   // User has confirmed the failover toggle first-run notice
   failoverConfirmed?: boolean;
   // User has confirmed the first-run welcome notice

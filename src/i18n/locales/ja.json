@@ -581,7 +581,9 @@
       "claudeDesc": "Anthropic Claude Code CLI",
       "codexDesc": "OpenAI Codex CLI",
       "geminiDesc": "Google Gemini CLI",
-      "opencodeDesc": "OpenCode CLI"
+      "opencodeDesc": "OpenCode CLI",
+      "showProfileSwitcher": "プロジェクト切り替えを表示",
+      "showProfileSwitcherDescription": "メイン画面上部にプロジェクト切り替えを表示します"
     },
     "skillSync": {
       "title": "スキル同期方式",
@@ -1519,6 +1521,41 @@
       "deleteTitle": "削除の確認",
       "deleteMessage": "プロンプト「{{name}}」を削除してもよろしいですか？"
     }
+  },
+  "profiles": {
+    "switcherTooltip": {
+      "claude": "プロジェクト：Claude Code のプロバイダー / MCP / Skills / Prompt をワンクリックで切り替え",
+      "claude-desktop": "プロジェクト：Claude Desktop のプロバイダーをワンクリックで切り替え",
+      "codex": "プロジェクト：Codex のプロバイダー / MCP / Skills / Prompt をワンクリックで切り替え"
+    },
+    "none": "プロジェクトを使用しない",
+    "searchPlaceholder": "プロジェクトを検索",
+    "empty": "プロジェクトはまだありません",
+    "createFromCurrent": "新規プロジェクト",
+    "createDescription": {
+      "claude": "Claude Code の現在のプロバイダー、MCP、Skills、Prompt をプロジェクトとして保存し、後から切り替えられます。",
+      "claude-desktop": "Claude Desktop の現在のプロバイダーをプロジェクトとして保存し、後から切り替えられます。",
+      "codex": "Codex の現在のプロバイダー、MCP、Skills、Prompt をプロジェクトとして保存し、後から切り替えられます。"
+    },
+    "manage": "プロジェクトを管理…",
+    "manageTitle": "プロジェクト管理",
+    "manageDescription": "プロジェクトは設定のスナップショットです。切り替えると、現在の設定は元のプロジェクトに自動保存されます。",
+    "namePlaceholder": "例：開発、イラスト",
+    "rename": "名前を変更",
+    "noSnapshotForScope": "このアプリ側は未保存",
+    "delete": "削除",
+    "deleteConfirmTitle": "削除の確認",
+    "deleteConfirmMessage": "プロジェクト「{{name}}」を削除してもよろしいですか？現在の設定は変更されません。",
+    "createSuccess": "プロジェクトを作成しました",
+    "createFailed": "プロジェクトの作成に失敗しました: {{detail}}",
+    "updateSuccess": "プロジェクトを更新しました",
+    "updateFailed": "プロジェクトの更新に失敗しました: {{detail}}",
+    "deleteSuccess": "プロジェクトを削除しました",
+    "deleteFailed": "プロジェクトの削除に失敗しました: {{detail}}",
+    "applySuccess": "プロジェクトを適用しました",
+    "applyFailed": "プロジェクトの適用に失敗しました: {{detail}}",
+    "applyWarnings": "プロジェクトを適用しました（警告 {{warningCount}} 件）：\n{{details}}",
+    "clearSuccess": "プロジェクトを使用しない状態に切り替えました"
   },
   "workspace": {
     "title": "ワークスペースファイル",

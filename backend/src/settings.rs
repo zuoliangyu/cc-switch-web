@@ -178,6 +178,9 @@ pub struct AppSettings {
     /// Whether to show the failover toggle independently on the main page
     #[serde(default)]
     pub enable_failover_toggle: bool,
+    /// Whether to show the project Profile switcher on the main page
+    #[serde(default = "default_true")]
+    pub show_profile_switcher: bool,
     /// User has confirmed the failover toggle first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failover_confirmed: Option<bool>,
@@ -275,6 +278,7 @@ impl Default for AppSettings {
             usage_confirmed: None,
             stream_check_confirmed: None,
             enable_failover_toggle: false,
+            show_profile_switcher: true,
             failover_confirmed: None,
             first_run_notice_confirmed: None,
             common_config_confirmed: None,
@@ -733,4 +737,15 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
             sync.status = status;
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppSettings;
+
+    #[test]
+    fn profile_switcher_is_visible_for_existing_settings() {
+        let settings: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(settings.show_profile_switcher);
+    }
 }

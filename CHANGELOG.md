@@ -43,6 +43,7 @@
 - 设置页认证中心新增 xAI / Grok 账号管理，支持设备码登录、多账号、默认账号、移除账号，以及失效凭据提示与定时刷新。
 - Claude Code 新增 xAI (Grok) OAuth Provider 预设，固定使用官方 Responses 端点与 Grok 4.5，并支持绑定托管账号和拦截失效账号。
 - Codex 新增 xAI API Key / OAuth 两类 Provider 预设；OAuth 模式支持绑定托管账号、隐藏本地不生效的凭据与端点字段，并使用该账号获取模型目录。
+- xAI 托管账号与 Grok Build 官方登录支持查询 SuperGrok 订阅额度；共享 gRPC-web/protobuf 账单解析，并按周、月或通用额度窗口展示使用率与重置时间。
 - 前端开放 Claude Desktop 应用入口和专属 Provider 表单，支持 71 项预设、直连或四档模型映射、1M 声明、模型拉取，以及 GitHub Copilot / Codex / xAI 托管账号绑定；列表定时检查并提示 profile、路由、token 与地址漂移。
 
 ## [0.8.0] - 2026-05-23

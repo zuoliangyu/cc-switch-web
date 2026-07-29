@@ -15,7 +15,8 @@ export function useSubscriptionQuota(
   return useQuery({
     queryKey: ["subscription", "quota", appId],
     queryFn: () => subscriptionApi.getQuota(appId),
-    enabled: enabled && ["claude", "codex", "gemini"].includes(appId),
+    enabled:
+      enabled && ["claude", "codex", "gemini", "grokbuild"].includes(appId),
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,
@@ -37,6 +38,28 @@ export function useCodexOauthQuota(
   return useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
+    enabled,
+    refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
+    refetchIntervalInBackground: autoQuery,
+    refetchOnWindowFocus: autoQuery,
+    staleTime: REFETCH_INTERVAL,
+    retry: 1,
+  });
+}
+
+export function useXaiOauthQuota(
+  meta: ProviderMeta | undefined,
+  options: {
+    enabled?: boolean;
+    autoQuery?: boolean;
+  } = {},
+) {
+  const { enabled = true, autoQuery = false } = options;
+  const accountId = resolveManagedAccountId(meta, PROVIDER_TYPES.XAI_OAUTH);
+
+  return useQuery({
+    queryKey: ["xai_oauth", "quota", accountId ?? "default"],
+    queryFn: () => subscriptionApi.getXaiOauthQuota(accountId),
     enabled,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,

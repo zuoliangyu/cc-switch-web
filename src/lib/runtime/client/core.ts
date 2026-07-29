@@ -11,6 +11,7 @@ import {
   getWebCopilotUsageForAccount,
   getWebCodingPlanQuota,
   getWebCodexOauthQuota,
+  getWebXaiOauthQuota,
   getWebSubscriptionQuota,
   getWebBalance,
   createWebDbBackup,
@@ -575,6 +576,10 @@ export async function invoke<T>(
       return (await getWebSubscriptionQuota(args?.tool as string)) as T;
     case "get_codex_oauth_quota":
       return (await getWebCodexOauthQuota(
+        (args?.accountId as string | null | undefined) ?? null,
+      )) as T;
+    case "get_xai_oauth_quota":
+      return (await getWebXaiOauthQuota(
         (args?.accountId as string | null | undefined) ?? null,
       )) as T;
     case "get_coding_plan_quota":

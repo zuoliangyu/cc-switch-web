@@ -2692,6 +2692,8 @@
     "geminiFlashLite": "Flash Lite",
     "copilotPremium": "高级请求",
     "weeklyLimit": "每周",
+    "monthly": "每月",
+    "credits": "额度",
     "utilization": "{{value}}%",
     "resetsIn": "{{time}}后重置",
     "extraUsage": "超额用量",

@@ -17,6 +17,7 @@ pub(crate) mod skill;
 pub(crate) mod speedtest;
 pub(crate) mod stream_check;
 pub(crate) mod subscription;
+pub(crate) mod subscription_grok;
 pub(crate) mod usage_stats;
 pub(crate) mod webdav;
 pub(crate) mod webdav_auto_sync;

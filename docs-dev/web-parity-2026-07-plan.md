@@ -43,7 +43,7 @@
   - [x] 前端应用入口与现有功能页面接入
   - [x] 专用 Provider 表单与 TOML 配置工具
   - [x] 第三方 Provider 预设
-- [ ] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
+- [x] xAI OAuth 设备流、账号管理和 Claude / Claude Desktop / Codex 路由
   - [x] OIDC 设备流、刷新令牌、多账号持久化与统一 Web auth API
   - [x] Claude / Claude Desktop Provider 与代理路由
   - [x] Codex Provider 与原生 Responses 路由
@@ -51,7 +51,7 @@
   - [x] Claude Code Provider 预设与托管账号绑定
   - [x] Claude Desktop Provider 专属表单、预设与托管账号绑定
   - [x] Codex Provider 预设与托管账号绑定
-  - [ ] xAI 订阅额度查询与展示
+  - [x] xAI 订阅额度查询与展示
 - [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
 - [x] A6API 跨应用预设与 PackyCode 备用端点（`dbb26595`、`30409878`）
 - [ ] Gemini Code0 / Qiniu 默认模型更新（随完整供应商清单引入 `bfb767ae`）
@@ -96,3 +96,4 @@
 - 2026-07-30：完成 Claude Desktop 前端入口与专属 Provider 表单；支持直连/四档映射、模型拉取、1M 声明和三类托管 OAuth 账号绑定，10 项组件测试、预设测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Claude Desktop 状态提示；列表每 5 秒检查平台支持、旧模型名、缺失映射、网关 token 和 Base URL 漂移，5 项列表测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Codex xAI API Key / OAuth 预设与托管账号绑定；OAuth 模式隐藏 Key、端点和格式编辑，支持按绑定账号获取模型目录，3 项定向测试、TypeScript 类型检查和后端二进制检查通过。
+- 2026-07-30：完成 Grok/xAI 订阅额度；引入上游 gRPC-web/protobuf 账单解析，xAI 托管 Provider 按绑定账号展示额度，Grok Build 官方 Provider 复用同一查询服务；14 项后端与 5 项前端定向测试通过。

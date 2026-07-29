@@ -2692,6 +2692,8 @@
     "geminiFlashLite": "Flash Lite",
     "copilotPremium": "プレミアム",
     "weeklyLimit": "週間",
+    "monthly": "月間",
+    "credits": "クレジット",
     "utilization": "{{value}}%",
     "resetsIn": "{{time}}後にリセット",
     "extraUsage": "超過使用量",

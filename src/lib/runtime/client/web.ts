@@ -643,6 +643,17 @@ export async function getWebCodexOauthQuota(
   );
 }
 
+export async function getWebXaiOauthQuota(
+  accountId: string | null,
+): Promise<import("@/types/subscription").SubscriptionQuota> {
+  const params = new URLSearchParams();
+  if (accountId) params.set("accountId", accountId);
+  const query = params.toString();
+  return requestJson<import("@/types/subscription").SubscriptionQuota>(
+    `/api/subscription/xai-oauth${query ? `?${query}` : ""}`,
+  );
+}
+
 export async function getWebCodingPlanQuota(
   baseUrl: string,
   apiKey: string,

@@ -162,6 +162,10 @@ const CLAUDE_KNOWN_TIERS: &[&str] = &[
     "seven_day_sonnet",
 ];
 
+pub(crate) const TIER_WEEKLY_LIMIT: &str = "weekly_limit";
+pub(crate) const TIER_MONTHLY: &str = "monthly";
+pub(crate) const TIER_CREDITS: &str = "credits";
+
 fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -939,6 +943,7 @@ pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, Str
                 }
             }
         }
+        "grokbuild" => crate::services::subscription_grok::get_grok_subscription_quota().await,
         _ => Ok(SubscriptionQuota::not_found(tool)),
     }
 }

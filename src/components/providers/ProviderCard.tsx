@@ -13,6 +13,7 @@ import { ProviderIcon } from "@/components/ProviderIcon";
 import UsageFooter from "@/components/UsageFooter";
 import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
+import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
@@ -93,6 +94,8 @@ const extractApiUrl = (provider: Provider, fallbackText: string) => {
 };
 
 function isOfficialProvider(provider: Provider, appId: AppId): boolean {
+  if (provider.category === "official") return true;
+
   const config = provider.settingsConfig as Record<string, any>;
 
   if (appId === "claude") {
@@ -182,6 +185,7 @@ export function ProviderCard({
     provider.meta?.usage_script?.templateType === "github_copilot";
   const isCodexOauth =
     provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH;
+  const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
   const needsRouting = providerNeedsRouting(appId, provider);
 
@@ -402,6 +406,12 @@ export function ProviderCard({
                   inline={true}
                   isCurrent={isCurrent}
                 />
+              ) : isXaiOauth ? (
+                <XaiOauthQuotaFooter
+                  meta={provider.meta}
+                  inline={true}
+                  isCurrent={isCurrent}
+                />
               ) : isOfficial ? (
                 <SubscriptionQuotaFooter
                   appId={appId}
@@ -466,12 +476,16 @@ export function ProviderCard({
               onEdit={() => onEdit(provider)}
               onDuplicate={() => onDuplicate(provider)}
               onTest={
-                onTest && !isOfficial && !isCopilot && !isCodexOauth
+                onTest &&
+                !isOfficial &&
+                !isCopilot &&
+                !isCodexOauth &&
+                !isXaiOauth
                   ? () => onTest(provider)
                   : undefined
               }
               onConfigureUsage={
-                isOfficial || isCopilot || isCodexOauth
+                isOfficial || isCopilot || isCodexOauth || isXaiOauth
                   ? undefined
                   : () => onConfigureUsage(provider)
               }

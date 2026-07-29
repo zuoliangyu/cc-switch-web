@@ -475,7 +475,7 @@ struct AuthAccountRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CodexOauthQuotaQuery {
+struct ManagedAccountQuotaQuery {
     account_id: Option<String>,
 }
 
@@ -2466,12 +2466,23 @@ async fn get_subscription_quota(
 
 async fn get_codex_oauth_quota(
     State(state): State<WebApiState>,
-    Query(query): Query<CodexOauthQuotaQuery>,
+    Query(query): Query<ManagedAccountQuotaQuery>,
 ) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
     let quota =
         crate::commands::get_codex_oauth_quota_internal(query.account_id, &state.codex_oauth_state)
             .await
             .map_err(|e| ApiError::internal(format!("failed to load codex oauth quota: {e}")))?;
+    Ok(Json(quota))
+}
+
+async fn get_xai_oauth_quota(
+    State(state): State<WebApiState>,
+    Query(query): Query<ManagedAccountQuotaQuery>,
+) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
+    let quota =
+        crate::commands::get_xai_oauth_quota_internal(query.account_id, &state.xai_oauth_state)
+            .await
+            .map_err(|e| ApiError::internal(format!("failed to load xAI oauth quota: {e}")))?;
     Ok(Json(quota))
 }
 
@@ -3495,6 +3506,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_copilot_usage_for_account),
         )
         .route("/api/subscription/codex-oauth", get(get_codex_oauth_quota))
+        .route("/api/subscription/xai-oauth", get(get_xai_oauth_quota))
         .route("/api/subscription/coding-plan", post(get_coding_plan_quota))
         .route("/api/subscription/balance", post(get_balance))
         .route("/api/subscription/:tool", get(get_subscription_quota))

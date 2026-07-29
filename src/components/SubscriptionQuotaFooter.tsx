@@ -28,6 +28,8 @@ export const TIER_I18N_KEYS: Record<string, string> = {
   gemini_flash: "subscription.geminiFlash",
   gemini_flash_lite: "subscription.geminiFlashLite",
   weekly_limit: "subscription.weeklyLimit",
+  monthly: "subscription.monthly",
+  credits: "subscription.credits",
   premium: "subscription.copilotPremium",
 };
 

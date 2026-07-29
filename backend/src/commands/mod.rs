@@ -25,6 +25,7 @@ mod sync_support;
 mod usage;
 mod webdav_sync;
 mod workspace;
+mod xai_oauth;
 
 pub(crate) use auth::*;
 pub(crate) use codex_oauth::*;
@@ -51,3 +52,4 @@ pub(crate) use sync_support::*;
 pub(crate) use usage::*;
 pub(crate) use webdav_sync::*;
 pub(crate) use workspace::*;
+pub(crate) use xai_oauth::*;

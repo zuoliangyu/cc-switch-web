@@ -2692,6 +2692,8 @@
     "geminiFlashLite": "Flash Lite",
     "copilotPremium": "Premium",
     "weeklyLimit": "Weekly",
+    "monthly": "Monthly",
+    "credits": "Credits",
     "utilization": "{{value}}%",
     "resetsIn": "Resets in {{time}}",
     "extraUsage": "Extra Usage",

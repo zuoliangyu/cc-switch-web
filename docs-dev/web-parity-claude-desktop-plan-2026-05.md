@@ -1,8 +1,7 @@
 # Web Parity — Claude Desktop 子系统移植实施计划
 
-> 状态：**Phase 0–5 已实现并验证（0.7.0），Phase 6 收尾中**。后端子系统完整；
-> 延后项（OFFICIAL_SEEDS 依赖的 import 命令、935 行专属预设+富 routeId 表单、
-> 通用 proxy 改进）见 CHANGELOG 0.7.0「显式延后」。下文为原始方案，保留备查。
+> 状态：**Phase 0–5 已实现，Phase 6 待收尾**。后端子系统、Web 专属表单、
+> 71 项预设和配置漂移提示已完成；其余延后项见 CHANGELOG。下文保留原始方案备查。
 > 对应上游：cc-switch `5bbd83f7~1 .. c460a404`（claude-desktop 全量，19 提交 / 98 文件 / +8544 −2315）。
 
 ## 1. 背景与关键发现
@@ -73,13 +72,13 @@ UX/修复链（依赖骨架，可后置）：
 - `get_claude_desktop_status`（stale models / missing routes / proxy stopped / base url mismatch / missing token）
 - 验证：HTTP 集成测试覆盖 status 漂移信号
 
-### Phase 4 — 前端（中高风险，~3–4 天）
+### Phase 4 — 前端（中高风险，~3–4 天）✅ 已完成 2026-07-30
 - `ClaudeDesktopProviderForm`：按 web `src/lib/api` hooks 重建（非 Tauri invoke），appId guard
 - `AppSwitcher` 区分 Claude Code/Desktop；ProviderList 状态 banner（5s 轮询，用 react-query）
 - 路由启停开关
 - 验证：vitest 组件/集成测试，复用 web 测试夹具风格
 
-### Phase 5 — 预设与 i18n（低风险，~1 天）
+### Phase 5 — 预设与 i18n（低风险，~1 天）✅ 已完成 2026-07-30
 - `claudeDesktopProviderPresets.ts` + 44 预设（含 4eb5543d 的 20 个 proxy→direct、c460a404 官方预设、6a3c2fe0 OAuth 预设）
 - zh/en/ja 文案
 - 验证：tsc + 预设渲染快照

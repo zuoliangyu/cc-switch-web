@@ -8,6 +8,11 @@ import { ProviderList } from "@/components/providers/ProviderList";
 const useDragSortMock = vi.fn();
 const useSortableMock = vi.fn();
 const providerCardRenderSpy = vi.fn();
+const getClaudeDesktopStatusMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/claudeDesktop", () => ({
+  claudeDesktopApi: { getStatus: getClaudeDesktopStatusMock },
+}));
 
 vi.mock("@/hooks/useDragSort", () => ({
   useDragSort: (...args: unknown[]) => useDragSortMock(...args),
@@ -124,6 +129,20 @@ beforeEach(() => {
   useDragSortMock.mockReset();
   useSortableMock.mockReset();
   providerCardRenderSpy.mockClear();
+  getClaudeDesktopStatusMock.mockResolvedValue({
+    supported: true,
+    configured: false,
+    appliedId: null,
+    profilePath: null,
+    configLibraryPath: null,
+    mode: null,
+    expectedBaseUrl: null,
+    actualBaseUrl: null,
+    proxyRunning: false,
+    staleRawModels: false,
+    missingRouteMappings: false,
+    gatewayTokenConfigured: false,
+  });
 
   useSortableMock.mockImplementation(({ id }: { id: string }) => ({
     setNodeRef: vi.fn(),
@@ -304,6 +323,58 @@ describe("ProviderList Component", () => {
     expect(screen.queryByTestId("provider-card-beta")).not.toBeInTheDocument();
     expect(
       screen.getByText("No providers match your search."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Claude Desktop configuration drift", async () => {
+    const provider = createProvider();
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [provider],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    getClaudeDesktopStatusMock.mockResolvedValueOnce({
+      supported: true,
+      configured: true,
+      appliedId: provider.id,
+      profilePath: "profile.json",
+      configLibraryPath: "configLibrary",
+      mode: "proxy",
+      expectedBaseUrl: "http://127.0.0.1:15721/claude-desktop/v1",
+      actualBaseUrl: "https://stale.example.com/v1",
+      proxyRunning: true,
+      staleRawModels: true,
+      missingRouteMappings: true,
+      gatewayTokenConfigured: false,
+    });
+
+    renderWithQueryClient(
+      <ProviderList
+        providers={{ [provider.id]: provider }}
+        currentProviderId={provider.id}
+        appId="claude-desktop"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("claudeDesktop.statusTitle"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusStaleRawModels"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusMissingRouteMappings"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusGatewayTokenMissing"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("claudeDesktop.statusBaseUrlMismatch"),
     ).toBeInTheDocument();
   });
 });

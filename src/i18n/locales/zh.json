@@ -265,6 +265,7 @@
       "beta": "Beta",
       "copilotDescription": "管理 GitHub Copilot 账号、默认账号以及供 Claude / Codex / Gemini 绑定的托管凭据。",
       "codexOauthDescription": "管理 ChatGPT 账号、默认账号以及供 Claude 供应商绑定的托管凭据。",
+      "xaiOauthDescription": "管理 xAI / Grok 账号、默认账号及失效后的重新登录。",
       "heading": "认证中心",
       "headingDescription": "统一管理可跨应用复用的 OAuth 账号和默认认证来源。"
     },
@@ -1052,6 +1053,31 @@
     "copyCode": "复制代码",
     "waitingForAuth": "等待授权中...",
     "retry": "重试"
+  },
+  "xaiOauth": {
+    "authStatus": "xAI OAuth 认证",
+    "accountCount": "{{count}} 个可用账号",
+    "reauthRequired": "需要重新登录",
+    "notAuthenticated": "未认证",
+    "selectAccount": "选择账号",
+    "selectAccountPlaceholder": "选择 xAI 账号",
+    "useDefaultAccount": "使用默认账号",
+    "accounts": "xAI 账号",
+    "defaultAccount": "默认",
+    "expired": "凭据已失效",
+    "setAsDefault": "设为默认",
+    "removeAccount": "移除账号",
+    "addOrReauth": "添加账号或重新登录",
+    "login": "使用 xAI 登录",
+    "waitingForAuth": "等待 xAI 授权中...",
+    "enterCode": "若浏览器未自动填入，请输入：",
+    "retry": "重试",
+    "logoutAll": "移除所有 xAI 账号",
+    "loginRequired": "请先登录 xAI 账号"
+  },
+  "managedAuth": {
+    "selectedAccountNeedsReauth": "已绑定账号不存在或需要重新登录",
+    "selectedAccountUnavailable": "已绑定账号不存在或需要重新登录，请重新选择账号"
   },
   "geminiConfig": {
     "envFile": "环境变量 (.env)",

@@ -31,6 +31,7 @@ export function useManagedAuth(authProvider: ManagedAuthProvider) {
     queryKey,
     queryFn: () => authApi.authGetStatus(authProvider),
     staleTime: 30000,
+    refetchInterval: authProvider === "xai_oauth" ? 15_000 : false,
   });
 
   const stopPolling = useCallback(() => {

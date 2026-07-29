@@ -265,6 +265,7 @@
       "beta": "Beta",
       "copilotDescription": "Manage GitHub Copilot accounts, default selection, and shared credentials used by Claude / Codex / Gemini.",
       "codexOauthDescription": "Manage ChatGPT accounts, default selection, and shared credentials bound by Claude providers.",
+      "xaiOauthDescription": "Manage xAI / Grok accounts, default selection, and sign-in renewal.",
       "heading": "Authentication Center",
       "headingDescription": "Manage reusable OAuth accounts and default authentication sources across apps."
     },
@@ -1052,6 +1053,31 @@
     "copyCode": "Copy code",
     "waitingForAuth": "Waiting for authorization...",
     "retry": "Retry"
+  },
+  "xaiOauth": {
+    "authStatus": "xAI OAuth authentication",
+    "accountCount": "Usable accounts: {{count}}",
+    "reauthRequired": "Sign-in required",
+    "notAuthenticated": "Not authenticated",
+    "selectAccount": "Select account",
+    "selectAccountPlaceholder": "Select an xAI account",
+    "useDefaultAccount": "Use default account",
+    "accounts": "xAI accounts",
+    "defaultAccount": "Default",
+    "expired": "Credentials expired",
+    "setAsDefault": "Set as default",
+    "removeAccount": "Remove account",
+    "addOrReauth": "Add account or sign in again",
+    "login": "Sign in with xAI",
+    "waitingForAuth": "Waiting for xAI authorization...",
+    "enterCode": "If the browser did not fill it in automatically, enter:",
+    "retry": "Retry",
+    "logoutAll": "Remove all xAI accounts",
+    "loginRequired": "Sign in to an xAI account first"
+  },
+  "managedAuth": {
+    "selectedAccountNeedsReauth": "The linked account is missing or needs you to sign in again",
+    "selectedAccountUnavailable": "The linked account is missing or needs you to sign in again. Select another account."
   },
   "geminiConfig": {
     "envFile": "Environment Variables (.env)",

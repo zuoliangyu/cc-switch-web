@@ -2,6 +2,7 @@
 export const PROVIDER_TYPES = {
   GITHUB_COPILOT: "github_copilot",
   CODEX_OAUTH: "codex_oauth",
+  XAI_OAUTH: "xai_oauth",
 } as const;
 
 const OAUTH_PROVIDER_TYPES = new Set<string>(Object.values(PROVIDER_TYPES));

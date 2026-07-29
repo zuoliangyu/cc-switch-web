@@ -1,6 +1,9 @@
 import { invoke } from "@/lib/runtime/client/core";
 
-export type ManagedAuthProvider = "github_copilot" | "codex_oauth";
+export type ManagedAuthProvider =
+  | "github_copilot"
+  | "codex_oauth"
+  | "xai_oauth";
 
 export interface ManagedAuthAccount {
   id: string;
@@ -9,6 +12,7 @@ export interface ManagedAuthAccount {
   avatar_url: string | null;
   authenticated_at: number;
   is_default: boolean;
+  requires_reauth: boolean;
 }
 
 export interface ManagedAuthStatus {
@@ -99,4 +103,3 @@ export const authApi = {
   authSetDefaultAccount,
   authLogout,
 };
-

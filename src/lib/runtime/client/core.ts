@@ -193,6 +193,7 @@ import {
   testWebUsageScript,
   toggleWebSkillApp,
   syncWebSessionUsage,
+  rebuildWebCodexUsage,
   uploadWebdavSync,
   updateWebModelPricing,
   updateWebProvider,
@@ -205,13 +206,7 @@ import {
   deleteWebUniversalProvider,
 } from "./web";
 
-type AppId =
-  | "claude"
-  | "codex"
-  | "gemini"
-  | "opencode"
-  | "openclaw"
-  | "hermes";
+type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes";
 
 type InvokeArgs = Record<string, unknown> | undefined;
 
@@ -784,6 +779,8 @@ export async function invoke<T>(
       )) as T;
     case "sync_session_usage":
       return (await syncWebSessionUsage()) as T;
+    case "rebuild_codex_usage":
+      return (await rebuildWebCodexUsage()) as T;
     case "get_usage_data_sources":
       return (await getWebUsageDataSources()) as T;
     case "start_proxy_server":

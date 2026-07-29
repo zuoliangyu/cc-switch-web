@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::SystemTime;
 
 /// 同步结果
@@ -46,6 +47,39 @@ impl SessionSyncResult {
         self.deferred_files = self.deferred_files.saturating_add(other.deferred_files);
         self.errors.extend(other.errors);
     }
+}
+
+pub fn session_sync_mutex() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+fn merge_sync_step(
+    aggregate: &mut SessionSyncResult,
+    name: &str,
+    step: Result<SessionSyncResult, AppError>,
+) {
+    match step {
+        Ok(result) => aggregate.merge(result),
+        Err(error) => aggregate.errors.push(format!("{name} 同步失败: {error}")),
+    }
+}
+
+/// 调用方必须持有 [`session_sync_mutex`]。
+pub fn sync_all_unlocked(db: &Database) -> SessionSyncResult {
+    let mut result = SessionSyncResult::default();
+    merge_sync_step(&mut result, "Claude", sync_claude_session_logs(db));
+    merge_sync_step(
+        &mut result,
+        "Codex",
+        crate::services::session_usage_codex::sync_codex_usage(db),
+    );
+    merge_sync_step(
+        &mut result,
+        "Gemini",
+        crate::services::session_usage_gemini::sync_gemini_usage(db),
+    );
+    result
 }
 
 /// 数据来源分布
@@ -611,6 +645,14 @@ pub fn get_data_source_breakdown(db: &Database) -> Result<Vec<DataSourceSummary>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn session_sync_mutex_serializes_callers() {
+        let first = session_sync_mutex().lock().await;
+        assert!(session_sync_mutex().try_lock().is_err());
+        drop(first);
+        assert!(session_sync_mutex().try_lock().is_ok());
+    }
 
     #[test]
     fn test_parse_usage_from_jsonl_line() {

@@ -932,9 +932,8 @@ export async function getWebProxyTakeoverStatus(): Promise<ProxyTakeoverStatus> 
 export async function getWebClaudeDesktopStatus(): Promise<
   import("@/types/claudeDesktop").ClaudeDesktopStatus
 > {
-  const { getDefaultClaudeDesktopStatus } = await import(
-    "@/types/claudeDesktop"
-  );
+  const { getDefaultClaudeDesktopStatus } =
+    await import("@/types/claudeDesktop");
   try {
     return await requestJson("/api/claude-desktop/status");
   } catch (error) {
@@ -2201,6 +2200,10 @@ export async function getWebProviderLimits(
 
 export async function syncWebSessionUsage(): Promise<SessionSyncResult> {
   return requestWithBody<SessionSyncResult>("/api/usage/session-sync", "POST");
+}
+
+export async function rebuildWebCodexUsage(): Promise<SessionSyncResult> {
+  return requestWithBody<SessionSyncResult>("/api/usage/codex/rebuild", "POST");
 }
 
 export async function getWebUsageDataSources(): Promise<DataSourceSummary[]> {

@@ -26,8 +26,8 @@
 
 - [x] 对齐 Responses / Chat / Anthropic 请求、响应与 SSE 转换修复
 - [x] 对齐 reasoning、tool call、tool-result media 的顺序与身份保持
-- [ ] 对齐稳定 usage key、幂等写入和 session import 单次通知
-- [ ] 对齐 Codex fork / sub-agent 用量重建与维护入口
+- [x] 对齐稳定 usage key、幂等写入和 session import 单次通知
+- [x] 对齐 Codex fork / sub-agent 用量重建与维护入口
 - [x] 对齐 managed OAuth routing-required 判定与失败策略
 
 ### P2：功能与生态
@@ -53,3 +53,4 @@
 - 2026-07-30：Codex session 增量同步完成，支持 fork、sub-agent、deferred 父会话恢复和疑似重复观测；28 项定向测试通过。
 - 2026-07-30：Managed OAuth 与协议格式统一使用路由需求谓词，切换拦截改为检查当前应用 takeover；7 项前端测试和类型检查通过。
 - 2026-07-30：稳定 usage key 与幂等写入完成；同语义重放忽略、跨语义碰撞保留两行，logger 5 项和 parser 28 项测试通过。
+- 2026-07-30：会话同步改为全局串行后台任务，新增 Codex 备份、清理、重导维护 API；P1 收口。

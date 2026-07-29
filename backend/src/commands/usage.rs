@@ -65,34 +65,32 @@ pub fn get_request_detail_internal(
     state.db.get_request_detail(&request_id)
 }
 
-pub fn sync_session_usage_internal(state: &AppState) -> Result<SessionSyncResult, AppError> {
-    let mut result = crate::services::session_usage::sync_claude_session_logs(&state.db)?;
+pub async fn sync_session_usage_internal(
+    state: &AppState,
+) -> Result<SessionSyncResult, AppError> {
+    let db = state.db.clone();
+    let _guard = crate::services::session_usage::session_sync_mutex()
+        .lock()
+        .await;
+    tokio::task::spawn_blocking(move || crate::services::session_usage::sync_all_unlocked(&db))
+        .await
+        .map_err(|error| AppError::Message(format!("会话用量同步任务失败: {error}")))
+}
 
-    match crate::services::session_usage_codex::sync_codex_usage(&state.db) {
-        Ok(codex_result) => {
-            result.imported += codex_result.imported;
-            result.skipped += codex_result.skipped;
-            result.files_scanned += codex_result.files_scanned;
-            result.errors.extend(codex_result.errors);
-        }
-        Err(e) => {
-            result.errors.push(format!("Codex 同步失败: {e}"));
-        }
-    }
-
-    match crate::services::session_usage_gemini::sync_gemini_usage(&state.db) {
-        Ok(gemini_result) => {
-            result.imported += gemini_result.imported;
-            result.skipped += gemini_result.skipped;
-            result.files_scanned += gemini_result.files_scanned;
-            result.errors.extend(gemini_result.errors);
-        }
-        Err(e) => {
-            result.errors.push(format!("Gemini 同步失败: {e}"));
-        }
-    }
-
-    Ok(result)
+pub async fn rebuild_codex_usage_internal(
+    state: &AppState,
+) -> Result<SessionSyncResult, AppError> {
+    let db = state.db.clone();
+    let _guard = crate::services::session_usage::session_sync_mutex()
+        .lock()
+        .await;
+    tokio::task::spawn_blocking(move || {
+        db.backup_database_file()?;
+        db.reset_codex_usage()?;
+        crate::services::session_usage_codex::sync_codex_usage(&db)
+    })
+    .await
+    .map_err(|error| AppError::Message(format!("Codex 用量重建任务失败: {error}")))?
 }
 
 pub fn get_usage_data_sources_internal(

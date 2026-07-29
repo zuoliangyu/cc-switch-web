@@ -1452,7 +1452,17 @@ async fn sync_usage_session_logs(
     State(state): State<WebApiState>,
 ) -> Result<Json<crate::services::session_usage::SessionSyncResult>, ApiError> {
     let result = crate::commands::sync_session_usage_internal(state.app_state.as_ref())
+        .await
         .map_err(|e| ApiError::internal(format!("failed to sync session usage: {e}")))?;
+    Ok(Json(result))
+}
+
+async fn rebuild_codex_usage(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::session_usage::SessionSyncResult>, ApiError> {
+    let result = crate::commands::rebuild_codex_usage_internal(state.app_state.as_ref())
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to rebuild Codex usage: {e}")))?;
     Ok(Json(result))
 }
 
@@ -3470,6 +3480,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/usage/provider-stats", get(get_usage_provider_stats))
         .route("/api/usage/model-stats", get(get_usage_model_stats))
         .route("/api/usage/session-sync", post(sync_usage_session_logs))
+        .route("/api/usage/codex/rebuild", post(rebuild_codex_usage))
         .route("/api/usage/data-sources", get(get_usage_data_sources))
         .route("/api/usage/request-logs", post(get_usage_request_logs))
         .route(

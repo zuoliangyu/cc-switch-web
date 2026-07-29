@@ -185,6 +185,7 @@
   - Web 后端 `proxy_request_logs` 补齐 `data_source` 字段并透传到日志查询结果，为后续接入会话日志来源做基础准备
 - 会话用量同步与数据来源概览
   - Web 后端补齐 `POST /api/usage/session-sync` 与 `GET /api/usage/data-sources`，支持手动导入 Claude / Codex / Gemini 会话日志并聚合数据来源分布
+  - 同步入口使用全局锁串行执行并移入阻塞任务；新增 `POST /api/usage/codex/rebuild`，先备份数据库，再清理并重导 Codex session 用量
   - 用量页恢复桌面版 `DataSourceBar`，展示 `Proxy / Session Log / Codex Session / Gemini Session` 来源计数，并提供手动同步入口
   - 前端 runtime、usage API、三语文案与类型定义同步补齐，保持 Web 与桌面端的会话统计交互一致
 - X-Code 预设图标键对齐

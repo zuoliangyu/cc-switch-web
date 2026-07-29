@@ -21,6 +21,7 @@
 - 按应用区分缓存 token 语义，避免 Codex、Gemini 和 Grok Build 重复计算缓存输入成本。
 - 托管 OAuth、Codex Chat/Anthropic 和完整 URL 供应商统一标记为需要当前应用路由接管，切换时不再只检查代理进程是否启动。
 - 非 Claude 用量 ID 增加应用与供应商作用域；重复响应幂等忽略，语义冲突使用稳定哈希后缀保存，不再静默覆盖历史用量。
+- 会话用量同步改为串行后台任务；新增 `POST /api/usage/codex/rebuild`，备份数据库后可安全清理并重导 Codex session 用量。
 
 ## [0.8.0] - 2026-05-23
 

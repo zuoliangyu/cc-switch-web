@@ -15,10 +15,14 @@ use super::{
     handler_context::RequestContext,
     providers::{
         get_adapter, get_claude_api_format, streaming::create_anthropic_sse_stream,
+        streaming_codex_anthropic::{
+            create_responses_sse_stream_from_anthropic_with_context,
+            responses_sse_events_from_anthropic_message,
+        },
         streaming_codex_chat::create_responses_sse_stream_from_chat,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
         streaming_responses::create_anthropic_sse_stream_from_responses, transform,
-        transform_codex_chat, transform_gemini, transform_responses,
+        transform_codex_anthropic, transform_codex_chat, transform_gemini, transform_responses,
     },
     response_processor::{
         create_logged_passthrough_stream, process_response, read_decoded_body,
@@ -171,7 +175,6 @@ async fn handle_messages_for_app(
         .get("stream")
         .and_then(|s| s.as_bool())
         .unwrap_or(false);
-
     // 转发请求
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -524,6 +527,8 @@ pub async fn handle_responses(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let codex_tool_context =
+        transform_codex_chat::build_codex_tool_context_from_request(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -555,6 +560,16 @@ pub async fn handle_responses(
     if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
         return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
     }
+    if super::providers::should_convert_codex_responses_to_anthropic(&ctx.provider, &endpoint) {
+        return handle_codex_anthropic_to_responses_transform(
+            response,
+            &ctx,
+            &state,
+            is_stream,
+            codex_tool_context,
+        )
+        .await;
+    }
 
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
 }
@@ -584,6 +599,8 @@ pub async fn handle_responses_compact(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let codex_tool_context =
+        transform_codex_chat::build_codex_tool_context_from_request(&body);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -612,6 +629,16 @@ pub async fn handle_responses_compact(
 
     if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
         return handle_codex_chat_to_responses_transform(response, &ctx, &state, is_stream).await;
+    }
+    if super::providers::should_convert_codex_responses_to_anthropic(&ctx.provider, &endpoint) {
+        return handle_codex_anthropic_to_responses_transform(
+            response,
+            &ctx,
+            &state,
+            is_stream,
+            codex_tool_context,
+        )
+        .await;
     }
 
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
@@ -710,6 +737,113 @@ async fn handle_codex_chat_to_responses_transform(
             log::error!("[Codex] 构建 Responses 响应失败: {e}");
             ProxyError::Internal(format!("Failed to build response: {e}"))
         })
+}
+
+async fn handle_codex_anthropic_to_responses_transform(
+    response: super::hyper_client::ProxyResponse,
+    ctx: &RequestContext,
+    state: &ProxyState,
+    is_stream: bool,
+    codex_tool_context: transform_codex_chat::CodexToolContext,
+) -> Result<axum::response::Response, ProxyError> {
+    let status = response.status();
+    if !status.is_success() {
+        return process_response(response, ctx, state, &CODEX_PARSER_CONFIG).await;
+    }
+
+    if response.is_sse() || (is_stream && !response.is_json()) {
+        let stream = response.bytes_stream();
+        let sse_stream =
+            create_responses_sse_stream_from_anthropic_with_context(stream, codex_tool_context);
+        let logged_stream = create_logged_passthrough_stream(
+            sse_stream,
+            ctx.tag,
+            None,
+            ctx.streaming_timeout_config(),
+        );
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-cache"),
+        );
+        return Ok((headers, axum::body::Body::from_stream(logged_stream)).into_response());
+    }
+
+    let body_timeout =
+        if ctx.app_config.auto_failover_enabled && ctx.app_config.non_streaming_timeout > 0 {
+            std::time::Duration::from_secs(ctx.app_config.non_streaming_timeout as u64)
+        } else {
+            std::time::Duration::ZERO
+        };
+    let (mut response_headers, status, body_bytes) =
+        read_decoded_body(response, ctx.tag, body_timeout).await?;
+    let body_text = String::from_utf8_lossy(&body_bytes);
+    let anthropic_response: Value = match serde_json::from_slice(&body_bytes) {
+        Ok(value) => value,
+        Err(_) if body_text.lines().any(|line| {
+            line.trim_start().starts_with("event:") || line.trim_start().starts_with("data:")
+        }) => transform_codex_anthropic::anthropic_sse_to_message_value(&body_text)?,
+        Err(error) => {
+            log::error!(
+                "[Codex] 解析 Anthropic 上游响应失败: {error}, body_bytes={}",
+                body_bytes.len()
+            );
+            return Err(ProxyError::TransformError(format!(
+                "Failed to parse upstream anthropic response: {error}"
+            )));
+        }
+    };
+
+    if is_stream {
+        let events = responses_sse_events_from_anthropic_message(
+            &anthropic_response,
+            codex_tool_context,
+        );
+        let sse_stream =
+            futures::stream::iter(events.into_iter().map(Ok::<Bytes, std::io::Error>));
+        let logged_stream = create_logged_passthrough_stream(
+            sse_stream,
+            ctx.tag,
+            None,
+            ctx.streaming_timeout_config(),
+        );
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-cache"),
+        );
+        return Ok((headers, axum::body::Body::from_stream(logged_stream)).into_response());
+    }
+
+    let responses_response =
+        transform_codex_anthropic::anthropic_response_to_responses_with_context(
+            anthropic_response,
+            &codex_tool_context,
+        )?;
+    strip_entity_headers_for_rebuilt_body(&mut response_headers);
+
+    let mut builder = axum::response::Response::builder().status(status);
+    for (key, value) in response_headers.iter() {
+        builder = builder.header(key, value);
+    }
+    builder
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&responses_response).map_err(|error| {
+                ProxyError::TransformError(format!(
+                    "Failed to serialize responses response: {error}"
+                ))
+            })?,
+        ))
+        .map_err(|error| ProxyError::Internal(format!("Failed to build response: {error}")))
 }
 
 // ============================================================================
@@ -839,7 +973,7 @@ async fn log_usage(
     // 使用 dedup_request_id() 让 proxy 写入与 session-log 同步共享同一 request_id
     // （Claude API 上是 `session:msg_xxx`），主键 INSERT OR REPLACE 自动去重；
     // 没拿到 message_id 时回退随机 UUID（与 session log 不可能撞上）。
-    let request_id = usage.dedup_request_id();
+    let request_id = usage.dedup_request_id(None);
 
     if let Err(e) = logger.log_with_calculation(
         request_id,

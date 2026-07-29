@@ -6,8 +6,9 @@
 //! 支持检测官方 Codex 客户端 (codex_vscode, codex_cli_rs)
 
 use super::{AuthInfo, AuthStrategy, ProviderAdapter};
-use crate::provider::Provider;
+use crate::provider::{CodexChatReasoningConfig, Provider};
 use crate::proxy::error::ProxyError;
+use serde_json::Value as JsonValue;
 use toml::Value as TomlValue;
 
 /// Codex 适配器
@@ -90,6 +91,343 @@ pub fn should_convert_codex_responses_to_chat(provider: &Provider, endpoint: &st
     ) && codex_provider_uses_chat_completions(provider)
 }
 
+/// 只有明确支持的上游才发送 `prompt_cache_key`；未知兼容网关默认关闭。
+pub fn should_send_codex_chat_prompt_cache_key(provider: &Provider) -> bool {
+    match provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.prompt_cache_routing.as_deref())
+        .unwrap_or("auto")
+    {
+        "enabled" => return true,
+        "disabled" => return false,
+        _ => {}
+    }
+
+    let base_url = provider
+        .settings_config
+        .get("base_url")
+        .or_else(|| provider.settings_config.get("baseURL"))
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("config")
+                .and_then(|value| value.as_str())
+                .and_then(extract_codex_base_url_from_toml)
+        });
+    let Some(base_url) = base_url else {
+        return false;
+    };
+    let Ok(url) = url::Url::parse(&base_url) else {
+        return false;
+    };
+
+    match url.host_str() {
+        Some("api.openai.com") => true,
+        Some("api.kimi.com") => {
+            let path = url.path().trim_end_matches('/');
+            path == "/coding" || path.starts_with("/coding/")
+        }
+        _ => false,
+    }
+}
+
+/// Responses → Chat 后注入稳定缓存路由键；显式键优先于客户端会话 ID。
+pub fn inject_codex_chat_prompt_cache_key(
+    provider: &Provider,
+    chat_body: &mut JsonValue,
+    explicit_key: Option<&str>,
+    client_session_id: Option<&str>,
+) -> bool {
+    if !should_send_codex_chat_prompt_cache_key(provider) {
+        return false;
+    }
+
+    let key = explicit_key
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .or_else(|| {
+            client_session_id
+                .map(str::trim)
+                .filter(|session_id| !session_id.is_empty())
+        });
+    let Some(key) = key else {
+        return false;
+    };
+
+    chat_body["prompt_cache_key"] = JsonValue::String(key.to_string());
+    true
+}
+
+/// Codex 供应商是否显式声明原生 Anthropic Messages 上游。
+pub fn codex_provider_uses_anthropic(provider: &Provider) -> bool {
+    if let Some(api_format) = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.api_format.as_deref())
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("api_format")
+                .and_then(|value| value.as_str())
+        })
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("apiFormat")
+                .and_then(|value| value.as_str())
+        })
+    {
+        return is_anthropic_wire_api(api_format);
+    }
+
+    provider
+        .settings_config
+        .get("config")
+        .and_then(|value| value.as_str())
+        .and_then(extract_codex_wire_api_from_toml)
+        .map(|wire_api| is_anthropic_wire_api(&wire_api))
+        .unwrap_or(false)
+}
+
+pub fn should_convert_codex_responses_to_anthropic(
+    provider: &Provider,
+    endpoint: &str,
+) -> bool {
+    let path = endpoint
+        .split_once('?')
+        .map_or(endpoint, |(path, _query)| path);
+
+    matches!(
+        path,
+        "/responses" | "/v1/responses" | "/responses/compact" | "/v1/responses/compact"
+    ) && codex_provider_uses_anthropic(provider)
+}
+
+/// 提取 Codex 供应商实际使用的上游模型。
+pub fn codex_provider_upstream_model(provider: &Provider) -> Option<String> {
+    provider
+        .settings_config
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("config")
+                .and_then(|value| value.as_str())
+                .and_then(extract_codex_model_from_toml)
+        })
+}
+
+/// Chat 协议转换前，把 Codex 客户端兼容模型替换为供应商真实模型。
+pub fn apply_codex_chat_upstream_model(
+    provider: &Provider,
+    body: &mut JsonValue,
+) -> Option<String> {
+    if !codex_provider_uses_chat_completions(provider) {
+        return None;
+    }
+    apply_codex_upstream_model(provider, body)
+}
+
+/// 已经确认协议类型时复用同一模型替换逻辑（如 Anthropic bridge）。
+pub fn apply_codex_upstream_model(provider: &Provider, body: &mut JsonValue) -> Option<String> {
+    let upstream_model = codex_provider_upstream_model(provider)?;
+    body["model"] = JsonValue::String(upstream_model.clone());
+    Some(upstream_model)
+}
+
+pub fn resolve_codex_chat_reasoning_config(
+    provider: &Provider,
+    body: &JsonValue,
+) -> Option<CodexChatReasoningConfig> {
+    if let Some(config) = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.codex_chat_reasoning.clone())
+    {
+        return Some(normalize_codex_chat_reasoning_config(config));
+    }
+
+    infer_codex_chat_reasoning_config(provider, body)
+}
+
+fn normalize_codex_chat_reasoning_config(
+    mut config: CodexChatReasoningConfig,
+) -> CodexChatReasoningConfig {
+    if config.supports_effort.unwrap_or(false) && config.supports_thinking.is_none() {
+        config.supports_thinking = Some(true);
+    }
+    config
+}
+
+fn infer_codex_chat_reasoning_config(
+    provider: &Provider,
+    body: &JsonValue,
+) -> Option<CodexChatReasoningConfig> {
+    let model = body
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
+        .or_else(|| codex_provider_upstream_model(provider))
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let base_url = provider
+        .settings_config
+        .get("base_url")
+        .or_else(|| provider.settings_config.get("baseURL"))
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("config")
+                .and_then(|v| v.as_str())
+                .and_then(extract_codex_base_url_from_toml)
+        })
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let name = provider.name.to_ascii_lowercase();
+
+    // 平台优先：聚合 / 托管平台的 reasoning 接口由平台的推理框架决定，而非模型官方实现，
+    // 因此先按平台标识（仅 name + base_url，不含 model 名）判定并覆盖模型规则。
+    if let Some(config) = infer_aggregator_platform_config(&name, &base_url) {
+        return Some(config);
+    }
+
+    let haystack = format!("{name} {base_url} {model}");
+
+    if haystack.contains("deepseek") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(true),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("reasoning_effort".to_string()),
+            effort_value_mode: Some("deepseek".to_string()),
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    // StepFun：仅 step-3.5-flash-2603 这一版支持 reasoning effort（low/high 两档），
+    // 其余 step 模型不暴露 effort，故 supports_effort 仅对含 "2603" 的模型置真。
+    // 第二个 OR 分支覆盖「经中转/聚合跑该模型、但平台 name/base_url 不含 stepfun」的情况。
+    if haystack.contains("stepfun") || haystack.contains("step-3.5-flash-2603") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(model.contains("2603")),
+            thinking_param: Some("none".to_string()),
+            effort_param: Some("reasoning_effort".to_string()),
+            effort_value_mode: Some("low_high".to_string()),
+            output_format: Some("reasoning".to_string()),
+        });
+    }
+
+    if haystack.contains("kimi") || haystack.contains("moonshot") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("glm") || haystack.contains("zhipu") || haystack.contains("z.ai") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("qwen") || haystack.contains("dashscope") || haystack.contains("bailian") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("enable_thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    if haystack.contains("minimax") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("reasoning_split".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_details".to_string()),
+        });
+    }
+
+    if haystack.contains("mimo") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    None
+}
+
+/// 聚合 / 托管平台的 reasoning 接口由平台决定：同一个模型在不同平台参数可能完全不同
+/// （DeepSeek 官方用 `thinking:{type}`、SiliconFlow 用 `enable_thinking`、
+/// OpenRouter 用原生 `reasoning:{effort}` 对象）。仅以平台标识（name / base_url）判定，
+/// 绝不掺入 model 名——model 名属于模型厂商，会把托管平台误判成模型官方接口。
+fn infer_aggregator_platform_config(
+    name: &str,
+    base_url: &str,
+) -> Option<CodexChatReasoningConfig> {
+    let platform = format!("{name} {base_url}");
+
+    // OpenRouter：用原生归一化对象 `reasoning: { effort }`（由 OpenRouter 翻译成各底层
+    // 模型的正确推理参数，比顶层 OpenAI 别名 reasoning_effort 覆盖面更全）。effort 走
+    // "openrouter" 值映射：枚举为 xhigh|high|medium|low|minimal，无 max——max 会触发
+    // `400 reasoning_effort: Invalid option`（见 openclaw#77350），故钳到 xhigh。
+    // 安全降级：不发 `thinking:{type}`（OpenRouter 不认该字段），避免误配导致请求被拒。
+    if platform.contains("openrouter") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(false),
+            supports_effort: Some(true),
+            thinking_param: Some("none".to_string()),
+            effort_param: Some("reasoning.effort".to_string()),
+            effort_value_mode: Some("openrouter".to_string()),
+            output_format: Some("auto".to_string()),
+        });
+    }
+
+    // SiliconFlow：平台级统一 `enable_thinking`，思维回传 reasoning_content。
+    // 安全降级：不按 reasoning_effort 发 effort（平台用 thinking_budget 控制深度，
+    // 发 reasoning_effort 反而可能不被接受）。
+    if platform.contains("siliconflow") {
+        return Some(CodexChatReasoningConfig {
+            supports_thinking: Some(true),
+            supports_effort: Some(false),
+            thinking_param: Some("enable_thinking".to_string()),
+            effort_param: Some("none".to_string()),
+            effort_value_mode: None,
+            output_format: Some("reasoning_content".to_string()),
+        });
+    }
+
+    None
+}
+
 fn is_chat_wire_api(value: &str) -> bool {
     matches!(
         value.trim().to_ascii_lowercase().as_str(),
@@ -99,6 +437,13 @@ fn is_chat_wire_api(value: &str) -> bool {
             | "openai_chat"
             | "openai-chat"
             | "openai_chat_completions"
+    )
+}
+
+fn is_anthropic_wire_api(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "anthropic" | "anthropic_messages" | "anthropic-messages" | "claude" | "messages"
     )
 }
 
@@ -125,6 +470,16 @@ fn extract_codex_wire_api_from_toml(config_text: &str) -> Option<String> {
 
     doc.get("wire_api")
         .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+}
+
+fn extract_codex_model_from_toml(config_text: &str) -> Option<String> {
+    let doc = config_text.parse::<TomlValue>().ok()?;
+
+    doc.get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
         .map(ToString::to_string)
 }
 
@@ -252,8 +607,19 @@ impl ProviderAdapter for CodexAdapter {
     }
 
     fn extract_auth(&self, provider: &Provider) -> Option<AuthInfo> {
+        let strategy = if codex_provider_uses_anthropic(provider)
+            && provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.api_key_field.as_deref())
+                .is_some_and(|field| field.eq_ignore_ascii_case("ANTHROPIC_API_KEY"))
+        {
+            AuthStrategy::Anthropic
+        } else {
+            AuthStrategy::Bearer
+        };
         self.extract_key(provider)
-            .map(|key| AuthInfo::new(key, AuthStrategy::Bearer))
+            .map(|key| AuthInfo::new(key, strategy))
     }
 
     fn build_url(&self, base_url: &str, endpoint: &str) -> String {
@@ -294,6 +660,12 @@ impl ProviderAdapter for CodexAdapter {
     }
 
     fn get_auth_headers(&self, auth: &AuthInfo) -> Vec<(http::HeaderName, http::HeaderValue)> {
+        if auth.strategy == AuthStrategy::Anthropic {
+            return vec![(
+                http::HeaderName::from_static("x-api-key"),
+                http::HeaderValue::from_str(&auth.api_key).unwrap(),
+            )];
+        }
         let bearer = format!("Bearer {}", auth.api_key);
         vec![(
             http::HeaderName::from_static("authorization"),
@@ -480,5 +852,62 @@ wire_api = "chat"
             &provider,
             "/responses"
         ));
+    }
+
+    #[test]
+    fn anthropic_bridge_requires_explicit_wire_format() {
+        let anthropic = create_provider(json!({
+            "apiFormat": "anthropic",
+            "base_url": "https://example.com/v1/messages"
+        }));
+        let unknown = create_provider(json!({
+            "base_url": "https://example.com/v1/messages"
+        }));
+
+        assert!(should_convert_codex_responses_to_anthropic(
+            &anthropic,
+            "/v1/responses?stream=true"
+        ));
+        assert!(!should_convert_codex_responses_to_anthropic(
+            &unknown,
+            "/v1/responses"
+        ));
+    }
+
+    #[test]
+    fn prompt_cache_key_uses_explicit_key_then_client_session() {
+        let provider = create_provider(json!({
+            "base_url": "https://api.openai.com/v1"
+        }));
+        let mut body = json!({});
+        assert!(inject_codex_chat_prompt_cache_key(
+            &provider,
+            &mut body,
+            Some("request-key"),
+            Some("session-key")
+        ));
+        assert_eq!(body["prompt_cache_key"], "request-key");
+
+        let mut body = json!({});
+        assert!(inject_codex_chat_prompt_cache_key(
+            &provider,
+            &mut body,
+            None,
+            Some("session-key")
+        ));
+        assert_eq!(body["prompt_cache_key"], "session-key");
+    }
+
+    #[test]
+    fn reasoning_config_prefers_platform_over_model_name() {
+        let provider = create_provider(json!({
+            "base_url": "https://openrouter.ai/api/v1",
+            "model": "deepseek/deepseek-chat"
+        }));
+        let config =
+            resolve_codex_chat_reasoning_config(&provider, &json!({"model": "deepseek-chat"}))
+                .unwrap();
+        assert_eq!(config.effort_param.as_deref(), Some("reasoning.effort"));
+        assert_eq!(config.thinking_param.as_deref(), Some("none"));
     }
 }

@@ -17,6 +17,7 @@ pub(crate) mod http_client;
 pub(crate) mod hyper_client;
 pub(crate) mod json_canonical;
 pub(crate) mod log_codes;
+pub(crate) mod media_sanitizer;
 pub(crate) mod model_mapper;
 pub(crate) mod provider_router;
 pub(crate) mod providers;
@@ -27,6 +28,7 @@ pub(crate) mod sse;
 pub(crate) mod thinking_budget_rectifier;
 pub(crate) mod thinking_optimizer;
 pub(crate) mod thinking_rectifier;
+pub(crate) mod tool_media;
 pub(crate) mod types;
 pub(crate) mod usage;
 

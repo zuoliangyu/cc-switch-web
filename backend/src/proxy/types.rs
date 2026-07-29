@@ -204,6 +204,12 @@ pub struct RectifierConfig {
     /// 处理错误：budget_tokens + thinking 相关约束
     #[serde(default = "default_true")]
     pub request_thinking_budget: bool,
+    /// 图片输入不受支持时降级为文本标记。
+    #[serde(default = "default_true")]
+    pub request_media_fallback: bool,
+    /// 对确认纯文本模型在发送前执行图片降级。
+    #[serde(default = "default_true")]
+    pub request_media_heuristic: bool,
 }
 
 fn default_true() -> bool {
@@ -220,6 +226,8 @@ impl Default for RectifierConfig {
             enabled: true,
             request_thinking_signature: true,
             request_thinking_budget: true,
+            request_media_fallback: true,
+            request_media_heuristic: true,
         }
     }
 }

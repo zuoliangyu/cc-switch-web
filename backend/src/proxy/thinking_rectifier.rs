@@ -243,6 +243,7 @@ mod tests {
             enabled: true,
             request_thinking_signature: true,
             request_thinking_budget: true,
+            ..Default::default()
         }
     }
 
@@ -251,6 +252,7 @@ mod tests {
             enabled: true,
             request_thinking_signature: false,
             request_thinking_budget: false,
+            ..Default::default()
         }
     }
 
@@ -259,6 +261,7 @@ mod tests {
             enabled: false,
             request_thinking_signature: true,
             request_thinking_budget: true,
+            ..Default::default()
         }
     }
 

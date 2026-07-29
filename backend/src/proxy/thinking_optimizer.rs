@@ -24,7 +24,7 @@ pub fn optimize(body: &mut Value, config: &OptimizerConfig) {
         return;
     }
 
-    if model.contains("opus-4-6") || model.contains("sonnet-4-6") {
+    if uses_adaptive_thinking(&model) {
         log::info!("[OPT] thinking: adaptive({model})");
         body["thinking"] = json!({"type": "adaptive"});
         body["output_config"] = json!({"effort": "max"});
@@ -71,6 +71,40 @@ pub fn optimize(body: &mut Value, config: &OptimizerConfig) {
             append_beta(body, "interleaved-thinking-2025-05-14");
         }
     }
+}
+
+pub(crate) fn uses_adaptive_thinking(model: &str) -> bool {
+    let normalized = normalize_model_name(model);
+    [
+        "fable-5",
+        "mythos-5",
+        "mythos-preview",
+        "sonnet-5",
+        "opus-4-8",
+        "opus-4-7",
+        "opus-4-6",
+        "sonnet-4-6",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
+}
+
+pub(crate) fn adaptive_thinking_is_default(model: &str) -> bool {
+    let normalized = normalize_model_name(model);
+    ["fable-5", "mythos-5", "mythos-preview", "sonnet-5"]
+        .iter()
+        .any(|needle| normalized.contains(needle))
+}
+
+pub(crate) fn thinking_cannot_be_disabled(model: &str) -> bool {
+    let normalized = normalize_model_name(model);
+    ["fable-5", "mythos-5"]
+        .iter()
+        .any(|needle| normalized.contains(needle))
+}
+
+fn normalize_model_name(model: &str) -> String {
+    model.trim().to_ascii_lowercase().replace(['.', '_'], "-")
 }
 
 /// 追加 beta 标识到 anthropic_beta 数组（去重）

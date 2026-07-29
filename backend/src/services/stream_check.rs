@@ -16,9 +16,7 @@ use crate::proxy::gemini_url::{normalize_gemini_model_id, resolve_gemini_native_
 use crate::proxy::providers::copilot_auth;
 use crate::proxy::providers::transform::anthropic_to_openai;
 use crate::proxy::providers::transform_gemini::anthropic_to_gemini;
-use crate::proxy::providers::transform_responses::{
-    anthropic_to_responses, anthropic_to_responses_for_codex_oauth,
-};
+use crate::proxy::providers::transform_responses::anthropic_to_responses;
 use crate::proxy::providers::{
     get_adapter, AuthInfo, AuthStrategy, ClaudeAdapter, ProviderAdapter,
 };
@@ -356,17 +354,18 @@ impl StreamCheckService {
             == Some("codex_oauth");
 
         let body = if is_openai_responses {
-            if is_codex_oauth {
-                anthropic_to_responses_for_codex_oauth(anthropic_body, Some(&provider.id))
-            } else {
-                anthropic_to_responses(anthropic_body, Some(&provider.id))
-            }
+            anthropic_to_responses(
+                anthropic_body,
+                Some(&provider.id),
+                is_codex_oauth,
+                false,
+            )
             .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_gemini_native {
             anthropic_to_gemini(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_openai_chat {
-            anthropic_to_openai(anthropic_body, Some(&provider.id))
+            anthropic_to_openai(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else {
             anthropic_body

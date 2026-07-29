@@ -60,6 +60,8 @@ pub struct RequestForwarder {
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
     session_id: String,
+    /// Session ID 是否由客户端提供；生成值不能作为上游缓存身份。
+    session_client_provided: bool,
     /// 整流器配置
     rectifier_config: RectifierConfig,
     /// 优化器配置
@@ -69,6 +71,32 @@ pub struct RequestForwarder {
 }
 
 impl RequestForwarder {
+    fn apply_media_prevention(&self, body: &mut Value, provider: &Provider) -> usize {
+        if !(self.rectifier_config.enabled && self.rectifier_config.request_media_fallback) {
+            return 0;
+        }
+        super::media_sanitizer::replace_images_for_text_only_model(
+            body,
+            provider,
+            self.rectifier_config.request_media_heuristic,
+        )
+    }
+
+    fn media_retry_should_trigger(
+        &self,
+        adapter_name: &str,
+        already_retried: bool,
+        provider_body: &Value,
+        error: &ProxyError,
+    ) -> bool {
+        matches!(adapter_name, "Claude" | "Codex")
+            && self.rectifier_config.enabled
+            && self.rectifier_config.request_media_fallback
+            && !already_retried
+            && super::media_sanitizer::contains_image_blocks(provider_body)
+            && super::media_sanitizer::is_unsupported_image_error(error)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         router: Arc<ProviderRouter>,
@@ -81,6 +109,7 @@ impl RequestForwarder {
         codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
         current_provider_id_at_start: String,
         session_id: String,
+        session_client_provided: bool,
         _streaming_first_byte_timeout: u64,
         _streaming_idle_timeout: u64,
         rectifier_config: RectifierConfig,
@@ -96,6 +125,7 @@ impl RequestForwarder {
             codex_oauth_state,
             current_provider_id_at_start,
             session_id,
+            session_client_provided,
             rectifier_config,
             optimizer_config,
             non_streaming_timeout: std::time::Duration::from_secs(non_streaming_timeout),
@@ -137,6 +167,7 @@ impl RequestForwarder {
         // 整流器重试标记：确保整流最多触发一次
         let mut rectifier_retried = false;
         let mut budget_rectifier_retried = false;
+        let mut media_retried = false;
 
         // 单 Provider 场景下跳过熔断器检查（故障转移关闭时）
         let bypass_circuit_breaker = providers.len() == 1;
@@ -174,6 +205,7 @@ impl RequestForwarder {
                 } else {
                     body.clone()
                 };
+            self.apply_media_prevention(&mut provider_body, provider);
 
             attempted_providers += 1;
 
@@ -255,7 +287,66 @@ impl RequestForwarder {
                         claude_api_format,
                     });
                 }
-                Err(e) => {
+                Err(mut e) => {
+                    if self.media_retry_should_trigger(
+                        adapter.name(),
+                        media_retried,
+                        &provider_body,
+                        &e,
+                    ) {
+                        media_retried = true;
+                        let replaced =
+                            super::media_sanitizer::replace_image_blocks_with_marker(
+                                &mut provider_body,
+                            );
+                        log::info!(
+                            "[{app_type_str}] 图片输入被上游拒绝，替换 {replaced} 个图片块后重试"
+                        );
+                        match self
+                            .forward(
+                                provider,
+                                endpoint,
+                                &provider_body,
+                                &headers,
+                                &extensions,
+                                adapter.as_ref(),
+                                app_type,
+                            )
+                            .await
+                        {
+                            Ok((response, claude_api_format)) => {
+                                let _ = self
+                                    .router
+                                    .record_result(
+                                        &provider.id,
+                                        app_type_str,
+                                        used_half_open_permit,
+                                        true,
+                                        None,
+                                    )
+                                    .await;
+                                self.current_providers.write().await.insert(
+                                    app_type_str.to_string(),
+                                    (provider.id.clone(), provider.name.clone()),
+                                );
+                                let mut status = self.status.write().await;
+                                status.success_requests += 1;
+                                status.last_error = None;
+                                if status.total_requests > 0 {
+                                    status.success_rate = (status.success_requests as f32
+                                        / status.total_requests as f32)
+                                        * 100.0;
+                                }
+                                return Ok(ForwardResult {
+                                    response,
+                                    provider: provider.clone(),
+                                    claude_api_format,
+                                });
+                            }
+                            Err(retry_error) => e = retry_error,
+                        }
+                    }
+
                     // 检测是否需要触发整流器（仅 Claude/ClaudeAuth 供应商）
                     let provider_type = ProviderType::from_app_type_and_config(app_type, provider);
                     let is_anthropic_provider = matches!(
@@ -763,6 +854,8 @@ impl RequestForwarder {
     ) -> Result<(ProxyResponse, Option<String>), ProxyError> {
         // 使用适配器提取 base_url
         let base_url = adapter.extract_base_url(provider)?;
+        let codex_responses_to_anthropic = matches!(app_type, AppType::Codex)
+            && super::providers::should_convert_codex_responses_to_anthropic(provider, endpoint);
 
         let is_full_url = provider
             .meta
@@ -821,8 +914,16 @@ impl RequestForwarder {
         // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
         let codex_responses_to_chat = matches!(app_type, AppType::Codex)
             && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
+        let codex_impersonate_claude_code = codex_responses_to_anthropic
+            && provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.impersonate_claude_code)
+                == Some(true);
         let (effective_endpoint, passthrough_query) = if codex_responses_to_chat {
             rewrite_codex_responses_endpoint_to_chat(endpoint)
+        } else if codex_responses_to_anthropic {
+            rewrite_codex_responses_endpoint_to_anthropic(endpoint)
         } else if needs_transform && adapter.name() == "Claude" {
             let api_format = resolved_claude_api_format
                 .as_deref()
@@ -844,18 +945,82 @@ impl RequestForwarder {
                 .trim_end_matches('/')
                 .to_ascii_lowercase()
                 .ends_with("/chat/completions");
+        let codex_anthropic_base_is_full_endpoint = codex_responses_to_anthropic
+            && base_url_is_full_endpoint(&base_url, "/v1/messages");
 
         let url = if matches!(resolved_claude_api_format.as_deref(), Some("gemini_native")) {
             super::gemini_url::resolve_gemini_native_url(&base_url, &effective_endpoint, is_full_url)
-        } else if is_full_url || codex_chat_base_is_full_endpoint {
+        } else if is_full_url
+            || codex_chat_base_is_full_endpoint
+            || codex_anthropic_base_is_full_endpoint
+        {
             append_query_to_full_url(&base_url, passthrough_query.as_deref())
         } else {
             adapter.build_url(&base_url, &effective_endpoint)
         };
 
         // 转换请求体（如果需要）
+        let mut codex_anthropic_one_m = false;
         let request_body = if codex_responses_to_chat {
-            super::providers::transform_codex_chat::responses_to_chat_completions(mapped_body)?
+            let explicit_prompt_cache_key = mapped_body
+                .get("prompt_cache_key")
+                .and_then(Value::as_str)
+                .map(ToString::to_string);
+            super::providers::apply_codex_chat_upstream_model(provider, &mut mapped_body);
+            let reasoning_config =
+                super::providers::resolve_codex_chat_reasoning_config(provider, &mapped_body);
+            let mut chat_body =
+                super::providers::transform_codex_chat::responses_to_chat_completions_with_reasoning(
+                    mapped_body,
+                    reasoning_config.as_ref(),
+                )?;
+            super::providers::inject_codex_chat_prompt_cache_key(
+                provider,
+                &mut chat_body,
+                explicit_prompt_cache_key.as_deref(),
+                self.session_client_provided
+                    .then_some(self.session_id.as_str()),
+            );
+            chat_body
+        } else if codex_responses_to_anthropic {
+            super::providers::apply_codex_upstream_model(provider, &mut mapped_body);
+            if let Some(max_output_tokens) = provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.max_output_tokens)
+                .filter(|value| *value > 0)
+            {
+                mapped_body["max_output_tokens"] = Value::from(max_output_tokens);
+            }
+            let mut anthropic_body =
+                super::providers::transform_codex_anthropic::responses_request_to_anthropic(
+                    mapped_body,
+                    8192,
+                )?;
+            if let Some(model) = anthropic_body
+                .get("model")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+            {
+                let stripped = strip_one_m_suffix(&model);
+                if stripped != model {
+                    codex_anthropic_one_m = true;
+                    anthropic_body["model"] = Value::String(stripped);
+                }
+            }
+            if codex_impersonate_claude_code {
+                prepend_claude_code_system_prompt(&mut anthropic_body);
+            }
+            super::cache_injector::inject(
+                &mut anthropic_body,
+                &super::types::OptimizerConfig {
+                    enabled: true,
+                    thinking_optimizer: false,
+                    cache_injection: self.optimizer_config.cache_injection,
+                    cache_ttl: self.optimizer_config.cache_ttl.clone(),
+                },
+            );
+            anthropic_body
         } else if needs_transform {
             if adapter.name() == "Claude" {
                 let api_format = resolved_claude_api_format
@@ -878,9 +1043,12 @@ impl RequestForwarder {
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
         let filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        let request_is_streaming =
+            should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
         let force_identity_encoding = needs_transform
             || codex_responses_to_chat
-            || should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
+            || codex_responses_to_anthropic
+            || request_is_streaming;
 
         let mut codex_oauth_account_id: Option<String> = None;
 
@@ -1011,6 +1179,15 @@ impl RequestForwarder {
             } else {
                 CLAUDE_CODE_BETA.to_string()
             })
+        } else if codex_impersonate_claude_code || codex_anthropic_one_m {
+            let mut betas = Vec::new();
+            if codex_impersonate_claude_code {
+                betas.push("claude-code-20250219");
+            }
+            if codex_anthropic_one_m {
+                betas.push("context-1m-2025-08-07");
+            }
+            Some(betas.join(","))
         } else {
             None
         };
@@ -1021,6 +1198,8 @@ impl RequestForwarder {
         let mut ordered_headers = http::HeaderMap::new();
         let mut saw_auth = false;
         let mut saw_accept_encoding = false;
+        let mut saw_accept = false;
+        let mut saw_user_agent = false;
         let mut saw_anthropic_beta = false;
         let mut saw_anthropic_version = false;
 
@@ -1068,6 +1247,38 @@ impl RequestForwarder {
                     | "traceparent"
                     | "tracestate"
             ) {
+                continue;
+            }
+
+            if codex_responses_to_anthropic && is_codex_client_fingerprint_header(key_str) {
+                continue;
+            }
+
+            if codex_responses_to_anthropic && key_str.eq_ignore_ascii_case("accept") {
+                if !saw_accept {
+                    saw_accept = true;
+                    ordered_headers.append(
+                        http::header::ACCEPT,
+                        http::HeaderValue::from_static("application/json"),
+                    );
+                }
+                continue;
+            }
+
+            if codex_impersonate_claude_code && key_str.eq_ignore_ascii_case("user-agent") {
+                if !saw_user_agent {
+                    saw_user_agent = true;
+                    ordered_headers.append(
+                        http::header::USER_AGENT,
+                        http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT),
+                    );
+                }
+                continue;
+            }
+            if key_str.eq_ignore_ascii_case("user-agent") {
+                saw_user_agent = true;
+            }
+            if codex_impersonate_claude_code && key_str.eq_ignore_ascii_case("x-app") {
                 continue;
             }
 
@@ -1148,6 +1359,22 @@ impl RequestForwarder {
             );
         }
 
+        if codex_responses_to_anthropic && !saw_accept {
+            ordered_headers.append(
+                http::header::ACCEPT,
+                http::HeaderValue::from_static("application/json"),
+            );
+        }
+        if codex_impersonate_claude_code {
+            if !saw_user_agent {
+                ordered_headers.append(
+                    http::header::USER_AGENT,
+                    http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT),
+                );
+            }
+            ordered_headers.append("x-app", http::HeaderValue::from_static("cli"));
+        }
+
         // 如果原始请求中没有 anthropic-beta 且有值需要添加，追加
         if !saw_anthropic_beta {
             if let Some(ref beta_val) = anthropic_beta_value {
@@ -1158,7 +1385,9 @@ impl RequestForwarder {
         }
 
         // anthropic-version：仅在缺失时补充默认值
-        if adapter.name() == "Claude" && !saw_anthropic_version {
+        if (adapter.name() == "Claude" || codex_responses_to_anthropic)
+            && !saw_anthropic_version
+        {
             ordered_headers.append(
                 "anthropic-version",
                 http::HeaderValue::from_static("2023-06-01"),
@@ -1263,6 +1492,14 @@ impl RequestForwarder {
         let status = response.status();
 
         if status.is_success() {
+            let response = if codex_responses_to_anthropic
+                && (!request_is_streaming || response.is_json())
+            {
+                self.validate_codex_anthropic_success_response(response)
+                    .await?
+            } else {
+                response
+            };
             Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
@@ -1273,6 +1510,21 @@ impl RequestForwarder {
                 body: body_text,
             })
         }
+    }
+
+    async fn validate_codex_anthropic_success_response(
+        &self,
+        response: ProxyResponse,
+    ) -> Result<ProxyResponse, ProxyError> {
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response.bytes().await?;
+        if let Some(message) = codex_anthropic_error_envelope_message(&body) {
+            return Err(ProxyError::TransformError(format!(
+                "Anthropic upstream returned a 2xx failure: {message}"
+            )));
+        }
+        Ok(ProxyResponse::buffered(status, headers, body))
     }
 
     async fn resolve_claude_api_format(
@@ -1550,6 +1802,103 @@ fn rewrite_codex_responses_endpoint_to_chat(endpoint: &str) -> (String, Option<S
         _ => target_path.to_string(),
     };
 
+    (rewritten, passthrough_query)
+}
+
+const CLAUDE_CODE_USER_AGENT: &str = "claude-cli/1.0.119 (external, cli)";
+const CLAUDE_CODE_SYSTEM_IDENTITY: &str =
+    "You are Claude Code, Anthropic's official CLI for Claude.";
+
+fn prepend_claude_code_system_prompt(body: &mut Value) {
+    let identity = serde_json::json!({ "type": "text", "text": CLAUDE_CODE_SYSTEM_IDENTITY });
+    let mut blocks = vec![identity];
+    match body.get("system") {
+        Some(Value::String(existing)) if !existing.is_empty() => {
+            blocks.push(serde_json::json!({ "type": "text", "text": existing }));
+        }
+        Some(Value::Array(existing)) => {
+            if existing
+                .first()
+                .and_then(|block| block.get("text"))
+                .and_then(Value::as_str)
+                == Some(CLAUDE_CODE_SYSTEM_IDENTITY)
+            {
+                return;
+            }
+            blocks.extend(existing.iter().cloned());
+        }
+        _ => {}
+    }
+    body["system"] = Value::Array(blocks);
+}
+
+fn base_url_is_full_endpoint(base_url: &str, endpoint_suffix: &str) -> bool {
+    let trimmed = base_url.trim();
+    let path = trimmed
+        .split_once(['?', '#'])
+        .map_or(trimmed, |(head, _)| head);
+    path.trim_end_matches('/')
+        .to_ascii_lowercase()
+        .ends_with(endpoint_suffix)
+}
+
+fn is_codex_client_fingerprint_header(key: &str) -> bool {
+    matches!(
+        key,
+        "originator"
+            | "session_id"
+            | "session-id"
+            | "thread-id"
+            | "conversation_id"
+            | "chatgpt-account-id"
+            | "x-openai-subagent"
+            | "x-client-request-id"
+            | "openai-beta"
+            | "openai-organization"
+            | "openai-project"
+    ) || key.starts_with("x-stainless-")
+        || key.starts_with("x-codex-")
+}
+
+fn codex_anthropic_error_envelope_message(body: &[u8]) -> Option<String> {
+    let value: Value = serde_json::from_slice(body).ok()?;
+    if value.get("type").and_then(Value::as_str) != Some("error")
+        && value.get("error").is_none()
+    {
+        return None;
+    }
+    let error = value.get("error").unwrap_or(&value);
+    let error_type = error.get("type").and_then(Value::as_str).unwrap_or("error");
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .or_else(|| error.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| error.to_string());
+    Some(format!("{error_type}: {message}"))
+}
+
+fn strip_one_m_suffix(model: &str) -> String {
+    let trimmed = model.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    for suffix in ["[1m]", "-1m"] {
+        if lower.ends_with(suffix) {
+            return trimmed[..trimmed.len() - suffix.len()].to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn rewrite_codex_responses_endpoint_to_anthropic(
+    endpoint: &str,
+) -> (String, Option<String>) {
+    let (_path, query) = split_endpoint_and_query(endpoint);
+    let passthrough_query = query.map(ToString::to_string);
+    let target_path = "/v1/messages";
+    let rewritten = match passthrough_query.as_deref() {
+        Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+        _ => target_path.to_string(),
+    };
     (rewritten, passthrough_query)
 }
 
@@ -1979,5 +2328,31 @@ mod tests {
             &headers,
         )
         .expect("guard is scoped to managed-account upstreams");
+    }
+
+    #[test]
+    fn codex_anthropic_routing_helpers_preserve_query_and_strip_fingerprints() {
+        let (endpoint, query) =
+            rewrite_codex_responses_endpoint_to_anthropic("/responses?beta=true");
+        assert_eq!(endpoint, "/v1/messages?beta=true");
+        assert_eq!(query.as_deref(), Some("beta=true"));
+        assert!(base_url_is_full_endpoint(
+            "https://example.com/api/v1/messages?x=1",
+            "/v1/messages"
+        ));
+        assert!(is_codex_client_fingerprint_header("x-stainless-runtime"));
+        assert!(!is_codex_client_fingerprint_header("anthropic-version"));
+        assert_eq!(strip_one_m_suffix("claude-opus-4-6[1m]"), "claude-opus-4-6");
+    }
+
+    #[test]
+    fn anthropic_2xx_error_envelope_is_retryable() {
+        assert_eq!(
+            codex_anthropic_error_envelope_message(
+                br#"{"type":"error","error":{"type":"overloaded_error","message":"busy"}}"#
+            )
+            .as_deref(),
+            Some("overloaded_error: busy")
+        );
     }
 }

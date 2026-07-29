@@ -79,13 +79,27 @@ fn global_hyper_client() -> &'static HyperClient {
 pub enum ProxyResponse {
     Hyper(hyper::Response<hyper::body::Incoming>),
     Reqwest(reqwest::Response),
+    Buffered {
+        status: http::StatusCode,
+        headers: http::HeaderMap,
+        body: Bytes,
+    },
 }
 
 impl ProxyResponse {
+    pub fn buffered(status: http::StatusCode, headers: http::HeaderMap, body: Bytes) -> Self {
+        Self::Buffered {
+            status,
+            headers,
+            body,
+        }
+    }
+
     pub fn status(&self) -> http::StatusCode {
         match self {
             Self::Hyper(r) => r.status(),
             Self::Reqwest(r) => r.status(),
+            Self::Buffered { status, .. } => *status,
         }
     }
 
@@ -93,6 +107,7 @@ impl ProxyResponse {
         match self {
             Self::Hyper(r) => r.headers(),
             Self::Reqwest(r) => r.headers(),
+            Self::Buffered { headers, .. } => headers,
         }
     }
 
@@ -110,6 +125,18 @@ impl ProxyResponse {
             .unwrap_or(false)
     }
 
+    pub fn is_json(&self) -> bool {
+        self.content_type().is_some_and(|content_type| {
+            let media_type = content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
+            media_type == "application/json" || media_type.ends_with("+json")
+        })
+    }
+
     /// Consume the response and collect the full body into `Bytes`.
     pub async fn bytes(self) -> Result<Bytes, ProxyError> {
         match self {
@@ -122,6 +149,7 @@ impl ProxyResponse {
             Self::Reqwest(r) => r.bytes().await.map_err(|e| {
                 ProxyError::ForwardFailed(format!("Failed to read response body: {e}"))
             }),
+            Self::Buffered { body, .. } => Ok(body),
         }
     }
 
@@ -161,6 +189,8 @@ impl ProxyResponse {
                     .map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
                 Box::pin(stream)
             }
+            Self::Buffered { body, .. } => Box::pin(futures::stream::once(async move { Ok(body) }))
+                as std::pin::Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
         }
     }
 }

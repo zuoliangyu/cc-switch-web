@@ -54,6 +54,8 @@ pub struct RequestContext {
     pub app_type_str: &'static str,
     /// Session ID（从客户端请求提取或新生成）
     pub session_id: String,
+    /// Session ID 是否来自客户端；生成值不能用作上游缓存身份。
+    pub session_client_provided: bool,
     /// 整流器配置
     pub rectifier_config: RectifierConfig,
     /// 优化器配置
@@ -154,6 +156,7 @@ impl RequestContext {
             tag,
             app_type_str,
             session_id,
+            session_client_provided: session_result.client_provided,
             rectifier_config,
             optimizer_config,
         })
@@ -216,6 +219,7 @@ impl RequestContext {
             state.codex_oauth_state.clone(),
             self.current_provider_id.clone(),
             self.session_id.clone(),
+            self.session_client_provided,
             first_byte_timeout,
             idle_timeout,
             self.rectifier_config.clone(),

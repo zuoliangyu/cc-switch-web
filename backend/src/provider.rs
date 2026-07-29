@@ -281,6 +281,22 @@ pub struct ClaudeDesktopModelRoute {
     pub supports_1m: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct CodexChatReasoningConfig {
+    #[serde(rename = "supportsThinking", skip_serializing_if = "Option::is_none")]
+    pub supports_thinking: Option<bool>,
+    #[serde(rename = "supportsEffort", skip_serializing_if = "Option::is_none")]
+    pub supports_effort: Option<bool>,
+    #[serde(rename = "thinkingParam", skip_serializing_if = "Option::is_none")]
+    pub thinking_param: Option<String>,
+    #[serde(rename = "effortParam", skip_serializing_if = "Option::is_none")]
+    pub effort_param: Option<String>,
+    #[serde(rename = "effortValueMode", skip_serializing_if = "Option::is_none")]
+    pub effort_value_mode: Option<String>,
+    #[serde(rename = "outputFormat", skip_serializing_if = "Option::is_none")]
+    pub output_format: Option<String>,
+}
+
 /// 供应商元数据
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderMeta {
@@ -359,6 +375,19 @@ pub struct ProviderMeta {
     /// If not set, provider ID is used automatically during format conversion.
     #[serde(rename = "promptCacheKey", skip_serializing_if = "Option::is_none")]
     pub prompt_cache_key: Option<String>,
+    #[serde(rename = "promptCacheRouting", skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_routing: Option<String>,
+    #[serde(rename = "codexChatReasoning", skip_serializing_if = "Option::is_none")]
+    pub codex_chat_reasoning: Option<CodexChatReasoningConfig>,
+    /// Codex → Anthropic bridge 的供应商级输出上限。
+    #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    /// 是否为 Codex → Anthropic 请求模拟 Claude Code 指纹。
+    #[serde(
+        rename = "impersonateClaudeCode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub impersonate_claude_code: Option<bool>,
     /// 累加模式应用中，该 provider 是否已写入 live config。
     /// `None` 表示旧数据/未知状态，`Some(false)` 表示明确仅存在于数据库中。
     #[serde(rename = "liveConfigManaged", skip_serializing_if = "Option::is_none")]

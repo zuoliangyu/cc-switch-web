@@ -3,7 +3,14 @@
 //! 实现 Anthropic ↔ OpenAI 格式转换，用于 OpenRouter 支持
 //! 参考: anthropic-proxy-rs
 
-use crate::proxy::error::ProxyError;
+use crate::proxy::{
+    error::ProxyError,
+    json_canonical::canonical_json_string,
+    tool_media::{
+        chat_media_part_from_tool_part, flush_pending_chat_tool_media, plan_chat_tool_output_media,
+        queue_chat_tool_output_media, ToolMediaScope,
+    },
+};
 use serde_json::{json, Value};
 
 const ANTHROPIC_BILLING_HEADER_PREFIX: &str = "x-anthropic-billing-header:";
@@ -54,18 +61,23 @@ pub fn is_openai_o_series(model: &str) -> bool {
         && model.as_bytes().get(1).is_some_and(|b| b.is_ascii_digit())
 }
 
-/// Detect OpenAI models that support reasoning_effort.
+/// Detect Responses-compatible models that support reasoning effort.
 ///
 /// Supported families:
 /// - o-series: o1, o3, o4-mini, etc.
 /// - GPT-5+: gpt-5, gpt-5.1, gpt-5.4, gpt-5-codex, etc.
+/// - xAI Grok Build models. `grok-4.5` is the current documented Grok Build
+///   model; retain the previous `grok-build-*` family for saved providers.
 pub fn supports_reasoning_effort(model: &str) -> bool {
-    is_openai_o_series(model)
-        || model
-            .to_lowercase()
+    let normalized = model.to_lowercase();
+    is_openai_o_series(&normalized)
+        || normalized
             .strip_prefix("gpt-")
             .and_then(|rest| rest.chars().next())
             .is_some_and(|c| c.is_ascii_digit() && c >= '5')
+        || normalized == "grok-4.5"
+        || normalized.starts_with("grok-4.5-")
+        || normalized.starts_with("grok-build-")
 }
 
 /// Resolve the appropriate OpenAI `reasoning_effort` from an Anthropic request body.
@@ -111,21 +123,22 @@ pub fn resolve_reasoning_effort(body: &Value) -> Option<&'static str> {
     }
 }
 
-/// Anthropic 请求 → OpenAI 请求
+/// Anthropic 请求 → OpenAI Chat Completions 请求
 ///
-/// `cache_key`: optional prompt_cache_key to inject for improved cache routing
-pub fn anthropic_to_openai(body: Value, cache_key: Option<&str>) -> Result<Value, ProxyError> {
-    anthropic_to_openai_with_reasoning_content(body, cache_key, false)
+/// 转换工具库 API：当前无生产调用方（连通性检查不再发真实请求，曾是其唯一 crate 内
+/// 消费者），但保留其转换逻辑与下方测试套件，供代理转换路径复用 / 未来接线。
+#[allow(dead_code)]
+pub fn anthropic_to_openai(body: Value) -> Result<Value, ProxyError> {
+    anthropic_to_openai_with_reasoning_content(body, false)
 }
 
-/// Anthropic 请求 → OpenAI 请求
+/// Anthropic 请求 → OpenAI Chat Completions 请求
 ///
-/// `preserve_reasoning_content` 仅用于明确需要 Moonshot/Kimi `reasoning_content`
-/// 兼容字段的 provider。默认转换保持通用 OpenAI-compatible 请求体，
-/// 避免向严格后端发送未知字段。
+/// `preserve_reasoning_content` 仅用于明确需要 Moonshot/Kimi/DeepSeek
+/// `reasoning_content` 兼容字段的 provider。默认转换保持通用 OpenAI-compatible
+/// 请求体，避免向严格后端发送未知字段。
 pub fn anthropic_to_openai_with_reasoning_content(
     body: Value,
-    cache_key: Option<&str>,
     preserve_reasoning_content: bool,
 ) -> Result<Value, ProxyError> {
     let mut result = json!({});
@@ -140,24 +153,18 @@ pub fn anthropic_to_openai_with_reasoning_content(
     // 处理 system prompt
     if let Some(system) = body.get("system") {
         if let Some(text) = system.as_str() {
-            // 单个字符串
             let text = strip_leading_anthropic_billing_header(text);
             if !text.is_empty() {
                 messages.push(json!({"role": "system", "content": text}));
             }
         } else if let Some(arr) = system.as_array() {
-            // 多个 system message — preserve cache_control for compatible proxies
             for msg in arr {
                 if let Some(text) = msg.get("text").and_then(|t| t.as_str()) {
                     let text = strip_leading_anthropic_billing_header(text);
                     if text.is_empty() {
                         continue;
                     }
-                    let mut sys_msg = json!({"role": "system", "content": text});
-                    if let Some(cc) = msg.get("cache_control") {
-                        sys_msg["cache_control"] = cc.clone();
-                    }
-                    messages.push(sys_msg);
+                    messages.push(json!({"role": "system", "content": text}));
                 }
             }
         }
@@ -211,18 +218,14 @@ pub fn anthropic_to_openai_with_reasoning_content(
             .iter()
             .filter(|t| t.get("type").and_then(|v| v.as_str()) != Some("BatchTool"))
             .map(|t| {
-                let mut tool = json!({
+                json!({
                     "type": "function",
                     "function": {
                         "name": t.get("name").and_then(|n| n.as_str()).unwrap_or(""),
                         "description": t.get("description"),
                         "parameters": clean_schema(t.get("input_schema").cloned().unwrap_or(json!({})))
                     }
-                });
-                if let Some(cc) = t.get("cache_control") {
-                    tool["cache_control"] = cc.clone();
-                }
-                tool
+                })
             })
             .collect();
 
@@ -232,15 +235,74 @@ pub fn anthropic_to_openai_with_reasoning_content(
     }
 
     if let Some(v) = body.get("tool_choice") {
-        result["tool_choice"] = v.clone();
-    }
-
-    // Inject prompt_cache_key for improved cache routing on OpenAI-compatible endpoints
-    if let Some(key) = cache_key {
-        result["prompt_cache_key"] = json!(key);
+        result["tool_choice"] = map_tool_choice_to_chat(v);
     }
 
     Ok(result)
+}
+
+/// 为 OpenAI Chat Completions 流式请求注入 `stream_options.include_usage`。
+///
+/// OpenAI 兼容上游在流式下默认不在 SSE 里返回 usage，必须显式声明 include_usage
+/// 才会在末尾吐 usage chunk。缺这一注入会导致流式请求的 token/成本/缓存全部漏记
+/// （input/output/cache 全为 0）。保留客户端可能透传的其它 stream_options 字段，
+/// 仅补 include_usage；非流式请求不动。
+///
+/// 由 Claude→openai_chat（claude.rs）与 Codex Responses→Chat（transform_codex_chat.rs）
+/// 两条转换路径共用，确保两个客户端方向行为一致。
+pub(crate) fn inject_openai_stream_include_usage(result: &mut Value) {
+    let is_stream = result
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !is_stream {
+        return;
+    }
+    match result.get_mut("stream_options") {
+        Some(Value::Object(opts)) => {
+            opts.insert("include_usage".to_string(), json!(true));
+        }
+        _ => {
+            result["stream_options"] = json!({ "include_usage": true });
+        }
+    }
+}
+
+/// Translate an Anthropic `tool_choice` into the OpenAI Chat Completions form.
+///
+/// Anthropic forms:
+///   "auto" / "any" / "none"           (string enum)
+///   {"type": "auto" | "any" | "none"}
+///   {"type": "tool", "name": "<X>"}
+///
+/// OpenAI Chat forms:
+///   "auto" / "none" / "required"      (note: no "any" — use "required")
+///   {"type": "function", "function": {"name": "<X>"}}
+///
+/// The Responses API uses a flatter `{"type":"function","name":"X"}` selector,
+/// so it has a sibling `map_tool_choice_to_responses` in `transform_responses.rs`.
+/// Keep the two in sync.
+fn map_tool_choice_to_chat(tool_choice: &Value) -> Value {
+    match tool_choice {
+        Value::String(s) => match s.as_str() {
+            "any" => json!("required"),
+            _ => json!(s),
+        },
+        Value::Object(obj) => match obj.get("type").and_then(|t| t.as_str()) {
+            Some("any") => json!("required"),
+            Some("auto") => json!("auto"),
+            Some("none") => json!("none"),
+            Some("tool") => {
+                let name = obj.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                json!({
+                    "type": "function",
+                    "function": { "name": name }
+                })
+            }
+            _ => tool_choice.clone(),
+        },
+        _ => tool_choice.clone(),
+    }
 }
 
 fn normalize_openai_system_messages(messages: &mut Vec<Value>) {
@@ -320,7 +382,8 @@ fn convert_message_to_openai(
     if let Some(blocks) = content.as_array() {
         let mut content_parts = Vec::new();
         let mut tool_calls = Vec::new();
-        // reasoning_parts: 仅在兼容 Moonshot/Kimi thinking tool-call 路径时
+        let mut pending_tool_media = Vec::new();
+        // reasoning_parts: 仅在兼容 Moonshot/Kimi/DeepSeek thinking tool-call 路径时
         // 生成 reasoning_content，通用 OpenAI-compatible 路径不发送该非标准字段。
         let mut reasoning_parts = Vec::new();
 
@@ -330,24 +393,14 @@ fn convert_message_to_openai(
             match block_type {
                 "text" => {
                     if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
-                        let mut part = json!({"type": "text", "text": text});
-                        if let Some(cc) = block.get("cache_control") {
-                            part["cache_control"] = cc.clone();
-                        }
-                        content_parts.push(part);
+                        content_parts.push(json!({"type": "text", "text": text}));
                     }
                 }
                 "image" => {
-                    if let Some(source) = block.get("source") {
-                        let media_type = source
-                            .get("media_type")
-                            .and_then(|m| m.as_str())
-                            .unwrap_or("image/png");
-                        let data = source.get("data").and_then(|d| d.as_str()).unwrap_or("");
-                        content_parts.push(json!({
-                            "type": "image_url",
-                            "image_url": {"url": format!("data:{};base64,{}", media_type, data)}
-                        }));
+                    if let Some(image) =
+                        chat_media_part_from_tool_part(block, ToolMediaScope::ImagesOnly)
+                    {
+                        content_parts.push(image);
                     }
                 }
                 "tool_use" => {
@@ -359,7 +412,7 @@ fn convert_message_to_openai(
                         "type": "function",
                         "function": {
                             "name": name,
-                            "arguments": serde_json::to_string(&input).unwrap_or_default()
+                            "arguments": canonical_json_string(&input)
                         }
                     }));
                 }
@@ -370,10 +423,22 @@ fn convert_message_to_openai(
                         .and_then(|i| i.as_str())
                         .unwrap_or("");
                     let content_val = block.get("content");
-                    let content_str = match content_val {
-                        Some(Value::String(s)) => s.clone(),
-                        Some(v) => serde_json::to_string(v).unwrap_or_default(),
-                        None => String::new(),
+                    let media_plan = content_val.cloned().and_then(plan_chat_tool_output_media);
+                    let content_str = if let Some(media_plan) = media_plan {
+                        queue_chat_tool_output_media(
+                            &mut pending_tool_media,
+                            tool_use_id,
+                            media_plan.media_parts,
+                        );
+                        media_plan.tool_content
+                    } else {
+                        // Keep the no-media representation exactly equal to
+                        // the legacy converter for prompt-cache stability.
+                        match content_val {
+                            Some(Value::String(s)) => s.clone(),
+                            Some(v) => canonical_json_string(v),
+                            None => String::new(),
+                        }
                     };
                     result.push(json!({
                         "role": "tool",
@@ -389,9 +454,22 @@ fn convert_message_to_openai(
                         }
                     }
                 }
+                "redacted_thinking" if preserve_reasoning_content => {
+                    // Claude Code encrypts historical thinking into redacted_thinking blocks.
+                    // MiMo/DeepSeek require non-empty reasoning_content on assistant tool-call
+                    // messages, so inject a minimal placeholder when the real content is
+                    // unavailable. Skip when preserve_reasoning_content is off (generic
+                    // OpenAI-compatible path).
+                    reasoning_parts.push("[redacted thinking]".to_string());
+                }
                 _ => {}
             }
         }
+
+        // Chat tool messages cannot carry image parts. Keep parallel tool
+        // results adjacent, then present all extracted media in one user turn
+        // before any ordinary message content from the same Anthropic turn.
+        flush_pending_chat_tool_media(&mut result, &mut pending_tool_media);
 
         // 添加带内容和/或工具调用的消息
         if !content_parts.is_empty() || !tool_calls.is_empty() {
@@ -401,14 +479,9 @@ fn convert_message_to_openai(
             if content_parts.is_empty() {
                 msg["content"] = Value::Null;
             } else if content_parts.len() == 1 {
-                // When cache_control is present, keep array format to preserve it
-                let has_cache_control = content_parts[0].get("cache_control").is_some();
-                if !has_cache_control {
-                    if let Some(text) = content_parts[0].get("text") {
-                        msg["content"] = text.clone();
-                    } else {
-                        msg["content"] = json!(content_parts);
-                    }
+                // 单 text block 简化为纯字符串
+                if let Some(text) = content_parts[0].get("text") {
+                    msg["content"] = text.clone();
                 } else {
                     msg["content"] = json!(content_parts);
                 }
@@ -441,9 +514,21 @@ fn convert_message_to_openai(
     Ok(result)
 }
 
-/// 清理 JSON schema（移除不支持的 format）
-pub fn clean_schema(mut schema: Value) -> Value {
+/// 清理工具参数的 JSON schema，并为根 schema 补齐 OpenAI 要求的 object 类型。
+pub fn clean_schema(schema: Value) -> Value {
+    clean_schema_inner(schema, true)
+}
+
+fn clean_schema_inner(mut schema: Value, is_root: bool) -> Value {
     if let Some(obj) = schema.as_object_mut() {
+        let missing_type = is_root && !obj.contains_key("type");
+        if missing_type {
+            obj.insert("type".to_string(), json!("object"));
+        }
+        if missing_type && !obj.contains_key("properties") {
+            obj.insert("properties".to_string(), json!({}));
+        }
+
         // 移除 "format": "uri"
         if obj.get("format").and_then(|v| v.as_str()) == Some("uri") {
             obj.remove("format");
@@ -452,12 +537,12 @@ pub fn clean_schema(mut schema: Value) -> Value {
         // 递归清理嵌套 schema
         if let Some(properties) = obj.get_mut("properties").and_then(|v| v.as_object_mut()) {
             for (_, value) in properties.iter_mut() {
-                *value = clean_schema(value.clone());
+                *value = clean_schema_inner(value.clone(), false);
             }
         }
 
         if let Some(items) = obj.get_mut("items") {
-            *items = clean_schema(items.clone());
+            *items = clean_schema_inner(items.clone(), false);
         }
     }
     schema
@@ -480,6 +565,13 @@ pub fn openai_to_anthropic(body: Value) -> Result<Value, ProxyError> {
 
     let mut content = Vec::new();
     let mut has_tool_use = false;
+
+    // DeepSeek provider 会把思考内容放在 message.reasoning_content。
+    if let Some(reasoning_content) = message.get("reasoning_content").and_then(|r| r.as_str()) {
+        if !reasoning_content.is_empty() {
+            content.push(json!({"type": "thinking", "thinking": reasoning_content}));
+        }
+    }
 
     // 文本/拒绝内容
     if let Some(msg_content) = message.get("content") {
@@ -592,10 +684,37 @@ pub fn openai_to_anthropic(body: Value) -> Result<Value, ProxyError> {
 
     // usage — map cache tokens from OpenAI format to Anthropic format
     let usage = body.get("usage").cloned().unwrap_or(json!({}));
+    // OpenAI prompt_tokens 含缓存命中，Anthropic input_tokens 不含 → 减去 cache_read 与
+    // cache_creation，使 input 成为 fresh input。本路径以 app_type="claude" 记账（calculator
+    // 不再扣减），若不减则缓存会被计入 input 与各 cache 桶两次。三桶互斥，恒等：
+    // input + cache_read + cache_creation == prompt_tokens（inclusive 上游）。
+    // 与流式 build_anthropic_usage_json (#2774) 及 transform_gemini 的 saturating_sub 对称。
+    // 最终 cache_read/cache_creation：直传字段优先于 OpenAI nested details。
+    let cached = usage
+        .get("cache_read_input_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            usage
+                .pointer("/prompt_tokens_details/cached_tokens")
+                .and_then(|v| v.as_u64())
+        })
+        .unwrap_or(0);
+    let cache_creation = usage
+        .get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            usage
+                .pointer("/prompt_tokens_details/cache_write_tokens")
+                .or_else(|| usage.pointer("/input_tokens_details/cache_write_tokens"))
+                .and_then(|v| v.as_u64())
+        })
+        .unwrap_or(0);
     let input_tokens = usage
         .get("prompt_tokens")
         .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
+        .unwrap_or(0)
+        .saturating_sub(cached)
+        .saturating_sub(cache_creation) as u32;
     let output_tokens = usage
         .get("completion_tokens")
         .and_then(|v| v.as_u64())
@@ -606,19 +725,11 @@ pub fn openai_to_anthropic(body: Value) -> Result<Value, ProxyError> {
         "output_tokens": output_tokens
     });
 
-    // OpenAI standard: prompt_tokens_details.cached_tokens
-    if let Some(cached) = usage
-        .pointer("/prompt_tokens_details/cached_tokens")
-        .and_then(|v| v.as_u64())
-    {
+    if cached > 0 {
         usage_json["cache_read_input_tokens"] = json!(cached);
     }
-    // Some compatible servers return these fields directly
-    if let Some(v) = usage.get("cache_read_input_tokens") {
-        usage_json["cache_read_input_tokens"] = v.clone();
-    }
-    if let Some(v) = usage.get("cache_creation_input_tokens") {
-        usage_json["cache_creation_input_tokens"] = v.clone();
+    if cache_creation > 0 {
+        usage_json["cache_creation_input_tokens"] = json!(cache_creation);
     }
 
     let result = json!({
@@ -647,7 +758,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["model"], "claude-3-opus");
         assert_eq!(result["max_tokens"], 1024);
         assert_eq!(result["messages"][0]["role"], "user");
@@ -663,7 +774,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(
             result["messages"][0]["content"],
@@ -681,7 +792,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(
             result["messages"][0]["content"],
@@ -702,9 +813,30 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(result["messages"][0]["content"], "Stable prompt");
+        assert_eq!(result["messages"][1]["role"], "user");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_preserves_prompt_after_billing_header_in_same_part() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "x-anthropic-billing-header: cc_version=2.1.119.47e; cc_entrypoint=sdk-cli; cch=a7754;\n\nStable prompt part 1"},
+                {"type": "text", "text": "Stable prompt part 2"}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "Stable prompt part 1\nStable prompt part 2"
+        );
         assert_eq!(result["messages"][1]["role"], "user");
     }
 
@@ -717,7 +849,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(
             result["messages"][0]["content"],
@@ -738,34 +870,143 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["tools"][0]["type"], "function");
         assert_eq!(result["tools"][0]["function"]["name"], "get_weather");
+        assert_eq!(
+            result["tools"][0]["function"]["parameters"]["type"],
+            json!("object")
+        );
+        assert_eq!(
+            result["tools"][0]["function"]["parameters"]["properties"]["location"]["type"],
+            json!("string")
+        );
     }
 
     #[test]
-    fn test_anthropic_to_openai_normalizes_fragmented_system_messages() {
+    fn test_anthropic_to_openai_defaults_missing_tool_schema_type() {
+        let input = json!({
+            "model": "claude-3-opus",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "What's the weather?"}],
+            "tools": [{
+                "name": "get_weather",
+                "description": "Get weather info",
+                "input_schema": {"properties": {"location": {"type": "string"}}}
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        let parameters = &result["tools"][0]["function"]["parameters"];
+        assert_eq!(parameters["type"], json!("object"));
+        assert_eq!(
+            parameters["properties"]["location"]["type"],
+            json!("string")
+        );
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_defaults_empty_tool_schema() {
+        let input = json!({
+            "model": "claude-3-opus",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": "Do work"}],
+            "tools": [{"name": "do_work", "input_schema": {}}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        let parameters = &result["tools"][0]["function"]["parameters"];
+        assert_eq!(parameters, &json!({"type": "object", "properties": {}}));
+    }
+
+    #[test]
+    fn test_clean_schema_only_defaults_root_to_object() {
+        let schema = json!({
+            "properties": {
+                "nullable_value": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}]
+                },
+                "list": {
+                    "items": {"type": "string"}
+                }
+            }
+        });
+
+        let result = clean_schema(schema);
+        assert_eq!(result["type"], json!("object"));
+        assert_eq!(
+            result["properties"]["nullable_value"],
+            json!({"anyOf": [{"type": "string"}, {"type": "null"}]})
+        );
+        assert_eq!(
+            result["properties"]["list"],
+            json!({"items": {"type": "string"}})
+        );
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_strips_cache_control_from_merged_system() {
         let input = json!({
             "model": "claude-3-sonnet",
             "max_tokens": 1024,
             "system": [
-                {"type": "text", "text": "You are Claude Code."},
-                {"type": "text", "text": "Be concise."}
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise.", "cache_control": {"type": "ephemeral"}}
             ],
-            "messages": [
-                {"role": "system", "content": "Follow repo conventions."},
-                {"role": "user", "content": "Hello"}
-            ]
+            "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"].as_array().unwrap().len(), 2);
         assert_eq!(result["messages"][0]["role"], "system");
         assert_eq!(
             result["messages"][0]["content"],
-            "You are Claude Code.\nBe concise.\nFollow repo conventions."
+            "You are Claude Code.\nBe concise."
         );
+        assert!(result["messages"][0].get("cache_control").is_none());
         assert_eq!(result["messages"][1]["role"], "user");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_strips_cache_control_from_mixed_system() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise."}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "You are Claude Code.\nBe concise."
+        );
+        assert!(result["messages"][0].get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_strips_cache_control_from_conflicting_system() {
+        let input = json!({
+            "model": "claude-3-sonnet",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are Claude Code.", "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": "Be concise.", "cache_control": {"type": "ephemeral", "ttl": "5m"}}
+            ],
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(result["messages"][0]["role"], "system");
+        assert_eq!(
+            result["messages"][0]["content"],
+            "You are Claude Code.\nBe concise."
+        );
+        assert!(result["messages"][0].get("cache_control").is_none());
     }
 
     #[test]
@@ -782,7 +1023,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "assistant");
         assert!(msg.get("tool_calls").is_some());
@@ -804,7 +1045,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai_with_reasoning_content(input, None, true).unwrap();
+        let result = anthropic_to_openai_with_reasoning_content(input, true).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "assistant");
         assert_eq!(msg["reasoning_content"], "I should call the tool.");
@@ -825,11 +1066,31 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai_with_reasoning_content(input, None, true).unwrap();
+        let result = anthropic_to_openai_with_reasoning_content(input, true).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "assistant");
         assert_eq!(msg["reasoning_content"], "tool call");
         assert!(msg.get("tool_calls").is_some());
+        assert_eq!(msg["tool_calls"][0]["id"], "call_123");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_tool_use_uses_redacted_thinking_placeholder() {
+        let input = json!({
+            "model": "mimo-v2.5-pro",
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "assistant",
+                "content": [
+                    {"type": "redacted_thinking", "data": "opaque"},
+                    {"type": "tool_use", "id": "call_123", "name": "get_weather", "input": {"location": "Tokyo"}}
+                ]
+            }]
+        });
+
+        let result = anthropic_to_openai_with_reasoning_content(input, true).unwrap();
+        let msg = &result["messages"][0];
+        assert_eq!(msg["reasoning_content"], "[redacted thinking]");
         assert_eq!(msg["tool_calls"][0]["id"], "call_123");
     }
 
@@ -847,7 +1108,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "assistant");
         assert!(msg.get("tool_calls").is_some());
@@ -867,7 +1128,7 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["messages"].as_array().unwrap().len(), 0);
     }
 
@@ -884,11 +1145,169 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         let msg = &result["messages"][0];
         assert_eq!(msg["role"], "tool");
         assert_eq!(msg["tool_call_id"], "call_123");
         assert_eq!(msg["content"], "Sunny, 25°C");
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_no_media_tool_results_keep_legacy_representation() {
+        let raw_json_string = "{ \"status\": \"ok\", \"count\": 2 }";
+        let input = json!({
+            "model": "claude-3-opus",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_string",
+                        "content": raw_json_string
+                    },
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_array",
+                        "content": [{"type": "text", "text": "plain"}]
+                    }
+                ]
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        let messages = result["messages"].as_array().unwrap();
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["content"], raw_json_string);
+        assert_eq!(
+            messages[1]["content"],
+            canonical_json_string(&json!([{"type": "text", "text": "plain"}]))
+        );
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_moves_tool_result_image_to_user_message() {
+        let input = json!({
+            "model": "claude-3-opus",
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "call_image",
+                    "content": [
+                        {"type": "text", "text": "caption"},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": "CLAUDE_CHAT_IMAGE_SENTINEL"
+                            },
+                            "cache_control": {"type": "ephemeral"},
+                            "prompt_cache_breakpoint": true
+                        }
+                    ]
+                }]
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        let messages = result["messages"].as_array().unwrap();
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "tool");
+        assert_eq!(messages[0]["tool_call_id"], "call_image");
+        assert!(messages[0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("tool result media moved"));
+        assert!(!messages[0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("CLAUDE_CHAT_IMAGE_SENTINEL"));
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(
+            messages[1]["content"][0]["text"],
+            "[cc-switch: media output of tool call call_image]"
+        );
+        assert_eq!(messages[1]["content"][1]["type"], "image_url");
+        assert!(messages[1]["content"][1].get("cache_control").is_none());
+        assert!(messages[1]["content"][1]
+            .get("prompt_cache_breakpoint")
+            .is_none());
+        assert_eq!(
+            messages[1]["content"][1]["image_url"]["url"],
+            "data:image/png;base64,CLAUDE_CHAT_IMAGE_SENTINEL"
+        );
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_batches_parallel_tool_result_media() {
+        let input = json!({
+            "model": "claude-3-opus",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_1",
+                        "content": [{
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/png", "data": "ONE"}
+                        }]
+                    },
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_2",
+                        "content": [{
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": "image/jpeg", "data": "TWO"}
+                        }]
+                    }
+                ]
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        let messages = result["messages"].as_array().unwrap();
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0]["role"], "tool");
+        assert_eq!(messages[1]["role"], "tool");
+        assert_eq!(messages[2]["role"], "user");
+        assert_eq!(messages[2]["content"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn test_anthropic_to_openai_maps_remote_image_source() {
+        let input = json!({
+            "model": "claude-3-opus",
+            "messages": [{
+                "role": "user",
+                "content": [{
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": "https://example.com/image.png"
+                    },
+                    "cache_control": {"type": "ephemeral"},
+                    "prompt_cache_breakpoint": true
+                }]
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+        assert_eq!(
+            result["messages"][0]["content"][0]["image_url"]["url"],
+            "https://example.com/image.png"
+        );
+        assert!(result["messages"][0]["content"][0]
+            .get("cache_control")
+            .is_none());
+        assert!(result["messages"][0]["content"][0]
+            .get("prompt_cache_breakpoint")
+            .is_none());
     }
 
     #[test]
@@ -918,9 +1337,6 @@ mod tests {
 
     #[test]
     fn test_openai_to_anthropic_preserves_id_for_usage_dedup() {
-        // openai_to_anthropic 必须把 OpenAI 的 `id` 透传到 Anthropic 形态的 body.id，
-        // 这样 from_claude_response 解析时 message_id 才能命中，dedup_request_id 也才会
-        // 走 `session:` 前缀，让 Claude+OpenAI compat 路径与 session-log 共享主键。
         let input = json!({
             "id": "chatcmpl-claude-compatible",
             "object": "chat.completion",
@@ -942,7 +1358,7 @@ mod tests {
             Some("chatcmpl-claude-compatible")
         );
         assert_eq!(
-            usage.dedup_request_id(),
+            usage.dedup_request_id(None),
             "session:chatcmpl-claude-compatible"
         );
     }
@@ -979,6 +1395,59 @@ mod tests {
     }
 
     #[test]
+    fn test_deepseek_reasoning_content_round_trips_for_tool_calls() {
+        let upstream_response = json!({
+            "id": "chatcmpl-deepseek",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "deepseek-v4-flash",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "reasoning_content": "Need the current date before calling weather.",
+                    "content": "Let me check the date first.",
+                    "tool_calls": [{
+                        "id": "call_date",
+                        "type": "function",
+                        "function": {"name": "get_date", "arguments": "{}"}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+        });
+
+        let anthropic_response = openai_to_anthropic(upstream_response).unwrap();
+        assert_eq!(anthropic_response["content"][0]["type"], "thinking");
+        assert_eq!(
+            anthropic_response["content"][0]["thinking"],
+            "Need the current date before calling weather."
+        );
+        assert_eq!(anthropic_response["content"][1]["type"], "text");
+        assert_eq!(anthropic_response["content"][2]["type"], "tool_use");
+        assert_eq!(anthropic_response["content"][2]["id"], "call_date");
+
+        let follow_up_request = json!({
+            "model": "deepseek-v4-flash",
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "assistant",
+                "content": anthropic_response["content"].clone()
+            }]
+        });
+        let replayed = anthropic_to_openai_with_reasoning_content(follow_up_request, true).unwrap();
+        let msg = &replayed["messages"][0];
+
+        assert_eq!(
+            msg["reasoning_content"],
+            "Need the current date before calling weather."
+        );
+        assert_eq!(msg["tool_calls"][0]["id"], "call_date");
+        assert_eq!(msg["tool_calls"][0]["function"]["name"], "get_date");
+    }
+
+    #[test]
     fn test_model_passthrough() {
         // 格式转换层只做结构转换，模型映射由上游 proxy::model_mapper 处理
         let input = json!({
@@ -987,36 +1456,24 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["model"], "gpt-4o");
     }
 
     #[test]
-    fn test_anthropic_to_openai_with_cache_key() {
+    fn test_anthropic_to_openai_does_not_inject_prompt_cache_key() {
         let input = json!({
             "model": "claude-3-opus",
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, Some("provider-123")).unwrap();
-        assert_eq!(result["prompt_cache_key"], "provider-123");
-    }
-
-    #[test]
-    fn test_anthropic_to_openai_no_cache_key() {
-        let input = json!({
-            "model": "claude-3-opus",
-            "max_tokens": 1024,
-            "messages": [{"role": "user", "content": "Hello"}]
-        });
-
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert!(result.get("prompt_cache_key").is_none());
     }
 
     #[test]
-    fn test_anthropic_to_openai_cache_control_preserved() {
+    fn test_anthropic_to_openai_strips_all_cache_control() {
         let input = json!({
             "model": "claude-3-opus",
             "max_tokens": 1024,
@@ -1037,20 +1494,90 @@ mod tests {
             }]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
-        // System message cache_control preserved
-        assert_eq!(result["messages"][0]["cache_control"]["type"], "ephemeral");
-        // Text block cache_control preserved
-        assert_eq!(
-            result["messages"][1]["content"][0]["cache_control"]["type"],
-            "ephemeral"
+        let result = anthropic_to_openai(input).unwrap();
+        // System message: no cache_control
+        assert!(result["messages"][0].get("cache_control").is_none());
+        // User message: content simplified to string (no cache_control → flat string)
+        assert_eq!(result["messages"][1]["content"], "Hello");
+        // Tool: no cache_control
+        assert!(result["tools"][0].get("cache_control").is_none());
+    }
+
+    /// 精确复现 Issue #3805 报告的 400 错误场景:
+    /// GLM/Qwen 等严格校验模型拒绝 cache_control 和 content 数组格式
+    #[test]
+    fn test_regression_gh3805_no_cache_control_leak_to_openai() {
+        let input = json!({
+            "model": "glm-5.1",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are helpful.", "cache_control": {"type": "ephemeral"}}
+            ],
+            "messages": [
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Hello", "cache_control": {"type": "ephemeral"}}
+                ]}
+            ],
+            "tools": [{
+                "name": "search",
+                "description": "Search the web",
+                "input_schema": {"type": "object"},
+                "cache_control": {"type": "ephemeral"}
+            }]
+        });
+
+        let result = anthropic_to_openai(input).unwrap();
+
+        // 验证: messages 中不存在 cache_control
+        for (i, msg) in result["messages"].as_array().unwrap().iter().enumerate() {
+            assert!(
+                msg.get("cache_control").is_none(),
+                "messages[{i}] must not have cache_control"
+            );
+        }
+
+        // 验证: content 中没有 cache_control
+        for (i, msg) in result["messages"].as_array().unwrap().iter().enumerate() {
+            if let Some(content) = msg.get("content") {
+                assert!(
+                    !content.is_array()
+                        || content
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .all(|part| part.get("cache_control").is_none()),
+                    "messages[{i}] content parts must not have cache_control"
+                );
+            }
+        }
+
+        // 验证: system content 为纯字符串格式（不是数组）
+        let sys_msg = &result["messages"][0];
+        assert_eq!(sys_msg["role"], "system");
+        assert!(
+            sys_msg["content"].is_string(),
+            "system content must be string, got: {}",
+            sys_msg["content"]
         );
-        assert_eq!(
-            result["messages"][1]["content"][0]["cache_control"]["ttl"],
-            "5m"
+
+        // 验证: user content 为纯字符串格式（不是数组）
+        let user_msg = &result["messages"][1];
+        assert_eq!(user_msg["role"], "user");
+        assert!(
+            user_msg["content"].is_string(),
+            "user content must be string, got: {}",
+            user_msg["content"]
         );
-        // Tool cache_control preserved
-        assert_eq!(result["tools"][0]["cache_control"]["type"], "ephemeral");
+
+        // 验证: tools 中不存在 cache_control
+        if let Some(tools) = result["tools"].as_array() {
+            for (i, tool) in tools.iter().enumerate() {
+                assert!(
+                    tool.get("cache_control").is_none(),
+                    "tools[{i}] must not have cache_control"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1073,7 +1600,8 @@ mod tests {
         });
 
         let result = openai_to_anthropic(input).unwrap();
-        assert_eq!(result["usage"]["input_tokens"], 100);
+        // prompt_tokens(100) 含 cached(80)，转换后 input 应为 fresh = 100 - 80 = 20
+        assert_eq!(result["usage"]["input_tokens"], 20);
         assert_eq!(result["usage"]["output_tokens"], 50);
         assert_eq!(result["usage"]["cache_read_input_tokens"], 80);
     }
@@ -1097,8 +1625,36 @@ mod tests {
         });
 
         let result = openai_to_anthropic(input).unwrap();
+        // cache_read(60)+cache_creation(20) 均从 prompt(100) 扣除，fresh = 100 - 60 - 20 = 20
+        // 守恒：input(20) + cache_read(60) + cache_creation(20) == prompt(100)
+        assert_eq!(result["usage"]["input_tokens"], 20);
         assert_eq!(result["usage"]["cache_read_input_tokens"], 60);
         assert_eq!(result["usage"]["cache_creation_input_tokens"], 20);
+    }
+
+    #[test]
+    fn test_openai_to_anthropic_clamps_input_when_cache_exceeds_prompt() {
+        // prompt(100) < cache_read(60)+cache_creation(50)=110：saturating 钳到 0，防下溢。
+        // 钉桩：阻止未来把 saturating_sub 误改成普通减法(debug panic / release wrap)。
+        let input = json!({
+            "id": "chatcmpl-uf",
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "x"},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 10,
+                "cache_read_input_tokens": 60,
+                "cache_creation_input_tokens": 50
+            }
+        });
+        let result = openai_to_anthropic(input).unwrap();
+        assert_eq!(result["usage"]["input_tokens"], 0);
+        assert_eq!(result["usage"]["cache_read_input_tokens"], 60);
+        assert_eq!(result["usage"]["cache_creation_input_tokens"], 50);
     }
 
     #[test]
@@ -1192,6 +1748,8 @@ mod tests {
         assert!(supports_reasoning_effort("gpt-5"));
         assert!(supports_reasoning_effort("gpt-5.4"));
         assert!(supports_reasoning_effort("gpt-5-codex"));
+        assert!(supports_reasoning_effort("grok-4.5"));
+        assert!(supports_reasoning_effort("grok-build-0.1"));
         assert!(!supports_reasoning_effort("gpt-4o"));
         assert!(!supports_reasoning_effort("claude-sonnet-4-6"));
     }
@@ -1291,7 +1849,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert!(result.get("reasoning_effort").is_none());
     }
 
@@ -1304,7 +1862,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["reasoning_effort"], "medium");
     }
 
@@ -1317,7 +1875,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["reasoning_effort"], "xhigh");
     }
 
@@ -1330,7 +1888,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["reasoning_effort"], "low");
     }
 
@@ -1343,7 +1901,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["reasoning_effort"], "xhigh");
     }
 
@@ -1355,7 +1913,7 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert!(result.get("reasoning_effort").is_none());
     }
 
@@ -1368,7 +1926,7 @@ mod tests {
                 "messages": [{"role": "user", "content": "Hello"}]
             });
 
-            let result = anthropic_to_openai(input, None).unwrap();
+            let result = anthropic_to_openai(input).unwrap();
             assert!(
                 result.get("max_tokens").is_none(),
                 "{model} should not have max_tokens"
@@ -1388,8 +1946,55 @@ mod tests {
             "messages": [{"role": "user", "content": "Hello"}]
         });
 
-        let result = anthropic_to_openai(input, None).unwrap();
+        let result = anthropic_to_openai(input).unwrap();
         assert_eq!(result["max_tokens"], 1024);
         assert!(result.get("max_completion_tokens").is_none());
+    }
+
+    fn run_tool_choice(value: Value) -> Value {
+        let input = json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "tools": [{
+                "name": "search",
+                "description": "search the web",
+                "input_schema": {"type": "object", "properties": {}}
+            }],
+            "tool_choice": value,
+        });
+        anthropic_to_openai(input).unwrap()["tool_choice"].clone()
+    }
+
+    #[test]
+    fn tool_choice_string_any_maps_to_required() {
+        assert_eq!(run_tool_choice(json!("any")), json!("required"));
+    }
+
+    #[test]
+    fn tool_choice_string_auto_and_none_pass_through() {
+        assert_eq!(run_tool_choice(json!("auto")), json!("auto"));
+        assert_eq!(run_tool_choice(json!("none")), json!("none"));
+    }
+
+    #[test]
+    fn tool_choice_object_any_maps_to_required() {
+        assert_eq!(run_tool_choice(json!({"type": "any"})), json!("required"));
+    }
+
+    #[test]
+    fn tool_choice_object_auto_and_none_collapse_to_string() {
+        assert_eq!(run_tool_choice(json!({"type": "auto"})), json!("auto"));
+        assert_eq!(run_tool_choice(json!({"type": "none"})), json!("none"));
+    }
+
+    #[test]
+    fn tool_choice_forced_tool_maps_to_nested_function_selector() {
+        // Anthropic {"type":"tool","name":"X"} must become OpenAI Chat
+        // {"type":"function","function":{"name":"X"}} — the *nested* form, not
+        // the flat Responses-API form.
+        assert_eq!(
+            run_tool_choice(json!({"type": "tool", "name": "search"})),
+            json!({"type": "function", "function": {"name": "search"}}),
+        );
     }
 }

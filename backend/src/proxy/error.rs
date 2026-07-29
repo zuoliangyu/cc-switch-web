@@ -50,6 +50,9 @@ pub enum ProxyError {
     #[error("格式转换错误: {0}")]
     TransformError(String),
 
+    #[error("无效的请求: {0}")]
+    InvalidRequest(String),
+
     #[error("超时: {0}")]
     Timeout(String),
 
@@ -128,6 +131,9 @@ impl IntoResponse for ProxyError {
                     ProxyError::ConfigError(_) => (StatusCode::BAD_REQUEST, self.to_string()),
                     ProxyError::TransformError(_) => {
                         (StatusCode::UNPROCESSABLE_ENTITY, self.to_string())
+                    }
+                    ProxyError::InvalidRequest(_) => {
+                        (StatusCode::BAD_REQUEST, self.to_string())
                     }
                     ProxyError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, self.to_string()),
                     ProxyError::AuthError(_) => (StatusCode::UNAUTHORIZED, self.to_string()),

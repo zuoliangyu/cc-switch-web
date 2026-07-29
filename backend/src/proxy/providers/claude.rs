@@ -136,21 +136,18 @@ pub fn transform_claude_request_for_api_format(
                 .as_ref()
                 .and_then(|m| m.provider_type.as_deref())
                 == Some("codex_oauth");
-            if is_codex_oauth {
-                super::transform_responses::anthropic_to_responses_for_codex_oauth(
-                    body,
-                    Some(cache_key),
-                )
-            } else {
-                super::transform_responses::anthropic_to_responses(body, Some(cache_key))
-            }
+            super::transform_responses::anthropic_to_responses(
+                body,
+                Some(cache_key),
+                is_codex_oauth,
+                false,
+            )
         }
         "openai_chat" => {
             let preserve_reasoning_content =
                 should_preserve_reasoning_content_for_openai_chat(provider, &body);
             super::transform::anthropic_to_openai_with_reasoning_content(
                 body,
-                Some(cache_key),
                 preserve_reasoning_content,
             )
         }

@@ -13,6 +13,7 @@ mod gemini_config;
 mod gemini_mcp;
 mod hermes_config;
 mod mcp;
+mod model_capabilities;
 mod openclaw_config;
 mod opencode_config;
 mod prompt;

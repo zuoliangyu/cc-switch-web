@@ -173,6 +173,12 @@ struct FetchModelsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ManagedAccountModelsQuery {
+    account_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct StreamCheckAllProvidersRequest {
     proxy_targets_only: bool,
 }
@@ -935,6 +941,19 @@ async fn fetch_provider_models(
     )
     .await
     .map_err(ApiError::bad_request)?;
+    Ok(Json(models))
+}
+
+async fn fetch_xai_oauth_models(
+    State(state): State<WebApiState>,
+    Query(query): Query<ManagedAccountModelsQuery>,
+) -> Result<Json<Vec<crate::services::model_fetch::FetchedModel>>, ApiError> {
+    let models = crate::commands::fetch_xai_oauth_models_internal(
+        query.account_id,
+        &state.xai_oauth_state,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to fetch xAI models: {e}")))?;
     Ok(Json(models))
 }
 
@@ -3459,6 +3478,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             post(auth_set_default_account),
         )
         .route("/api/auth/logout", post(auth_logout))
+        .route("/api/auth/xai_oauth/models", get(fetch_xai_oauth_models))
         .route("/api/copilot/token", get(get_copilot_token))
         .route(
             "/api/copilot/accounts/:account_id/token",

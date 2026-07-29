@@ -21,6 +21,12 @@ export async function fetchModelsForConfig(
   });
 }
 
+export async function fetchXaiOauthModels(
+  accountId?: string | null,
+): Promise<FetchedModel[]> {
+  return invoke("get_xai_oauth_models", { accountId: accountId || null });
+}
+
 export function showFetchModelsError(
   err: unknown,
   t: TFunction,

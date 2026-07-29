@@ -50,7 +50,7 @@
   - [x] 账号管理 UI
   - [x] Claude Code Provider 预设与托管账号绑定
   - [x] Claude Desktop Provider 专属表单、预设与托管账号绑定
-  - [ ] Codex Provider 预设与托管账号绑定
+  - [x] Codex Provider 预设与托管账号绑定
   - [ ] xAI 订阅额度查询与展示
 - [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
 - [x] A6API 跨应用预设与 PackyCode 备用端点（`dbb26595`、`30409878`）
@@ -95,3 +95,4 @@
 - 2026-07-30：同步 Claude Desktop 71 项最终预设目录，覆盖官方、合作方、直连、模型映射及 GitHub Copilot / Codex / xAI 托管 OAuth；专属表单接线留到下一笔提交。
 - 2026-07-30：完成 Claude Desktop 前端入口与专属 Provider 表单；支持直连/四档映射、模型拉取、1M 声明和三类托管 OAuth 账号绑定，10 项组件测试、预设测试和 TypeScript 类型检查通过。
 - 2026-07-30：完成 Claude Desktop 状态提示；列表每 5 秒检查平台支持、旧模型名、缺失映射、网关 token 和 Base URL 漂移，5 项列表测试和 TypeScript 类型检查通过。
+- 2026-07-30：完成 Codex xAI API Key / OAuth 预设与托管账号绑定；OAuth 模式隐藏 Key、端点和格式编辑，支持按绑定账号获取模型目录，3 项定向测试、TypeScript 类型检查和后端二进制检查通过。

@@ -91,6 +91,7 @@ import {
   getWebSkillRepos,
   getWebSkillBackups,
   getWebManagedAuthStatus,
+  getWebXaiOauthModels,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
   getWebUpstreamProxyStatus,
@@ -311,6 +312,10 @@ export async function invoke<T>(
         args?.apiKey as string,
         args?.isFullUrl as boolean | undefined,
         args?.modelsUrl as string | undefined,
+      )) as T;
+    case "get_xai_oauth_models":
+      return (await getWebXaiOauthModels(
+        args?.accountId as string | null | undefined,
       )) as T;
     case "get_windows_env_paths":
       return (await fetchWebWindowsEnvPaths()) as T;

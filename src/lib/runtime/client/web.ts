@@ -543,6 +543,15 @@ export async function getWebManagedAuthStatus(
   return requestJson(`/api/auth/${encodeURIComponent(authProvider)}/status`);
 }
 
+export async function getWebXaiOauthModels(
+  accountId?: string | null,
+): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
+  const query = accountId
+    ? `?accountId=${encodeURIComponent(accountId)}`
+    : "";
+  return requestJson(`/api/auth/xai_oauth/models${query}`);
+}
+
 export async function removeWebManagedAuthAccount(
   authProvider: string,
   accountId: string,

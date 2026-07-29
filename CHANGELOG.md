@@ -37,6 +37,7 @@
 - Grok Build 新增独立 Provider 预设清单，覆盖适用的合作方、聚合站、xAI 与 OpenRouter；官方预设复用固定 seed，Chat/Messages 预设统一参与路由需求判定。
 - A6API Provider 预设覆盖 Claude、Codex、Gemini、Grok Build、OpenCode 与 OpenClaw，并接入三语推广文案和官方图标。
 - PackyCode 主端点切换到 `packyapi.ai`，Claude、Codex、Gemini 增加 Cloudflare、负载均衡和旧域名备用端点。
+- xAI OAuth 后端新增 OIDC 设备流、刷新令牌持久化、多账号与默认账号管理和失效重登录标记，并接入统一 Web 认证 API。
 
 ## [0.8.0] - 2026-05-23
 

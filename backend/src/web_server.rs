@@ -25,6 +25,7 @@ use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::types::{
     AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
     ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
@@ -48,6 +49,7 @@ struct WebApiState {
     app_state: Arc<AppState>,
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
+    xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2255,6 +2257,7 @@ async fn auth_start_login(
         &payload.auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to start auth login: {e}")))?;
@@ -2270,6 +2273,7 @@ async fn auth_poll_for_account(
         &payload.device_code,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to poll auth account: {e}")))?;
@@ -2284,6 +2288,7 @@ async fn auth_list_accounts(
         &auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to list auth accounts: {e}")))?;
@@ -2298,6 +2303,7 @@ async fn auth_get_status(
         &auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to load auth status: {e}")))?;
@@ -2313,6 +2319,7 @@ async fn auth_remove_account(
         &payload.account_id,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to remove auth account: {e}")))?;
@@ -2328,6 +2335,7 @@ async fn auth_set_default_account(
         &payload.account_id,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to set default auth account: {e}")))?;
@@ -2342,6 +2350,7 @@ async fn auth_logout(
         &payload.auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
+        &state.xai_oauth_state,
     )
     .await
     .map_err(|e| ApiError::internal(format!("failed to logout auth provider: {e}")))?;
@@ -3352,6 +3361,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
     let state = WebApiState {
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         codex_oauth_state: app_state.codex_oauth_state.clone(),
+        xai_oauth_state: app_state.xai_oauth_state.clone(),
         app_state,
     };
     let bind_options = resolve_bind_options(&options)?;

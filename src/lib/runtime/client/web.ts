@@ -80,6 +80,8 @@ import type {
   DailyStats,
   LogFilters,
   ModelPricing,
+  ModelsDevSyncConfig,
+  ModelsDevSyncState,
   ModelStats,
   PaginatedLogs,
   ProviderLimitStatus,
@@ -546,9 +548,7 @@ export async function getWebManagedAuthStatus(
 export async function getWebXaiOauthModels(
   accountId?: string | null,
 ): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
-  const query = accountId
-    ? `?accountId=${encodeURIComponent(accountId)}`
-    : "";
+  const query = accountId ? `?accountId=${encodeURIComponent(accountId)}` : "";
   return requestJson(`/api/auth/xai_oauth/models${query}`);
 }
 
@@ -2206,6 +2206,36 @@ export async function updateWebModelPricing(
       cacheCreationCost,
     },
   );
+}
+
+export async function updateWebModelPricingBatch(
+  entries: ModelPricing[],
+): Promise<number> {
+  return requestWithBody<number>(
+    "/api/usage/model-pricing/batch",
+    "PUT",
+    entries,
+  );
+}
+
+export async function getWebModelsDevSyncConfig(): Promise<ModelsDevSyncState> {
+  return requestJson<ModelsDevSyncState>("/api/usage/models-dev-sync");
+}
+
+export async function saveWebModelsDevSyncConfig(
+  config: ModelsDevSyncConfig,
+): Promise<void> {
+  return requestWithBody<void>("/api/usage/models-dev-sync", "PUT", config);
+}
+
+export async function recordWebModelsDevSyncResult(
+  syncedAt: number | null,
+  error: string | null,
+): Promise<void> {
+  return requestWithBody<void>("/api/usage/models-dev-sync/result", "POST", {
+    syncedAt,
+    error,
+  });
 }
 
 export async function deleteWebModelPricing(modelId: string): Promise<void> {

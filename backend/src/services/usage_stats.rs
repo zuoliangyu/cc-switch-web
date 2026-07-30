@@ -1150,6 +1150,97 @@ struct PricingInfo {
 }
 
 impl Database {
+    pub(crate) fn backfill_missing_usage_costs(&self) -> Result<usize, AppError> {
+        self.backfill_missing_usage_costs_inner(None)
+    }
+
+    pub(crate) fn backfill_missing_usage_costs_for_model(
+        &self,
+        model_id: &str,
+    ) -> Result<usize, AppError> {
+        self.backfill_missing_usage_costs_inner(Some(model_id))
+    }
+
+    fn backfill_missing_usage_costs_inner(
+        &self,
+        only_model_id: Option<&str>,
+    ) -> Result<usize, AppError> {
+        let conn = lock_conn!(self.conn);
+        let mut stmt = conn.prepare(
+            "SELECT l.request_id, l.provider_id, p.name, l.app_type, l.model,
+                    l.request_model, l.cost_multiplier,
+                    l.input_tokens, l.output_tokens, l.cache_read_tokens, l.cache_creation_tokens,
+                    l.input_cost_usd, l.output_cost_usd, l.cache_read_cost_usd,
+                    l.cache_creation_cost_usd, l.total_cost_usd,
+                    l.is_streaming, l.latency_ms, l.first_token_ms, l.duration_ms,
+                    l.status_code, l.error_message, l.created_at, l.data_source
+             FROM proxy_request_logs l
+             LEFT JOIN providers p ON l.provider_id = p.id AND l.app_type = p.app_type
+             WHERE CAST(l.total_cost_usd AS REAL) <= 0
+               AND (l.input_tokens > 0 OR l.output_tokens > 0
+                    OR l.cache_read_tokens > 0 OR l.cache_creation_tokens > 0)",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(RequestLogDetail {
+                request_id: row.get(0)?,
+                provider_id: row.get(1)?,
+                provider_name: row.get(2)?,
+                app_type: row.get(3)?,
+                model: row.get(4)?,
+                request_model: row.get(5)?,
+                cost_multiplier: row
+                    .get::<_, Option<String>>(6)?
+                    .unwrap_or_else(|| "1".to_string()),
+                input_tokens: row.get::<_, i64>(7)? as u32,
+                output_tokens: row.get::<_, i64>(8)? as u32,
+                cache_read_tokens: row.get::<_, i64>(9)? as u32,
+                cache_creation_tokens: row.get::<_, i64>(10)? as u32,
+                input_cost_usd: row.get(11)?,
+                output_cost_usd: row.get(12)?,
+                cache_read_cost_usd: row.get(13)?,
+                cache_creation_cost_usd: row.get(14)?,
+                total_cost_usd: row.get(15)?,
+                is_streaming: row.get::<_, i64>(16)? != 0,
+                latency_ms: row.get::<_, i64>(17)? as u64,
+                first_token_ms: row.get::<_, Option<i64>>(18)?.map(|value| value as u64),
+                duration_ms: row.get::<_, Option<i64>>(19)?.map(|value| value as u64),
+                status_code: row.get::<_, i64>(20)? as u16,
+                error_message: row.get(21)?,
+                created_at: row.get(22)?,
+                data_source: row.get(23)?,
+            })
+        })?;
+        let mut logs = rows.collect::<Result<Vec<_>, _>>()?;
+
+        if let Some(model_id) = only_model_id {
+            let target = clean_model_id_for_pricing(model_id);
+            logs.retain(|log| {
+                clean_model_id_for_pricing(&log.model) == target
+                    || log
+                        .request_model
+                        .as_deref()
+                        .is_some_and(|model| clean_model_id_for_pricing(model) == target)
+            });
+        }
+
+        let mut provider_cache = HashMap::new();
+        let mut pricing_cache = HashMap::new();
+        let mut updated = 0;
+        for mut log in logs {
+            let previous_total = log.total_cost_usd.clone();
+            Self::maybe_backfill_log_costs(
+                &conn,
+                &mut log,
+                &mut provider_cache,
+                &mut pricing_cache,
+            )?;
+            if log.total_cost_usd != previous_total {
+                updated += 1;
+            }
+        }
+        Ok(updated)
+    }
+
     fn maybe_backfill_log_costs(
         conn: &Connection,
         log: &mut RequestLogDetail,
@@ -1305,17 +1396,7 @@ pub(crate) fn find_model_pricing_row(
     conn: &Connection,
     model_id: &str,
 ) -> Result<Option<(String, String, String, String)>, AppError> {
-    // 清洗模型名称：去前缀(/)、去后缀(:)、@ 替换为 -，再统一转小写。
-    // 例如 OpenAI/GPT-5.5@HIGH:v2 → gpt-5.5-high，能匹配到 seed 中小写的 model_id。
-    let cleaned = model_id
-        .rsplit_once('/')
-        .map_or(model_id, |(_, r)| r)
-        .split(':')
-        .next()
-        .unwrap_or(model_id)
-        .trim()
-        .replace('@', "-")
-        .to_ascii_lowercase();
+    let cleaned = clean_model_id_for_pricing(model_id);
 
     // 精确匹配清洗后的名称
     let exact = conn
@@ -1342,6 +1423,24 @@ pub(crate) fn find_model_pricing_row(
     }
 
     Ok(exact)
+}
+
+fn clean_model_id_for_pricing(model_id: &str) -> String {
+    // 与 models.dev 前端归一化保持一致。
+    let mut cleaned = model_id
+        .rsplit_once('/')
+        .map_or(model_id, |(_, r)| r)
+        .split(':')
+        .next()
+        .unwrap_or(model_id)
+        .trim()
+        .replace('@', "-")
+        .to_ascii_lowercase();
+    if cleaned.ends_with("[1m]") {
+        cleaned.truncate(cleaned.len() - "[1m]".len());
+        cleaned = cleaned.trim().to_string();
+    }
+    cleaned
 }
 
 #[cfg(test)]
@@ -1475,6 +1574,46 @@ mod tests {
             "大小写不一致的模型 OpenAI/GPT-5.2-Codex@LOW 应能命中 gpt-5.2-codex-low"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn scoped_backfill_uses_models_dev_normalization() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            conn.execute(
+                "INSERT OR REPLACE INTO model_pricing (
+                    model_id, display_name, input_cost_per_million, output_cost_per_million,
+                    cache_read_cost_per_million, cache_creation_cost_per_million
+                ) VALUES ('custom-model', 'Custom Model', '1.25', '5', '0.1', '1.5')",
+                [],
+            )?;
+            insert_dedup_test_log(
+                &conn,
+                "models-dev-backfill",
+                "codex",
+                "provider-1",
+                "openrouter/vendor/CUSTOM-MODEL[1m]:free",
+                "proxy",
+                1,
+                1_000_000,
+                0,
+                0,
+                0,
+                200,
+                "0",
+            )?;
+        }
+
+        assert_eq!(db.backfill_missing_usage_costs_for_model("custom-model")?, 1);
+        let conn = lock_conn!(db.conn);
+        let total_cost: String = conn.query_row(
+            "SELECT total_cost_usd FROM proxy_request_logs WHERE request_id = ?1",
+            ["models-dev-backfill"],
+            |row| row.get(0),
+        )?;
+        assert_eq!(total_cost, "1.250000");
         Ok(())
     }
 

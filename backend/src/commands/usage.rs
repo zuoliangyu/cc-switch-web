@@ -1,6 +1,9 @@
 //! 使用统计相关命令
 
 use crate::error::AppError;
+use crate::services::model_pricing::{
+    ModelPricingInfo, ModelsDevSyncConfig, ModelsDevSyncState,
+};
 use crate::services::session_usage::{DataSourceSummary, SessionSyncResult};
 use crate::services::usage_stats::*;
 use crate::store::AppState;
@@ -102,6 +105,7 @@ pub fn get_usage_data_sources_internal(
 pub fn get_model_pricing_internal(state: &AppState) -> Result<Vec<ModelPricingInfo>, AppError> {
     log::info!("获取模型定价列表");
     state.db.ensure_model_pricing_seeded()?;
+    crate::services::model_pricing::sync_local_model_pricing(&state.db)?;
 
     let db = state.db.clone();
     let conn = crate::database::lock_conn!(db.conn);
@@ -155,26 +159,47 @@ pub fn update_model_pricing_internal(
     cache_read_cost: String,
     cache_creation_cost: String,
 ) -> Result<(), AppError> {
-    let db = state.db.clone();
-    let conn = crate::database::lock_conn!(db.conn);
-
-    conn.execute(
-        "INSERT OR REPLACE INTO model_pricing (
-            model_id, display_name, input_cost_per_million, output_cost_per_million,
-            cache_read_cost_per_million, cache_creation_cost_per_million
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![
+    crate::services::model_pricing::update_model_pricing(
+        &state.db,
+        ModelPricingInfo {
             model_id,
             display_name,
-            input_cost,
-            output_cost,
-            cache_read_cost,
-            cache_creation_cost
-        ],
-    )
-    .map_err(|e| AppError::Database(format!("更新模型定价失败: {e}")))?;
+            input_cost_per_million: input_cost,
+            output_cost_per_million: output_cost,
+            cache_read_cost_per_million: cache_read_cost,
+            cache_creation_cost_per_million: cache_creation_cost,
+        },
+    )?;
 
     Ok(())
+}
+
+pub fn update_model_pricing_batch_internal(
+    state: &AppState,
+    entries: Vec<ModelPricingInfo>,
+) -> Result<usize, AppError> {
+    crate::services::model_pricing::update_model_pricing_batch(&state.db, entries)
+}
+
+pub fn get_models_dev_sync_config_internal(
+    state: &AppState,
+) -> Result<ModelsDevSyncState, AppError> {
+    crate::services::model_pricing::get_models_dev_sync_state(&state.db)
+}
+
+pub fn save_models_dev_sync_config_internal(
+    state: &AppState,
+    config: ModelsDevSyncConfig,
+) -> Result<(), AppError> {
+    crate::services::model_pricing::save_models_dev_sync_config(&state.db, config)
+}
+
+pub fn record_models_dev_sync_result_internal(
+    state: &AppState,
+    synced_at: Option<i64>,
+    error: Option<String>,
+) -> Result<(), AppError> {
+    crate::services::model_pricing::record_models_dev_sync_result(&state.db, synced_at, error)
 }
 
 pub fn check_provider_limits_internal(
@@ -189,27 +214,8 @@ pub fn delete_model_pricing_internal(
     state: &AppState,
     model_id: String,
 ) -> Result<(), AppError> {
-    let db = state.db.clone();
-    let conn = crate::database::lock_conn!(db.conn);
-
-    conn.execute(
-        "DELETE FROM model_pricing WHERE model_id = ?1",
-        rusqlite::params![model_id.clone()],
-    )
-    .map_err(|e| AppError::Database(format!("删除模型定价失败: {e}")))?;
+    crate::services::model_pricing::delete_model_pricing(&state.db, &model_id)?;
 
     log::info!("已删除模型定价: {model_id}");
     Ok(())
-}
-
-/// 模型定价信息
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelPricingInfo {
-    pub model_id: String,
-    pub display_name: String,
-    pub input_cost_per_million: String,
-    pub output_cost_per_million: String,
-    pub cache_read_cost_per_million: String,
-    pub cache_creation_cost_per_million: String,
 }

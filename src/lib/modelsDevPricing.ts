@@ -1,3 +1,5 @@
+import type { ModelPricing, ModelsDevSyncConfig } from "@/types/usage";
+
 export const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_FETCH_TIMEOUT_MS = 15_000;
 
@@ -151,4 +153,125 @@ export async function fetchModelsDevPricing(): Promise<ModelsDevResponse> {
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+const COMMON_MODEL_LIMIT_PER_FAMILY = 6;
+
+interface CommonFamilyRule {
+  id: string;
+  providers: ReadonlySet<string>;
+  matches: (modelId: string) => boolean;
+}
+
+const COMMON_FAMILY_RULES: CommonFamilyRule[] = [
+  {
+    id: "claude",
+    providers: new Set(["anthropic"]),
+    matches: (modelId) => modelId.startsWith("claude-"),
+  },
+  {
+    id: "gpt",
+    providers: new Set(["openai"]),
+    matches: (modelId) =>
+      modelId.startsWith("gpt-") ||
+      modelId.startsWith("o1-") ||
+      modelId.startsWith("o3-") ||
+      modelId.startsWith("o4-"),
+  },
+  {
+    id: "gemini",
+    providers: new Set(["google"]),
+    matches: (modelId) => modelId.startsWith("gemini-"),
+  },
+  {
+    id: "grok",
+    providers: new Set(["xai"]),
+    matches: (modelId) => modelId.startsWith("grok-"),
+  },
+  {
+    id: "deepseek",
+    providers: new Set(["deepseek"]),
+    matches: (modelId) => modelId.startsWith("deepseek-"),
+  },
+  {
+    id: "qwen",
+    providers: new Set(["alibaba"]),
+    matches: (modelId) => modelId.startsWith("qwen"),
+  },
+  {
+    id: "mimo",
+    providers: new Set(["xiaomi"]),
+    matches: (modelId) => modelId.startsWith("mimo-"),
+  },
+  {
+    id: "longcat",
+    providers: new Set(["longcat"]),
+    matches: (modelId) => modelId.startsWith("longcat-"),
+  },
+  {
+    id: "kimi",
+    providers: new Set(["moonshotai"]),
+    matches: (modelId) => modelId.startsWith("kimi-"),
+  },
+  {
+    id: "minimax",
+    providers: new Set(["minimax-cn"]),
+    matches: (modelId) => modelId.startsWith("minimax-m"),
+  },
+  {
+    id: "glm",
+    providers: new Set(["zai"]),
+    matches: (modelId) => modelId.startsWith("glm-"),
+  },
+];
+
+/** Pick a bounded, canonical set of recent chat/coding models per family. */
+export function getCommonModelKeys(entries: ModelsDevEntry[]): Set<string> {
+  const keys = new Set<string>();
+  for (const rule of COMMON_FAMILY_RULES) {
+    let count = 0;
+    for (const entry of entries) {
+      if (
+        rule.providers.has(entry.providerId) &&
+        rule.matches(entry.modelId.toLowerCase())
+      ) {
+        keys.add(entry.key);
+        count += 1;
+        if (count >= COMMON_MODEL_LIMIT_PER_FAMILY) break;
+      }
+    }
+  }
+  return keys;
+}
+
+export function resolveModelsDevSelection(
+  entries: ModelsDevEntry[],
+  config: ModelsDevSyncConfig,
+): ModelsDevEntry[] {
+  const explicit = new Set(config.selectedModelKeys);
+  const excluded = new Set(config.excludedCommonModelKeys);
+  const common = config.includeCommonModels
+    ? getCommonModelKeys(entries)
+    : new Set<string>();
+  return entries.filter(
+    (entry) =>
+      explicit.has(entry.key) ||
+      (common.has(entry.key) && !excluded.has(entry.key)),
+  );
+}
+
+export function toModelPricing(entries: ModelsDevEntry[]): ModelPricing[] {
+  const byModelId = new Map<string, ModelPricing>();
+  for (const entry of entries) {
+    if (byModelId.has(entry.normalizedId)) continue;
+    byModelId.set(entry.normalizedId, {
+      modelId: entry.normalizedId,
+      displayName: entry.modelName,
+      inputCostPerMillion: formatPrice(entry.input),
+      outputCostPerMillion: formatPrice(entry.output),
+      cacheReadCostPerMillion: formatPrice(entry.cacheRead),
+      cacheCreationCostPerMillion: formatPrice(entry.cacheWrite),
+    });
+  }
+  return Array.from(byModelId.values());
 }

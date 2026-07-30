@@ -489,6 +489,13 @@ struct UpdateModelPricingPayload {
     cache_creation_cost: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordModelsDevSyncResultPayload {
+    synced_at: Option<i64>,
+    error: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UsageModelPricingInfo {
@@ -1697,6 +1704,48 @@ async fn update_usage_model_pricing(
         payload.cache_creation_cost,
     )
     .map_err(|e| ApiError::internal(format!("failed to update model pricing: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn update_usage_model_pricing_batch(
+    State(state): State<WebApiState>,
+    Json(entries): Json<Vec<crate::services::model_pricing::ModelPricingInfo>>,
+) -> Result<Json<usize>, ApiError> {
+    let changed = crate::commands::update_model_pricing_batch_internal(
+        state.app_state.as_ref(),
+        entries,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to update model pricing batch: {e}")))?;
+    Ok(Json(changed))
+}
+
+async fn get_models_dev_sync_config(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::model_pricing::ModelsDevSyncState>, ApiError> {
+    crate::commands::get_models_dev_sync_config_internal(state.app_state.as_ref())
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to load models.dev sync config: {e}")))
+}
+
+async fn save_models_dev_sync_config(
+    State(state): State<WebApiState>,
+    Json(config): Json<crate::services::model_pricing::ModelsDevSyncConfig>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::save_models_dev_sync_config_internal(state.app_state.as_ref(), config)
+        .map_err(|e| ApiError::internal(format!("failed to save models.dev sync config: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn record_models_dev_sync_result(
+    State(state): State<WebApiState>,
+    Json(payload): Json<RecordModelsDevSyncResultPayload>,
+) -> Result<StatusCode, ApiError> {
+    crate::commands::record_models_dev_sync_result_internal(
+        state.app_state.as_ref(),
+        payload.synced_at,
+        payload.error,
+    )
+    .map_err(|e| ApiError::internal(format!("failed to record models.dev sync result: {e}")))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -3708,8 +3757,20 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/usage/model-pricing", get(get_usage_model_pricing))
         .route(
+            "/api/usage/model-pricing/batch",
+            put(update_usage_model_pricing_batch),
+        )
+        .route(
             "/api/usage/model-pricing/:model_id",
             put(update_usage_model_pricing).delete(delete_usage_model_pricing),
+        )
+        .route(
+            "/api/usage/models-dev-sync",
+            get(get_models_dev_sync_config).put(save_models_dev_sync_config),
+        )
+        .route(
+            "/api/usage/models-dev-sync/result",
+            post(record_models_dev_sync_result),
         )
         .route(
             "/api/usage/provider-limits/:app_type/:provider_id",

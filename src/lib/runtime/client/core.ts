@@ -160,6 +160,7 @@ import {
   getWebSessions,
   launchWebSessionTerminal,
   getWebModelPricing,
+  getWebModelsDevSyncConfig,
   getWebModelStats,
   getWebProviderLimits,
   getWebProviderStats,
@@ -199,10 +200,13 @@ import {
   toggleWebSkillApp,
   syncWebSessionUsage,
   rebuildWebCodexUsage,
+  recordWebModelsDevSyncResult,
   applyWebProfile,
   clearWebCurrentProfile,
   uploadWebdavSync,
   updateWebModelPricing,
+  updateWebModelPricingBatch,
+  saveWebModelsDevSyncConfig,
   updateWebProfile,
   updateWebProvider,
   updateWebProvidersSortOrder,
@@ -811,6 +815,17 @@ export async function invoke<T>(
         args?.outputCost as string,
         args?.cacheReadCost as string,
         args?.cacheCreationCost as string,
+      )) as T;
+    case "update_model_pricing_batch":
+      return (await updateWebModelPricingBatch(args?.entries as any)) as T;
+    case "get_models_dev_sync_config":
+      return (await getWebModelsDevSyncConfig()) as T;
+    case "save_models_dev_sync_config":
+      return (await saveWebModelsDevSyncConfig(args?.config as any)) as T;
+    case "record_models_dev_sync_result":
+      return (await recordWebModelsDevSyncResult(
+        args?.syncedAt as number | null,
+        args?.error as string | null,
       )) as T;
     case "delete_model_pricing":
       return (await deleteWebModelPricing(args?.modelId as string)) as T;

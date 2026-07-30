@@ -4,6 +4,7 @@ pub(crate) mod env_checker;
 pub(crate) mod env_manager;
 pub(crate) mod mcp;
 pub(crate) mod model_fetch;
+pub(crate) mod model_pricing;
 pub(crate) mod omo;
 pub(crate) mod profile;
 pub(crate) mod prompt;

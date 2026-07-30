@@ -47,6 +47,7 @@
 - Claude 预设目录完整对齐上游 74 项最终清单，补齐 Kimi、Code0、Qiniu、Gemini Native、OpenCode Go 等供应商，并支持预设指定独立模型目录地址。
 - Codex 表单支持保存和编辑预设模型目录、Chat reasoning 能力与 prompt-cache 路由策略，并在编辑时保留原生 Responses 的隐藏模型能力字段。
 - Codex 默认模型支持合并模型映射与远端目录建议、提示并补入缺失映射；凭据或端点变化会清理过期拉取结果，留空保存时回退到映射首行。
+- Codex 将上游格式、模型映射、Chat 推理配置和自定义 User-Agent 收入高级选项；上游协议转换与模型映射开关彼此独立，原生 Responses 供应商也可使用映射。
 - Codex 预设目录完整对齐上游 68 项最终清单，新增 Kimi、Code0、Qiniu、OpenCode Go 等供应商，并对齐 Chat/Responses 格式、默认模型、上下文窗口和推理能力。
 - 新增 Hermes 后端应用目标与 `~/.hermes/config.yaml` Provider 生命周期：支持自定义供应商导入、增删改、切换默认模型和三种 API 模式连通检查；保留未知 YAML 配置，`providers:` 字典条目只读，并接入配置目录、Skills 与 Prompts 路径。
 - Hermes 前端接入 Provider 列表和专属表单，支持 additive 添加/移除、默认模型切换、协议与模型编辑、请求间隔、live ID 锁定，以及 `providers:` overlay 只读提示；工具栏开放 Skills、Memory、Web UI 与 MCP 入口。

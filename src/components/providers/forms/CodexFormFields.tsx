@@ -11,8 +11,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import { Download, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import EndpointSpeedTest from "./EndpointSpeedTest";
 import { ApiKeySection, EndpointField, ModelInputWithFetch } from "./shared";
 import { XaiOAuthSection } from "./XaiOAuthSection";
@@ -61,6 +73,9 @@ interface CodexFormFieldsProps {
   onCustomEndpointsChange?: (endpoints: string[]) => void;
   autoSelect: boolean;
   onAutoSelectChange: (checked: boolean) => void;
+
+  takeoverEnabled: boolean;
+  onTakeoverEnabledChange: (enabled: boolean) => void;
 
   // API Format（跟随上游 cc-switch 1c82b8a3）
   apiFormat: CodexApiFormat;
@@ -146,6 +161,8 @@ export function CodexFormFields({
   onCustomEndpointsChange,
   autoSelect,
   onAutoSelectChange,
+  takeoverEnabled,
+  onTakeoverEnabledChange,
   apiFormat,
   onApiFormatChange,
   shouldShowModelField = true,
@@ -169,6 +186,14 @@ export function CodexFormFields({
     catalogModels.map((model) => createCatalogRow(model)),
   );
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
+  const isChatFormat = apiFormat === "openai_chat";
+  const canEditCatalog = Boolean(onCatalogModelsChange);
+  const hasAnyAdvancedValue = !!customUserAgent || takeoverEnabled;
+  const [advancedExpanded, setAdvancedExpanded] = useState(hasAnyAdvancedValue);
+
+  useEffect(() => {
+    if (hasAnyAdvancedValue) setAdvancedExpanded(true);
+  }, [hasAnyAdvancedValue]);
 
   useEffect(() => {
     fetchModelsSeqRef.current += 1;
@@ -391,43 +416,6 @@ export function CodexFormFields({
         />
       )}
 
-      {/* Codex API 格式选择（跟随上游 cc-switch 1c82b8a3） */}
-      {shouldShowSpeedTest && !isXaiOauthPreset && (
-        <div className="space-y-2">
-          <FormLabel htmlFor="codexApiFormat">
-            {t("providerForm.apiFormat", { defaultValue: "API 格式" })}
-          </FormLabel>
-          <Select
-            value={apiFormat}
-            onValueChange={(value) =>
-              onApiFormatChange(value as CodexApiFormat)
-            }
-          >
-            <SelectTrigger id="codexApiFormat" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="openai_responses">
-                {t("providerForm.codexApiFormatResponses", {
-                  defaultValue: "OpenAI Responses API (原生)",
-                })}
-              </SelectItem>
-              <SelectItem value="openai_chat">
-                {t("providerForm.codexApiFormatOpenAIChat", {
-                  defaultValue: "OpenAI Chat Completions (需开启路由)",
-                })}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t("providerForm.codexApiFormatHint", {
-              defaultValue:
-                "选择供应商真实支持的 Codex API 格式；Chat Completions 会通过本地路由自动转换为 Responses。",
-            })}
-          </p>
-        </div>
-      )}
-
       {/* Codex Model Name 输入框 */}
       {shouldShowModelField && onModelNameChange && (
         <div className="space-y-2">
@@ -482,171 +470,269 @@ export function CodexFormFields({
         </div>
       )}
 
-      {shouldShowModelField && apiFormat === "openai_chat" && (
-        <div className="space-y-4 rounded-lg border border-border-default p-4">
-          <div className="space-y-2">
-            <FormLabel>{t("codexConfig.promptCacheRoutingLabel")}</FormLabel>
-            <Select
-              value={promptCacheRouting}
-              onValueChange={(value) =>
-                onPromptCacheRoutingChange(value as PromptCacheRoutingMode)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">
-                  {t("codexConfig.promptCacheRoutingAuto")}
-                </SelectItem>
-                <SelectItem value="enabled">
-                  {t("codexConfig.promptCacheRoutingEnabled")}
-                </SelectItem>
-                <SelectItem value="disabled">
-                  {t("codexConfig.promptCacheRoutingDisabled")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {t("codexConfig.promptCacheRoutingHint")}
-            </p>
-          </div>
-
-          <div className="space-y-1 border-t border-border-default pt-3">
-            <FormLabel>{t("codexConfig.reasoningGroupTitle")}</FormLabel>
-            <p className="text-xs text-muted-foreground">
-              {t("codexConfig.reasoningSectionHint")}
-            </p>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <FormLabel>{t("codexConfig.reasoningModeToggle")}</FormLabel>
-              <p className="text-xs text-muted-foreground">
-                {t("codexConfig.reasoningModeHint")}
-              </p>
-            </div>
-            <Switch
-              checked={supportsThinking}
-              onCheckedChange={handleReasoningThinkingChange}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
-            <div className="space-y-1">
-              <FormLabel>{t("codexConfig.reasoningEffortToggle")}</FormLabel>
-              <p className="text-xs text-muted-foreground">
-                {t("codexConfig.reasoningEffortHint")}
-              </p>
-            </div>
-            <Switch
-              checked={supportsEffort}
-              onCheckedChange={handleReasoningEffortChange}
-            />
-          </div>
-        </div>
-      )}
-
-      {shouldShowModelField && onCatalogModelsChange && (
-        <div className="space-y-3 rounded-lg border border-border-default p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <FormLabel>{t("codexConfig.modelMappingTitle")}</FormLabel>
-              <p className="text-xs text-muted-foreground">
-                {t("codexConfig.modelMappingHint")}
-              </p>
-            </div>
+      {category !== "official" && (
+        <Collapsible
+          open={advancedExpanded}
+          onOpenChange={setAdvancedExpanded}
+          className="rounded-lg border border-border-default p-4"
+        >
+          <CollapsibleTrigger asChild>
             <Button
               type="button"
-              variant="outline"
+              variant={null}
               size="sm"
-              onClick={() =>
-                setCatalogRows((current) => [...current, createCatalogRow()])
-              }
-              className="h-7 shrink-0 gap-1"
+              className="h-8 w-full justify-start gap-1.5 px-0 text-sm font-medium text-foreground hover:opacity-70"
             >
-              <Plus className="h-3.5 w-3.5" />
-              {t("codexConfig.addCatalogModel")}
+              {advancedExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              {t("providerForm.advancedOptionsToggle")}
             </Button>
-          </div>
+          </CollapsibleTrigger>
+          {!advancedExpanded && (
+            <p className="mt-1 ml-1 text-xs text-muted-foreground">
+              {t("codexConfig.advancedSectionHint")}
+            </p>
+          )}
+          <CollapsibleContent className="space-y-3 pt-3">
+            {shouldShowSpeedTest && !isXaiOauthPreset && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <FormLabel htmlFor="codexApiFormat">
+                    {t("codexConfig.upstreamFormatLabel")}
+                  </FormLabel>
+                  <Select
+                    value={apiFormat}
+                    onValueChange={(value) =>
+                      onApiFormatChange(value as CodexApiFormat)
+                    }
+                  >
+                    <SelectTrigger id="codexApiFormat" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai_chat">
+                        {t("codexConfig.upstreamFormatChat")}
+                      </SelectItem>
+                      <SelectItem value="openai_responses">
+                        {t("codexConfig.upstreamFormatResponses")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t("codexConfig.upstreamFormatHint")}
+                  </p>
+                </div>
 
-          {catalogRows.map((row, index) => (
+                <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
+                  <div className="space-y-1">
+                    <FormLabel>{t("codexConfig.localRoutingToggle")}</FormLabel>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {t(
+                        takeoverEnabled
+                          ? "codexConfig.localRoutingOnHint"
+                          : "codexConfig.localRoutingOffHint",
+                      )}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={takeoverEnabled}
+                    onCheckedChange={onTakeoverEnabledChange}
+                    aria-label={t("codexConfig.localRoutingToggle")}
+                  />
+                </div>
+              </div>
+            )}
+
+            {takeoverEnabled && shouldShowModelField && isChatFormat && (
+              <div className="space-y-4 border-t border-border-default pt-3">
+                <div className="space-y-2">
+                  <FormLabel>
+                    {t("codexConfig.promptCacheRoutingLabel")}
+                  </FormLabel>
+                  <Select
+                    value={promptCacheRouting}
+                    onValueChange={(value) =>
+                      onPromptCacheRoutingChange(
+                        value as PromptCacheRoutingMode,
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        {t("codexConfig.promptCacheRoutingAuto")}
+                      </SelectItem>
+                      <SelectItem value="enabled">
+                        {t("codexConfig.promptCacheRoutingEnabled")}
+                      </SelectItem>
+                      <SelectItem value="disabled">
+                        {t("codexConfig.promptCacheRoutingDisabled")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("codexConfig.promptCacheRoutingHint")}
+                  </p>
+                </div>
+
+                <div className="space-y-1 border-t border-border-default pt-3">
+                  <FormLabel>{t("codexConfig.reasoningGroupTitle")}</FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    {t("codexConfig.reasoningSectionHint")}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <FormLabel>
+                      {t("codexConfig.reasoningModeToggle")}
+                    </FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      {t("codexConfig.reasoningModeHint")}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={supportsThinking}
+                    onCheckedChange={handleReasoningThinkingChange}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
+                  <div className="space-y-1">
+                    <FormLabel>
+                      {t("codexConfig.reasoningEffortToggle")}
+                    </FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      {t("codexConfig.reasoningEffortHint")}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={supportsEffort}
+                    onCheckedChange={handleReasoningEffortChange}
+                  />
+                </div>
+              </div>
+            )}
+
+            {takeoverEnabled && shouldShowModelField && canEditCatalog && (
+              <div className="space-y-3 border-t border-border-default pt-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <FormLabel>{t("codexConfig.modelMappingTitle")}</FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      {t("codexConfig.modelMappingHint")}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCatalogRows((current) => [
+                        ...current,
+                        createCatalogRow(),
+                      ])
+                    }
+                    className="h-7 shrink-0 gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("codexConfig.addCatalogModel")}
+                  </Button>
+                </div>
+
+                {catalogRows.map((row, index) => (
+                  <div
+                    key={row.rowId}
+                    className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_140px_36px]"
+                  >
+                    <Input
+                      value={row.displayName ?? ""}
+                      onChange={(event) =>
+                        setCatalogRows((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, displayName: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder={t(
+                        "codexConfig.catalogDisplayNamePlaceholder",
+                      )}
+                      aria-label={t("codexConfig.catalogColumnDisplay")}
+                    />
+                    <Input
+                      value={row.model}
+                      onChange={(event) =>
+                        setCatalogRows((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, model: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder={t("codexConfig.catalogModelPlaceholder")}
+                      aria-label={t("codexConfig.catalogColumnModel")}
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      value={row.contextWindow ?? ""}
+                      onChange={(event) =>
+                        setCatalogRows((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  contextWindow: event.target.value.replace(
+                                    /[^\d]/g,
+                                    "",
+                                  ),
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder={t("codexConfig.contextWindowPlaceholder")}
+                      aria-label={t("codexConfig.catalogColumnContext")}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setCatalogRows((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                      title={t("common.delete")}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div
-              key={row.rowId}
-              className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_140px_36px]"
+              className={
+                shouldShowSpeedTest || takeoverEnabled
+                  ? "border-t border-border-default pt-3"
+                  : undefined
+              }
             >
-              <Input
-                value={row.displayName ?? ""}
-                onChange={(event) =>
-                  setCatalogRows((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? { ...item, displayName: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                placeholder={t("codexConfig.catalogDisplayNamePlaceholder")}
-                aria-label={t("codexConfig.catalogColumnDisplay")}
+              <CustomUserAgentField
+                id="codex-custom-user-agent"
+                value={customUserAgent}
+                onChange={onCustomUserAgentChange}
               />
-              <Input
-                value={row.model}
-                onChange={(event) =>
-                  setCatalogRows((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? { ...item, model: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-                placeholder={t("codexConfig.catalogModelPlaceholder")}
-                aria-label={t("codexConfig.catalogColumnModel")}
-              />
-              <Input
-                type="number"
-                min={1}
-                value={row.contextWindow ?? ""}
-                onChange={(event) =>
-                  setCatalogRows((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? {
-                            ...item,
-                            contextWindow: event.target.value.replace(
-                              /[^\d]/g,
-                              "",
-                            ),
-                          }
-                        : item,
-                    ),
-                  )
-                }
-                placeholder={t("codexConfig.contextWindowPlaceholder")}
-                aria-label={t("codexConfig.catalogColumnContext")}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  setCatalogRows((current) =>
-                    current.filter((_, itemIndex) => itemIndex !== index),
-                  )
-                }
-                title={t("common.delete")}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
-          ))}
-        </div>
-      )}
-
-      {category !== "official" && (
-        <CustomUserAgentField
-          id="codex-custom-user-agent"
-          value={customUserAgent}
-          onChange={onCustomUserAgentChange}
-        />
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* 端点测速弹窗 - Codex */}

@@ -146,6 +146,14 @@ const codexApiFormatFromWireApi = (
   }
 };
 
+const codexCatalogCountFromSettings = (settingsConfig: unknown): number => {
+  if (!settingsConfig || typeof settingsConfig !== "object") return 0;
+  const models = (
+    settingsConfig as { modelCatalog?: { models?: unknown } }
+  ).modelCatalog?.models;
+  return Array.isArray(models) ? models.length : 0;
+};
+
 export const normalizeCodexCatalogModelsForSave = (
   models: CodexCatalogModel[],
 ): CodexCatalogModel[] => {
@@ -552,6 +560,9 @@ function ProviderFormFull({
       );
     },
   );
+  const [codexTakeoverEnabled, setCodexTakeoverEnabled] = useState(
+    () => codexCatalogCountFromSettings(initialData?.settingsConfig) > 0,
+  );
 
   const { configError: codexConfigError, debouncedValidate } =
     useCodexTomlValidation();
@@ -587,6 +598,7 @@ function ProviderFormFull({
     if (appId === "codex" && !initialData && selectedPresetId === "custom") {
       const template = getCodexCustomTemplate();
       resetCodexConfig(template.auth, template.config);
+      setCodexTakeoverEnabled(false);
     }
   }, [appId, initialData, selectedPresetId, resetCodexConfig]);
 
@@ -1184,7 +1196,7 @@ function ProviderFormFull({
             ? setCodexWireApi(codexConfig ?? "", "responses")
             : (codexConfig ?? "");
         const normalizedCatalogModels =
-          category !== "official"
+          category !== "official" && codexTakeoverEnabled
             ? normalizeCodexCatalogModelsForSave(codexCatalogModels)
             : [];
         if (
@@ -1393,12 +1405,14 @@ function ProviderFormFull({
       codexChatReasoning:
         appId === "codex" &&
         category !== "official" &&
+        codexTakeoverEnabled &&
         localCodexApiFormat === "openai_chat"
           ? normalizeCodexChatReasoningForSave(codexChatReasoning)
           : undefined,
       promptCacheRouting:
         appId === "codex" &&
         category !== "official" &&
+        codexTakeoverEnabled &&
         localCodexApiFormat === "openai_chat" &&
         promptCacheRouting !== "auto"
           ? promptCacheRouting
@@ -1551,6 +1565,7 @@ function ProviderFormFull({
           codexApiFormatFromWireApi(extractCodexWireApi(template.config)) ??
             "openai_responses",
         );
+        setCodexTakeoverEnabled(false);
       }
       if (appId === "gemini") {
         resetGeminiConfig({}, {});
@@ -1594,6 +1609,7 @@ function ProviderFormFull({
           codexApiFormatFromWireApi(extractCodexWireApi(config)) ??
           "openai_responses",
       );
+      setCodexTakeoverEnabled((preset.modelCatalog?.length ?? 0) > 0);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
@@ -2064,6 +2080,8 @@ function ProviderFormFull({
             }
             autoSelect={endpointAutoSelect}
             onAutoSelectChange={setEndpointAutoSelect}
+            takeoverEnabled={codexTakeoverEnabled}
+            onTakeoverEnabledChange={setCodexTakeoverEnabled}
             apiFormat={localCodexApiFormat}
             onApiFormatChange={handleCodexApiFormatChange}
             shouldShowModelField={category !== "official"}

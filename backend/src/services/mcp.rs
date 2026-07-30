@@ -266,4 +266,95 @@ impl McpService {
         crate::mcp::import_from_opencode(&mut imported)?;
         Self::persist_imported_servers(state, imported, AppType::OpenCode)
     }
+
+    /// Best-effort 导入所有当前支持 MCP 的应用，并在结束后聚合上报失败。
+    pub fn import_from_all_apps(state: &AppState) -> Result<usize, AppError> {
+        let results = [
+            ("claude", Self::import_from_claude(state)),
+            ("codex", Self::import_from_codex(state)),
+            ("gemini", Self::import_from_gemini(state)),
+            ("grokbuild", Self::import_from_grokbuild(state)),
+            ("opencode", Self::import_from_opencode(state)),
+        ];
+        let mut total = 0;
+        let mut failures = Vec::new();
+
+        for (app, result) in results {
+            match result {
+                Ok(count) => total += count,
+                Err(error) => {
+                    log::warn!("从 {app} 导入 MCP 失败: {error}");
+                    failures.push(format!("{app}: {error}"));
+                }
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(total)
+        } else {
+            Err(AppError::Message(format!(
+                "已导入 {total} 个，部分应用导入失败: {}",
+                failures.join("; ")
+            )))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct TestHome {
+        previous: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            crate::settings::reload_settings().expect("reload test settings");
+            Self {
+                previous,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+            crate::settings::reload_settings().expect("restore settings");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn import_from_all_apps_reports_failure_but_keeps_successes() {
+        let _home = TestHome::new();
+        std::fs::write(
+            crate::config::get_claude_mcp_path(),
+            r#"{"mcpServers":{"alpha":{"type":"stdio","command":"echo"}}}"#,
+        )
+        .expect("write claude mcp");
+        let codex_path = crate::codex_config::get_codex_config_path();
+        std::fs::create_dir_all(codex_path.parent().expect("codex parent"))
+            .expect("create codex dir");
+        std::fs::write(codex_path, "not = = valid toml").expect("write invalid codex config");
+
+        let db = Arc::new(crate::database::Database::memory().expect("database"));
+        let state = AppState::new(db.clone());
+        let error = McpService::import_from_all_apps(&state)
+            .expect_err("invalid Codex config must be reported");
+
+        assert!(error.to_string().contains("codex"));
+        let servers = db.get_all_mcp_servers().expect("servers");
+        assert!(servers.get("alpha").is_some_and(|server| server.apps.claude));
+    }
 }

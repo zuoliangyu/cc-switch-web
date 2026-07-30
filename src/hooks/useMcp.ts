@@ -20,7 +20,8 @@ export function useUpsertMcpServer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (server: McpServer) => mcpApi.upsertUnifiedServer(server),
-    onSuccess: () => {
+    // 后端按应用 best-effort 导入；部分失败时其余应用可能已经入库。
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["mcp", "all"] });
     },
   });

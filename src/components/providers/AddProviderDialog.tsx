@@ -34,6 +34,7 @@ interface AddProviderDialogProps {
       suggestedDefaults?: OpenClawSuggestedDefaults;
       addToLive?: boolean;
       ensureGrokBuildOfficialSeed?: boolean;
+      ensureCodexOfficialSeed?: boolean;
     },
   ) => Promise<void> | void;
 }
@@ -104,6 +105,7 @@ export function AddProviderDialog({
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       } = {
         name: values.name.trim(),
         notes: values.notes?.trim() || undefined,
@@ -121,6 +123,14 @@ export function AddProviderDialog({
         values.presetId === GROKBUILD_OFFICIAL_PROVIDER_ID
       ) {
         providerData.ensureGrokBuildOfficialSeed = true;
+      }
+
+      if (
+        appId === "codex" &&
+        values.presetCategory === "official" &&
+        values.presetId === "codex-0"
+      ) {
+        providerData.ensureCodexOfficialSeed = true;
       }
 
       // 累加模式应用：传递 providerKey 作为 Provider ID

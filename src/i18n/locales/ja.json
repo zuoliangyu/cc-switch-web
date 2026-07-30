@@ -958,7 +958,9 @@
     "categoryThirdParty": "サードパーティ"
   },
   "codex": {
-    "needsRouting": "ルーティング必須"
+    "needsRouting": "ルーティング必須",
+    "nativeLogin": "Codex ログイン",
+    "officialRouting": "公式アカウントルーティング"
   },
   "copilot": {
     "authSection": "GitHub Copilot 認証",

@@ -9,7 +9,10 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import { invalidateHermesProviderCaches } from "@/hooks/useHermes";
-import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
+import {
+  CODEX_OFFICIAL_PROVIDER_ID,
+  GROKBUILD_OFFICIAL_PROVIDER_ID,
+} from "@/utils/providerCapabilities";
 
 export const useAddProviderMutation = (appId: AppId) => {
   const queryClient = useQueryClient();
@@ -21,12 +24,14 @@ export const useAddProviderMutation = (appId: AppId) => {
         providerKey?: string;
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       },
     ) => {
       const {
         providerKey: _providerKey,
         addToLive,
         ensureGrokBuildOfficialSeed,
+        ensureCodexOfficialSeed,
         ...rest
       } = providerInput;
 
@@ -43,11 +48,7 @@ export const useAddProviderMutation = (appId: AppId) => {
 
       let id: string;
 
-      if (
-        appId === "opencode" ||
-        appId === "openclaw" ||
-        appId === "hermes"
-      ) {
+      if (appId === "opencode" || appId === "openclaw" || appId === "hermes") {
         if (
           providerInput.category === "omo" ||
           providerInput.category === "omo-slim"
@@ -60,6 +61,8 @@ export const useAddProviderMutation = (appId: AppId) => {
           }
           id = providerInput.providerKey;
         }
+      } else if (appId === "codex" && ensureCodexOfficialSeed) {
+        id = CODEX_OFFICIAL_PROVIDER_ID;
       } else {
         id = generateUUID();
       }

@@ -251,6 +251,23 @@ describe("useProviderActions", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("allows the built-in Codex official provider during takeover", async () => {
+    switchProviderMutateAsync.mockResolvedValueOnce({ warnings: [] });
+    const { wrapper } = createWrapper();
+    const provider = createProvider({ id: "codex-official" });
+    const { result } = renderHook(
+      () => useProviderActions("codex", true, true),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+
+    expect(switchProviderMutateAsync).toHaveBeenCalledWith("codex-official");
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
   it("should call delete mutation when calling deleteProvider", async () => {
     deleteProviderMutateAsync.mockResolvedValueOnce(undefined);
     const { wrapper } = createWrapper();

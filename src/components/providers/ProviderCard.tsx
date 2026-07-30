@@ -20,7 +20,10 @@ import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBa
 import { PROVIDER_TYPES } from "@/config/constants";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
-import { providerNeedsRouting } from "@/utils/providerCapabilities";
+import {
+  providerNeedsRouting,
+  supportsOfficialProxyTakeover,
+} from "@/utils/providerCapabilities";
 import { useProviderHealth } from "@/lib/query/failover";
 import { useUsageQuery } from "@/lib/query/queries";
 
@@ -191,6 +194,10 @@ export function ProviderCard({
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
   const needsRouting = providerNeedsRouting(appId, provider);
+  const supportsOfficialRouting = supportsOfficialProxyTakeover(
+    appId,
+    provider,
+  );
 
   // 获取用量数据以判断是否有多套餐
   // 累加模式应用（OpenCode/OpenClaw/Hermes）：使用 isInConfig 代替 isCurrent
@@ -354,6 +361,18 @@ export function ProviderCard({
                   {t("codex.needsRouting", {
                     defaultValue: "需要路由",
                   })}
+                </span>
+              )}
+
+              {supportsOfficialRouting && (
+                <span className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                  {isProxyTakeover
+                    ? t("codex.officialRouting", {
+                        defaultValue: "官方账号路由",
+                      })
+                    : t("codex.nativeLogin", {
+                        defaultValue: "Codex 登录",
+                      })}
                 </span>
               )}
 

@@ -8,6 +8,18 @@ import {
 } from "@/utils/providerConfigUtils";
 
 export const GROKBUILD_OFFICIAL_PROVIDER_ID = "grokbuild-official";
+export const CODEX_OFFICIAL_PROVIDER_ID = "codex-official";
+
+export function supportsOfficialProxyTakeover(
+  appId: AppId,
+  provider: Pick<Provider, "id" | "category">,
+): boolean {
+  return (
+    appId === "codex" &&
+    provider.id === CODEX_OFFICIAL_PROVIDER_ID &&
+    provider.category === "official"
+  );
+}
 
 /** 供应商是否必须由当前应用的本地路由接管。 */
 export function providerNeedsRouting(

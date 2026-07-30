@@ -14,6 +14,12 @@ use toml::Value as TomlValue;
 /// Codex 适配器
 pub struct CodexAdapter;
 
+/// 只有固定的内置官方条目可以复用 Codex 客户端携带的 ChatGPT 登录。
+pub fn is_codex_official_provider(provider: &Provider) -> bool {
+    provider.id == crate::database::CODEX_OFFICIAL_PROVIDER_ID
+        && provider.category.as_deref() == Some("official")
+}
+
 // ---------------------------------------------------------------------------
 // Codex Chat Completions 路由判定（跟随上游 cc-switch 1c82b8a3）
 //
@@ -574,6 +580,10 @@ impl ProviderAdapter for CodexAdapter {
     }
 
     fn extract_base_url(&self, provider: &Provider) -> Result<String, ProxyError> {
+        if is_codex_official_provider(provider) {
+            return Ok(super::CHATGPT_CODEX_BASE_URL.to_string());
+        }
+
         if provider.is_xai_oauth() {
             return Ok(super::XAI_API_BASE_URL.to_string());
         }
@@ -1002,5 +1012,20 @@ wire_api = "chat"
                 .unwrap();
         assert_eq!(config.effort_param.as_deref(), Some("reasoning.effort"));
         assert_eq!(config.thinking_param.as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn official_provider_uses_fixed_chatgpt_backend_without_stored_key() {
+        let mut provider = create_provider(json!({ "auth": {}, "config": "" }));
+        provider.id = crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string();
+        provider.category = Some("official".to_string());
+        let adapter = CodexAdapter::new();
+
+        assert!(is_codex_official_provider(&provider));
+        assert_eq!(
+            adapter.extract_base_url(&provider).expect("official URL"),
+            crate::proxy::providers::CHATGPT_CODEX_BASE_URL
+        );
+        assert!(adapter.extract_auth(&provider).is_none());
     }
 }

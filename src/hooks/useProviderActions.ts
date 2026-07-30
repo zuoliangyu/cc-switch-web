@@ -24,7 +24,10 @@ import {
   isCodexChatWireApi,
 } from "@/utils/providerConfigUtils";
 import { isOAuthProviderType } from "@/config/constants";
-import { providerNeedsRouting } from "@/utils/providerCapabilities";
+import {
+  providerNeedsRouting,
+  supportsOfficialProxyTakeover,
+} from "@/utils/providerCapabilities";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -75,6 +78,7 @@ export function useProviderActions(
         suggestedDefaults?: OpenClawSuggestedDefaults;
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
+        ensureCodexOfficialSeed?: boolean;
       },
     ) => {
       await addProviderMutation.mutateAsync(provider);
@@ -233,7 +237,11 @@ export function useProviderActions(
         return;
       }
 
-      if (isProxyTakeover && provider.category === "official") {
+      if (
+        isProxyTakeover &&
+        provider.category === "official" &&
+        !supportsOfficialProxyTakeover(activeApp, provider)
+      ) {
         toast.error(
           t("notifications.officialBlockedByProxy", {
             defaultValue:

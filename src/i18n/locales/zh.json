@@ -958,7 +958,9 @@
     "categoryThirdParty": "第三方"
   },
   "codex": {
-    "needsRouting": "需要路由"
+    "needsRouting": "需要路由",
+    "nativeLogin": "Codex 登录",
+    "officialRouting": "官方账号路由"
   },
   "copilot": {
     "authSection": "GitHub Copilot 认证",

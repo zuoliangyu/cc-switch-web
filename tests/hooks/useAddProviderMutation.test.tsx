@@ -94,4 +94,32 @@ describe("useAddProviderMutation", () => {
       undefined,
     );
   });
+
+  it("Codex 官方预设使用稳定 Provider ID", async () => {
+    addMock.mockResolvedValue(undefined);
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useAddProviderMutation("codex"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        name: "OpenAI Official",
+        category: "official",
+        settingsConfig: { auth: {}, config: "" },
+        ensureCodexOfficialSeed: true,
+      });
+    });
+
+    expect(addMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "codex-official" }),
+      "codex",
+      undefined,
+    );
+  });
 });

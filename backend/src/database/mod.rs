@@ -50,6 +50,9 @@ pub(crate) const SCHEMA_VERSION: i32 = 13;
 /// Claude Desktop 官方预设供应商 ID（恢复官方配置时识别用）
 pub(crate) const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID: &str = "claude-desktop-official";
 
+/// Codex 内置官方供应商 ID；只有这个固定条目允许复用 Codex 原生 ChatGPT 登录。
+pub(crate) const CODEX_OFFICIAL_PROVIDER_ID: &str = "codex-official";
+
 /// 安全地序列化 JSON，避免 unwrap panic
 pub(crate) fn to_json_string<T: Serialize>(value: &T) -> Result<String, AppError> {
     serde_json::to_string(value)

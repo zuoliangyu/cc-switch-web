@@ -14,6 +14,7 @@ vi.mock("@/lib/query/queries", () => ({
 }));
 vi.mock("@/utils/providerCapabilities", () => ({
   providerNeedsRouting: () => false,
+  supportsOfficialProxyTakeover: () => false,
 }));
 vi.mock("@/components/providers/ProviderActions", () => ({
   ProviderActions: () => null,

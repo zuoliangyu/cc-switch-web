@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Provider } from "@/types";
-import { providerNeedsRouting } from "@/utils/providerCapabilities";
+import {
+  providerNeedsRouting,
+  supportsOfficialProxyTakeover,
+} from "@/utils/providerCapabilities";
 
 const provider = (overrides: Partial<Provider> = {}): Provider => ({
   id: "p1",
@@ -13,6 +16,21 @@ const codexConfig = (wireApi: string) =>
   `model_provider = "custom"\n\n[model_providers.custom]\nwire_api = "${wireApi}"\n`;
 
 describe("providerNeedsRouting", () => {
+  it("只有固定 Codex 官方条目支持原生登录接管", () => {
+    expect(
+      supportsOfficialProxyTakeover(
+        "codex",
+        provider({ id: "codex-official", category: "official" }),
+      ),
+    ).toBe(true);
+    expect(
+      supportsOfficialProxyTakeover(
+        "codex",
+        provider({ id: "custom-official", category: "official" }),
+      ),
+    ).toBe(false);
+  });
+
   it("官方供应商不需要路由", () => {
     expect(
       providerNeedsRouting(

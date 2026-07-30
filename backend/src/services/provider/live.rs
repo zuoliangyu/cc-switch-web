@@ -7,7 +7,7 @@ use toml_edit::{DocumentMut, Item, TableLike};
 
 use crate::app_config::AppType;
 use crate::codex_config::{get_codex_auth_path, write_codex_live_atomic_with_stable_provider};
-use crate::config::{get_claude_settings_path, read_json_file, write_json_file};
+use crate::config::{get_claude_settings_path, read_json_file, write_json_file, write_text_file};
 use crate::database::Database;
 use crate::error::AppError;
 use crate::provider::Provider;
@@ -684,10 +684,15 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 AppError::Config("Codex 供应商配置缺少 'config' 字段或不是字符串".to_string())
             })?;
 
-            // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
-            // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
-            // 让 Codex resume history 不会因为切换 provider 漂移。
-            write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
+            if crate::proxy::providers::is_codex_official_provider(provider) {
+                // 官方条目不持有凭据；只恢复 config.toml，保留 Codex 原生 ChatGPT 登录。
+                write_text_file(&crate::codex_config::get_codex_config_path(), config_str)?;
+            } else {
+                // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
+                // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
+                // 让 Codex resume history 不会因为切换 provider 漂移。
+                write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
+            }
         }
         AppType::Gemini => {
             // Delegate to write_gemini_live which handles env file writing correctly

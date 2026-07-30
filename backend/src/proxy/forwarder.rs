@@ -37,6 +37,22 @@ use tokio::sync::RwLock;
 /// 和 `chatgpt.com/backend-api/codex`）。跟随上游 cc-switch 61e68d75。
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
 
+fn validate_codex_official_authorization(headers: &http::HeaderMap) -> Result<(), ProxyError> {
+    match headers
+        .get(http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+    {
+        None | Some("") => Err(ProxyError::AuthError(
+            "Codex 官方登录不可用，请先在 Codex 中完成 ChatGPT 登录".to_string(),
+        )),
+        Some(value) if value.contains(PROXY_AUTH_PLACEHOLDER) => Err(ProxyError::AuthError(
+            "已切换到 OpenAI 官方供应商，请重启 Codex 或新建会话以加载官方登录配置".to_string(),
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
 pub struct ForwardResult {
     pub response: ProxyResponse,
     pub provider: Provider,
@@ -923,6 +939,11 @@ impl RequestForwarder {
         // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
         let codex_responses_to_chat = matches!(app_type, AppType::Codex | AppType::GrokBuild)
             && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
+        let codex_official_auth_passthrough = matches!(app_type, AppType::Codex)
+            && super::providers::is_codex_official_provider(provider);
+        if codex_official_auth_passthrough {
+            validate_codex_official_authorization(headers)?;
+        }
         let codex_impersonate_claude_code = codex_responses_to_anthropic
             && provider
                 .meta
@@ -1355,6 +1376,12 @@ impl RequestForwarder {
                 || key_str.eq_ignore_ascii_case("x-api-key")
                 || key_str.eq_ignore_ascii_case("x-goog-api-key")
             {
+                if codex_official_auth_passthrough && key_str.eq_ignore_ascii_case("authorization")
+                {
+                    saw_auth = true;
+                    ordered_headers.append(key.clone(), value.clone());
+                    continue;
+                }
                 if !saw_auth {
                     saw_auth = true;
                     for (ah_name, ah_value) in &auth_headers {
@@ -1712,6 +1739,19 @@ impl RequestForwarder {
     }
 
     fn categorize_proxy_error(error: &ProxyError, provider: &Provider) -> ErrorCategory {
+        if super::providers::is_codex_official_provider(provider)
+            && (matches!(error, ProxyError::AuthError(_))
+                || matches!(
+                    error,
+                    ProxyError::UpstreamError {
+                        status: 401 | 403,
+                        ..
+                    }
+                ))
+        {
+            return ErrorCategory::NonRetryable;
+        }
+
         if provider.is_xai_oauth() && matches!(error, ProxyError::AuthError(_)) {
             return ErrorCategory::NonRetryable;
         }
@@ -2713,6 +2753,37 @@ mod tests {
             )
             .as_deref(),
             Some("overloaded_error: busy")
+        );
+    }
+
+    #[test]
+    fn official_codex_rejects_placeholder_and_auth_failures_do_not_failover() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer PROXY_MANAGED"),
+        );
+        assert!(matches!(
+            validate_codex_official_authorization(&headers),
+            Err(ProxyError::AuthError(message)) if message.contains("重启 Codex")
+        ));
+
+        let mut provider = Provider::with_id(
+            crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string(),
+            "OpenAI Official".to_string(),
+            json!({ "auth": {}, "config": "" }),
+            None,
+        );
+        provider.category = Some("official".to_string());
+        assert_eq!(
+            RequestForwarder::categorize_proxy_error(
+                &ProxyError::UpstreamError {
+                    status: 401,
+                    body: None,
+                },
+                &provider,
+            ),
+            ErrorCategory::NonRetryable
         );
     }
 }

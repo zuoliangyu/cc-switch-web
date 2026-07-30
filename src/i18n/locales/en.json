@@ -958,7 +958,9 @@
     "categoryThirdParty": "Third Party"
   },
   "codex": {
-    "needsRouting": "Needs routing"
+    "needsRouting": "Needs routing",
+    "nativeLogin": "Codex login",
+    "officialRouting": "Official account routing"
   },
   "copilot": {
     "authSection": "GitHub Copilot Authentication",

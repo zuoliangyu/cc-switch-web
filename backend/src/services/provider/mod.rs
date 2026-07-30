@@ -54,6 +54,12 @@ pub struct SwitchResult {
     pub warnings: Vec<String>,
 }
 
+/// 官方供应商通常禁止代理接管；Codex 固定内置条目是唯一例外。
+pub fn official_provider_supports_proxy_takeover(app_type: &AppType, provider: &Provider) -> bool {
+    matches!(app_type, AppType::Codex)
+        && crate::proxy::providers::is_codex_official_provider(provider)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -882,7 +888,10 @@ impl ProviderService {
         // Hot-switch only when BOTH: this app is taken over AND proxy server is actually running
         let should_hot_switch = (is_app_taken_over || live_taken_over) && is_proxy_running;
 
-        if should_hot_switch && _provider.category.as_deref() == Some("official") {
+        if should_hot_switch
+            && _provider.category.as_deref() == Some("official")
+            && !official_provider_supports_proxy_takeover(&app_type, _provider)
+        {
             return Err(AppError::localized(
                 "provider.switch.official_blocked_by_proxy",
                 "Routing 激活时不能切换到官方供应商，经由本地代理访问官方 API 可能导致账号风险。请先关闭 Routing，或改用第三方供应商。",
@@ -923,6 +932,9 @@ impl ProviderService {
                 if let Err(e) = state.proxy_service.cleanup_claude_model_overrides_in_live() {
                     log::warn!("清理 Claude Live 模型字段失败（不影响切换结果）: {e}");
                 }
+            } else if matches!(app_type, AppType::Codex) {
+                futures::executor::block_on(state.proxy_service.reapply_codex_takeover_live())
+                    .map_err(|e| AppError::Message(format!("刷新 Codex 接管配置失败: {e}")))?;
             }
 
             // Note: No Live config write, no MCP sync

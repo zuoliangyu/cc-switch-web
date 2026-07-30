@@ -6,6 +6,7 @@ import { useGeminiCommonConfig } from "@/components/providers/forms/hooks/useGem
 const getCommonConfigSnippetMock = vi.fn();
 const setCommonConfigSnippetMock = vi.fn();
 const extractCommonConfigSnippetMock = vi.fn();
+const updateTomlCommonConfigSnippetMock = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   configApi: {
@@ -15,6 +16,8 @@ vi.mock("@/lib/api", () => ({
       setCommonConfigSnippetMock(...args),
     extractCommonConfigSnippet: (...args: unknown[]) =>
       extractCommonConfigSnippetMock(...args),
+    updateTomlCommonConfigSnippet: (...args: unknown[]) =>
+      updateTomlCommonConfigSnippetMock(...args),
   },
 }));
 
@@ -23,22 +26,25 @@ describe("common config snippet saving", () => {
     getCommonConfigSnippetMock.mockResolvedValue("");
     setCommonConfigSnippetMock.mockResolvedValue(undefined);
     extractCommonConfigSnippetMock.mockResolvedValue("");
+    updateTomlCommonConfigSnippetMock.mockImplementation(
+      async (configToml: string) => configToml,
+    );
   });
 
   it("does not persist an invalid Codex common config snippet", async () => {
     const onConfigChange = vi.fn();
     const { result } = renderHook(() =>
       useCodexCommonConfig({
-        codexConfig: "model = \"gpt-5\"",
+        codexConfig: 'model = "gpt-5"',
         onConfigChange,
       }),
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    let saved = false;
-    act(() => {
-      saved = result.current.handleCommonConfigSnippetChange(
+    let saved = true;
+    await act(async () => {
+      saved = await result.current.handleCommonConfigSnippetChange(
         "base_url = https://bad.example/v1",
       );
     });
@@ -47,6 +53,89 @@ describe("common config snippet saving", () => {
     expect(setCommonConfigSnippetMock).not.toHaveBeenCalled();
     expect(onConfigChange).not.toHaveBeenCalled();
     expect(result.current.commonConfigError).toContain("invalid value");
+  });
+
+  it("keeps the latest toggle result when backend responses finish out of order", async () => {
+    getCommonConfigSnippetMock.mockResolvedValue(
+      "[tui]\nnotifications = true\n",
+    );
+    const onConfigChange = vi.fn();
+    const { result } = renderHook(() =>
+      useCodexCommonConfig({
+        codexConfig: 'model = "gpt-5"',
+        onConfigChange,
+        initialData: { settingsConfig: { config: 'model = "gpt-5"' } },
+        initialEnabled: false,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.useCommonConfig).toBe(false));
+
+    let resolveMerge: ((value: string) => void) | undefined;
+    updateTomlCommonConfigSnippetMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveMerge = resolve;
+          }),
+      )
+      .mockImplementationOnce(async (configToml: string) => configToml);
+
+    await act(async () => {
+      const mergePending = result.current.handleCommonConfigToggle(true);
+      const removeDone = result.current.handleCommonConfigToggle(false);
+      await removeDone;
+      resolveMerge?.('model = "gpt-5"\n\n[tui]\nnotifications = true\n');
+      await mergePending;
+    });
+
+    expect(result.current.useCommonConfig).toBe(false);
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+    expect(onConfigChange.mock.calls.at(-1)?.[0]).not.toContain("[tui]");
+  });
+
+  it("discards a merge based on config edited while the request was in flight", async () => {
+    getCommonConfigSnippetMock.mockResolvedValue(
+      "[tui]\nnotifications = true\n",
+    );
+    const initialData = { settingsConfig: { config: 'model = "gpt-5"' } };
+    const onConfigChange = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ config }: { config: string }) =>
+        useCodexCommonConfig({
+          codexConfig: config,
+          onConfigChange,
+          initialData,
+          initialEnabled: false,
+        }),
+      { initialProps: { config: 'model = "gpt-5"' } },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.useCommonConfig).toBe(false));
+
+    let resolveMerge: ((value: string) => void) | undefined;
+    updateTomlCommonConfigSnippetMock.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveMerge = resolve;
+        }),
+    );
+
+    let togglePending: Promise<void> = Promise.resolve();
+    act(() => {
+      togglePending = result.current.handleCommonConfigToggle(true);
+    });
+    rerender({ config: 'model = "gpt-6-user-edit"' });
+
+    await act(async () => {
+      resolveMerge?.('model = "gpt-5"\n\n[tui]\nnotifications = true\n');
+      await togglePending;
+    });
+
+    expect(onConfigChange).not.toHaveBeenCalled();
+    expect(result.current.useCommonConfig).toBe(false);
   });
 
   it("does not persist an invalid Gemini common config snippet", async () => {

@@ -392,6 +392,18 @@ export async function extractWebCommonConfigSnippet(
   );
 }
 
+export async function updateWebTomlCommonConfigSnippet(
+  configToml: string,
+  snippetToml: string,
+  enabled: boolean,
+): Promise<string> {
+  return requestWithBody<string>(
+    "/api/settings/common-config/codex/update-toml",
+    "POST",
+    { configToml, snippetToml, enabled },
+  );
+}
+
 export async function syncWebCurrentProvidersLive(): Promise<{
   success?: boolean;
   message?: string;

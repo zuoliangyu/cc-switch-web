@@ -304,6 +304,38 @@ fn remove_toml_table_like(target: &mut dyn TableLike, source: &dyn TableLike) {
     }
 }
 
+/// 在编辑器的 config.toml 文本中结构化合并或剥离通用配置片段。
+/// 使用 toml_edit 保留用户注释和键顺序。
+pub fn update_toml_common_config_snippet(
+    config_toml: &str,
+    snippet_toml: &str,
+    enabled: bool,
+) -> Result<String, AppError> {
+    let trimmed = snippet_toml.trim();
+    if trimmed.is_empty() {
+        return Ok(config_toml.to_string());
+    }
+
+    let mut target_doc = if config_toml.trim().is_empty() {
+        DocumentMut::new()
+    } else {
+        config_toml
+            .parse::<DocumentMut>()
+            .map_err(|error| AppError::Message(format!("Invalid Codex config.toml: {error}")))?
+    };
+    let source_doc = trimmed.parse::<DocumentMut>().map_err(|error| {
+        AppError::Message(format!("Invalid Codex common config snippet: {error}"))
+    })?;
+
+    if enabled {
+        merge_toml_table_like(target_doc.as_table_mut(), source_doc.as_table());
+    } else {
+        remove_toml_table_like(target_doc.as_table_mut(), source_doc.as_table());
+    }
+
+    Ok(target_doc.to_string())
+}
+
 fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet: &str) -> bool {
     let trimmed = snippet.trim();
     if trimmed.is_empty() {
@@ -1356,6 +1388,50 @@ pub fn remove_hermes_provider_from_live(provider_id: &str) -> Result<(), AppErro
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn update_toml_common_config_preserves_comments_and_key_order() {
+        let config = r#"# user comment
+model = "gpt-5.5"
+model_provider = "custom"
+disable_response_storage = true
+
+[model_providers.custom]
+# provider comment
+name = "Custom"
+base_url = "https://example.com/v1"
+"#;
+        let snippet = "[tui]\nnotifications = true\n";
+
+        let merged = update_toml_common_config_snippet(config, snippet, true).unwrap();
+        assert!(merged.contains("# user comment"));
+        assert!(merged.contains("# provider comment"));
+        assert!(merged.find("model = ").unwrap() < merged.find("model_provider = ").unwrap());
+        assert!(
+            merged.find("model_provider = ").unwrap()
+                < merged.find("disable_response_storage").unwrap()
+        );
+        assert!(merged.contains("[tui]"));
+        assert!(!merged.contains("[model_providers]\n"));
+
+        let removed = update_toml_common_config_snippet(&merged, snippet, false).unwrap();
+        assert!(!removed.contains("[tui]"));
+        assert!(removed.contains("# user comment"));
+    }
+
+    #[test]
+    fn update_toml_common_config_removes_only_matching_values() {
+        let snippet = "[tui]\nnotifications = true\n";
+        let merged =
+            update_toml_common_config_snippet("[tui]\nnotifications = false\n", snippet, true)
+                .unwrap();
+        assert!(merged.contains("notifications = true"));
+
+        let removed =
+            update_toml_common_config_snippet("[tui]\nnotifications = false\n", snippet, false)
+                .unwrap();
+        assert!(removed.contains("notifications = false"));
+    }
 
     #[test]
     fn claude_common_config_apply_and_remove_roundtrip_for_non_overlapping_fields() {

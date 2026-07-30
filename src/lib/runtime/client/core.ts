@@ -125,6 +125,7 @@ import {
   syncWebUniversalProvider,
   testWebProxyUrl,
   toggleWebMcpApp,
+  updateWebTomlCommonConfigSnippet,
   launchWebHermesDashboard,
   setWebProxyTakeoverForApp,
   startWebProxyServer,
@@ -245,6 +246,12 @@ export async function invoke<T>(
       return (await extractWebCommonConfigSnippet(
         args?.appType as string,
         args?.settingsConfig as string | undefined,
+      )) as T;
+    case "update_toml_common_config_snippet":
+      return (await updateWebTomlCommonConfigSnippet(
+        (args?.configToml as string | undefined) ?? "",
+        (args?.snippetToml as string | undefined) ?? "",
+        args?.enabled === true,
       )) as T;
     case "sync_current_providers_live":
       return (await syncWebCurrentProvidersLive()) as T;

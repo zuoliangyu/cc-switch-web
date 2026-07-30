@@ -131,6 +131,14 @@ struct ExtractCommonConfigSnippetRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct UpdateTomlCommonConfigSnippetRequest {
+    config_toml: String,
+    snippet_toml: String,
+    enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ProviderIdRequest {
     provider_id: String,
 }
@@ -2226,6 +2234,18 @@ async fn extract_common_config_snippet(
     }
 }
 
+async fn update_toml_common_config_snippet(
+    Json(payload): Json<UpdateTomlCommonConfigSnippetRequest>,
+) -> Result<Json<String>, ApiError> {
+    crate::services::provider::update_toml_common_config_snippet(
+        &payload.config_toml,
+        &payload.snippet_toml,
+        payload.enabled,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::bad_request(error.to_string()))
+}
+
 async fn sync_current_providers_live(
     State(state): State<WebApiState>,
 ) -> Result<Json<Value>, ApiError> {
@@ -3485,6 +3505,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/settings/common-config/:app/extract",
             post(extract_common_config_snippet),
+        )
+        .route(
+            "/api/settings/common-config/codex/update-toml",
+            post(update_toml_common_config_snippet),
         )
         .route(
             "/api/settings/sync-current-providers-live",

@@ -27,6 +27,18 @@ export async function setCommonConfigSnippet(
   return invoke("set_common_config_snippet", { appType, snippet });
 }
 
+export async function updateTomlCommonConfigSnippet(
+  configToml: string,
+  snippetToml: string,
+  enabled: boolean,
+): Promise<string> {
+  return invoke<string>("update_toml_common_config_snippet", {
+    configToml,
+    snippetToml,
+    enabled,
+  });
+}
+
 /**
  * 提取通用配置片段
  *
@@ -54,4 +66,3 @@ export async function extractCommonConfigSnippet(
 
   return invoke<string>("extract_common_config_snippet", args);
 }
-

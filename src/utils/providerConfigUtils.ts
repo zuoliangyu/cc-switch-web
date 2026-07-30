@@ -2,7 +2,7 @@
 
 import type { TemplateValueConfig } from "../config/claudeProviderPresets";
 import { normalizeTomlText } from "@/utils/textNormalization";
-import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import { parse as parseToml } from "smol-toml";
 
 const isPlainObject = (value: unknown): value is Record<string, any> => {
   return Object.prototype.toString.call(value) === "[object Object]";
@@ -382,41 +382,6 @@ export const setApiKeyInConfig = (
 };
 
 // ========== TOML Config Utilities ==========
-
-export interface UpdateTomlCommonConfigResult {
-  updatedConfig: string;
-  error?: string;
-}
-
-// Write/remove common config snippet to/from TOML config (structural merge)
-export const updateTomlCommonConfigSnippet = (
-  tomlString: string,
-  snippetString: string,
-  enabled: boolean,
-): UpdateTomlCommonConfigResult => {
-  if (!snippetString.trim()) {
-    return { updatedConfig: tomlString };
-  }
-
-  try {
-    const config = parseToml(normalizeTomlText(tomlString || ""));
-    const snippet = parseToml(normalizeTomlText(snippetString));
-
-    if (enabled) {
-      const merged = deepMerge(
-        deepClone(config) as Record<string, any>,
-        deepClone(snippet) as Record<string, any>,
-      );
-      return { updatedConfig: stringifyToml(merged) };
-    } else {
-      const result = deepClone(config) as Record<string, any>;
-      deepRemove(result, snippet as Record<string, any>);
-      return { updatedConfig: stringifyToml(result) };
-    }
-  } catch (e) {
-    return { updatedConfig: tomlString, error: String(e) };
-  }
-};
 
 // Check if TOML config already contains the common config snippet (structural subset check)
 export const hasTomlCommonConfigSnippet = (

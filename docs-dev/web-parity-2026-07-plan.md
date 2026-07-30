@@ -75,6 +75,7 @@
     - [x] 新增 Provider 页面间距与固定底栏填写提示
     - [x] OpenClaw 预设分类、API Key 获取链接与官方分类凭据输入
     - [x] Provider 自定义 User-Agent、预设选择与代理/检测/模型拉取一致性
+    - [x] Codex 默认模型安全读写、目录建议与映射回退（`7479d10d`）
 
 ## 验证原则
 
@@ -132,3 +133,4 @@
 - 2026-07-30：新增 Provider 页面支持内容区局部间距覆盖，收紧预设区顶部留白，并在固定底栏持续提示补充 API Key 等必填字段。
 - 2026-07-30：补齐 OpenClaw Provider 的预设分类识别和 API Key 获取链接；官方分类仍保留凭据输入，避免沿用 OAuth-only 表单行为。
 - 2026-07-30：完整接入 Provider 自定义 User-Agent；Claude、Codex 与 Grok Build 支持预设选择和非法字符提示，Web 代理转发、健康检查与模型拉取统一应用，官方 Provider 与 Copilot 指纹保持原行为。
+- 2026-07-30：完善 Codex 默认模型配置；严格转义远端模型 ID，合并映射与 `/models` 建议，支持缺失映射提示、快速补入、过期响应丢弃及空值保存回退；14 项定向测试和 TypeScript 类型检查通过。

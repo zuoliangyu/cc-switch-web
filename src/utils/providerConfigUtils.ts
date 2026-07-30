@@ -446,7 +446,10 @@ export const hasTomlCommonConfigSnippet = (
 const TOML_SECTION_HEADER_PATTERN = /^\s*\[([^\]\r\n]+)\]\s*$/;
 const TOML_BASE_URL_PATTERN =
   /^\s*base_url\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
-const TOML_MODEL_PATTERN = /^\s*model\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
+const TOML_MODEL_DOUBLE_QUOTED_PATTERN =
+  /^\s*model\s*=\s*"((?:[^"\\\r\n]|\\.)*)"\s*(?:#.*)?$/;
+const TOML_MODEL_SINGLE_QUOTED_PATTERN =
+  /^\s*model\s*=\s*'([^'\r\n]*)'\s*(?:#.*)?$/;
 const TOML_WIRE_API_PATTERN =
   /^\s*wire_api\s*=\s*(["'])([^"'\r\n]+)\1\s*(?:#.*)?$/;
 const TOML_MODEL_PROVIDER_LINE_PATTERN =
@@ -512,6 +515,43 @@ const getTopLevelEndIndex = (lines: string[]): number => {
   );
   return firstSectionIndex === -1 ? lines.length : firstSectionIndex;
 };
+
+const TOML_BASIC_STRING_ESCAPES: Record<string, string> = {
+  '"': '\\"',
+  "\\": "\\\\",
+  "\b": "\\b",
+  "\t": "\\t",
+  "\n": "\\n",
+  "\f": "\\f",
+  "\r": "\\r",
+};
+
+const tomlBasicString = (value: string): string =>
+  `"${value.replace(/["\\\u0000-\u001f]/g, (character) => {
+    const escaped = TOML_BASIC_STRING_ESCAPES[character];
+    return (
+      escaped ?? `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+    );
+  })}"`;
+
+const TOML_BASIC_STRING_UNESCAPES: Record<string, string> = {
+  '"': '"',
+  "\\": "\\",
+  b: "\b",
+  t: "\t",
+  n: "\n",
+  f: "\f",
+  r: "\r",
+};
+
+const unescapeTomlBasicString = (value: string): string =>
+  value.replace(
+    /\\(?:u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8})|(.))/g,
+    (match, u4, u8, character) => {
+      if (u4 || u8) return String.fromCodePoint(parseInt(u4 || u8, 16));
+      return TOML_BASIC_STRING_UNESCAPES[character] ?? match;
+    },
+  );
 
 const getTomlSectionInsertIndex = (
   lines: string[],
@@ -968,7 +1008,22 @@ export const setCodexBaseUrl = (
 
 // ========== Codex model name utils ==========
 
-// 从 Codex 的 TOML 配置文本中提取 model 字段（支持单/双引号）
+const findTopLevelModelLineIndex = (
+  lines: string[],
+  topLevelEndIndex: number,
+): number => {
+  for (let index = 0; index < topLevelEndIndex; index += 1) {
+    if (
+      TOML_MODEL_DOUBLE_QUOTED_PATTERN.test(lines[index]) ||
+      TOML_MODEL_SINGLE_QUOTED_PATTERN.test(lines[index])
+    ) {
+      return index;
+    }
+  }
+  return -1;
+};
+
+// 从 Codex 的 TOML 配置文本中提取顶层 model 字段
 export const extractCodexModelName = (
   configText: string | undefined | null,
 ): string | undefined => {
@@ -977,13 +1032,14 @@ export const extractCodexModelName = (
     const text = normalizeTomlText(raw);
     if (!text) return undefined;
     const lines = text.split("\n");
-    const topLevelMatch = findTomlAssignmentInRange(
-      lines,
-      TOML_MODEL_PATTERN,
-      0,
-      getTopLevelEndIndex(lines),
-    );
-    return topLevelMatch?.value;
+    const topLevelEndIndex = getTopLevelEndIndex(lines);
+    for (let index = 0; index < topLevelEndIndex; index += 1) {
+      const doubleQuoted = lines[index].match(TOML_MODEL_DOUBLE_QUOTED_PATTERN);
+      if (doubleQuoted) return unescapeTomlBasicString(doubleQuoted[1]);
+      const singleQuoted = lines[index].match(TOML_MODEL_SINGLE_QUOTED_PATTERN);
+      if (singleQuoted) return singleQuoted[1];
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -998,24 +1054,19 @@ export const setCodexModelName = (
   const normalizedText = normalizeTomlText(configText);
   const lines = normalizedText ? normalizedText.split("\n") : [];
   const topLevelEndIndex = getTopLevelEndIndex(lines);
-  const topLevelMatch = findTomlAssignmentInRange(
-    lines,
-    TOML_MODEL_PATTERN,
-    0,
-    topLevelEndIndex,
-  );
+  const modelLineIndex = findTopLevelModelLineIndex(lines, topLevelEndIndex);
 
   if (!trimmed) {
     if (!normalizedText) return normalizedText;
-    if (topLevelMatch) {
-      lines.splice(topLevelMatch.index, 1);
+    if (modelLineIndex !== -1) {
+      lines.splice(modelLineIndex, 1);
     }
     return finalizeTomlText(lines);
   }
 
-  const replacementLine = `model = "${trimmed}"`;
-  if (topLevelMatch) {
-    lines[topLevelMatch.index] = replacementLine;
+  const replacementLine = `model = ${tomlBasicString(trimmed)}`;
+  if (modelLineIndex !== -1) {
+    lines[modelLineIndex] = replacementLine;
     return finalizeTomlText(lines);
   }
 

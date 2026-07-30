@@ -227,11 +227,11 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
   // 处理 Codex Model Name 变化
   const handleCodexModelNameChange = useCallback(
     (modelName: string) => {
-      const trimmed = modelName.trim();
-      setCodexModelName(trimmed);
+      const sanitized = modelName.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+      setCodexModelName(sanitized);
 
       isUpdatingCodexModelNameRef.current = true;
-      setCodexConfig((prev) => setCodexModelNameInConfig(prev, trimmed));
+      setCodexConfig((prev) => setCodexModelNameInConfig(prev, sanitized));
       setTimeout(() => {
         isUpdatingCodexModelNameRef.current = false;
       }, 0);

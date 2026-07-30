@@ -10,6 +10,7 @@
 - Skill 仓库坐标、归档下载与解压增加路径穿越、压缩炸弹、symlink 自递归和目录字段校验；临时目录改为自动清理。
 - Gemini 通用配置不再保存凭据，并在启动时清理供应商、代理备份和 `.env` 中的历史污染。
 - Codex MCP 与 OpenCode 遇到非法配置结构时归一化或报错，不再覆盖原配置或 panic。
+- Codex 默认模型写入严格转义 TOML 字符串，远端 `/models` 返回的异常模型 ID 不再能注入额外配置行。
 - 通用配置合并拒绝 `__proto__`、`constructor`、`prototype` 原型链键。
 - Deeplink 确认页完整显示 MCP 参数和用量脚本，标记高风险命令、环境变量及私网端点，支持 URL-safe Base64；导入用量脚本默认关闭。
 - 托管账号接管按类型只写入一个正确的 Claude 认证占位符。
@@ -45,6 +46,7 @@
 - OpenClaw 预设目录完整对齐上游；应用预设时会按实际 Provider Key 重写主模型、回退模型与模型目录引用。
 - Claude 预设目录完整对齐上游 74 项最终清单，补齐 Kimi、Code0、Qiniu、Gemini Native、OpenCode Go 等供应商，并支持预设指定独立模型目录地址。
 - Codex 表单支持保存和编辑预设模型目录、Chat reasoning 能力与 prompt-cache 路由策略，并在编辑时保留原生 Responses 的隐藏模型能力字段。
+- Codex 默认模型支持合并模型映射与远端目录建议、提示并补入缺失映射；凭据或端点变化会清理过期拉取结果，留空保存时回退到映射首行。
 - Codex 预设目录完整对齐上游 68 项最终清单，新增 Kimi、Code0、Qiniu、OpenCode Go 等供应商，并对齐 Chat/Responses 格式、默认模型、上下文窗口和推理能力。
 - 新增 Hermes 后端应用目标与 `~/.hermes/config.yaml` Provider 生命周期：支持自定义供应商导入、增删改、切换默认模型和三种 API 模式连通检查；保留未知 YAML 配置，`providers:` 字典条目只读，并接入配置目录、Skills 与 Prompts 路径。
 - Hermes 前端接入 Provider 列表和专属表单，支持 additive 添加/移除、默认模型切换、协议与模型编辑、请求间隔、live ID 锁定，以及 `providers:` overlay 只读提示；工具栏开放 Skills、Memory、Web UI 与 MCP 入口。

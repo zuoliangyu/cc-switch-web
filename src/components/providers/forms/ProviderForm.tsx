@@ -55,8 +55,10 @@ import { HermesFormFields } from "./HermesFormFields";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 import {
   applyTemplateValues,
+  extractCodexModelName,
   extractCodexWireApi,
   hasApiKeyField,
+  setCodexModelName as setCodexModelNameInConfig,
   setCodexWireApi,
 } from "@/utils/providerConfigUtils";
 import { mergeProviderMeta } from "@/utils/providerMetaUtils";
@@ -1177,7 +1179,7 @@ function ProviderFormFull({
         // 跟随上游 cc-switch 1c82b8a3：第三方 Codex provider 保存时把 TOML 的
         // wire_api 归一为 "responses"——客户端始终用 Responses 协议跟代理对话，
         // 真实路由是否转 Chat 由 meta.apiFormat 决定。
-        const normalizedCodexConfig =
+        let normalizedCodexConfig =
           category !== "official" && (codexConfig ?? "").trim()
             ? setCodexWireApi(codexConfig ?? "", "responses")
             : (codexConfig ?? "");
@@ -1185,6 +1187,15 @@ function ProviderFormFull({
           category !== "official"
             ? normalizeCodexCatalogModelsForSave(codexCatalogModels)
             : [];
+        if (
+          normalizedCatalogModels.length > 0 &&
+          !extractCodexModelName(normalizedCodexConfig)
+        ) {
+          normalizedCodexConfig = setCodexModelNameInConfig(
+            normalizedCodexConfig,
+            normalizedCatalogModels[0].model,
+          );
+        }
         const configObj = {
           auth: authJson,
           config: normalizedCodexConfig,

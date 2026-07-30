@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
@@ -164,10 +164,24 @@ export function CodexFormFields({
   const { t } = useTranslation();
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const fetchModelsSeqRef = useRef(0);
   const [catalogRows, setCatalogRows] = useState<CodexCatalogRow[]>(() =>
     catalogModels.map((model) => createCatalogRow(model)),
   );
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
+
+  useEffect(() => {
+    fetchModelsSeqRef.current += 1;
+    setFetchedModels((current) => (current.length === 0 ? current : []));
+  }, [
+    codexBaseUrl,
+    isFullUrl,
+    codexApiKey,
+    customUserAgent,
+    isXaiOauthPreset,
+    isXaiOauthAuthenticated,
+    selectedXaiAccountId,
+  ]);
 
   useEffect(() => {
     setCatalogRows((current) =>
@@ -185,6 +199,40 @@ export function CodexFormFields({
     lastSentModelsRef.current = next;
     onCatalogModelsChange(next);
   }, [catalogRows, onCatalogModelsChange]);
+
+  const modelSuggestions = useMemo<FetchedModel[]>(() => {
+    const seen = new Set<string>();
+    const suggestions: FetchedModel[] = [];
+    for (const row of catalogRows) {
+      const id = row.model.trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      suggestions.push({ id, ownedBy: t("codexConfig.modelMappingTitle") });
+    }
+    for (const model of fetchedModels) {
+      if (seen.has(model.id)) continue;
+      seen.add(model.id);
+      suggestions.push(model);
+    }
+    return suggestions;
+  }, [catalogRows, fetchedModels, t]);
+
+  const trimmedModelName = modelName.trim();
+  const isModelOutsideCatalog =
+    catalogRows.length > 0 &&
+    !!trimmedModelName &&
+    !catalogRows.some((row) => row.model.trim() === trimmedModelName);
+
+  const handleAddModelToCatalog = useCallback(() => {
+    if (!onCatalogModelsChange || !trimmedModelName) return;
+    setCatalogRows((current) => [
+      ...current,
+      createCatalogRow({
+        model: trimmedModelName,
+        displayName: trimmedModelName,
+      }),
+    ]);
+  }, [onCatalogModelsChange, trimmedModelName]);
 
   const supportsThinking =
     codexChatReasoning.supportsThinking === true ||
@@ -222,9 +270,11 @@ export function CodexFormFields({
         toast.error(t("xaiOauth.loginRequired"));
         return;
       }
+      const seq = ++fetchModelsSeqRef.current;
       setIsFetchingModels(true);
       fetchXaiOauthModels(selectedXaiAccountId)
         .then((models) => {
+          if (seq !== fetchModelsSeqRef.current) return;
           setFetchedModels(models);
           toast[models.length === 0 ? "info" : "success"](
             t(
@@ -236,10 +286,13 @@ export function CodexFormFields({
           );
         })
         .catch((error) => {
+          if (seq !== fetchModelsSeqRef.current) return;
           console.warn("[XaiOAuth] Failed to fetch models:", error);
           showFetchModelsError(error, t);
         })
-        .finally(() => setIsFetchingModels(false));
+        .finally(() => {
+          if (seq === fetchModelsSeqRef.current) setIsFetchingModels(false);
+        });
       return;
     }
 
@@ -251,6 +304,7 @@ export function CodexFormFields({
       return;
     }
 
+    const seq = ++fetchModelsSeqRef.current;
     setIsFetchingModels(true);
     fetchModelsForConfig(
       codexBaseUrl,
@@ -260,6 +314,7 @@ export function CodexFormFields({
       customUserAgent,
     )
       .then((models) => {
+        if (seq !== fetchModelsSeqRef.current) return;
         setFetchedModels(models);
         if (models.length === 0) {
           toast.info(t("providerForm.fetchModelsEmpty"));
@@ -270,10 +325,13 @@ export function CodexFormFields({
         }
       })
       .catch((error) => {
+        if (seq !== fetchModelsSeqRef.current) return;
         console.warn("[ModelFetch] Failed:", error);
         showFetchModelsError(error, t);
       })
-      .finally(() => setIsFetchingModels(false));
+      .finally(() => {
+        if (seq === fetchModelsSeqRef.current) setIsFetchingModels(false);
+      });
   }, [
     codexApiKey,
     codexBaseUrl,
@@ -378,7 +436,7 @@ export function CodexFormFields({
               htmlFor="codexModelName"
               className="block text-sm font-medium text-foreground"
             >
-              {t("codexConfig.modelName", { defaultValue: "模型名称" })}
+              {t("codexConfig.defaultModelLabel")}
             </label>
             <Button
               type="button"
@@ -400,21 +458,27 @@ export function CodexFormFields({
             id="codexModelName"
             value={modelName}
             onChange={onModelNameChange}
-            placeholder={t("codexConfig.modelNamePlaceholder", {
-              defaultValue: "例如: gpt-5.4",
-            })}
-            fetchedModels={fetchedModels}
+            placeholder={t("codexConfig.defaultModelPlaceholder")}
+            fetchedModels={modelSuggestions}
             isLoading={isFetchingModels}
           />
           <p className="text-xs text-muted-foreground">
-            {modelName.trim()
-              ? t("codexConfig.modelNameHint", {
-                  defaultValue: "指定使用的模型，将自动更新到 config.toml 中",
-                })
-              : t("providerForm.modelHint", {
-                  defaultValue: "💡 留空将使用供应商的默认模型",
-                })}
+            {t("codexConfig.defaultModelHint")}
           </p>
+          {isModelOutsideCatalog && (
+            <p className="flex flex-wrap items-center gap-x-2 text-xs leading-relaxed text-muted-foreground">
+              {t("codexConfig.defaultModelNotInCatalog")}
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={handleAddModelToCatalog}
+              >
+                {t("codexConfig.addToModelMapping")}
+              </Button>
+            </p>
+          )}
         </div>
       )}
 

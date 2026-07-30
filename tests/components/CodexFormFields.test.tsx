@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CodexFormFields } from "@/components/providers/forms/CodexFormFields";
 
 const fetchXaiOauthModelsMock = vi.hoisted(() => vi.fn());
+const fetchModelsForConfigMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -20,7 +21,7 @@ vi.mock("@/components/ui/form", () => ({
 }));
 
 vi.mock("@/lib/api/model-fetch", () => ({
-  fetchModelsForConfig: vi.fn(),
+  fetchModelsForConfig: fetchModelsForConfigMock,
   fetchXaiOauthModels: fetchXaiOauthModelsMock,
   showFetchModelsError: vi.fn(),
 }));
@@ -34,7 +35,12 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 vi.mock("@/components/providers/forms/shared", () => ({
   ApiKeySection: () => <div data-testid="api-key-field" />,
   EndpointField: () => <div data-testid="endpoint-field" />,
-  ModelInputWithFetch: () => <div data-testid="model-field" />,
+  ModelInputWithFetch: ({ fetchedModels }: { fetchedModels: unknown[] }) => (
+    <div
+      data-testid="model-field"
+      data-models={JSON.stringify(fetchedModels)}
+    />
+  ),
 }));
 
 function renderXaiOauthFields() {
@@ -145,6 +151,71 @@ describe("CodexFormFields", () => {
           supportsParallelToolCalls: true,
           inputModalities: ["text", "image"],
           baseInstructions: "You are MiMo.",
+        }),
+      ]),
+    );
+  });
+
+  it("默认模型合并目录与远端建议，并可加入模型映射", async () => {
+    fetchModelsForConfigMock.mockResolvedValueOnce([
+      { id: "mapped-model" },
+      { id: "remote-model", ownedBy: "remote" },
+    ]);
+    const onCatalogModelsChange = vi.fn();
+    render(
+      <CodexFormFields
+        codexApiKey="sk-test"
+        onApiKeyChange={vi.fn()}
+        category="third_party"
+        shouldShowApiKeyLink={false}
+        websiteUrl="https://example.com"
+        shouldShowSpeedTest
+        codexBaseUrl="https://example.com/v1"
+        onBaseUrlChange={vi.fn()}
+        isFullUrl={false}
+        onFullUrlChange={vi.fn()}
+        isEndpointModalOpen={false}
+        onEndpointModalToggle={vi.fn()}
+        autoSelect={false}
+        onAutoSelectChange={vi.fn()}
+        apiFormat="openai_responses"
+        onApiFormatChange={vi.fn()}
+        promptCacheRouting="auto"
+        onPromptCacheRoutingChange={vi.fn()}
+        modelName="outside-model"
+        onModelNameChange={vi.fn()}
+        catalogModels={[{ model: "mapped-model" }]}
+        onCatalogModelsChange={onCatalogModelsChange}
+        speedTestEndpoints={[]}
+        customUserAgent="cc-switch-test"
+        onCustomUserAgentChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("model-field")).toHaveAttribute(
+        "data-models",
+        expect.stringContaining('"id":"remote-model"'),
+      ),
+    );
+    expect(screen.getByTestId("model-field")).toHaveAttribute(
+      "data-models",
+      expect.stringContaining('"id":"mapped-model"'),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "codexConfig.addToModelMapping" }),
+    );
+    await waitFor(() =>
+      expect(onCatalogModelsChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ model: "mapped-model" }),
+        expect.objectContaining({
+          model: "outside-model",
+          displayName: "outside-model",
         }),
       ]),
     );

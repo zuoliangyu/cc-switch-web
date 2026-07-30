@@ -27,10 +27,21 @@ pub fn get_settings_internal() -> crate::settings::AppSettings {
 }
 
 /// 保存设置
-pub fn save_settings_internal(settings: crate::settings::AppSettings) -> Result<bool, String> {
+pub fn save_settings_internal(
+    state: &crate::store::AppState,
+    settings: crate::settings::AppSettings,
+) -> Result<bool, String> {
     let existing = crate::settings::get_settings();
     let merged = merge_settings_for_save(settings, &existing);
+    let unify_changed = merged.unify_codex_session_history != existing.unify_codex_session_history;
     crate::settings::update_settings(merged).map_err(|e| e.to_string())?;
+    if unify_changed {
+        if let Err(error) = crate::services::provider::reapply_current_codex_official_live(state) {
+            let _ = crate::settings::update_settings(existing);
+            let _ = crate::services::provider::reapply_current_codex_official_live(state);
+            return Err(format!("统一 Codex 会话历史设置未生效: {error}"));
+        }
+    }
     Ok(true)
 }
 

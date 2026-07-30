@@ -2103,9 +2103,10 @@ async fn webdav_sync_fetch_remote_info() -> Result<Json<Value>, ApiError> {
 }
 
 async fn save_settings(
+    State(state): State<WebApiState>,
     Json(settings): Json<crate::settings::AppSettings>,
 ) -> Result<Json<bool>, ApiError> {
-    crate::commands::save_settings_internal(settings)
+    crate::commands::save_settings_internal(state.app_state.as_ref(), settings)
         .map(Json)
         .map_err(|e| ApiError::internal(format!("failed to save settings: {e}")))
 }

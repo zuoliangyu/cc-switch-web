@@ -1625,6 +1625,10 @@ impl ProxyService {
                 anchor_config_text,
             )
             .map_err(|e| format!("归一化 Codex restore backup 失败: {e}"))?;
+            crate::codex_config::apply_codex_unified_session_bucket_to_settings(
+                provider.category.as_deref(),
+                &mut effective_settings,
+            )?;
         }
 
         if matches!(app_type_enum, AppType::GrokBuild) {

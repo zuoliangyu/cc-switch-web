@@ -169,6 +169,9 @@ pub struct AppSettings {
     /// 是否在主页面启用本地代理功能（默认关闭）
     #[serde(default)]
     pub enable_local_proxy: bool,
+    /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
+    #[serde(default)]
+    pub unify_codex_session_history: bool,
     /// User has confirmed the local proxy first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_confirmed: Option<bool>,
@@ -282,6 +285,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             enable_local_proxy: false,
+            unify_codex_session_history: false,
             proxy_confirmed: None,
             usage_confirmed: None,
             stream_check_confirmed: None,
@@ -555,6 +559,16 @@ pub fn get_codex_override_dir() -> Option<PathBuf> {
         .codex_config_dir
         .as_ref()
         .map(|p| resolve_override_path(p))
+}
+
+pub fn unify_codex_session_history() -> bool {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .unify_codex_session_history
 }
 
 pub fn get_gemini_override_dir() -> Option<PathBuf> {

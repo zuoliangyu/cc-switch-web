@@ -262,6 +262,8 @@
     "tabAdvanced": "詳細",
     "tabProxy": "プロキシ",
     "tabAuth": "認証",
+    "unifyCodexSessionHistory": "Codex セッション履歴を統合",
+    "unifyCodexSessionHistoryDescription": "今後作成する公式 Codex とサードパーティ Provider のセッションを同じ再開履歴にまとめます。既存のセッションは移動しません。",
     "authCenter": {
       "title": "OAuth 認証センター",
       "description": "アプリ間で再利用できる OAuth アカウントを一元管理します。Provider はこれらの認証元に紐付くだけで、毎回再ログインする必要はありません。",

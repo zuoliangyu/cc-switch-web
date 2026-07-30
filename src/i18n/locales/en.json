@@ -262,6 +262,8 @@
     "tabAdvanced": "Advanced",
     "tabProxy": "Proxy",
     "tabAuth": "Auth",
+    "unifyCodexSessionHistory": "Unify Codex session history",
+    "unifyCodexSessionHistoryDescription": "Use one resume-history entry for future official Codex and third-party Provider sessions. Existing sessions are not moved.",
     "authCenter": {
       "title": "OAuth Authentication Center",
       "description": "Manage reusable OAuth accounts across apps in one place. Providers bind to these auth sources instead of logging in repeatedly.",

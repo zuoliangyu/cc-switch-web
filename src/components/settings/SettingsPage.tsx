@@ -16,6 +16,7 @@ import {
   ScrollText,
   HardDriveDownload,
   FlaskConical,
+  History,
   KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { ToggleRow } from "@/components/ui/toggle-row";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { AppVisibilitySettings } from "@/components/settings/AppVisibilitySettings";
@@ -387,6 +389,19 @@ export function SettingsPage({
                   />
 
                   <AuthCenterPanel />
+                  {settings ? (
+                    <ToggleRow
+                      icon={<History className="h-4 w-4 text-sky-500" />}
+                      title={t("settings.unifyCodexSessionHistory")}
+                      description={t(
+                        "settings.unifyCodexSessionHistoryDescription",
+                      )}
+                      checked={settings.unifyCodexSessionHistory ?? false}
+                      onCheckedChange={(value) =>
+                        handleAutoSave({ unifyCodexSessionHistory: value })
+                      }
+                    />
+                  ) : null}
                 </motion.div>
               </TabsContent>
 

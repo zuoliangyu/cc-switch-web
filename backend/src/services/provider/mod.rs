@@ -33,8 +33,7 @@ pub(crate) use live::sanitize_claude_settings_for_live;
 pub(crate) use live::{
     build_effective_settings_with_common_config, normalize_provider_common_config_for_storage,
     provider_exists_in_live_config, strip_common_config_from_live_settings,
-    sync_current_provider_for_app_to_live,
-    write_live_with_common_config,
+    sync_current_provider_for_app_to_live, write_live_with_common_config,
 };
 
 // Internal re-exports
@@ -58,6 +57,42 @@ pub struct SwitchResult {
 pub fn official_provider_supports_proxy_takeover(app_type: &AppType, provider: &Provider) -> bool {
     matches!(app_type, AppType::Codex)
         && crate::proxy::providers::is_codex_official_provider(provider)
+}
+
+/// 统一会话开关变化后，立即刷新当前官方 Codex 的 live 或代理恢复备份。
+pub fn reapply_current_codex_official_live(state: &AppState) -> Result<bool, AppError> {
+    let Some(current_id) =
+        crate::settings::get_effective_current_provider(&state.db, &AppType::Codex)?
+    else {
+        return Ok(false);
+    };
+    let Some(provider) = state
+        .db
+        .get_provider_by_id(&current_id, AppType::Codex.as_str())?
+    else {
+        return Ok(false);
+    };
+    if !crate::proxy::providers::is_codex_official_provider(&provider) {
+        return Ok(false);
+    }
+
+    let has_backup =
+        futures::executor::block_on(state.db.get_live_backup(AppType::Codex.as_str()))?.is_some();
+    let live_taken_over = state
+        .proxy_service
+        .detect_takeover_in_live_config_for_app(&AppType::Codex);
+    if has_backup || live_taken_over {
+        futures::executor::block_on(
+            state
+                .proxy_service
+                .update_live_backup_from_provider(AppType::Codex.as_str(), &provider),
+        )
+        .map_err(AppError::Message)?;
+    } else {
+        write_live_with_common_config(state.db.as_ref(), &AppType::Codex, &provider)?;
+        McpService::sync_enabled_for_app(state, &AppType::Codex)?;
+    }
+    Ok(true)
 }
 
 #[cfg(test)]

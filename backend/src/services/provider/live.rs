@@ -614,6 +614,11 @@ fn restore_live_settings_for_provider_backfill(
     }
 
     let mut settings = live_settings;
+    if let Err(err) =
+        crate::codex_config::strip_codex_unified_session_bucket_from_settings(&mut settings)
+    {
+        log::warn!("Failed to strip Codex unified history route while backfilling: {err}");
+    }
     if let Err(err) = crate::codex_config::restore_codex_settings_config_model_provider_for_backfill(
         &mut settings,
         &provider.settings_config,
@@ -673,8 +678,13 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             write_json_file(&path, &settings)?;
         }
         AppType::Codex => {
-            let obj = provider
-                .settings_config
+            let mut settings = provider.settings_config.clone();
+            crate::codex_config::apply_codex_unified_session_bucket_to_settings(
+                provider.category.as_deref(),
+                &mut settings,
+            )
+            .map_err(AppError::Config)?;
+            let obj = settings
                 .as_object()
                 .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
             let auth = obj

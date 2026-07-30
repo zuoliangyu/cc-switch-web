@@ -262,6 +262,8 @@
     "tabAdvanced": "高级",
     "tabProxy": "代理",
     "tabAuth": "认证",
+    "unifyCodexSessionHistory": "统一 Codex 会话历史",
+    "unifyCodexSessionHistoryDescription": "让之后创建的官方 Codex 会话与第三方 Provider 共用恢复历史入口；不会移动已有会话。",
     "authCenter": {
       "title": "OAuth 认证中心",
       "description": "集中管理跨应用复用的 OAuth 账号。Provider 只绑定这些认证源，不再重复登录。",

@@ -222,6 +222,10 @@ vi.mock("@/components/settings/AboutSection", () => ({
   AboutSection: () => <div>about</div>,
 }));
 
+vi.mock("@/components/settings/AuthCenterPanel", () => ({
+  AuthCenterPanel: () => <div>auth-center</div>,
+}));
+
 vi.mock("@/components/settings/WebdavSyncSection", () => ({
   WebdavSyncSection: ({ config }: any) => (
     <div>webdav-sync-section:{config?.baseUrl ?? "none"}</div>
@@ -348,6 +352,26 @@ describe("SettingsPage Component", () => {
       await lastUseImportExportOptions.onImportSuccess();
     }
     expect(onImportSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("should autosave the unified Codex session history toggle", async () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByText("settings.tabAuth"));
+    fireEvent.click(
+      screen.getByRole("switch", {
+        name: "settings.unifyCodexSessionHistory",
+      }),
+    );
+
+    expect(settingsMock.updateSettings).toHaveBeenCalledWith({
+      unifyCodexSessionHistory: true,
+    });
+    await waitFor(() => {
+      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
+        unifyCodexSessionHistory: true,
+      });
+    });
   });
 
   it("should call saveSettings and close dialog when clicking save", async () => {

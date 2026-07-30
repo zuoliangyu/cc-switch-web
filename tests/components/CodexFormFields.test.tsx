@@ -74,6 +74,10 @@ function renderXaiOauthFields() {
       speedTestEndpoints={[]}
       customUserAgent=""
       onCustomUserAgentChange={vi.fn()}
+      localProxyHeadersOverride=""
+      onLocalProxyHeadersOverrideChange={vi.fn()}
+      localProxyBodyOverride=""
+      onLocalProxyBodyOverrideChange={vi.fn()}
     />,
   );
 }
@@ -140,6 +144,10 @@ describe("CodexFormFields", () => {
         speedTestEndpoints={[]}
         customUserAgent=""
         onCustomUserAgentChange={vi.fn()}
+        localProxyHeadersOverride=""
+        onLocalProxyHeadersOverrideChange={vi.fn()}
+        localProxyBodyOverride=""
+        onLocalProxyBodyOverrideChange={vi.fn()}
       />,
     );
 
@@ -195,6 +203,10 @@ describe("CodexFormFields", () => {
         speedTestEndpoints={[]}
         customUserAgent="cc-switch-test"
         onCustomUserAgentChange={vi.fn()}
+        localProxyHeadersOverride=""
+        onLocalProxyHeadersOverrideChange={vi.fn()}
+        localProxyBodyOverride=""
+        onLocalProxyBodyOverrideChange={vi.fn()}
       />,
     );
 

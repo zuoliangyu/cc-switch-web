@@ -303,6 +303,15 @@ pub struct CodexChatReasoningConfig {
     pub output_format: Option<String>,
 }
 
+/// 协议转换后应用到本地代理上游请求的覆盖项。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LocalProxyRequestOverrides {
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub headers: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<serde_json::Value>,
+}
+
 /// 供应商元数据
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderMeta {
@@ -388,6 +397,12 @@ pub struct ProviderMeta {
     /// 本地代理转发使用的自定义 User-Agent。
     #[serde(rename = "customUserAgent", skip_serializing_if = "Option::is_none")]
     pub custom_user_agent: Option<String>,
+    /// 协议转换后应用到上游请求的本地代理覆盖项。
+    #[serde(
+        rename = "localProxyRequestOverrides",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub local_proxy_request_overrides: Option<LocalProxyRequestOverrides>,
     /// Codex → Anthropic bridge 的供应商级输出上限。
     #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u64>,
@@ -844,10 +859,11 @@ pub struct OpenCodeModelLimit {
 #[cfg(test)]
 mod tests {
     use super::{
-        ClaudeModelConfig, CodexModelConfig, GeminiModelConfig, OpenCodeProviderConfig, Provider,
-        ProviderManager, ProviderMeta, UniversalProvider,
+        ClaudeModelConfig, CodexModelConfig, GeminiModelConfig, LocalProxyRequestOverrides,
+        OpenCodeProviderConfig, Provider, ProviderManager, ProviderMeta, UniversalProvider,
     };
     use serde_json::json;
+    use std::collections::HashMap;
 
     #[test]
     fn provider_meta_serializes_pricing_model_source() {
@@ -871,6 +887,33 @@ mod tests {
         let value = serde_json::to_value(&meta).expect("serialize ProviderMeta");
 
         assert!(value.get("pricingModelSource").is_none());
+    }
+
+    #[test]
+    fn provider_meta_roundtrips_local_proxy_request_overrides() {
+        let meta = ProviderMeta {
+            local_proxy_request_overrides: Some(LocalProxyRequestOverrides {
+                headers: HashMap::from([("X-Test".to_string(), "yes".to_string())]),
+                body: Some(json!({ "temperature": 0.2 })),
+            }),
+            ..ProviderMeta::default()
+        };
+
+        let value = serde_json::to_value(&meta).expect("serialize ProviderMeta");
+        assert_eq!(
+            value["localProxyRequestOverrides"]["headers"]["X-Test"],
+            "yes"
+        );
+        assert_eq!(
+            value["localProxyRequestOverrides"]["body"]["temperature"],
+            0.2
+        );
+
+        let decoded: ProviderMeta =
+            serde_json::from_value(value).expect("deserialize ProviderMeta");
+        let overrides = decoded.local_proxy_request_overrides.unwrap();
+        assert_eq!(overrides.headers.get("X-Test"), Some(&"yes".to_string()));
+        assert_eq!(overrides.body.unwrap()["temperature"], 0.2);
     }
 
     #[test]

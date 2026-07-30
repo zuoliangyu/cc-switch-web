@@ -172,6 +172,11 @@ export interface CodexChatReasoning {
 
 export type PromptCacheRoutingMode = "auto" | "enabled" | "disabled";
 
+export interface LocalProxyRequestOverrides {
+  headers?: Record<string, string>;
+  body?: Record<string, unknown>;
+}
+
 // 供应商元数据（字段名与后端一致，保持 snake_case）
 export interface ProviderMeta {
   // 自定义端点：以 URL 为键，值为端点信息
@@ -222,6 +227,8 @@ export interface ProviderMeta {
   codexChatReasoning?: CodexChatReasoning;
   // 本地代理转发使用的自定义 User-Agent
   customUserAgent?: string;
+  // 协议转换完成后应用到上游请求的本地代理覆盖项
+  localProxyRequestOverrides?: LocalProxyRequestOverrides;
   // 累加模式应用中，该 provider 是否已写入 live config
   liveConfigManaged?: boolean;
   // 供应商类型（用于识别 Copilot 等特殊供应商）

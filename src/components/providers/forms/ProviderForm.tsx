@@ -9,6 +9,10 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Form, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
+import {
+  buildLocalProxyRequestOverrides,
+  formatRequestOverrideObject,
+} from "@/lib/requestOverrides";
 import { providersApi, settingsApi, type AppId } from "@/lib/api";
 import { useSettingsQuery } from "@/lib/query";
 import type {
@@ -340,6 +344,17 @@ function ProviderFormFull({
   const [customUserAgent, setCustomUserAgent] = useState(
     () => initialData?.meta?.customUserAgent ?? "",
   );
+  const [localProxyHeadersOverride, setLocalProxyHeadersOverride] = useState(
+    () =>
+      formatRequestOverrideObject(
+        initialData?.meta?.localProxyRequestOverrides?.headers,
+      ),
+  );
+  const [localProxyBodyOverride, setLocalProxyBodyOverride] = useState(() =>
+    formatRequestOverrideObject(
+      initialData?.meta?.localProxyRequestOverrides?.body,
+    ),
+  );
 
   const { category } = useProviderCategory({
     appId,
@@ -376,6 +391,16 @@ function ProviderFormFull({
     setCodexChatReasoning(initialData?.meta?.codexChatReasoning ?? {});
     setPromptCacheRouting(initialData?.meta?.promptCacheRouting ?? "auto");
     setCustomUserAgent(initialData?.meta?.customUserAgent ?? "");
+    setLocalProxyHeadersOverride(
+      formatRequestOverrideObject(
+        initialData?.meta?.localProxyRequestOverrides?.headers,
+      ),
+    );
+    setLocalProxyBodyOverride(
+      formatRequestOverrideObject(
+        initialData?.meta?.localProxyRequestOverrides?.body,
+      ),
+    );
   }, [appId, initialData, supportsFullUrl]);
 
   const defaultValues: ProviderFormData = useMemo(
@@ -956,7 +981,25 @@ function ProviderFormFull({
 
   const [isCommonConfigModalOpen, setIsCommonConfigModalOpen] = useState(false);
 
+  const shouldApplyLocalProxyRequestOverrides =
+    (appId === "claude" || appId === "codex") && category !== "official";
+
   const handleSubmit = async (values: ProviderFormData) => {
+    const overridesResult = shouldApplyLocalProxyRequestOverrides
+      ? buildLocalProxyRequestOverrides(
+          localProxyHeadersOverride,
+          localProxyBodyOverride,
+        )
+      : {};
+    if (overridesResult.error) {
+      toast.error(
+        t("providerForm.localProxyRequestOverridesInvalid", {
+          error: overridesResult.error,
+        }),
+      );
+      return;
+    }
+
     if (appId === "claude" && templateValueEntries.length > 0) {
       const validation = validateTemplateValues();
       if (!validation.isValid && validation.missingField) {
@@ -1421,6 +1464,9 @@ function ProviderFormFull({
         (appId === "claude" || appId === "codex") && category !== "official"
           ? customUserAgent.trim() || undefined
           : undefined,
+      localProxyRequestOverrides: shouldApplyLocalProxyRequestOverrides
+        ? overridesResult.overrides
+        : undefined,
       testConfig: testConfig.enabled ? testConfig : undefined,
       proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
       costMultiplier: pricingConfig.enabled
@@ -2048,6 +2094,10 @@ function ProviderFormFull({
             onFullUrlChange={setLocalIsFullUrl}
             customUserAgent={customUserAgent}
             onCustomUserAgentChange={setCustomUserAgent}
+            localProxyHeadersOverride={localProxyHeadersOverride}
+            onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
+            localProxyBodyOverride={localProxyBodyOverride}
+            onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
           />
         )}
 
@@ -2096,6 +2146,10 @@ function ProviderFormFull({
             speedTestEndpoints={speedTestEndpoints}
             customUserAgent={customUserAgent}
             onCustomUserAgentChange={setCustomUserAgent}
+            localProxyHeadersOverride={localProxyHeadersOverride}
+            onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
+            localProxyBodyOverride={localProxyBodyOverride}
+            onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
           />
         )}
 

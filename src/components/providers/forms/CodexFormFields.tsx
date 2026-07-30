@@ -35,6 +35,7 @@ import {
   type FetchedModel,
 } from "@/lib/api/model-fetch";
 import { CustomUserAgentField } from "./CustomUserAgentField";
+import { LocalProxyRequestOverridesField } from "./LocalProxyRequestOverridesField";
 import type {
   CodexApiFormat,
   CodexCatalogModel,
@@ -98,6 +99,10 @@ interface CodexFormFieldsProps {
 
   customUserAgent: string;
   onCustomUserAgentChange: (value: string) => void;
+  localProxyHeadersOverride: string;
+  onLocalProxyHeadersOverrideChange: (value: string) => void;
+  localProxyBodyOverride: string;
+  onLocalProxyBodyOverrideChange: (value: string) => void;
 }
 
 type CodexCatalogRow = CodexCatalogModel & { rowId: string };
@@ -177,6 +182,10 @@ export function CodexFormFields({
   speedTestEndpoints,
   customUserAgent,
   onCustomUserAgentChange,
+  localProxyHeadersOverride,
+  onLocalProxyHeadersOverrideChange,
+  localProxyBodyOverride,
+  onLocalProxyBodyOverrideChange,
 }: CodexFormFieldsProps) {
   const { t } = useTranslation();
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
@@ -188,7 +197,11 @@ export function CodexFormFields({
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
   const isChatFormat = apiFormat === "openai_chat";
   const canEditCatalog = Boolean(onCatalogModelsChange);
-  const hasAnyAdvancedValue = !!customUserAgent || takeoverEnabled;
+  const hasRequestOverrides = Boolean(
+    localProxyHeadersOverride.trim() || localProxyBodyOverride.trim(),
+  );
+  const hasAnyAdvancedValue =
+    !!customUserAgent || hasRequestOverrides || takeoverEnabled;
   const [advancedExpanded, setAdvancedExpanded] = useState(hasAnyAdvancedValue);
 
   useEffect(() => {
@@ -721,8 +734,8 @@ export function CodexFormFields({
             <div
               className={
                 shouldShowSpeedTest || takeoverEnabled
-                  ? "border-t border-border-default pt-3"
-                  : undefined
+                  ? "space-y-3 border-t border-border-default pt-3"
+                  : "space-y-3"
               }
             >
               <CustomUserAgentField
@@ -730,6 +743,14 @@ export function CodexFormFields({
                 value={customUserAgent}
                 onChange={onCustomUserAgentChange}
               />
+              <div className="border-t border-border-default pt-3">
+                <LocalProxyRequestOverridesField
+                  headersJson={localProxyHeadersOverride}
+                  bodyJson={localProxyBodyOverride}
+                  onHeadersJsonChange={onLocalProxyHeadersOverrideChange}
+                  onBodyJsonChange={onLocalProxyBodyOverrideChange}
+                />
+              </div>
             </div>
           </CollapsibleContent>
         </Collapsible>

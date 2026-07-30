@@ -23,7 +23,10 @@ use super::{
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
-use crate::{app_config::AppType, provider::Provider};
+use crate::{
+    app_config::AppType,
+    provider::{LocalProxyRequestOverrides, Provider},
+};
 use http::Extensions;
 use serde_json::Value;
 use std::sync::Arc;
@@ -1066,7 +1069,18 @@ impl RequestForwarder {
 
         // 过滤私有参数（以 `_` 开头的字段），防止内部信息泄露到上游
         // 默认使用空白名单，过滤所有 _ 前缀字段
-        let filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        let mut filtered_body = filter_private_params_with_whitelist(request_body, &[]);
+        if !is_copilot {
+            if let Some(overrides) = provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.local_proxy_request_overrides.as_ref())
+            {
+                if apply_local_proxy_body_overrides(&mut filtered_body, overrides) {
+                    filtered_body = filter_private_params_with_whitelist(filtered_body, &[]);
+                }
+            }
+        }
         let request_is_streaming =
             should_force_identity_encoding(&effective_endpoint, &filtered_body, headers);
         let force_identity_encoding = needs_transform
@@ -1471,6 +1485,15 @@ impl RequestForwarder {
                 http::HeaderValue::from_static("application/json"),
             );
         }
+
+        apply_local_proxy_header_overrides(
+            &mut ordered_headers,
+            provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.local_proxy_request_overrides.as_ref()),
+            is_copilot,
+        );
 
         // 跟随上游 cc-switch 61e68d75：出站前最后一道防线 ——
         // 如果发往托管账号上游（GitHub Copilot / Codex OAuth / xAI）
@@ -2104,6 +2127,131 @@ fn summarize_text_for_log(text: &str, max_chars: usize) -> String {
     format!("{truncated}...")
 }
 
+fn apply_local_proxy_body_overrides(
+    body: &mut Value,
+    overrides: &LocalProxyRequestOverrides,
+) -> bool {
+    let Some(override_body) = overrides.body.as_ref() else {
+        return false;
+    };
+    if !override_body.is_object() {
+        log::warn!("[LocalProxyOverrides] 忽略非对象 Body 覆盖");
+        return false;
+    }
+    merge_json_override_inner(body, override_body, true)
+}
+
+fn merge_json_override_inner(target: &mut Value, patch: &Value, is_top_level: bool) -> bool {
+    match (target, patch) {
+        (Value::Object(target_map), Value::Object(patch_map)) => {
+            let mut changed = false;
+            for (key, patch_value) in patch_map {
+                if is_top_level && key == "stream" {
+                    log::warn!("[LocalProxyOverrides] 忽略受保护的 Body 字段: stream");
+                    continue;
+                }
+                match target_map.get_mut(key) {
+                    Some(target_value) => {
+                        changed |= merge_json_override_inner(target_value, patch_value, false);
+                    }
+                    None => {
+                        target_map.insert(key.clone(), patch_value.clone());
+                        changed = true;
+                    }
+                }
+            }
+            changed
+        }
+        (target_value, patch_value) => {
+            if target_value == patch_value {
+                false
+            } else {
+                *target_value = patch_value.clone();
+                true
+            }
+        }
+    }
+}
+
+fn apply_local_proxy_header_overrides(
+    headers: &mut http::HeaderMap,
+    overrides: Option<&LocalProxyRequestOverrides>,
+    is_copilot: bool,
+) {
+    if is_copilot {
+        return;
+    }
+    let Some(header_overrides) = overrides.map(|overrides| &overrides.headers) else {
+        return;
+    };
+
+    for (raw_name, raw_value) in header_overrides {
+        let header_name = raw_name.trim().to_ascii_lowercase();
+        let Ok(name) = http::HeaderName::from_bytes(header_name.as_bytes()) else {
+            log::warn!("[LocalProxyOverrides] 忽略非法 Header 名: {raw_name}");
+            continue;
+        };
+        if is_protected_local_proxy_override_header(&name) {
+            log::debug!("[LocalProxyOverrides] 忽略受保护的 Header: {name}");
+            continue;
+        }
+        let Ok(value) = http::HeaderValue::from_str(raw_value) else {
+            log::warn!("[LocalProxyOverrides] 忽略非法 Header 值: {name}");
+            continue;
+        };
+        headers.insert(name, value);
+    }
+}
+
+fn is_protected_local_proxy_override_header(name: &http::HeaderName) -> bool {
+    matches!(
+        name.as_str(),
+        "host"
+            | "content-length"
+            | "transfer-encoding"
+            | "connection"
+            | "proxy-authorization"
+            | "proxy-authenticate"
+            | "te"
+            | "trailer"
+            | "upgrade"
+            | "accept-encoding"
+            | "content-type"
+            | "authorization"
+            | "x-api-key"
+            | "x-goog-api-key"
+            | "chatgpt-account-id"
+            | "session_id"
+            | "x-client-request-id"
+            | "x-codex-window-id"
+            | "x-forwarded-host"
+            | "x-forwarded-port"
+            | "x-forwarded-proto"
+            | "forwarded"
+            | "cf-connecting-ip"
+            | "cf-ipcountry"
+            | "cf-ray"
+            | "cf-visitor"
+            | "true-client-ip"
+            | "fastly-client-ip"
+            | "x-azure-clientip"
+            | "x-azure-fdid"
+            | "x-azure-ref"
+            | "akamai-origin-hop"
+            | "x-akamai-config-log-detail"
+            | "x-request-id"
+            | "x-correlation-id"
+            | "x-trace-id"
+            | "x-amzn-trace-id"
+            | "x-b3-traceid"
+            | "x-b3-spanid"
+            | "x-b3-parentspanid"
+            | "x-b3-sampled"
+            | "traceparent"
+            | "tracestate"
+    )
+}
+
 // ---------------------------------------------------------------------------
 // 出站请求 PROXY_MANAGED 占位符防护（跟随上游 cc-switch 61e68d75）
 //
@@ -2250,6 +2398,109 @@ mod tests {
         let summary = summarize_text_for_log("line1\n\n line2   line3", 12);
 
         assert_eq!(summary, "line1 line2...");
+    }
+
+    #[test]
+    fn local_proxy_body_overrides_deep_merge_final_body_without_stream() {
+        let mut body = json!({
+            "model": "before",
+            "stream": false,
+            "metadata": { "keep": true, "temperature": 1 },
+            "messages": [{ "role": "user", "content": "hello" }]
+        });
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::new(),
+            body: Some(json!({
+                "model": "after",
+                "stream": true,
+                "metadata": { "temperature": 0.2, "top_p": 0.9 },
+                "messages": []
+            })),
+        };
+
+        assert!(apply_local_proxy_body_overrides(&mut body, &overrides));
+        assert_eq!(body["model"], "after");
+        assert_eq!(body["stream"], false);
+        assert_eq!(body["metadata"]["keep"], true);
+        assert_eq!(body["metadata"]["temperature"], 0.2);
+        assert_eq!(body["metadata"]["top_p"], 0.9);
+        assert_eq!(body["messages"], json!([]));
+    }
+
+    #[test]
+    fn local_proxy_header_overrides_replace_allowed_headers_only() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert(
+            http::header::USER_AGENT,
+            http::HeaderValue::from_static("original"),
+        );
+        headers.insert(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_static("Bearer good"),
+        );
+        headers.insert(
+            http::header::CONTENT_TYPE,
+            http::HeaderValue::from_static("application/json"),
+        );
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::from([
+                ("User-Agent".to_string(), "custom".to_string()),
+                ("X-Test".to_string(), "ok".to_string()),
+                ("Authorization".to_string(), "Bearer bad".to_string()),
+                ("Content-Type".to_string(), "text/plain".to_string()),
+                ("X-Bad".to_string(), "bad\nvalue".to_string()),
+            ]),
+            body: None,
+        };
+
+        apply_local_proxy_header_overrides(&mut headers, Some(&overrides), false);
+        assert_eq!(
+            headers
+                .get(http::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("custom")
+        );
+        assert_eq!(
+            headers
+                .get(http::header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer good")
+        );
+        assert_eq!(
+            headers
+                .get(http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+        assert_eq!(
+            headers.get("x-test").and_then(|value| value.to_str().ok()),
+            Some("ok")
+        );
+        assert!(headers.get("x-bad").is_none());
+    }
+
+    #[test]
+    fn local_proxy_header_overrides_are_skipped_for_copilot() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert(
+            http::header::USER_AGENT,
+            http::HeaderValue::from_static("copilot"),
+        );
+        let overrides = LocalProxyRequestOverrides {
+            headers: std::collections::HashMap::from([(
+                "User-Agent".to_string(),
+                "custom".to_string(),
+            )]),
+            body: None,
+        };
+
+        apply_local_proxy_header_overrides(&mut headers, Some(&overrides), true);
+        assert_eq!(
+            headers
+                .get(http::header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("copilot")
+        );
     }
 
     #[test]

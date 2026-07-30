@@ -18,6 +18,7 @@
 
 ### 代理与用量
 
+- Claude 与 Codex 第三方 Provider 支持自定义本地代理请求 Header 和 Body；覆盖在协议转换后应用，并保护认证、连接、追踪、转发链与 `stream` 等代理管理字段。
 - 对齐 Codex Chat、Responses 与 Anthropic 的请求、响应和 SSE 转换，补齐 reasoning、tool call、媒体降级、缓存路由及 Claude Code 模拟。
 - Codex session 用量同步支持 fork、sub-agent、延迟父会话恢复和疑似重复观测，游标改用纳秒 mtime。
 - 按应用区分缓存 token 语义，避免 Codex、Gemini 和 Grok Build 重复计算缓存输入成本。

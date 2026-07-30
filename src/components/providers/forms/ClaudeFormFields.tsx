@@ -41,6 +41,7 @@ import {
   type FetchedModel,
 } from "@/lib/api/model-fetch";
 import { CustomUserAgentField } from "./CustomUserAgentField";
+import { LocalProxyRequestOverridesField } from "./LocalProxyRequestOverridesField";
 import type {
   ProviderCategory,
   ClaudeApiFormat,
@@ -137,6 +138,10 @@ interface ClaudeFormFieldsProps {
 
   customUserAgent: string;
   onCustomUserAgentChange: (value: string) => void;
+  localProxyHeadersOverride: string;
+  onLocalProxyHeadersOverrideChange: (value: string) => void;
+  localProxyBodyOverride: string;
+  onLocalProxyBodyOverrideChange: (value: string) => void;
 }
 
 export function ClaudeFormFields({
@@ -188,8 +193,15 @@ export function ClaudeFormFields({
   onFullUrlChange,
   customUserAgent,
   onCustomUserAgentChange,
+  localProxyHeadersOverride,
+  onLocalProxyHeadersOverrideChange,
+  localProxyBodyOverride,
+  onLocalProxyBodyOverrideChange,
 }: ClaudeFormFieldsProps) {
   const { t } = useTranslation();
+  const hasRequestOverrides = Boolean(
+    localProxyHeadersOverride.trim() || localProxyBodyOverride.trim(),
+  );
   const hasAnyAdvancedValue = !!(
     claudeModel ||
     reasoningModel ||
@@ -198,7 +210,8 @@ export function ClaudeFormFields({
     defaultOpusModel ||
     (!isXaiOauthPreset && apiFormat !== "anthropic") ||
     apiKeyField !== "ANTHROPIC_AUTH_TOKEN" ||
-    customUserAgent
+    customUserAgent ||
+    hasRequestOverrides
   );
   const [advancedExpanded, setAdvancedExpanded] = useState(
     isXaiOauthPreset ? false : hasAnyAdvancedValue,
@@ -705,6 +718,15 @@ export function ClaudeFormFields({
               value={customUserAgent}
               onChange={onCustomUserAgentChange}
             />
+
+            <div className="border-t border-border-default pt-3">
+              <LocalProxyRequestOverridesField
+                headersJson={localProxyHeadersOverride}
+                bodyJson={localProxyBodyOverride}
+                onHeadersJsonChange={onLocalProxyHeadersOverrideChange}
+                onBodyJsonChange={onLocalProxyBodyOverrideChange}
+              />
+            </div>
           </CollapsibleContent>
         </Collapsible>
       )}

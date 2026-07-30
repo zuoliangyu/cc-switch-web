@@ -7,12 +7,17 @@ pub(crate) async fn fetch_models_for_config_internal(
     api_key: String,
     is_full_url: Option<bool>,
     models_url_override: Option<String>,
+    custom_user_agent: Option<String>,
 ) -> Result<Vec<FetchedModel>, String> {
+    let user_agent = crate::provider::parse_custom_user_agent(custom_user_agent.as_deref())
+        .ok()
+        .flatten();
     model_fetch::fetch_models(
         &base_url,
         &api_key,
         is_full_url.unwrap_or(false),
         models_url_override.as_deref(),
+        user_agent,
     )
     .await
 }
@@ -38,6 +43,7 @@ pub(crate) async fn fetch_xai_oauth_models_internal(
         crate::proxy::providers::XAI_API_BASE_URL,
         &token,
         false,
+        None,
         None,
     )
     .await

@@ -22,6 +22,7 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
+import { CustomUserAgentField } from "./CustomUserAgentField";
 import type {
   CodexApiFormat,
   CodexCatalogModel,
@@ -79,6 +80,9 @@ interface CodexFormFieldsProps {
 
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
+
+  customUserAgent: string;
+  onCustomUserAgentChange: (value: string) => void;
 }
 
 type CodexCatalogRow = CodexCatalogModel & { rowId: string };
@@ -154,6 +158,8 @@ export function CodexFormFields({
   catalogModels = [],
   onCatalogModelsChange,
   speedTestEndpoints,
+  customUserAgent,
+  onCustomUserAgentChange,
 }: CodexFormFieldsProps) {
   const { t } = useTranslation();
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
@@ -246,7 +252,13 @@ export function CodexFormFields({
     }
 
     setIsFetchingModels(true);
-    fetchModelsForConfig(codexBaseUrl, codexApiKey, isFullUrl)
+    fetchModelsForConfig(
+      codexBaseUrl,
+      codexApiKey,
+      isFullUrl,
+      undefined,
+      customUserAgent,
+    )
       .then((models) => {
         setFetchedModels(models);
         if (models.length === 0) {
@@ -265,6 +277,7 @@ export function CodexFormFields({
   }, [
     codexApiKey,
     codexBaseUrl,
+    customUserAgent,
     isFullUrl,
     isXaiOauthAuthenticated,
     isXaiOauthPreset,
@@ -562,6 +575,14 @@ export function CodexFormFields({
             </div>
           ))}
         </div>
+      )}
+
+      {category !== "official" && (
+        <CustomUserAgentField
+          id="codex-custom-user-agent"
+          value={customUserAgent}
+          onChange={onCustomUserAgentChange}
+        />
       )}
 
       {/* 端点测速弹窗 - Codex */}

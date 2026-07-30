@@ -220,6 +220,8 @@ export interface ProviderMeta {
   promptCacheRouting?: PromptCacheRoutingMode;
   // Codex Responses -> Chat Completions 推理能力元数据
   codexChatReasoning?: CodexChatReasoning;
+  // 本地代理转发使用的自定义 User-Agent
+  customUserAgent?: string;
   // 累加模式应用中，该 provider 是否已写入 live config
   liveConfigManaged?: boolean;
   // 供应商类型（用于识别 Copilot 等特殊供应商）

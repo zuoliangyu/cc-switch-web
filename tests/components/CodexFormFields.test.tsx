@@ -64,6 +64,8 @@ function renderXaiOauthFields() {
       modelName="grok-4.5"
       onModelNameChange={vi.fn()}
       speedTestEndpoints={[]}
+      customUserAgent=""
+      onCustomUserAgentChange={vi.fn()}
     />,
   );
 }
@@ -126,6 +128,8 @@ describe("CodexFormFields", () => {
         ]}
         onCatalogModelsChange={onCatalogModelsChange}
         speedTestEndpoints={[]}
+        customUserAgent=""
+        onCustomUserAgentChange={vi.fn()}
       />,
     );
 

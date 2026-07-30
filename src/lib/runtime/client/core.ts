@@ -317,6 +317,7 @@ export async function invoke<T>(
         args?.apiKey as string,
         args?.isFullUrl as boolean | undefined,
         args?.modelsUrl as string | undefined,
+        args?.customUserAgent as string | undefined,
       )) as T;
     case "get_xai_oauth_models":
       return (await getWebXaiOauthModels(

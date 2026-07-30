@@ -194,6 +194,13 @@ impl StreamCheckService {
         }
     }
 
+    fn custom_user_agent(provider: &Provider) -> Option<reqwest::header::HeaderValue> {
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.custom_user_agent_header().ok().flatten())
+    }
+
     /// 单次流式检查
     async fn check_once(
         app_type: &AppType,
@@ -482,6 +489,12 @@ impl StreamCheckService {
             }
         }
 
+        if !is_github_copilot {
+            if let Some(user_agent) = Self::custom_user_agent(provider) {
+                request_builder = request_builder.header("user-agent", user_agent);
+            }
+        }
+
         let response = request_builder
             .timeout(timeout)
             .json(&body)
@@ -533,6 +546,12 @@ impl StreamCheckService {
         // 获取本地系统信息
         let os_name = Self::get_os_name();
         let arch_name = Self::get_arch_name();
+        let user_agent = Self::custom_user_agent(provider).unwrap_or_else(|| {
+            reqwest::header::HeaderValue::from_str(&format!(
+                "codex_cli_rs/0.80.0 ({os_name} 15.7.2; {arch_name}) Terminal"
+            ))
+            .unwrap_or_else(|_| reqwest::header::HeaderValue::from_static("codex_cli_rs/0.80.0"))
+        });
 
         // Responses API 请求体格式 (input 必须是数组)
         let mut body = json!({
@@ -554,10 +573,7 @@ impl StreamCheckService {
                 .header("content-type", "application/json")
                 .header("accept", "text/event-stream")
                 .header("accept-encoding", "identity")
-                .header(
-                    "user-agent",
-                    format!("codex_cli_rs/0.80.0 ({os_name} 15.7.2; {arch_name}) Terminal"),
-                )
+                .header("user-agent", user_agent.clone())
                 .header("originator", "codex_cli_rs")
                 .timeout(timeout)
                 .json(&body)
@@ -1451,6 +1467,44 @@ mod tests {
             "api": "openai-completions",
         }));
         assert!(!StreamCheckService::openclaw_uses_auth_header(&provider));
+    }
+
+    #[test]
+    fn custom_user_agent_trims_empty_and_invalid_values() {
+        use crate::provider::ProviderMeta;
+
+        let mut provider = make_provider(serde_json::json!({}));
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("  claude-cli/2.1.161  ".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(
+            StreamCheckService::custom_user_agent(&provider)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "claude-cli/2.1.161"
+        );
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("   ".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("claude-cli/2.1.161 中文".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_some());
+
+        provider.meta = Some(ProviderMeta {
+            custom_user_agent: Some("claude-cli/2.1.161\nX".to_string()),
+            ..Default::default()
+        });
+        assert!(StreamCheckService::custom_user_agent(&provider).is_none());
     }
 
     #[test]

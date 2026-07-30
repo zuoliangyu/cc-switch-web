@@ -12,12 +12,14 @@ export async function fetchModelsForConfig(
   apiKey: string,
   isFullUrl?: boolean,
   modelsUrlOverride?: string,
+  customUserAgent?: string,
 ): Promise<FetchedModel[]> {
   return invoke<FetchedModel[]>("fetch_models_for_config", {
     baseUrl,
     apiKey,
     isFullUrl,
     modelsUrl: modelsUrlOverride,
+    customUserAgent,
   });
 }
 

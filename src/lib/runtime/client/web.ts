@@ -770,6 +770,7 @@ export async function fetchWebProviderModels(
   apiKey: string,
   isFullUrl?: boolean,
   modelsUrl?: string,
+  customUserAgent?: string,
 ): Promise<import("@/lib/api/model-fetch").FetchedModel[]> {
   return requestWithBody<import("@/lib/api/model-fetch").FetchedModel[]>(
     "/api/providers/models/fetch",
@@ -779,6 +780,7 @@ export async function fetchWebProviderModels(
       apiKey,
       isFullUrl,
       modelsUrl,
+      customUserAgent,
     },
   );
 }

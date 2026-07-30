@@ -34,6 +34,7 @@ import {
 } from "@/utils/providerConfigUtils";
 import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 import { BasicFormFields } from "./BasicFormFields";
+import { CustomUserAgentField } from "./CustomUserAgentField";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import type { ProviderFormProps, ProviderFormValues } from "./ProviderForm";
 
@@ -98,6 +99,9 @@ export function GrokBuildProviderForm({
     initialConfigText ?? buildGrokBuildConfig(initialConfig),
   );
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [customUserAgent, setCustomUserAgent] = useState(
+    initialData?.meta?.customUserAgent ?? "",
+  );
 
   const form = useForm<ProviderFormData>({
     resolver: zodResolver(providerSchema),
@@ -232,7 +236,9 @@ export function GrokBuildProviderForm({
         settingsConfig: JSON.stringify({ config: rawConfig }),
         presetId: selectedPresetId ?? undefined,
         presetCategory: "official",
-        meta: initialData?.meta,
+        meta: initialData?.meta
+          ? { ...initialData.meta, customUserAgent: undefined }
+          : undefined,
       });
       return;
     }
@@ -279,6 +285,7 @@ export function GrokBuildProviderForm({
       meta: {
         ...(initialData?.meta ?? {}),
         apiFormat: apiFormatForBackend(apiBackend),
+        customUserAgent: customUserAgent.trim() || undefined,
         isPartner,
         partnerPromotionKey,
       },
@@ -432,6 +439,12 @@ export function GrokBuildProviderForm({
                 </p>
               )}
             </div>
+
+            <CustomUserAgentField
+              id="grokbuild-custom-user-agent"
+              value={customUserAgent}
+              onChange={setCustomUserAgent}
+            />
           </>
         )}
 

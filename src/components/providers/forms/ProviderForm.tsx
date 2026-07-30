@@ -327,6 +327,9 @@ function ProviderFormFull({
     useState<PromptCacheRoutingMode>(
       () => initialData?.meta?.promptCacheRouting ?? "auto",
     );
+  const [customUserAgent, setCustomUserAgent] = useState(
+    () => initialData?.meta?.customUserAgent ?? "",
+  );
 
   const { category } = useProviderCategory({
     appId,
@@ -362,6 +365,7 @@ function ProviderFormFull({
     });
     setCodexChatReasoning(initialData?.meta?.codexChatReasoning ?? {});
     setPromptCacheRouting(initialData?.meta?.promptCacheRouting ?? "auto");
+    setCustomUserAgent(initialData?.meta?.customUserAgent ?? "");
   }, [appId, initialData, supportsFullUrl]);
 
   const defaultValues: ProviderFormData = useMemo(
@@ -1388,6 +1392,10 @@ function ProviderFormFull({
         promptCacheRouting !== "auto"
           ? promptCacheRouting
           : undefined,
+      customUserAgent:
+        (appId === "claude" || appId === "codex") && category !== "official"
+          ? customUserAgent.trim() || undefined
+          : undefined,
       testConfig: testConfig.enabled ? testConfig : undefined,
       proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
       costMultiplier: pricingConfig.enabled
@@ -2011,6 +2019,8 @@ function ProviderFormFull({
             onApiKeyFieldChange={handleApiKeyFieldChange}
             isFullUrl={localIsFullUrl}
             onFullUrlChange={setLocalIsFullUrl}
+            customUserAgent={customUserAgent}
+            onCustomUserAgentChange={setCustomUserAgent}
           />
         )}
 
@@ -2055,6 +2065,8 @@ function ProviderFormFull({
             catalogModels={codexCatalogModels}
             onCatalogModelsChange={setCodexCatalogModels}
             speedTestEndpoints={speedTestEndpoints}
+            customUserAgent={customUserAgent}
+            onCustomUserAgentChange={setCustomUserAgent}
           />
         )}
 

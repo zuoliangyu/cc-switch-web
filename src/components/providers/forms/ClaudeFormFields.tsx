@@ -40,6 +40,7 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
+import { CustomUserAgentField } from "./CustomUserAgentField";
 import type {
   ProviderCategory,
   ClaudeApiFormat,
@@ -133,6 +134,9 @@ interface ClaudeFormFieldsProps {
   // Full URL mode
   isFullUrl: boolean;
   onFullUrlChange: (value: boolean) => void;
+
+  customUserAgent: string;
+  onCustomUserAgentChange: (value: string) => void;
 }
 
 export function ClaudeFormFields({
@@ -182,6 +186,8 @@ export function ClaudeFormFields({
   onApiKeyFieldChange,
   isFullUrl,
   onFullUrlChange,
+  customUserAgent,
+  onCustomUserAgentChange,
 }: ClaudeFormFieldsProps) {
   const { t } = useTranslation();
   const hasAnyAdvancedValue = !!(
@@ -191,7 +197,8 @@ export function ClaudeFormFields({
     defaultSonnetModel ||
     defaultOpusModel ||
     (!isXaiOauthPreset && apiFormat !== "anthropic") ||
-    apiKeyField !== "ANTHROPIC_AUTH_TOKEN"
+    apiKeyField !== "ANTHROPIC_AUTH_TOKEN" ||
+    customUserAgent
   );
   const [advancedExpanded, setAdvancedExpanded] = useState(
     isXaiOauthPreset ? false : hasAnyAdvancedValue,
@@ -228,7 +235,7 @@ export function ClaudeFormFields({
     })?.modelsUrl;
 
     setIsFetchingModels(true);
-    fetchModelsForConfig(baseUrl, apiKey, isFullUrl, modelsUrl)
+    fetchModelsForConfig(baseUrl, apiKey, isFullUrl, modelsUrl, customUserAgent)
       .then((models) => {
         setFetchedModels(models);
         if (models.length === 0) {
@@ -244,7 +251,7 @@ export function ClaudeFormFields({
         showFetchModelsError(error, t);
       })
       .finally(() => setIsFetchingModels(false));
-  }, [apiKey, baseUrl, isFullUrl, t]);
+  }, [apiKey, baseUrl, customUserAgent, isFullUrl, t]);
 
   // 当 Copilot 预设且已认证时，加载可用模型
   useEffect(() => {
@@ -692,6 +699,12 @@ export function ClaudeFormFields({
                 )}
               </div>
             </div>
+
+            <CustomUserAgentField
+              id="claude-custom-user-agent"
+              value={customUserAgent}
+              onChange={onCustomUserAgentChange}
+            />
           </CollapsibleContent>
         </Collapsible>
       )}

@@ -1,3 +1,4 @@
+use http::header::{HeaderValue, InvalidHeaderValue};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -384,6 +385,9 @@ pub struct ProviderMeta {
     pub prompt_cache_routing: Option<String>,
     #[serde(rename = "codexChatReasoning", skip_serializing_if = "Option::is_none")]
     pub codex_chat_reasoning: Option<CodexChatReasoningConfig>,
+    /// 本地代理转发使用的自定义 User-Agent。
+    #[serde(rename = "customUserAgent", skip_serializing_if = "Option::is_none")]
+    pub custom_user_agent: Option<String>,
     /// Codex → Anthropic bridge 的供应商级输出上限。
     #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u64>,
@@ -407,7 +411,21 @@ pub struct ProviderMeta {
     pub github_account_id: Option<String>,
 }
 
+/// 解析 Provider 级自定义 User-Agent；空白视为未设置，非法 header 交由调用方静默忽略。
+pub fn parse_custom_user_agent(
+    raw: Option<&str>,
+) -> Result<Option<HeaderValue>, InvalidHeaderValue> {
+    match raw.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => HeaderValue::from_str(value).map(Some),
+        None => Ok(None),
+    }
+}
+
 impl ProviderMeta {
+    pub fn custom_user_agent_header(&self) -> Result<Option<HeaderValue>, InvalidHeaderValue> {
+        parse_custom_user_agent(self.custom_user_agent.as_deref())
+    }
+
     /// 解析指定托管认证供应商绑定的账号 ID。
     ///
     /// 新版优先读取 authBinding，旧版继续兼容 githubAccountId。

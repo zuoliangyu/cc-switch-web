@@ -1195,6 +1195,21 @@ impl RequestForwarder {
             }
         }
 
+        // Copilot 的指纹 UA 不允许覆盖；其他供应商的非法值在运行时静默忽略。
+        let custom_user_agent = if is_copilot {
+            None
+        } else {
+            provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.custom_user_agent_header().ok().flatten())
+        };
+        let custom_user_agent = if custom_user_agent.is_none() && codex_impersonate_claude_code {
+            Some(http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT))
+        } else {
+            custom_user_agent
+        };
+
         // Copilot 指纹头名（由 get_auth_headers 注入，需在原始头中去重）
         let copilot_fingerprint_headers: &[&str] = if is_copilot {
             &[
@@ -1317,19 +1332,6 @@ impl RequestForwarder {
                 continue;
             }
 
-            if codex_impersonate_claude_code && key_str.eq_ignore_ascii_case("user-agent") {
-                if !saw_user_agent {
-                    saw_user_agent = true;
-                    ordered_headers.append(
-                        http::header::USER_AGENT,
-                        http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT),
-                    );
-                }
-                continue;
-            }
-            if key_str.eq_ignore_ascii_case("user-agent") {
-                saw_user_agent = true;
-            }
             if codex_impersonate_claude_code && key_str.eq_ignore_ascii_case("x-app") {
                 continue;
             }
@@ -1357,6 +1359,19 @@ impl RequestForwarder {
                             http::header::ACCEPT_ENCODING,
                             http::HeaderValue::from_static("identity"),
                         );
+                    } else {
+                        ordered_headers.append(key.clone(), value.clone());
+                    }
+                }
+                continue;
+            }
+
+            // Provider 级 User-Agent 在原始位置替换，缺失时在循环后补入。
+            if !is_copilot && key_str.eq_ignore_ascii_case("user-agent") {
+                if !saw_user_agent {
+                    saw_user_agent = true;
+                    if let Some(ref user_agent) = custom_user_agent {
+                        ordered_headers.append(http::header::USER_AGENT, user_agent.clone());
                     } else {
                         ordered_headers.append(key.clone(), value.clone());
                     }
@@ -1418,13 +1433,12 @@ impl RequestForwarder {
             );
         }
         if codex_impersonate_claude_code {
-            if !saw_user_agent {
-                ordered_headers.append(
-                    http::header::USER_AGENT,
-                    http::HeaderValue::from_static(CLAUDE_CODE_USER_AGENT),
-                );
-            }
             ordered_headers.append("x-app", http::HeaderValue::from_static("cli"));
+        }
+        if !saw_user_agent {
+            if let Some(ref user_agent) = custom_user_agent {
+                ordered_headers.append(http::header::USER_AGENT, user_agent.clone());
+            }
         }
 
         // 如果原始请求中没有 anthropic-beta 且有值需要添加，追加

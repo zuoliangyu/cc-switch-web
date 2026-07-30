@@ -59,12 +59,16 @@ describe("GrokBuildProviderForm", () => {
           name: "Env Relay",
           category: "custom",
           settingsConfig: { config: envConfig },
+          meta: { customUserAgent: "claude-code/0.1.0" },
         }}
       />,
     );
 
     fireEvent.change(screen.getByLabelText("grokBuild.baseUrl"), {
       target: { value: "https://new.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("providerForm.customUserAgent"), {
+      target: { value: "claude-cli/2.1.161" },
     });
     fireEvent.click(screen.getByRole("button", { name: "save" }));
 
@@ -78,6 +82,7 @@ describe("GrokBuildProviderForm", () => {
     });
     expect(parsedToml.model["grok-profile"]).not.toHaveProperty("api_key");
     expect(payload.meta.apiFormat).toBe("openai_responses");
+    expect(payload.meta.customUserAgent).toBe("claude-cli/2.1.161");
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
@@ -93,6 +98,7 @@ describe("GrokBuildProviderForm", () => {
           category: "official",
           settingsConfig: { config: "" },
           icon: "grok",
+          meta: { customUserAgent: "stale-agent" },
         }}
       />,
     );
@@ -104,6 +110,7 @@ describe("GrokBuildProviderForm", () => {
     const payload = onSubmit.mock.calls[0][0];
     expect(JSON.parse(payload.settingsConfig)).toEqual({ config: "" });
     expect(payload.presetCategory).toBe("official");
+    expect(payload.meta.customUserAgent).toBeUndefined();
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
@@ -117,7 +124,7 @@ describe("GrokBuildProviderForm", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "PackyCode" }));
+    fireEvent.click(screen.getByRole("button", { name: /PackyCode/ }));
     fireEvent.change(screen.getByLabelText("API Key"), {
       target: { value: "secret" },
     });

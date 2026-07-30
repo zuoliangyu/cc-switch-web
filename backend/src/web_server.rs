@@ -169,6 +169,7 @@ struct FetchModelsRequest {
     /// 预设级别的 `/models` 端点覆盖。命中时跳过 baseURL 推导直接使用此 URL。
     /// 用于 DeepSeek 这类把 Anthropic 协议挂在子路径，但 `/models` 在根上的供应商。
     models_url: Option<String>,
+    custom_user_agent: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -945,6 +946,7 @@ async fn fetch_provider_models(
         payload.api_key,
         payload.is_full_url,
         payload.models_url,
+        payload.custom_user_agent,
     )
     .await
     .map_err(ApiError::bad_request)?;

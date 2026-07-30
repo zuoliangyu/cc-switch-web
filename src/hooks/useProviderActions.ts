@@ -285,9 +285,11 @@ export function useProviderActions(
           );
         } else {
           // 普通供应商：显示切换成功
-          // OpenCode/OpenClaw: show "added to config" message instead of "switched"
+          // 累加模式应用显示“已添加到配置”而不是“切换成功”
           const isMultiProviderApp =
-            activeApp === "opencode" || activeApp === "openclaw";
+            activeApp === "opencode" ||
+            activeApp === "openclaw" ||
+            activeApp === "hermes";
           const messageKey = isMultiProviderApp
             ? "notifications.addToConfigSuccess"
             : "notifications.switchSuccess";

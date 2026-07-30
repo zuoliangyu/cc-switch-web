@@ -6,6 +6,7 @@ import type { ProviderPreset } from "@/config/claudeProviderPresets";
 import type { CodexProviderPreset } from "@/config/codexProviderPresets";
 import type { GeminiProviderPreset } from "@/config/geminiProviderPresets";
 import type { ClaudeDesktopProviderPreset } from "@/config/claudeDesktopProviderPresets";
+import type { HermesProviderPreset } from "@/config/hermesProviderPresets";
 import type { ProviderCategory } from "@/types";
 import {
   universalProviderPresets,
@@ -17,7 +18,8 @@ type SelectablePreset =
   | ProviderPreset
   | CodexProviderPreset
   | GeminiProviderPreset
-  | ClaudeDesktopProviderPreset;
+  | ClaudeDesktopProviderPreset
+  | HermesProviderPreset;
 
 type PresetEntry = {
   id: string;

@@ -1,5 +1,10 @@
 import { useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { providersApi } from "@/lib/api/providers";
@@ -13,9 +18,18 @@ export const hermesKeys = {
   all: ["hermes"] as const,
   health: ["hermes", "health"] as const,
   liveProviderIds: ["hermes", "liveProviderIds"] as const,
+  modelConfig: ["hermes", "modelConfig"] as const,
   memory: (kind: HermesMemoryKind) => ["hermes", "memory", kind] as const,
   memoryLimits: ["hermes", "memoryLimits"] as const,
 };
+
+export function invalidateHermesProviderCaches(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: hermesKeys.liveProviderIds }),
+    queryClient.invalidateQueries({ queryKey: hermesKeys.modelConfig }),
+    queryClient.invalidateQueries({ queryKey: hermesKeys.health }),
+  ]);
+}
 
 export function useHermesLiveProviderIds(enabled: boolean) {
   return useQuery({
@@ -36,7 +50,7 @@ export function useHermesHealth(enabled: boolean) {
 
 export function useHermesModelConfig(enabled: boolean) {
   return useQuery({
-    queryKey: ["hermes", "modelConfig"],
+    queryKey: hermesKeys.modelConfig,
     queryFn: () => hermesApi.getModelConfig(),
     enabled,
   });

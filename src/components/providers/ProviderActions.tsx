@@ -36,6 +36,7 @@ interface ProviderActionsProps {
   isAutoFailoverEnabled?: boolean;
   isInFailoverQueue?: boolean;
   onToggleFailover?: (enabled: boolean) => void;
+  isReadOnly?: boolean;
   // OpenClaw: default model
   isDefaultModel?: boolean;
   onSetAsDefault?: () => void;
@@ -60,6 +61,7 @@ export function ProviderActions({
   isAutoFailoverEnabled = false,
   isInFailoverQueue = false,
   onToggleFailover,
+  isReadOnly = false,
   // OpenClaw: default model
   isDefaultModel = false,
   onSetAsDefault,
@@ -67,9 +69,11 @@ export function ProviderActions({
   const { t } = useTranslation();
   const iconButtonClass = "h-8 w-8 p-1";
 
-  // 累加模式应用（OpenCode 非 OMO 和 OpenClaw）
+  // 累加模式应用（OpenCode 非 OMO / OpenClaw / Hermes）
   const isAdditiveMode =
-    (appId === "opencode" && !isOmo) || appId === "openclaw";
+    (appId === "opencode" && !isOmo) ||
+    appId === "openclaw" ||
+    appId === "hermes";
 
   // 故障转移模式下的按钮逻辑（累加模式和 OMO 应用不支持故障转移）
   const isFailoverMode =
@@ -124,11 +128,11 @@ export function ProviderActions({
     if (isAdditiveMode) {
       if (isInConfig) {
         return {
-          disabled: isDefaultModel === true,
+          disabled: isReadOnly || isDefaultModel === true,
           variant: "secondary" as const,
           className: cn(
             "theme-chip-warm hover:text-inherit",
-            isDefaultModel && "opacity-40 cursor-not-allowed",
+            (isReadOnly || isDefaultModel) && "opacity-40 cursor-not-allowed",
           ),
           icon: <Minus className="h-4 w-4" />,
           text: t("provider.removeFromConfig", { defaultValue: "移除" }),
@@ -183,29 +187,39 @@ export function ProviderActions({
 
   const buttonState = getMainButtonState();
 
-  const canDelete = isOmo || isAdditiveMode ? true : !isCurrent;
+  const canDelete =
+    !isReadOnly && (isOmo || isAdditiveMode ? true : !isCurrent);
+  const readOnlyHint = t("provider.managedByHermesHint", {
+    defaultValue: "由 Hermes 管理，请在 Hermes Web UI 中编辑",
+  });
 
   return (
     <div className="flex items-center gap-1.5">
-      {appId === "openclaw" && isInConfig && onSetAsDefault && (
-        <Button
-          size="sm"
-          variant={isDefaultModel ? "secondary" : "default"}
-          onClick={isDefaultModel ? undefined : onSetAsDefault}
-          disabled={isDefaultModel}
-          className={cn(
-            "w-fit px-2.5",
-            isDefaultModel
-              ? "theme-chip-neutral opacity-60 cursor-not-allowed"
-              : "theme-primary-solid",
-          )}
-        >
-          <Zap className="h-4 w-4" />
-          {isDefaultModel
-            ? t("provider.isDefault", { defaultValue: "当前默认" })
-            : t("provider.setAsDefault", { defaultValue: "设为默认" })}
-        </Button>
-      )}
+      {(appId === "openclaw" || appId === "hermes") &&
+        isInConfig &&
+        onSetAsDefault && (
+          <Button
+            size="sm"
+            variant={isDefaultModel ? "secondary" : "default"}
+            onClick={isDefaultModel ? undefined : onSetAsDefault}
+            disabled={isDefaultModel}
+            className={cn(
+              "w-fit px-2.5",
+              isDefaultModel
+                ? "theme-chip-neutral opacity-60 cursor-not-allowed"
+                : "theme-primary-solid",
+            )}
+          >
+            <Zap className="h-4 w-4" />
+            {isDefaultModel
+              ? appId === "hermes"
+                ? t("provider.inUse")
+                : t("provider.isDefault", { defaultValue: "当前默认" })
+              : appId === "hermes"
+                ? t("provider.enable")
+                : t("provider.setAsDefault", { defaultValue: "设为默认" })}
+          </Button>
+        )}
 
       <Button
         size="sm"
@@ -222,9 +236,13 @@ export function ProviderActions({
         <Button
           size="icon"
           variant="ghost"
-          onClick={onEdit}
-          title={t("common.edit")}
-          className={iconButtonClass}
+          onClick={isReadOnly ? undefined : onEdit}
+          disabled={isReadOnly}
+          title={isReadOnly ? readOnlyHint : t("common.edit")}
+          className={cn(
+            iconButtonClass,
+            isReadOnly && "opacity-40 cursor-not-allowed text-muted-foreground",
+          )}
         >
           <Edit className="h-4 w-4" />
         </Button>
@@ -290,7 +308,7 @@ export function ProviderActions({
           size="icon"
           variant="ghost"
           onClick={canDelete ? onDelete : undefined}
-          title={t("common.delete")}
+          title={isReadOnly ? readOnlyHint : t("common.delete")}
           className={cn(
             iconButtonClass,
             canDelete && "hover:text-red-500 dark:hover:text-red-400",

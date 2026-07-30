@@ -8,6 +8,7 @@ import type { Provider, SessionMeta, Settings } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
+import { invalidateHermesProviderCaches } from "@/hooks/useHermes";
 import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 
 export const useAddProviderMutation = (appId: AppId) => {
@@ -42,7 +43,11 @@ export const useAddProviderMutation = (appId: AppId) => {
 
       let id: string;
 
-      if (appId === "opencode" || appId === "openclaw") {
+      if (
+        appId === "opencode" ||
+        appId === "openclaw" ||
+        appId === "hermes"
+      ) {
         if (
           providerInput.category === "omo" ||
           providerInput.category === "omo-slim"
@@ -93,6 +98,10 @@ export const useAddProviderMutation = (appId: AppId) => {
         });
       }
 
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
+      }
+
       toast.success(
         t("notifications.providerAdded", {
           defaultValue: "供应商已添加",
@@ -135,6 +144,9 @@ export const useUpdateProviderMutation = (appId: AppId) => {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      }
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
       }
       toast.success(
         t("notifications.updateSuccess", {
@@ -187,6 +199,10 @@ export const useDeleteProviderMutation = (appId: AppId) => {
         await queryClient.invalidateQueries({
           queryKey: openclawKeys.health,
         });
+      }
+
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
       }
 
       toast.success(
@@ -244,7 +260,9 @@ export const useSwitchProviderMutation = (appId: AppId) => {
           queryKey: openclawKeys.health,
         });
       }
-
+      if (appId === "hermes") {
+        await invalidateHermesProviderCaches(queryClient);
+      }
     },
     onError: (error: Error) => {
       const detail = extractErrorMessage(error) || t("common.unknown");

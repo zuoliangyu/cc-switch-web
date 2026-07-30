@@ -45,9 +45,12 @@ export function AddProviderDialog({
   onSubmit,
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
-  // OpenCode、OpenClaw 和 Grok Build 不支持统一供应商投影。
+  // 累加模式应用和 Grok Build 不支持统一供应商投影。
   const showUniversalTab =
-    appId !== "opencode" && appId !== "openclaw" && appId !== "grokbuild";
+    appId !== "opencode" &&
+    appId !== "openclaw" &&
+    appId !== "hermes" &&
+    appId !== "grokbuild";
   const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
     "app-specific",
   );
@@ -120,9 +123,11 @@ export function AddProviderDialog({
         providerData.ensureGrokBuildOfficialSeed = true;
       }
 
-      // OpenCode/OpenClaw: pass providerKey for ID generation
+      // 累加模式应用：传递 providerKey 作为 Provider ID
       if (
-        (appId === "opencode" || appId === "openclaw") &&
+        (appId === "opencode" ||
+          appId === "openclaw" ||
+          appId === "hermes") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
@@ -229,6 +234,10 @@ export function AddProviderDialog({
           // OpenClaw uses baseUrl directly
           if (parsedConfig.baseUrl) {
             addUrl(parsedConfig.baseUrl as string);
+          }
+        } else if (appId === "hermes") {
+          if (parsedConfig.base_url) {
+            addUrl(parsedConfig.base_url as string);
           }
         }
 

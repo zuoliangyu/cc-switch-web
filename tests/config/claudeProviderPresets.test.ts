@@ -76,3 +76,44 @@ describe("AWS Bedrock Provider Presets", () => {
     expect(bedrockApiKey!.category).toBe("cloud_provider");
   });
 });
+
+describe("Claude Provider Presets", () => {
+  it("should match the complete upstream catalog", () => {
+    expect(providerPresets).toHaveLength(74);
+    expect(providerPresets.map((preset) => preset.name)).toEqual(
+      expect.arrayContaining([
+        "Kimi",
+        "Kimi For Coding",
+        "Code0",
+        "Qiniu",
+        "Gemini Native",
+        "OpenCode Go",
+        "Xiaomi MiMo Token Plan (China)",
+      ]),
+    );
+  });
+
+  it("should keep the latest Kimi coding model routes", () => {
+    const kimi = providerPresets.find((preset) => preset.name === "Kimi");
+    const kimiCoding = providerPresets.find(
+      (preset) => preset.name === "Kimi For Coding",
+    );
+
+    expect(kimi?.primePartner).toBe(true);
+    expect((kimi?.settingsConfig as any).env.ANTHROPIC_MODEL).toBe(
+      "kimi-k2.7-code",
+    );
+    expect(kimiCoding?.primePartner).toBe(true);
+    expect((kimiCoding?.settingsConfig as any).env.ANTHROPIC_MODEL).toBe(
+      "kimi-for-coding",
+    );
+  });
+
+  it("should use DeepSeek's explicit models endpoint", () => {
+    const deepSeek = providerPresets.find(
+      (preset) => preset.name === "DeepSeek",
+    );
+
+    expect(deepSeek?.modelsUrl).toBe("https://api.deepseek.com/models");
+  });
+});

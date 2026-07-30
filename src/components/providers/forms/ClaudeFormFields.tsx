@@ -45,7 +45,10 @@ import type {
   ClaudeApiFormat,
   ClaudeApiKeyField,
 } from "@/types";
-import type { TemplateValueConfig } from "@/config/claudeProviderPresets";
+import {
+  providerPresets,
+  type TemplateValueConfig,
+} from "@/config/claudeProviderPresets";
 
 interface EndpointCandidate {
   url: string;
@@ -218,8 +221,14 @@ export function ClaudeFormFields({
       return;
     }
 
+    const modelsUrl = providerPresets.find((preset) => {
+      const env = (preset.settingsConfig as { env?: Record<string, string> })
+        .env;
+      return env?.ANTHROPIC_BASE_URL === baseUrl;
+    })?.modelsUrl;
+
     setIsFetchingModels(true);
-    fetchModelsForConfig(baseUrl, apiKey, isFullUrl)
+    fetchModelsForConfig(baseUrl, apiKey, isFullUrl, modelsUrl)
       .then((models) => {
         setFetchedModels(models);
         if (models.length === 0) {
@@ -455,7 +464,7 @@ export function ClaudeFormFields({
                 ? t("providerForm.apiHintOAI")
                 : apiFormat === "gemini_native"
                   ? t("providerForm.apiHintGeminiNative")
-                : t("providerForm.apiHint")
+                  : t("providerForm.apiHint")
           }
           fullUrlHint={
             apiFormat === "gemini_native"

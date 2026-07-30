@@ -55,16 +55,16 @@
 - [x] Grok/Kimi/Opus 5/GPT-5.6 内置定价
 - [x] A6API 跨应用预设与 PackyCode 备用端点（`dbb26595`、`30409878`）
 - [x] Gemini Code0 / Qiniu 默认模型更新（`bfb767ae`）
-- [ ] 完整供应商预设目录同步
+- [x] 完整供应商预设目录同步
   - [x] Gemini
   - [x] OpenCode
   - [x] OpenClaw
   - [x] Claude
   - [x] Codex
-  - [ ] Hermes
+  - [x] Hermes
     - [x] 后端应用标识、YAML Provider 生命周期、导入、切换、连通检查与配置目录接入
     - [x] 前端 Provider 页面与专属表单
-    - [ ] 完整预设目录
+    - [x] 完整预设目录
 - [ ] models.dev 定价同步
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
 
@@ -116,3 +116,4 @@
 - 2026-07-30：完整同步 Codex 68 项最终预设目录；补齐 Kimi、Code0、Qiniu、OpenCode Go 等条目，对齐 Chat/Responses 协议、默认模型、上下文窗口及推理能力配置。
 - 2026-07-30：完成 Hermes 后端第一阶段；接入 additive Provider CRUD、live 导入、默认模型切换、三种 API 模式检查、Skills/Prompts 路径与只读 `providers:` overlay，4 项定向测试和后端二进制检查通过。
 - 2026-07-30：完成 Hermes 前端第二阶段；接入 Provider 列表、专属表单、additive 生命周期、默认模型切换、live ID 锁定和 `providers:` overlay 只读交互，3 项定向测试和 TypeScript 类型检查通过。
+- 2026-07-30：完整同步 Hermes 63 项最终预设目录；四种协议、Provider Key 唯一性、默认模型引用及三语名称/推广文案由 5 项目录测试锁定，TypeScript 类型检查通过。

@@ -66,6 +66,8 @@
     - [x] 前端 Provider 页面与专属表单
     - [x] 完整预设目录
 - [ ] models.dev 定价同步
+  - [x] 手动选择单个模型并导入定价
+  - [ ] 持久化配置与自动周期同步
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
 
 ## 验证原则
@@ -117,3 +119,4 @@
 - 2026-07-30：完成 Hermes 后端第一阶段；接入 additive Provider CRUD、live 导入、默认模型切换、三种 API 模式检查、Skills/Prompts 路径与只读 `providers:` overlay，4 项定向测试和后端二进制检查通过。
 - 2026-07-30：完成 Hermes 前端第二阶段；接入 Provider 列表、专属表单、additive 生命周期、默认模型切换、live ID 锁定和 `providers:` overlay 只读交互，3 项定向测试和 TypeScript 类型检查通过。
 - 2026-07-30：完整同步 Hermes 63 项最终预设目录；四种协议、Provider Key 唯一性、默认模型引用及三语名称/推广文案由 5 项目录测试锁定，TypeScript 类型检查通过。
+- 2026-07-30：完成 models.dev 手动定价导入；支持供应商筛选、全量搜索、文本模型过滤、价格与模型 ID 归一化、超时错误和重试，自动同步留到下一阶段。

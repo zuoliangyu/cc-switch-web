@@ -257,7 +257,7 @@ export function OpenClawFormFields({
       <ApiKeySection
         value={apiKey}
         onChange={onApiKeyChange}
-        category={category}
+        category={category === "official" ? undefined : category}
         shouldShowLink={shouldShowApiKeyLink}
         websiteUrl={websiteUrl}
         isPartner={isPartner}

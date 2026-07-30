@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isWindows, isLinux } from "@/lib/platform";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { cn } from "@/lib/utils";
 
 interface FullScreenPanelProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface FullScreenPanelProps {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  contentClassName?: string;
 }
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px - match App.tsx
@@ -28,6 +30,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   onClose,
   children,
   footer,
+  contentClassName,
 }) => {
   React.useEffect(() => {
     if (isOpen) {
@@ -118,7 +121,12 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto scroll-overlay">
-            <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-6 sm:py-6">
+            <div
+              className={cn(
+                "mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-6 sm:py-6",
+                contentClassName,
+              )}
+            >
               {children}
             </div>
           </div>

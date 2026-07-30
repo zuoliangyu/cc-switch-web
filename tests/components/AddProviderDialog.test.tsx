@@ -59,6 +59,20 @@ describe("AddProviderDialog", () => {
     };
   });
 
+  it("显示预设填写提示并收紧顶部间距", () => {
+    const { container } = render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("provider.addFooterHint")).toBeInTheDocument();
+    expect(container.ownerDocument.querySelector(".pt-3")).not.toBeNull();
+  });
+
   it("使用 ProviderForm 返回的自定义端点", async () => {
     const handleSubmit = vi.fn().mockResolvedValue(undefined);
     const handleOpenChange = vi.fn();

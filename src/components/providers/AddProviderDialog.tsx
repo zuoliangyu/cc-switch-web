@@ -125,9 +125,7 @@ export function AddProviderDialog({
 
       // 累加模式应用：传递 providerKey 作为 Provider ID
       if (
-        (appId === "opencode" ||
-          appId === "openclaw" ||
-          appId === "hermes") &&
+        (appId === "opencode" || appId === "openclaw" || appId === "hermes") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
@@ -274,6 +272,9 @@ export function AddProviderDialog({
   const footer =
     !showUniversalTab || activeTab === "app-specific" ? (
       <>
+        <span className="mr-auto min-w-0 truncate text-xs text-muted-foreground">
+          {t("provider.addFooterHint")}
+        </span>
         <Button
           variant="outline"
           onClick={() => onOpenChange(false)}
@@ -316,6 +317,7 @@ export function AddProviderDialog({
       title={t("provider.addNewProvider")}
       onClose={() => onOpenChange(false)}
       footer={footer}
+      contentClassName="pt-3"
     >
       {showUniversalTab ? (
         <Tabs

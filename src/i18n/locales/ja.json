@@ -46,7 +46,8 @@
     "title": "CC Switch へようこそ",
     "bodyDefault": "CC Switch は Claude Code / Codex / Gemini CLI の複数プロバイダーをワンクリックで切り替えられるツールです。すでにこれらのツールを設定済みの場合、CC Switch は現在の設定を「default」という名前のプロバイダーとして自動保存するため、既存の設定が失われることはありません。",
     "bodyOfficial": "リストには「Official（公式）」プリセットも用意されており、いつでも公式の既定設定に戻せます。切り替える前に現在の設定は自動で default にバックアップされるので、安心して行き来できます。",
-    "confirm": "了解しました"
+    "confirm": "了解しました",
+    "saveFailed": "確認状態を保存できません。サーバーのデータディレクトリ権限を確認して再試行してください。"
   },
   "apiKeyInput": {
     "placeholder": "API Key を入力",

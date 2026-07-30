@@ -104,13 +104,11 @@ interface ProvidersResponse {
   currentProviderId: string;
 }
 
-const DEFAULT_WEB_API_BASE = "http://127.0.0.1:8890";
-
 export const getWebApiBase = (): string => {
   const configured = import.meta.env.VITE_LOCAL_API_BASE?.trim();
   return configured && configured.length > 0
     ? configured.replace(/\/+$/, "")
-    : DEFAULT_WEB_API_BASE;
+    : "";
 };
 
 const isWebRuntimeDebugEnabled = (): boolean =>

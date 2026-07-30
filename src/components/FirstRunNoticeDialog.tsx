@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -18,17 +20,30 @@ export function FirstRunNoticeDialog() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: settings } = useSettingsQuery();
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const isOpen = settings != null && settings.firstRunNoticeConfirmed !== true;
+  const isOpen =
+    !acknowledged &&
+    settings != null &&
+    settings.firstRunNoticeConfirmed !== true;
 
   const handleAcknowledge = async () => {
-    if (!settings) return;
+    if (!settings || saving) return;
+    setSaving(true);
     try {
       const { webdavSync: _ignoredWebdavSync, ...rest } = settings;
       await settingsApi.save({ ...rest, firstRunNoticeConfirmed: true });
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.setQueryData(["settings"], {
+        ...settings,
+        firstRunNoticeConfirmed: true,
+      });
+      setAcknowledged(true);
     } catch (error) {
       console.error("Failed to save firstRunNoticeConfirmed:", error);
+      toast.error(t("firstRunNotice.saveFailed"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -55,7 +70,10 @@ export function FirstRunNoticeDialog() {
           </DialogDescription>
         </div>
         <DialogFooter>
-          <Button onClick={() => void handleAcknowledge()}>
+          <Button
+            disabled={saving}
+            onClick={() => void handleAcknowledge()}
+          >
             {t("firstRunNotice.confirm")}
           </Button>
         </DialogFooter>

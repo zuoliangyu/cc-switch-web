@@ -46,7 +46,8 @@
     "title": "Welcome to CC Switch",
     "bodyDefault": "CC Switch lets you switch between multiple Claude Code / Codex / Gemini CLI providers with a single click. If you already had these tools configured, CC Switch has saved your existing setup as a provider named “default” so none of your previous configuration is lost.",
     "bodyOfficial": "An “Official” preset is also included in the list, so you can switch back to the official default at any time. Before switching, CC Switch automatically backs up your current config to “default”, so you can move back and forth safely.",
-    "confirm": "Got it"
+    "confirm": "Got it",
+    "saveFailed": "Could not save the confirmation. Check the server data directory permissions and try again."
   },
   "apiKeyInput": {
     "placeholder": "Enter API Key",

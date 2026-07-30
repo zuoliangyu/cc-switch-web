@@ -4,6 +4,7 @@ import "@testing-library/jest-dom";
 import { createContext, useContext, type ComponentProps } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsPage } from "@/components/settings/SettingsPage";
+import { settingsApi } from "@/lib/api";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -267,6 +268,7 @@ describe("SettingsPage Component", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("should not render form content when loading", () => {
@@ -363,14 +365,53 @@ describe("SettingsPage Component", () => {
         name: "settings.unifyCodexSessionHistory",
       }),
     );
+    fireEvent.click(screen.getByText("confirm.unifyCodexHistory.confirm"));
 
-    expect(settingsMock.updateSettings).toHaveBeenCalledWith({
-      unifyCodexSessionHistory: true,
-    });
     await waitFor(() => {
       expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
         unifyCodexSessionHistory: true,
+        unifyCodexMigrateExisting: false,
       });
+      expect(settingsMock.updateSettings).toHaveBeenCalledWith({
+        unifyCodexSessionHistory: true,
+        unifyCodexMigrateExisting: false,
+      });
+    });
+  });
+
+  it("should restore migrated Codex history only after disabling succeeds", async () => {
+    settingsMock = createSettingsMock({
+      settings: {
+        language: "zh",
+        unifyCodexSessionHistory: true,
+        unifyCodexMigrateExisting: true,
+      },
+    });
+    vi.spyOn(settingsApi, "hasCodexUnifyHistoryBackup").mockResolvedValue(true);
+    const restoreSpy = vi
+      .spyOn(settingsApi, "restoreCodexUnifiedHistory")
+      .mockResolvedValue({ restoredJsonlFiles: 2, restoredStateRows: 3 });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByText("settings.tabAuth"));
+    fireEvent.click(
+      screen.getByRole("switch", {
+        name: "settings.unifyCodexSessionHistory",
+      }),
+    );
+    fireEvent.click(
+      await screen.findByText("confirm.unifyCodexHistoryOff.confirm"),
+    );
+
+    await waitFor(() => {
+      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
+        unifyCodexSessionHistory: false,
+        unifyCodexMigrateExisting: false,
+      });
+      expect(restoreSpy).toHaveBeenCalledTimes(1);
+      expect(toastSuccessMock).toHaveBeenCalledWith(
+        "settings.unifyCodexHistoryRestoreCompleted",
+      );
     });
   });
 

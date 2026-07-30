@@ -1318,6 +1318,18 @@ export async function saveWebSettings(settings: Settings): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings", "PUT", settings);
 }
 
+export async function hasWebCodexUnifyHistoryBackup(): Promise<boolean> {
+  return requestJson<boolean>("/api/settings/codex-unify-history-backup");
+}
+
+export async function restoreWebCodexUnifiedHistory(): Promise<
+  import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
+> {
+  return requestWithBody<
+    import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
+  >("/api/settings/codex-unify-history-restore", "POST");
+}
+
 export async function testWebdavConnection(
   settings: WebDavSyncSettings,
   preserveEmptyPassword = true,

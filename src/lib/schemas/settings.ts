@@ -11,6 +11,7 @@ export const settingsSchema = z.object({
   // 设备级 UI 设置
   enableLocalProxy: z.boolean().optional(),
   unifyCodexSessionHistory: z.boolean().optional(),
+  unifyCodexMigrateExisting: z.boolean().optional(),
   language: z.enum(["en", "zh", "ja"]).optional(),
   proxyConfirmed: z.boolean().optional(),
   usageConfirmed: z.boolean().optional(),

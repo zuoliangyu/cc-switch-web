@@ -158,6 +158,26 @@ impl WebDavSyncSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexOfficialHistoryUnifyMigration {
+    pub completed_at: String,
+    pub target_provider_id: String,
+    #[serde(default)]
+    pub migrated_jsonl_files: usize,
+    #[serde(default)]
+    pub migrated_state_rows: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_config_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMigrations {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_official_history_unify_v1: Option<CodexOfficialHistoryUnifyMigration>,
+}
+
 /// 应用设置结构
 ///
 /// 存储设备级别设置，保存在本地 `~/.cc-switch/settings.json`，不随数据库同步。
@@ -172,6 +192,9 @@ pub struct AppSettings {
     /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
     #[serde(default)]
     pub unify_codex_session_history: bool,
+    /// 用户选择把已有官方会话迁入统一历史；失败时保留以便启动重试。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unify_codex_migrate_existing: Option<bool>,
     /// User has confirmed the local proxy first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_confirmed: Option<bool>,
@@ -279,6 +302,10 @@ pub struct AppSettings {
     /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_terminal: Option<String>,
+
+    // ===== 后端本地迁移状态 =====
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_migrations: Option<LocalMigrations>,
 }
 
 impl Default for AppSettings {
@@ -286,6 +313,7 @@ impl Default for AppSettings {
         Self {
             enable_local_proxy: false,
             unify_codex_session_history: false,
+            unify_codex_migrate_existing: None,
             proxy_confirmed: None,
             usage_confirmed: None,
             stream_check_confirmed: None,
@@ -319,6 +347,7 @@ impl Default for AppSettings {
             backup_interval_hours: None,
             backup_retain_count: None,
             preferred_terminal: None,
+            local_migrations: None,
         }
     }
 }
@@ -502,6 +531,7 @@ pub fn get_settings_for_frontend() -> AppSettings {
         sync.password.clear();
     }
     settings.webdav_backup = None;
+    settings.local_migrations = None;
     settings
 }
 
@@ -569,6 +599,45 @@ pub fn unify_codex_session_history() -> bool {
             e.into_inner()
         })
         .unify_codex_session_history
+}
+
+pub fn unify_codex_migrate_existing_requested() -> bool {
+    get_settings().unify_codex_migrate_existing.unwrap_or(false)
+}
+
+pub fn is_codex_official_history_unify_migrated_for_dir(codex_dir: &str) -> bool {
+    get_settings()
+        .local_migrations
+        .as_ref()
+        .and_then(|migrations| migrations.codex_official_history_unify_v1.as_ref())
+        .is_some_and(|migration| migration.codex_config_dir.as_deref() == Some(codex_dir))
+}
+
+pub fn mark_codex_official_history_unify_migrated_if_enabled(
+    migration: CodexOfficialHistoryUnifyMigration,
+) -> Result<bool, AppError> {
+    let mut written = false;
+    mutate_settings(|settings| {
+        if settings.unify_codex_session_history
+            && settings.unify_codex_migrate_existing.unwrap_or(false)
+        {
+            settings
+                .local_migrations
+                .get_or_insert_with(Default::default)
+                .codex_official_history_unify_v1 = Some(migration);
+            written = true;
+        }
+    })?;
+    Ok(written)
+}
+
+pub fn clear_codex_official_history_unify_state() -> Result<(), AppError> {
+    mutate_settings(|settings| {
+        settings.unify_codex_migrate_existing = None;
+        if let Some(migrations) = settings.local_migrations.as_mut() {
+            migrations.codex_official_history_unify_v1 = None;
+        }
+    })
 }
 
 pub fn get_gemini_override_dir() -> Option<PathBuf> {

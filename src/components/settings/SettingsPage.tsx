@@ -16,7 +16,6 @@ import {
   ScrollText,
   HardDriveDownload,
   FlaskConical,
-  History,
   KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +34,6 @@ import {
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { ToggleRow } from "@/components/ui/toggle-row";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { AppVisibilitySettings } from "@/components/settings/AppVisibilitySettings";
@@ -54,6 +52,7 @@ import { ModelTestConfigPanel } from "@/components/usage/ModelTestConfigPanel";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
+import { CodexHistorySettings } from "@/components/settings/CodexHistorySettings";
 import { useSettings } from "@/hooks/useSettings";
 import { useInstalledSkills } from "@/hooks/useSkills";
 import { useImportExport } from "@/hooks/useImportExport";
@@ -215,6 +214,24 @@ export function SettingsPage({
       }
     },
     [autoSaveSettings, settings, t, updateSettings],
+  );
+
+  const handleConfirmedAutoSave = useCallback(
+    async (updates: Partial<SettingsFormState>): Promise<boolean> => {
+      if (!settings) return false;
+      try {
+        await autoSaveSettings(updates);
+        updateSettings(updates);
+        return true;
+      } catch (error) {
+        console.error(
+          "[SettingsPage] Failed to autosave confirmed setting",
+          error,
+        );
+        return false;
+      }
+    },
+    [autoSaveSettings, settings, updateSettings],
   );
 
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
@@ -390,16 +407,9 @@ export function SettingsPage({
 
                   <AuthCenterPanel />
                   {settings ? (
-                    <ToggleRow
-                      icon={<History className="h-4 w-4 text-sky-500" />}
-                      title={t("settings.unifyCodexSessionHistory")}
-                      description={t(
-                        "settings.unifyCodexSessionHistoryDescription",
-                      )}
-                      checked={settings.unifyCodexSessionHistory ?? false}
-                      onCheckedChange={(value) =>
-                        handleAutoSave({ unifyCodexSessionHistory: value })
-                      }
+                    <CodexHistorySettings
+                      settings={settings}
+                      onChange={handleConfirmedAutoSave}
                     />
                   ) : null}
                 </motion.div>

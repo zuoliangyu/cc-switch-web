@@ -253,6 +253,18 @@
       "title": "About Common Config",
       "message": "The \"Common Config Snippet\" lets you share plugins, environment variables, and other settings across different providers so they won't be lost when you switch.\n\nHow to use:\n① Edit a provider and click \"Edit Common Config\" → \"Extract from Editor\"\n② When creating a new provider, check \"Write Common Config\" (enabled by default)\n\nIf you've newly installed plugins or hooks, re-extract the common config to keep them in sync.",
       "confirm": "Got it"
+    },
+    "unifyCodexHistory": {
+      "title": "Unify Codex session history",
+      "message": "Official accounts and third-party Providers will share one session history. Resuming a session across Providers may fail when another backend cannot decrypt its encrypted_content.\n\nYou can also migrate existing official sessions; every changed item is backed up first.",
+      "migrateExisting": "Also migrate existing official session history",
+      "confirm": "I understand, enable"
+    },
+    "unifyCodexHistoryOff": {
+      "title": "Turn off unified session history",
+      "message": "Official accounts and third-party Providers will return to separate histories. Sessions created while unified cannot be attributed reliably and will remain in the unified history.",
+      "restoreBackup": "Restore previously migrated official sessions from the migration backup",
+      "confirm": "Turn off"
     }
   },
   "settings": {
@@ -263,7 +275,11 @@
     "tabProxy": "Proxy",
     "tabAuth": "Auth",
     "unifyCodexSessionHistory": "Unify Codex session history",
-    "unifyCodexSessionHistoryDescription": "Use one resume-history entry for future official Codex and third-party Provider sessions. Existing sessions are not moved.",
+    "unifyCodexSessionHistoryDescription": "Share resume history between official accounts and third-party Providers, optionally migrating existing official sessions with backup-based restore.",
+    "unifyCodexHistoryRestoreCompleted": "Official history restored ({{files}} session files, {{rows}} index rows)",
+    "unifyCodexHistoryRestoreFailed": "Failed to restore official session history. Please try again.",
+    "unifyCodexHistoryRestoreNothing": "No restorable migration backup exists for the current Codex directory.",
+    "unifyCodexHistoryRestoreSkippedToggleOn": "Unified session history was enabled again, so restore was skipped.",
     "authCenter": {
       "title": "OAuth Authentication Center",
       "description": "Manage reusable OAuth accounts across apps in one place. Providers bind to these auth sources instead of logging in repeatedly.",

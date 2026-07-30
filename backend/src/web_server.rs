@@ -2111,6 +2111,19 @@ async fn save_settings(
         .map_err(|e| ApiError::internal(format!("failed to save settings: {e}")))
 }
 
+async fn has_codex_unify_history_backup() -> Json<bool> {
+    Json(crate::commands::has_codex_unify_history_backup_internal())
+}
+
+async fn restore_codex_unified_history(
+) -> Result<Json<crate::commands::CodexUnifyHistoryRestoreResult>, ApiError> {
+    tokio::task::spawn_blocking(crate::commands::restore_codex_unified_history_internal)
+        .await
+        .map_err(|error| ApiError::internal(format!("Codex history restore task failed: {error}")))?
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to restore Codex history: {error}")))
+}
+
 async fn get_auto_launch_status() -> Result<Json<bool>, ApiError> {
     crate::commands::get_auto_launch_status_internal()
         .map(Json)
@@ -3460,6 +3473,17 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup Gemini common-config credential scrub failed: {err}");
     }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
+    tokio::task::spawn_blocking(|| {
+        match crate::codex_history_migration::maybe_migrate_codex_official_history() {
+            Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
+                "Codex 官方历史迁移完成: files={}, rows={}",
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex 官方历史启动迁移失败: {error}"),
+        }
+    });
     let state = WebApiState {
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         codex_oauth_state: app_state.codex_oauth_state.clone(),
@@ -3474,6 +3498,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
+        .route(
+            "/api/settings/codex-unify-history-backup",
+            get(has_codex_unify_history_backup),
+        )
+        .route(
+            "/api/settings/codex-unify-history-restore",
+            post(restore_codex_unified_history),
+        )
         .route(
             "/api/settings/auto-launch",
             get(get_auto_launch_status).put(set_auto_launch),

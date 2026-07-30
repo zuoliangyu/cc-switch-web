@@ -36,7 +36,7 @@
 
 ### 功能与生态
 
-- 设置页新增 Codex 统一会话历史开关；启用后，之后创建的官方 Codex 会话与第三方 Provider 共用稳定的恢复历史入口，已有显式路由和同名第三方路由不会被覆盖。
+- 设置页新增 Codex 统一会话历史开关；官方 Codex 可与第三方 Provider 共用稳定的恢复历史入口，并可选择在备份 JSONL 与 `state_5.sqlite` 后迁入已有官方会话。关闭时可按账本精确恢复，已有显式路由和同名第三方路由不会被覆盖。
 - 新增项目 Profile 持久化、服务、Web API 与页面入口，支持按 scope 拍摄/自动保存/应用配置快照、创建/切换/重命名/删除项目和隐藏切换器；切换时退出旧代理接管，并以 warning 汇总已删除条目或单项应用失败。
 - 新增 Grok Build 后端应用目标、`~/.grok/config.toml` 配置读写、Provider CRUD/切换/导入和连接检查；官方登录态允许空配置，自定义供应商强制校验模型与凭据，声明的 `env_key` 未设置时不会借用 `XAI_API_KEY`。
 - Grok Build 支持统一 MCP、Skills 与 Prompts：MCP 投影到 `config.toml` 且不会污染 Provider 快照，Skill 同步到 `.grok/skills`，启用 Prompt 写入 `.grok/AGENTS.md`。

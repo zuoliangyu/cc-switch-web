@@ -105,8 +105,10 @@ import {
   removeWebManagedAuthAccount,
   resetWebCircuitBreaker,
   restoreWebDbBackup,
+  restoreWebCodexUnifiedHistory,
   restoreWebEnvBackup,
   saveWebSettings,
+  hasWebCodexUnifyHistoryBackup,
   scanWebLocalProxies,
   getWebRectifierConfig,
   setWebAutoFailoverEnabled,
@@ -235,6 +237,10 @@ export async function invoke<T>(
       return (await getWebSettings()) as T;
     case "save_settings":
       return (await saveWebSettings(args?.settings as any)) as T;
+    case "has_codex_unify_history_backup":
+      return (await hasWebCodexUnifyHistoryBackup()) as T;
+    case "restore_codex_unified_history":
+      return (await restoreWebCodexUnifiedHistory()) as T;
     case "get_common_config_snippet":
       return (await getWebCommonConfigSnippet(args?.appType as string)) as T;
     case "set_common_config_snippet":

@@ -329,6 +329,8 @@ export interface Settings {
   enableLocalProxy?: boolean;
   // 让之后创建的官方 Codex 会话与第三方 Provider 共用恢复历史入口
   unifyCodexSessionHistory?: boolean;
+  // 用户选择把已有官方会话迁入统一历史；迁移失败时用于启动重试
+  unifyCodexMigrateExisting?: boolean;
   // User has confirmed the local proxy first-run notice
   proxyConfirmed?: boolean;
   // User has confirmed the usage query first-run notice

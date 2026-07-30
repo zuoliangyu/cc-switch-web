@@ -79,7 +79,8 @@
     - [x] Codex 高级选项收口及上游格式/模型映射解耦（`e7761609`、`a4eb5f37`）
     - [x] Codex 通用配置改用后端 `toml_edit` 合并并保护异步编辑（`88d5ffba`）
     - [x] Codex 内置官方 Provider 与原生 ChatGPT 登录代理接管（`51d6c458`、`f15184ed`）
-    - [x] Codex 官方 Provider 统一新会话历史开关（`948d7627`；存量迁移另阶段处理）
+    - [x] Codex 官方 Provider 统一新会话历史开关（`948d7627`）
+    - [x] Codex 官方存量会话迁移、备份账本恢复与 `CODEX_SQLITE_HOME` 探测（`eab6bfd2`、`69341db2`）
 
 ## 验证原则
 
@@ -146,3 +147,4 @@
 - 2026-07-30：补齐 Claude/Codex 切换前的通用配置自动回收；把 live 中新增、删除或修改的共享项整体重提取回片段，尊重显式清空标记，并继续排除凭据、端点、模型目录及 MCP 注入项。
 - 2026-07-30：接入 Codex 内置 OpenAI Official 稳定条目与原生 ChatGPT 登录代理接管；官方认证只透传到固定后端，第三方接管不再覆盖 `auth.json`，热切换会按目标 Provider 重新投影 live 路由。
 - 2026-07-30：接入 Codex 官方 Provider 统一会话历史开关；仅在无显式路由且稳定路由名未被第三方占用时投影新会话桶，代理接管期间同步更新恢复备份，存量历史迁移留到下一阶段。
+- 2026-07-30：完成 Codex 官方存量会话迁移；用户可选择把 `openai` 桶迁入 `ccswitch`，JSONL 与 `state_5.sqlite` 改写前按代际备份，关闭开关后只按官方 ID 账本精确恢复，并支持配置项和 `CODEX_SQLITE_HOME` 指定的状态库目录。

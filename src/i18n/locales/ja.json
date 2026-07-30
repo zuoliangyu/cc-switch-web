@@ -253,6 +253,18 @@
       "title": "共通設定について",
       "message": "「共通設定スニペット」は、プラグインや環境変数などの設定を異なるプロバイダー間で共有するためのものです。プロバイダーを切り替えてもこれらの設定が失われません。\n\n使い方:\n① プロバイダーを編集して「共通設定を編集」→「編集内容から抽出」をクリック\n② 新規プロバイダー作成時に「共通設定を書き込む」をチェック（既定で有効）\n\n新しいプラグインや Hook を入れた場合は、共通設定を再抽出して同期してください。",
       "confirm": "了解しました"
+    },
+    "unifyCodexHistory": {
+      "title": "Codex セッション履歴を統合",
+      "message": "公式アカウントとサードパーティ Provider が同じセッション履歴を共有します。Provider をまたいで再開すると、別のバックエンドが encrypted_content を復号できず失敗する場合があります。\n\n既存の公式セッションも移行できます。変更前に必ずバックアップします。",
+      "migrateExisting": "既存の公式セッション履歴も移行する",
+      "confirm": "理解しました、有効にする"
+    },
+    "unifyCodexHistoryOff": {
+      "title": "セッション履歴の統合を無効にする",
+      "message": "公式アカウントとサードパーティ Provider は別々の履歴に戻ります。統合中に作成されたセッションは提供元を確実に判別できないため、統合履歴に残ります。",
+      "restoreBackup": "移行バックアップから既存の公式セッションを正確に復元する",
+      "confirm": "無効にする"
     }
   },
   "settings": {
@@ -263,7 +275,11 @@
     "tabProxy": "プロキシ",
     "tabAuth": "認証",
     "unifyCodexSessionHistory": "Codex セッション履歴を統合",
-    "unifyCodexSessionHistoryDescription": "今後作成する公式 Codex とサードパーティ Provider のセッションを同じ再開履歴にまとめます。既存のセッションは移動しません。",
+    "unifyCodexSessionHistoryDescription": "公式アカウントとサードパーティ Provider の再開履歴を共有し、既存の公式セッションもバックアップ付きで移行できます。",
+    "unifyCodexHistoryRestoreCompleted": "公式履歴を復元しました（セッションファイル {{files}} 件、インデックス {{rows}} 行）",
+    "unifyCodexHistoryRestoreFailed": "公式セッション履歴の復元に失敗しました。もう一度お試しください。",
+    "unifyCodexHistoryRestoreNothing": "現在の Codex ディレクトリに復元可能な移行バックアップはありません。",
+    "unifyCodexHistoryRestoreSkippedToggleOn": "統合セッション履歴が再度有効になったため、復元をスキップしました。",
     "authCenter": {
       "title": "OAuth 認証センター",
       "description": "アプリ間で再利用できる OAuth アカウントを一元管理します。Provider はこれらの認証元に紐付くだけで、毎回再ログインする必要はありません。",

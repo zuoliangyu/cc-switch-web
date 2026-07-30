@@ -19,6 +19,7 @@ fn merge_settings_for_save(
         }
         _ => {}
     }
+    incoming.local_migrations = existing.local_migrations.clone();
     incoming
 }
 
@@ -34,6 +35,7 @@ pub fn save_settings_internal(
     let existing = crate::settings::get_settings();
     let merged = merge_settings_for_save(settings, &existing);
     let unify_changed = merged.unify_codex_session_history != existing.unify_codex_session_history;
+    let unify_enabled = merged.unify_codex_session_history;
     crate::settings::update_settings(merged).map_err(|e| e.to_string())?;
     if unify_changed {
         if let Err(error) = crate::services::provider::reapply_current_codex_official_live(state) {
@@ -41,8 +43,42 @@ pub fn save_settings_internal(
             let _ = crate::services::provider::reapply_current_codex_official_live(state);
             return Err(format!("统一 Codex 会话历史设置未生效: {error}"));
         }
+        if unify_enabled {
+            tokio::task::spawn_blocking(|| {
+                if let Err(error) =
+                    crate::codex_history_migration::maybe_migrate_codex_official_history()
+                {
+                    log::warn!("Codex 官方历史迁移失败，将在下次启动重试: {error}");
+                }
+            });
+        } else if let Err(error) = crate::settings::clear_codex_official_history_unify_state() {
+            log::warn!("清理 Codex 官方历史迁移状态失败: {error}");
+        }
     }
     Ok(true)
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexUnifyHistoryRestoreResult {
+    pub restored_jsonl_files: usize,
+    pub restored_state_rows: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped_reason: Option<String>,
+}
+
+pub fn has_codex_unify_history_backup_internal() -> bool {
+    crate::codex_history_migration::has_codex_official_history_backup()
+}
+
+pub fn restore_codex_unified_history_internal() -> Result<CodexUnifyHistoryRestoreResult, String> {
+    let outcome = crate::codex_history_migration::restore_codex_official_history()
+        .map_err(|error| error.to_string())?;
+    Ok(CodexUnifyHistoryRestoreResult {
+        restored_jsonl_files: outcome.restored_jsonl_files,
+        restored_state_rows: outcome.restored_state_rows,
+        skipped_reason: outcome.skipped_reason,
+    })
 }
 
 /// 获取 app_config_dir 覆盖配置 (从 Store)
@@ -105,7 +141,39 @@ pub fn clear_claude_onboarding_skip_internal() -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::merge_settings_for_save;
-    use crate::settings::{AppSettings, WebDavSyncSettings};
+    use crate::settings::{
+        AppSettings, CodexOfficialHistoryUnifyMigration, LocalMigrations, WebDavSyncSettings,
+    };
+
+    #[test]
+    fn save_settings_preserves_backend_migration_marker() {
+        let existing = AppSettings {
+            local_migrations: Some(LocalMigrations {
+                codex_official_history_unify_v1: Some(CodexOfficialHistoryUnifyMigration {
+                    completed_at: "2026-07-30T00:00:00Z".to_string(),
+                    target_provider_id: "ccswitch".to_string(),
+                    migrated_jsonl_files: 2,
+                    migrated_state_rows: 3,
+                    codex_config_dir: Some("C:/Users/test/.codex".to_string()),
+                }),
+            }),
+            ..AppSettings::default()
+        };
+        let incoming = AppSettings {
+            local_migrations: Some(LocalMigrations::default()),
+            ..AppSettings::default()
+        };
+
+        let merged = merge_settings_for_save(incoming, &existing);
+
+        assert_eq!(
+            merged
+                .local_migrations
+                .and_then(|migrations| migrations.codex_official_history_unify_v1)
+                .map(|migration| migration.migrated_state_rows),
+            Some(3)
+        );
+    }
 
     #[test]
     fn save_settings_should_preserve_existing_webdav_when_payload_omits_it() {

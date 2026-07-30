@@ -137,6 +137,41 @@ export interface ClaudeDesktopModelRoute {
   supports1m?: boolean;
 }
 
+export type CodexChatThinkingParam =
+  | "none"
+  | "thinking"
+  | "enable_thinking"
+  | "reasoning_split";
+
+export type CodexChatEffortParam =
+  | "none"
+  | "reasoning_effort"
+  | "reasoning.effort";
+
+export type CodexChatEffortValueMode =
+  | "passthrough"
+  | "low_high"
+  | "deepseek"
+  | "openrouter";
+
+export type CodexChatReasoningOutputFormat =
+  | "auto"
+  | "reasoning_content"
+  | "reasoning"
+  | "reasoning_details"
+  | "think_tags";
+
+export interface CodexChatReasoning {
+  supportsThinking?: boolean;
+  supportsEffort?: boolean;
+  thinkingParam?: CodexChatThinkingParam;
+  effortParam?: CodexChatEffortParam;
+  effortValueMode?: CodexChatEffortValueMode;
+  outputFormat?: CodexChatReasoningOutputFormat;
+}
+
+export type PromptCacheRoutingMode = "auto" | "enabled" | "disabled";
+
 // 供应商元数据（字段名与后端一致，保持 snake_case）
 export interface ProviderMeta {
   // 自定义端点：以 URL 为键，值为端点信息
@@ -181,6 +216,10 @@ export interface ProviderMeta {
   isFullUrl?: boolean;
   // Prompt cache key for OpenAI-compatible endpoints (improves cache hit rate)
   promptCacheKey?: string;
+  // Codex Responses -> Chat 转换的会话级提示词缓存路由
+  promptCacheRouting?: PromptCacheRoutingMode;
+  // Codex Responses -> Chat Completions 推理能力元数据
+  codexChatReasoning?: CodexChatReasoning;
   // 累加模式应用中，该 provider 是否已写入 live config
   liveConfigManaged?: boolean;
   // 供应商类型（用于识别 Copilot 等特殊供应商）
@@ -210,6 +249,15 @@ export type ClaudeApiFormat =
 // - "openai_responses": OpenAI Responses API 格式，直接透传
 // - "openai_chat": OpenAI Chat Completions 格式，需要本地路由转换
 export type CodexApiFormat = "openai_responses" | "openai_chat";
+
+export interface CodexCatalogModel {
+  model: string;
+  displayName?: string;
+  contextWindow?: string | number;
+  supportsParallelToolCalls?: boolean;
+  inputModalities?: string[];
+  baseInstructions?: string;
+}
 
 // Claude 认证字段类型
 export type ClaudeApiKeyField = "ANTHROPIC_AUTH_TOKEN" | "ANTHROPIC_API_KEY";

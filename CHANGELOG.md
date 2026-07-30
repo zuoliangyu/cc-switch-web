@@ -43,6 +43,7 @@
 - OpenCode 预设与模型能力目录完整对齐上游，新增合作方和 OpenCode Go，并更新 GPT、Gemini、Claude、GLM、Kimi 与 StepFun 的默认模型能力。
 - OpenClaw 预设目录完整对齐上游；应用预设时会按实际 Provider Key 重写主模型、回退模型与模型目录引用。
 - Claude 预设目录完整对齐上游 74 项最终清单，补齐 Kimi、Code0、Qiniu、Gemini Native、OpenCode Go 等供应商，并支持预设指定独立模型目录地址。
+- Codex 表单支持保存和编辑预设模型目录、Chat reasoning 能力与 prompt-cache 路由策略，并在编辑时保留原生 Responses 的隐藏模型能力字段。
 - xAI OAuth 后端新增 OIDC 设备流、刷新令牌持久化、多账号与默认账号管理和失效重登录标记，并接入统一 Web 认证 API。
 - Claude 与 Claude Desktop 的 xAI OAuth Provider 接入本地代理：固定使用 xAI 官方 Responses 端点，按绑定账号动态刷新并注入 Bearer token，同时阻止代理占位符发往官方上游。
 - 设置页认证中心新增 xAI / Grok 账号管理，支持设备码登录、多账号、默认账号、移除账号，以及失效凭据提示与定时刷新。

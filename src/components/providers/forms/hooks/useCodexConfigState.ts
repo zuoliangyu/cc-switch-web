@@ -6,6 +6,7 @@ import {
   setCodexModelName as setCodexModelNameInConfig,
 } from "@/utils/providerConfigUtils";
 import { normalizeTomlText } from "@/utils/textNormalization";
+import type { CodexCatalogModel } from "@/types";
 
 interface UseCodexConfigStateProps {
   initialData?: {
@@ -23,6 +24,9 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
   const [codexApiKey, setCodexApiKey] = useState("");
   const [codexBaseUrl, setCodexBaseUrl] = useState("");
   const [codexModelName, setCodexModelName] = useState("");
+  const [codexCatalogModels, setCodexCatalogModels] = useState<
+    CodexCatalogModel[]
+  >([]);
   const [codexAuthError, setCodexAuthError] = useState("");
 
   const isUpdatingCodexBaseUrlRef = useRef(false);
@@ -44,6 +48,56 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
           ? (config as any).config
           : "";
       setCodexConfigState(configStr);
+
+      const modelCatalog = (config as any).modelCatalog;
+      const rawCatalogModels = Array.isArray(modelCatalog?.models)
+        ? modelCatalog.models
+        : [];
+      setCodexCatalogModels(
+        rawCatalogModels
+          .map((item: any) => {
+            const supportsParallelToolCalls =
+              typeof item?.supportsParallelToolCalls === "boolean"
+                ? item.supportsParallelToolCalls
+                : typeof item?.supports_parallel_tool_calls === "boolean"
+                  ? item.supports_parallel_tool_calls
+                  : undefined;
+            const inputModalities = Array.isArray(item?.inputModalities)
+              ? item.inputModalities
+              : Array.isArray(item?.input_modalities)
+                ? item.input_modalities
+                : undefined;
+            const baseInstructions =
+              typeof item?.baseInstructions === "string"
+                ? item.baseInstructions
+                : typeof item?.base_instructions === "string"
+                  ? item.base_instructions
+                  : undefined;
+            return {
+              model: typeof item?.model === "string" ? item.model : "",
+              displayName:
+                typeof item?.displayName === "string"
+                  ? item.displayName
+                  : typeof item?.display_name === "string"
+                    ? item.display_name
+                    : "",
+              contextWindow:
+                typeof item?.contextWindow === "string" ||
+                typeof item?.contextWindow === "number"
+                  ? item.contextWindow
+                  : typeof item?.context_window === "string" ||
+                      typeof item?.context_window === "number"
+                    ? item.context_window
+                    : "",
+              ...(supportsParallelToolCalls !== undefined
+                ? { supportsParallelToolCalls }
+                : {}),
+              ...(inputModalities ? { inputModalities } : {}),
+              ...(baseInstructions ? { baseInstructions } : {}),
+            };
+          })
+          .filter((item: CodexCatalogModel) => item.model.trim()),
+      );
 
       // 提取 Base URL
       const initialBaseUrl = extractCodexBaseUrl(configStr);
@@ -211,10 +265,15 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
 
   // 重置配置（用于预设切换）
   const resetCodexConfig = useCallback(
-    (auth: Record<string, unknown>, config: string) => {
+    (
+      auth: Record<string, unknown>,
+      config: string,
+      modelCatalogModels: CodexCatalogModel[] = [],
+    ) => {
       const authString = JSON.stringify(auth, null, 2);
       setCodexAuth(authString);
       setCodexConfig(config);
+      setCodexCatalogModels(modelCatalogModels);
 
       const baseUrl = extractCodexBaseUrl(config);
       if (baseUrl) {
@@ -248,9 +307,11 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
     codexApiKey,
     codexBaseUrl,
     codexModelName,
+    codexCatalogModels,
     codexAuthError,
     setCodexAuth,
     setCodexConfig,
+    setCodexCatalogModels,
     handleCodexApiKeyChange,
     handleCodexBaseUrlChange,
     handleCodexModelNameChange,

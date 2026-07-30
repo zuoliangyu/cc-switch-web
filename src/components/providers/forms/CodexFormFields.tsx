@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -10,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Plus, Trash2 } from "lucide-react";
 import EndpointSpeedTest from "./EndpointSpeedTest";
 import { ApiKeySection, EndpointField, ModelInputWithFetch } from "./shared";
 import { XaiOAuthSection } from "./XaiOAuthSection";
@@ -20,7 +22,13 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
-import type { CodexApiFormat, ProviderCategory } from "@/types";
+import type {
+  CodexApiFormat,
+  CodexCatalogModel,
+  CodexChatReasoning,
+  PromptCacheRoutingMode,
+  ProviderCategory,
+} from "@/types";
 
 interface EndpointCandidate {
   url: string;
@@ -62,8 +70,53 @@ interface CodexFormFieldsProps {
   modelName?: string;
   onModelNameChange?: (model: string) => void;
 
+  codexChatReasoning?: CodexChatReasoning;
+  onCodexChatReasoningChange?: (value: CodexChatReasoning) => void;
+  promptCacheRouting: PromptCacheRoutingMode;
+  onPromptCacheRoutingChange: (value: PromptCacheRoutingMode) => void;
+  catalogModels?: CodexCatalogModel[];
+  onCatalogModelsChange?: (models: CodexCatalogModel[]) => void;
+
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
+}
+
+type CodexCatalogRow = CodexCatalogModel & { rowId: string };
+
+function createCatalogRow(seed?: Partial<CodexCatalogModel>): CodexCatalogRow {
+  return {
+    rowId: crypto.randomUUID(),
+    model: seed?.model ?? "",
+    displayName: seed?.displayName ?? "",
+    contextWindow: seed?.contextWindow ?? "",
+    ...(seed?.supportsParallelToolCalls !== undefined
+      ? { supportsParallelToolCalls: seed.supportsParallelToolCalls }
+      : {}),
+    ...(seed?.inputModalities ? { inputModalities: seed.inputModalities } : {}),
+    ...(seed?.baseInstructions
+      ? { baseInstructions: seed.baseInstructions }
+      : {}),
+  };
+}
+
+function catalogRowsMatchModels(
+  rows: CodexCatalogModel[],
+  models: CodexCatalogModel[],
+): boolean {
+  if (rows.length !== models.length) return false;
+  return rows.every((row, index) => {
+    const model = models[index];
+    return (
+      row.model === (model.model ?? "") &&
+      (row.displayName ?? "") === (model.displayName ?? "") &&
+      String(row.contextWindow ?? "") === String(model.contextWindow ?? "") &&
+      (row.supportsParallelToolCalls ?? null) ===
+        (model.supportsParallelToolCalls ?? null) &&
+      (row.baseInstructions ?? "") === (model.baseInstructions ?? "") &&
+      JSON.stringify(row.inputModalities ?? []) ===
+        JSON.stringify(model.inputModalities ?? [])
+    );
+  });
 }
 
 export function CodexFormFields({
@@ -94,11 +147,68 @@ export function CodexFormFields({
   shouldShowModelField = true,
   modelName = "",
   onModelNameChange,
+  codexChatReasoning = {},
+  onCodexChatReasoningChange,
+  promptCacheRouting,
+  onPromptCacheRoutingChange,
+  catalogModels = [],
+  onCatalogModelsChange,
   speedTestEndpoints,
 }: CodexFormFieldsProps) {
   const { t } = useTranslation();
   const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [catalogRows, setCatalogRows] = useState<CodexCatalogRow[]>(() =>
+    catalogModels.map((model) => createCatalogRow(model)),
+  );
+  const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
+
+  useEffect(() => {
+    setCatalogRows((current) =>
+      catalogRowsMatchModels(current, catalogModels)
+        ? current
+        : catalogModels.map((model) => createCatalogRow(model)),
+    );
+    lastSentModelsRef.current = catalogModels;
+  }, [catalogModels]);
+
+  useEffect(() => {
+    if (!onCatalogModelsChange) return;
+    const next = catalogRows.map(({ rowId: _rowId, ...model }) => model);
+    if (catalogRowsMatchModels(catalogRows, lastSentModelsRef.current)) return;
+    lastSentModelsRef.current = next;
+    onCatalogModelsChange(next);
+  }, [catalogRows, onCatalogModelsChange]);
+
+  const supportsThinking =
+    codexChatReasoning.supportsThinking === true ||
+    codexChatReasoning.supportsEffort === true;
+  const supportsEffort = codexChatReasoning.supportsEffort === true;
+
+  const handleReasoningThinkingChange = useCallback(
+    (checked: boolean) => {
+      onCodexChatReasoningChange?.({
+        ...codexChatReasoning,
+        supportsThinking: checked,
+        supportsEffort: checked ? codexChatReasoning.supportsEffort : false,
+      });
+    },
+    [codexChatReasoning, onCodexChatReasoningChange],
+  );
+
+  const handleReasoningEffortChange = useCallback(
+    (checked: boolean) => {
+      onCodexChatReasoningChange?.({
+        ...codexChatReasoning,
+        supportsThinking: checked ? true : codexChatReasoning.supportsThinking,
+        supportsEffort: checked,
+        effortParam: checked
+          ? (codexChatReasoning.effortParam ?? "reasoning_effort")
+          : "none",
+      });
+    },
+    [codexChatReasoning, onCodexChatReasoningChange],
+  );
 
   const handleFetchModels = useCallback(() => {
     if (isXaiOauthPreset) {
@@ -292,6 +402,165 @@ export function CodexFormFields({
                   defaultValue: "💡 留空将使用供应商的默认模型",
                 })}
           </p>
+        </div>
+      )}
+
+      {shouldShowModelField && apiFormat === "openai_chat" && (
+        <div className="space-y-4 rounded-lg border border-border-default p-4">
+          <div className="space-y-2">
+            <FormLabel>{t("codexConfig.promptCacheRoutingLabel")}</FormLabel>
+            <Select
+              value={promptCacheRouting}
+              onValueChange={(value) =>
+                onPromptCacheRoutingChange(value as PromptCacheRoutingMode)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">
+                  {t("codexConfig.promptCacheRoutingAuto")}
+                </SelectItem>
+                <SelectItem value="enabled">
+                  {t("codexConfig.promptCacheRoutingEnabled")}
+                </SelectItem>
+                <SelectItem value="disabled">
+                  {t("codexConfig.promptCacheRoutingDisabled")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t("codexConfig.promptCacheRoutingHint")}
+            </p>
+          </div>
+
+          <div className="space-y-1 border-t border-border-default pt-3">
+            <FormLabel>{t("codexConfig.reasoningGroupTitle")}</FormLabel>
+            <p className="text-xs text-muted-foreground">
+              {t("codexConfig.reasoningSectionHint")}
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <FormLabel>{t("codexConfig.reasoningModeToggle")}</FormLabel>
+              <p className="text-xs text-muted-foreground">
+                {t("codexConfig.reasoningModeHint")}
+              </p>
+            </div>
+            <Switch
+              checked={supportsThinking}
+              onCheckedChange={handleReasoningThinkingChange}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
+            <div className="space-y-1">
+              <FormLabel>{t("codexConfig.reasoningEffortToggle")}</FormLabel>
+              <p className="text-xs text-muted-foreground">
+                {t("codexConfig.reasoningEffortHint")}
+              </p>
+            </div>
+            <Switch
+              checked={supportsEffort}
+              onCheckedChange={handleReasoningEffortChange}
+            />
+          </div>
+        </div>
+      )}
+
+      {shouldShowModelField && onCatalogModelsChange && (
+        <div className="space-y-3 rounded-lg border border-border-default p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <FormLabel>{t("codexConfig.modelMappingTitle")}</FormLabel>
+              <p className="text-xs text-muted-foreground">
+                {t("codexConfig.modelMappingHint")}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setCatalogRows((current) => [...current, createCatalogRow()])
+              }
+              className="h-7 shrink-0 gap-1"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("codexConfig.addCatalogModel")}
+            </Button>
+          </div>
+
+          {catalogRows.map((row, index) => (
+            <div
+              key={row.rowId}
+              className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_140px_36px]"
+            >
+              <Input
+                value={row.displayName ?? ""}
+                onChange={(event) =>
+                  setCatalogRows((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, displayName: event.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                placeholder={t("codexConfig.catalogDisplayNamePlaceholder")}
+                aria-label={t("codexConfig.catalogColumnDisplay")}
+              />
+              <Input
+                value={row.model}
+                onChange={(event) =>
+                  setCatalogRows((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, model: event.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                placeholder={t("codexConfig.catalogModelPlaceholder")}
+                aria-label={t("codexConfig.catalogColumnModel")}
+              />
+              <Input
+                type="number"
+                min={1}
+                value={row.contextWindow ?? ""}
+                onChange={(event) =>
+                  setCatalogRows((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            contextWindow: event.target.value.replace(
+                              /[^\d]/g,
+                              "",
+                            ),
+                          }
+                        : item,
+                    ),
+                  )
+                }
+                placeholder={t("codexConfig.contextWindowPlaceholder")}
+                aria-label={t("codexConfig.catalogColumnContext")}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() =>
+                  setCatalogRows((current) =>
+                    current.filter((_, itemIndex) => itemIndex !== index),
+                  )
+                }
+                title={t("common.delete")}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
 

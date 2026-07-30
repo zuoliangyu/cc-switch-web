@@ -2,7 +2,12 @@
  * Codex 预设供应商配置模板
  */
 import { ProviderCategory } from "../types";
-import type { CodexApiFormat } from "../types";
+import type {
+  CodexApiFormat,
+  CodexCatalogModel,
+  CodexChatReasoning,
+  PromptCacheRoutingMode,
+} from "../types";
 import type { PresetTheme } from "./claudeProviderPresets";
 
 export interface CodexProviderPreset {
@@ -29,6 +34,9 @@ export interface CodexProviderPreset {
   apiFormat?: CodexApiFormat;
   providerType?: "xai_oauth";
   requiresOAuth?: boolean;
+  modelCatalog?: CodexCatalogModel[];
+  codexChatReasoning?: CodexChatReasoning;
+  promptCacheRouting?: PromptCacheRoutingMode;
 }
 
 /**

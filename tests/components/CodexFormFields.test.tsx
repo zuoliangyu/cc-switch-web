@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CodexFormFields } from "@/components/providers/forms/CodexFormFields";
@@ -10,6 +11,12 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock("@/components/ui/form", () => ({
+  FormLabel: ({ children }: { children: ReactNode }) => (
+    <label>{children}</label>
+  ),
 }));
 
 vi.mock("@/lib/api/model-fetch", () => ({
@@ -52,6 +59,8 @@ function renderXaiOauthFields() {
       onAutoSelectChange={vi.fn()}
       apiFormat="openai_responses"
       onApiFormatChange={vi.fn()}
+      promptCacheRouting="auto"
+      onPromptCacheRoutingChange={vi.fn()}
       modelName="grok-4.5"
       onModelNameChange={vi.fn()}
       speedTestEndpoints={[]}
@@ -78,6 +87,62 @@ describe("CodexFormFields", () => {
 
     await waitFor(() =>
       expect(fetchXaiOauthModelsMock).toHaveBeenCalledWith("xai-account"),
+    );
+  });
+
+  it("编辑模型目录时保留原生 Responses 隐藏能力字段", async () => {
+    const onCatalogModelsChange = vi.fn();
+    render(
+      <CodexFormFields
+        codexApiKey="sk-test"
+        onApiKeyChange={vi.fn()}
+        category="third_party"
+        shouldShowApiKeyLink={false}
+        websiteUrl="https://example.com"
+        shouldShowSpeedTest={false}
+        codexBaseUrl="https://example.com/v1"
+        onBaseUrlChange={vi.fn()}
+        isFullUrl={false}
+        onFullUrlChange={vi.fn()}
+        isEndpointModalOpen={false}
+        onEndpointModalToggle={vi.fn()}
+        autoSelect={false}
+        onAutoSelectChange={vi.fn()}
+        apiFormat="openai_responses"
+        onApiFormatChange={vi.fn()}
+        promptCacheRouting="auto"
+        onPromptCacheRoutingChange={vi.fn()}
+        modelName="mimo-v2.5-pro"
+        onModelNameChange={vi.fn()}
+        catalogModels={[
+          {
+            model: "mimo-v2.5-pro",
+            displayName: "MiMo",
+            contextWindow: 262144,
+            supportsParallelToolCalls: true,
+            inputModalities: ["text", "image"],
+            baseInstructions: "You are MiMo.",
+          },
+        ]}
+        onCatalogModelsChange={onCatalogModelsChange}
+        speedTestEndpoints={[]}
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByLabelText("codexConfig.catalogColumnDisplay"),
+      { target: { value: "MiMo 2.5" } },
+    );
+
+    await waitFor(() =>
+      expect(onCatalogModelsChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({
+          displayName: "MiMo 2.5",
+          supportsParallelToolCalls: true,
+          inputModalities: ["text", "image"],
+          baseInstructions: "You are MiMo.",
+        }),
+      ]),
     );
   });
 });

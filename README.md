@@ -66,7 +66,7 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
 
 ## 当前版本
 
-当前仓库版本为 `0.8.0`。逐版变更明细、每条修复对应的上游 commit、被延后到独立任务的项，见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
+当前仓库版本为 `1.0.0`。逐版变更明细、每条修复对应的上游 commit、被延后到独立任务的项，见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-3.14-2026-05.md`。
 
 仓库以 `0.1.0` 作为 Web 分支的初始发布基线，此前继承的历史发布记录已移除，更早历史请以上游项目为准。
 

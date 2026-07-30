@@ -195,7 +195,36 @@ Web ブランチで既に利用できる機能:
 
    ここには `settings.json`、`cc-switch.db`、バックアップ、統一 Skills ストレージなどが保存されます。旧 `config.json` は現在の Web ランタイムの主データ経路には含まれません。
 
+### アクセスキー（任意）
+
+`CC_SWITCH_WEB_ACCESS_KEY` を設定すると Web API を保護できます。キーは 16 文字以上が必要です。未設定または空の場合は、従来どおり認証なしで動作します。
+
+```bash
+CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' ./backend/target/release/cc-switch-web
+```
+
+PowerShell:
+
+```powershell
+$env:CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key'; .\backend\target\release\cc-switch-web.exe
+```
+
+認証後、ブラウザは現在のタブの `sessionStorage` にのみキーを保存します。LAN またはインターネットへ公開する場合も HTTPS リバースプロキシを使用してください。アクセスキーは認証を提供しますが、通信自体は暗号化しません。
+
 ### Docker 実行
+
+リリースワークフローは `linux/amd64` ランタイムイメージを GitHub Container Registry へ公開します。
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 8890:8890 \
+  -e CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' \
+  -v cc-switch-web-data:/data \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+バージョン tag では対応する `vX.Y.Z`、`X.Y.Z`、`X.Y` のイメージタグも公開します。Registry のランタイムイメージは現在 `linux/amd64` のみです。arm64 は後述の単体静的バイナリパッケージを利用してください。
 
 1. Docker イメージをビルドします。
 
@@ -239,6 +268,12 @@ Web ブランチで既に利用できる機能:
    docker compose up -d
    docker compose logs -f
    docker compose down
+   ```
+
+   Compose でアクセスキーを有効にする場合:
+
+   ```bash
+   CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' docker compose up -d
    ```
 
 4. [http://localhost:8890](http://localhost:8890) または指定したポートを開きます。コンテナ内でもフロントエンドと API は同じポートを共有します。Docker モードでは、公開ポートの対応を固定するために `CC_SWITCH_WEB_PORT_SCAN_COUNT=1` をデフォルトにしています。永続データは `cc-switch-web-data` volume に保存されます。

@@ -195,7 +195,36 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
 
    其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
+### 访问密钥（可选）
+
+通过 `CC_SWITCH_WEB_ACCESS_KEY` 可以保护 Web API。密钥至少需要 16 个字符；未设置或留空时保持原有的无认证模式。
+
+```bash
+CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' ./backend/target/release/cc-switch-web
+```
+
+PowerShell：
+
+```powershell
+$env:CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key'; .\backend\target\release\cc-switch-web.exe
+```
+
+浏览器验证成功后仅在当前标签页的 `sessionStorage` 中保存密钥。局域网或公网部署时仍应使用 HTTPS 反向代理；访问密钥负责认证，不负责加密传输。
+
 ### Docker 运行
+
+发布流水线会将 `linux/amd64` 运行镜像推送到 GitHub Container Registry：
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 8890:8890 \
+  -e CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' \
+  -v cc-switch-web-data:/data \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+版本 tag 还会发布对应的 `vX.Y.Z`、`X.Y.Z` 和 `X.Y` 镜像标签。当前 Registry 运行镜像仅提供 `linux/amd64`；arm64 仍使用下文的独立静态二进制包。
 
 1. 构建 Docker 镜像：
 
@@ -239,6 +268,12 @@ CC Switch Web 在本地跑一个 Rust 服务，你在浏览器里管理 Claude�
    docker compose up -d
    docker compose logs -f
    docker compose down
+   ```
+
+   通过 Compose 启用访问密钥：
+
+   ```bash
+   CC_SWITCH_WEB_ACCESS_KEY='replace-with-a-long-random-key' docker compose up -d
    ```
 
 4. 打开 [http://localhost:8890](http://localhost:8890) 或你自定义的端口。容器内前端和 API 也是共用同一个端口；Docker 模式默认固定 `CC_SWITCH_WEB_PORT_SCAN_COUNT=1`，避免容器内自动换端口后导致宿主机映射失效。持久化数据默认保存在 `cc-switch-web-data` volume 中。

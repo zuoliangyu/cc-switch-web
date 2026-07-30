@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### 安全
+
+- 新增可选的 `CC_SWITCH_WEB_ACCESS_KEY` Web 访问密钥；服务端拒绝短于 16 字符的配置，以固定长度摘要比较 Bearer 密钥，并统一保护除健康检查和认证接口外的所有 API。
+- 前端新增访问密钥登录门禁，密钥仅保存在当前标签页的 `sessionStorage`；受保护请求收到 401 时会清除密钥并重新锁定页面。
+
+### 修复
+
+- Web API 默认改为同源 `/api`，Vite 开发环境同步代理到本地 Rust 服务；修复浏览器远程访问 Docker/Linux 服务时错误请求浏览器自身 `127.0.0.1:8890`，导致欢迎弹窗无法确认的问题。
+- 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
+- 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。
+
+### 发布
+
+- Web Package 流水线新增 GitHub Container Registry 发布，将 `linux/amd64` 运行镜像推送到 `ghcr.io/zuoliangyu/cc-switch-web`，支持版本、`latest` 与短 SHA 标签，并继续保留 Docker image tar 发布附件。
+- Docker Compose 支持通过宿主环境传入可选的 `CC_SWITCH_WEB_ACCESS_KEY`。
+
 ## [1.0.0] - 2026-07-30
 
 `v0.9.0` 位于独立同步分支，并非当前 `main` 的祖先。本版本从双方共同的 `v0.8.0` 基线重新追平上游；以下内容按当前 `main` 自 `v0.8.0` 以来的 58 笔提交审计整理，并单列与 `v0.9.0` 的兼容差异。

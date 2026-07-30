@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: web-package-${{ github.ref }}
@@ -151,7 +152,7 @@ jobs:
           if-no-files-found: error
 
   docker-image:
-    name: Package (docker-image)
+    name: Publish Docker image
     runs-on: ubuntu-latest
 
     steps:
@@ -161,18 +162,48 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image tar
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') || github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export Docker image tar
         shell: bash
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euxo pipefail
           out_dir="$RUNNER_TEMP/docker-image"
           rm -rf "$out_dir"
           mkdir -p "$out_dir"
-          docker buildx build \
-            --tag "cc-switch-web:${GITHUB_REF_NAME}" \
-            --output "type=docker,dest=$out_dir/cc-switch-web-docker-image.tar" \
-            .
-          gzip -f "$out_dir/cc-switch-web-docker-image.tar"
+          image_ref="$(printf '%s\n' "$IMAGE_TAGS" | head -n 1)"
+          docker pull "$image_ref"
+          docker save "$image_ref" | gzip > "$out_dir/cc-switch-web-docker-image.tar.gz"
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
@@ -184,6 +215,7 @@ jobs:
   release:
     name: Publish Release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - package
       - docker-image

@@ -68,12 +68,6 @@ pub(crate) fn validate_common_config_snippet(app_type: &str, snippet: &str) -> R
 }
 
 pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
-    if app == "hermes" {
-        return Ok(crate::hermes_config::get_hermes_dir()
-            .to_string_lossy()
-            .to_string());
-    }
-
     let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
         // C-Phase0 脚手架：claude-desktop 配置目录尚未实现
         AppType::ClaudeDesktop => {
@@ -85,18 +79,13 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
         AppType::GrokBuild => crate::grok_config::get_grok_config_dir(),
         AppType::OpenCode => crate::opencode_config::get_opencode_dir(),
         AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
+        AppType::Hermes => crate::hermes_config::get_hermes_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())
 }
 
 pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, String> {
-    if app == "hermes" {
-        return Ok(crate::hermes_config::get_default_hermes_dir()
-            .to_string_lossy()
-            .to_string());
-    }
-
     let dir = match AppType::from_str(&app).map_err(|e| e.to_string())? {
         // C-Phase0 脚手架：claude-desktop 配置目录尚未实现
         AppType::ClaudeDesktop => {
@@ -108,6 +97,7 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::GrokBuild => config::get_home_dir().join(".grok"),
         AppType::OpenCode => crate::opencode_config::get_default_opencode_dir(),
         AppType::OpenClaw => crate::openclaw_config::get_default_openclaw_dir(),
+        AppType::Hermes => crate::hermes_config::get_default_hermes_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())

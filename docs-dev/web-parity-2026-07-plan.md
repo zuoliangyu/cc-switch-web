@@ -62,6 +62,8 @@
   - [x] Claude
   - [x] Codex
   - [ ] Hermes
+    - [x] 后端应用标识、YAML Provider 生命周期、导入、切换、连通检查与配置目录接入
+    - [ ] 前端 Provider 页面、专属表单与完整预设目录
 - [ ] models.dev 定价同步
 - [ ] 适用于 Web 的供应商排序、导入错误、表单和配置编辑改进
 
@@ -111,3 +113,4 @@
 - 2026-07-30：完整同步 Claude 74 项最终预设目录；补齐 Kimi、Code0、Qiniu、Gemini Native、OpenCode Go 等条目，选择器展示顶级合作方徽章，并将 DeepSeek 独立模型目录接入现有模型拉取链路。
 - 2026-07-30：完成 Codex 完整目录的前置表单接线；支持预设模型目录、Chat reasoning 与 prompt-cache 路由的加载、编辑和保存，并保留原生 Responses 的隐藏模型能力字段。
 - 2026-07-30：完整同步 Codex 68 项最终预设目录；补齐 Kimi、Code0、Qiniu、OpenCode Go 等条目，对齐 Chat/Responses 协议、默认模型、上下文窗口及推理能力配置。
+- 2026-07-30：完成 Hermes 后端第一阶段；接入 additive Provider CRUD、live 导入、默认模型切换、三种 API 模式检查、Skills/Prompts 路径与只读 `providers:` overlay，4 项定向测试和后端二进制检查通过。

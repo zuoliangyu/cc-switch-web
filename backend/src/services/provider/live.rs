@@ -40,6 +40,8 @@ pub(crate) fn provider_exists_in_live_config(
             .map(|providers| providers.contains_key(provider_id)),
         AppType::OpenClaw => crate::openclaw_config::get_providers()
             .map(|providers| providers.contains_key(provider_id)),
+        AppType::Hermes => crate::hermes_config::get_providers()
+            .map(|providers| providers.contains_key(provider_id)),
         _ => Ok(false),
     }
 }
@@ -345,7 +347,7 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
             }
             _ => false,
         },
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => false,
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => false,
     }
 }
 
@@ -415,7 +417,9 @@ pub(crate) fn remove_common_config_from_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            Ok(settings.clone())
+        }
     }
 }
 
@@ -470,7 +474,9 @@ fn apply_common_config_to_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => Ok(settings.clone()),
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            Ok(settings.clone())
+        }
     }
 }
 
@@ -756,6 +762,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 }
             }
         }
+        AppType::Hermes => {
+            crate::hermes_config::set_provider(&provider.id, provider.settings_config.clone())?;
+            log::info!("Hermes provider '{}' written to live config", provider.id);
+        }
     }
     Ok(())
 }
@@ -953,6 +963,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             let config = read_openclaw_config()?;
             Ok(config)
         }
+        AppType::Hermes => Ok(Value::Object(crate::hermes_config::get_providers()?)),
     }
 }
 
@@ -1049,8 +1060,8 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings)?;
             settings
         }
-        // OpenCode and OpenClaw use additive mode and are handled by early return above
-        AppType::OpenCode | AppType::OpenClaw => {
+        // Additive mode apps are handled by the early return above.
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
             unreachable!("additive mode apps are handled by early return")
         }
     };
@@ -1295,6 +1306,29 @@ pub fn import_openclaw_providers_from_live(state: &AppState) -> Result<usize, Ap
     Ok(imported)
 }
 
+pub fn import_hermes_providers_from_live(state: &AppState) -> Result<usize, AppError> {
+    let providers = crate::hermes_config::get_providers()?;
+    if providers.is_empty() {
+        return Ok(0);
+    }
+
+    let existing = state.db.get_all_providers("hermes")?;
+    let mut imported = 0;
+    for (id, settings_config) in providers {
+        if existing.contains_key(&id) {
+            continue;
+        }
+        let mut provider = Provider::with_id(id.clone(), id.clone(), settings_config, None);
+        provider
+            .meta
+            .get_or_insert_with(Default::default)
+            .live_config_managed = Some(true);
+        state.db.save_provider("hermes", &provider)?;
+        imported += 1;
+    }
+    Ok(imported)
+}
+
 /// Remove an OpenClaw provider from live config
 ///
 /// This removes a specific provider from ~/.openclaw/openclaw.json
@@ -1312,6 +1346,10 @@ pub fn remove_openclaw_provider_from_live(provider_id: &str) -> Result<(), AppEr
     log::info!("OpenClaw provider '{provider_id}' removed from live config");
 
     Ok(())
+}
+
+pub fn remove_hermes_provider_from_live(provider_id: &str) -> Result<(), AppError> {
+    crate::hermes_config::remove_provider(provider_id)
 }
 
 #[cfg(test)]

@@ -205,7 +205,10 @@ impl StreamCheckService {
     ) -> Result<StreamCheckResult, AppError> {
         let start = Instant::now();
 
-        if matches!(app_type, AppType::OpenCode | AppType::OpenClaw) {
+        if matches!(
+            app_type,
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
+        ) {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
 
@@ -285,8 +288,8 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::OpenCode | AppType::OpenClaw => {
-                unreachable!("OpenCode/OpenClaw 已通过 check_once_without_adapter 处理")
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+                unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
 
@@ -692,7 +695,17 @@ impl StreamCheckService {
                 )
                 .await
             }
-            _ => unreachable!("check_once_without_adapter 只处理 OpenCode/OpenClaw"),
+            AppType::Hermes => {
+                Self::check_hermes_stream(
+                    &client,
+                    provider,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                )
+                .await
+            }
+            _ => unreachable!("check_once_without_adapter 只处理累加模式应用"),
         };
 
         let response_time = start.elapsed().as_millis() as u64;
@@ -883,6 +896,62 @@ impl StreamCheckService {
                 "OpenClaw provider is missing the `api` field",
             )),
         }
+    }
+
+    async fn check_hermes_stream(
+        client: &Client,
+        provider: &Provider,
+        model: &str,
+        test_prompt: &str,
+        timeout: std::time::Duration,
+    ) -> Result<(u16, String), AppError> {
+        let base_url = Self::extract_hermes_string(provider, "base_url")?;
+        let api_key = Self::extract_hermes_string(provider, "api_key")?;
+        let api_mode = Self::extract_hermes_string(provider, "api_mode")?;
+        let (strategy, api_format) = Self::resolve_hermes_api_mode(&api_mode)?;
+
+        Self::check_claude_stream(
+            client,
+            &base_url,
+            &AuthInfo::new(api_key, strategy),
+            model,
+            test_prompt,
+            timeout,
+            provider,
+            Some(api_format),
+            None,
+        )
+        .await
+    }
+
+    fn resolve_hermes_api_mode(api_mode: &str) -> Result<(AuthStrategy, &'static str), AppError> {
+        match api_mode {
+            "anthropic_messages" => Ok((AuthStrategy::Anthropic, "anthropic")),
+            "chat_completions" => Ok((AuthStrategy::Bearer, "openai_chat")),
+            "codex_responses" => Ok((AuthStrategy::Bearer, "openai_responses")),
+            other => Err(AppError::localized(
+                "hermes_api_mode_not_supported",
+                format!("Hermes 暂不支持 API 模式: {other}"),
+                format!("Hermes API mode is not supported: {other}"),
+            )),
+        }
+    }
+
+    fn extract_hermes_string(provider: &Provider, field: &str) -> Result<String, AppError> {
+        provider
+            .settings_config
+            .get(field)
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .ok_or_else(|| {
+                AppError::localized(
+                    "hermes_config_field_missing",
+                    format!("Hermes 供应商缺少 {field}"),
+                    format!("Hermes provider is missing `{field}`"),
+                )
+            })
     }
 
     fn openclaw_uses_auth_header(provider: &Provider) -> bool {
@@ -1205,6 +1274,9 @@ impl StreamCheckService {
                 // Try to extract first model from the models array
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| "gpt-4o".to_string())
             }
+            AppType::Hermes => {
+                Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
+            }
         }
     }
 
@@ -1405,6 +1477,23 @@ mod tests {
             StreamCheckService::resolve_opencode_base_url(&provider, Some("@ai-sdk/openai"))
                 .expect("openai fallback should resolve");
         assert_eq!(resolved, "https://api.openai.com/v1");
+    }
+
+    #[test]
+    fn hermes_api_modes_use_matching_wire_formats() {
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("anthropic_messages").unwrap(),
+            (AuthStrategy::Anthropic, "anthropic")
+        );
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("chat_completions").unwrap(),
+            (AuthStrategy::Bearer, "openai_chat")
+        );
+        assert_eq!(
+            StreamCheckService::resolve_hermes_api_mode("codex_responses").unwrap(),
+            (AuthStrategy::Bearer, "openai_responses")
+        );
+        assert!(StreamCheckService::resolve_hermes_api_mode("unknown").is_err());
     }
 
     #[test]

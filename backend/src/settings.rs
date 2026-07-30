@@ -614,6 +614,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::GrokBuild => settings.current_provider_grokbuild.clone(),
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
+        AppType::Hermes => None,
     }
 }
 
@@ -633,6 +634,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::GrokBuild => settings.current_provider_grokbuild = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
+        AppType::Hermes => {}
     }
 
     update_settings(settings)

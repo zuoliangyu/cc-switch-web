@@ -90,6 +90,11 @@ pub(crate) fn switch_provider_by_name_internal(
 }
 
 fn import_default_config_internal(state: &AppState, app_type: AppType) -> Result<bool, AppError> {
+    if matches!(app_type, AppType::Hermes) {
+        return crate::services::provider::import_hermes_providers_from_live(state)
+            .map(|count| count > 0);
+    }
+
     if matches!(app_type, AppType::GrokBuild) {
         if let Ok(settings) = crate::grok_config::read_grok_live_settings() {
             let config = settings

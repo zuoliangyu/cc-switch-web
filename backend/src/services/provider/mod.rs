@@ -23,7 +23,7 @@ use crate::store::AppState;
 
 // Re-export sub-module functions for external access
 pub use live::{
-    import_default_config, import_openclaw_providers_from_live,
+    import_default_config, import_hermes_providers_from_live, import_openclaw_providers_from_live,
     import_opencode_providers_from_live, read_live_settings, sync_current_to_live,
 };
 
@@ -37,7 +37,10 @@ pub(crate) use live::{
 };
 
 // Internal re-exports
-use live::{remove_openclaw_provider_from_live, remove_opencode_provider_from_live};
+use live::{
+    remove_hermes_provider_from_live, remove_openclaw_provider_from_live,
+    remove_opencode_provider_from_live,
+};
 use usage::validate_usage_script;
 
 /// Provider business logic service
@@ -374,6 +377,14 @@ impl ProviderService {
             .live_config_managed = Some(managed);
     }
 
+    fn is_hermes_read_only_provider(provider: &Provider) -> bool {
+        provider
+            .settings_config
+            .get(crate::hermes_config::PROVIDER_SOURCE_FIELD)
+            .and_then(Value::as_str)
+            == Some(crate::hermes_config::PROVIDER_SOURCE_DICT)
+    }
+
     /// List all providers for an app type
     pub fn list(
         state: &AppState,
@@ -460,6 +471,17 @@ impl ProviderService {
         let existing_provider = state
             .db
             .get_provider_by_id(&original_id, app_type.as_str())?;
+        if matches!(app_type, AppType::Hermes)
+            && existing_provider
+                .as_ref()
+                .is_some_and(Self::is_hermes_read_only_provider)
+        {
+            return Err(AppError::localized(
+                "provider.hermes.read_only",
+                "该供应商由 Hermes providers 配置管理，请在 Hermes Web UI 中修改",
+                "This provider is managed by Hermes; edit it in Hermes Web UI",
+            ));
+        }
         // Normalize Claude model keys
         Self::normalize_provider_if_claude(&app_type, &mut provider);
         Self::validate_provider_settings(&app_type, &provider)?;
@@ -666,6 +688,7 @@ impl ProviderService {
                 match app_type {
                     AppType::OpenCode => remove_opencode_provider_from_live(id)?,
                     AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
+                    AppType::Hermes => remove_hermes_provider_from_live(id)?,
                     _ => {}
                 }
             }
@@ -745,6 +768,9 @@ impl ProviderService {
             }
             AppType::OpenClaw => {
                 remove_openclaw_provider_from_live(id)?;
+            }
+            AppType::Hermes => {
+                remove_hermes_provider_from_live(id)?;
             }
             _ => {
                 return Err(AppError::Message(format!(
@@ -940,8 +966,13 @@ impl ProviderService {
             state.db.set_current_provider(app_type.as_str(), id)?;
         }
 
-        // Sync to live (write_gemini_live handles security flag internally for Gemini)
-        write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+        // providers: map entries are owned by Hermes and must not be rewritten as custom providers.
+        if !matches!(app_type, AppType::Hermes) || !Self::is_hermes_read_only_provider(provider) {
+            write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+        }
+        if matches!(app_type, AppType::Hermes) {
+            crate::hermes_config::apply_switch_defaults(&provider.id, &provider.settings_config)?;
+        }
 
         if app_type.is_additive_mode() && Self::provider_live_config_managed(provider) != Some(true)
         {
@@ -951,6 +982,7 @@ impl ProviderService {
                 let rollback_result = match app_type {
                     AppType::OpenCode => remove_opencode_provider_from_live(&provider.id),
                     AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
+                    AppType::Hermes => remove_hermes_provider_from_live(&provider.id),
                     _ => Ok(()),
                 };
 
@@ -1130,6 +1162,7 @@ impl ProviderService {
             AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
+            AppType::Hermes => Ok(String::new()),
         }
     }
 
@@ -1147,6 +1180,7 @@ impl ProviderService {
             AppType::GrokBuild => Ok(String::new()),
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
+            AppType::Hermes => Ok(String::new()),
         }
     }
 
@@ -1701,6 +1735,27 @@ impl ProviderService {
                     ));
                 }
             }
+            AppType::Hermes => {
+                let settings = provider.settings_config.as_object().ok_or_else(|| {
+                    AppError::localized(
+                        "provider.hermes.settings.not_object",
+                        "Hermes 配置必须是 JSON 对象",
+                        "Hermes configuration must be a JSON object",
+                    )
+                })?;
+                let name = settings
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim();
+                if name.is_empty() {
+                    return Err(AppError::localized(
+                        "provider.hermes.name.missing",
+                        "Hermes 配置缺少供应商名称",
+                        "Hermes configuration is missing the provider name",
+                    ));
+                }
+            }
         }
 
         // Validate and clean UsageScript configuration (common for all app types)
@@ -1916,6 +1971,21 @@ impl ProviderService {
                     .unwrap_or("")
                     .to_string();
 
+                Ok((api_key, base_url))
+            }
+            AppType::Hermes => {
+                let api_key = provider
+                    .settings_config
+                    .get("api_key")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let base_url = provider
+                    .settings_config
+                    .get("base_url")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
                 Ok((api_key, base_url))
             }
         }

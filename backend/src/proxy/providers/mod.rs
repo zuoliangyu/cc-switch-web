@@ -204,6 +204,7 @@ impl ProviderType {
                 // OpenClaw doesn't support proxy, but return a default type for completeness
                 ProviderType::Codex // Fallback to Codex-like type
             }
+            AppType::Hermes => ProviderType::Codex,
         }
     }
 
@@ -265,6 +266,7 @@ pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
             // OpenClaw doesn't support proxy, fallback to Codex adapter
             Box::new(CodexAdapter::new())
         }
+        AppType::Hermes => Box::new(CodexAdapter::new()),
     }
 }
 

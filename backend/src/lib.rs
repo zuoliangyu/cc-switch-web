@@ -27,6 +27,7 @@ mod session_manager;
 mod settings;
 mod store;
 mod usage_script;
+mod web_auth;
 mod web_server;
 
 pub(crate) use commands::*;

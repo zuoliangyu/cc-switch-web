@@ -3,6 +3,18 @@
     "title": "CC Switch Web",
     "description": "CC Switch Web branch with browser UI and local Rust service"
   },
+  "auth": {
+    "accessKey": "Access key",
+    "checking": "Checking access",
+    "prompt": "Enter the access key to continue",
+    "signIn": "Sign in",
+    "signingIn": "Signing in...",
+    "invalidKey": "Invalid access key",
+    "serviceUnavailable": "Service unavailable",
+    "retry": "Retry",
+    "showKey": "Show access key",
+    "hideKey": "Hide access key"
+  },
   "common": {
     "add": "Add",
     "edit": "Edit",

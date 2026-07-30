@@ -3,6 +3,18 @@
     "title": "CC Switch Web",
     "description": "CC Switch の Web ブランチ。ブラウザ UI とローカル Rust サービスで動作"
   },
+  "auth": {
+    "accessKey": "アクセスキー",
+    "checking": "アクセス権を確認しています",
+    "prompt": "続行するにはアクセスキーを入力してください",
+    "signIn": "ログイン",
+    "signingIn": "ログイン中...",
+    "invalidKey": "アクセスキーが無効です",
+    "serviceUnavailable": "サービスを利用できません",
+    "retry": "再試行",
+    "showKey": "アクセスキーを表示",
+    "hideKey": "アクセスキーを非表示"
+  },
   "common": {
     "add": "追加",
     "edit": "編集",

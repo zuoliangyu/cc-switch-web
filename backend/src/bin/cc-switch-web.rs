@@ -13,6 +13,7 @@ fn print_usage() {
     println!("  CC_SWITCH_WEB_HOST");
     println!("  CC_SWITCH_WEB_PORT");
     println!("  CC_SWITCH_WEB_PORT_SCAN_COUNT");
+    println!("  CC_SWITCH_WEB_ACCESS_KEY    Optional Web API access key (minimum 16 characters)");
 }
 
 fn parse_u16_arg(flag: &str, value: &str) -> Result<u16, String> {

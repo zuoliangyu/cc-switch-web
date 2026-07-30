@@ -104,6 +104,44 @@ interface ProvidersResponse {
   currentProviderId: string;
 }
 
+const WEB_ACCESS_KEY_STORAGE_KEY = "cc-switch-web-access-key";
+export const WEB_AUTH_REQUIRED_EVENT = "cc-switch-web-auth-required";
+
+export function getWebAccessKey(): string | null {
+  try {
+    return sessionStorage.getItem(WEB_ACCESS_KEY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setWebAccessKey(accessKey: string): void {
+  sessionStorage.setItem(WEB_ACCESS_KEY_STORAGE_KEY, accessKey);
+}
+
+export function clearWebAccessKey(): void {
+  try {
+    sessionStorage.removeItem(WEB_ACCESS_KEY_STORAGE_KEY);
+  } catch {
+    // Storage may be unavailable in hardened browser modes.
+  }
+}
+
+function webRequestHeaders(accept: string): Record<string, string> {
+  const headers: Record<string, string> = { Accept: accept };
+  const accessKey = getWebAccessKey();
+  if (accessKey) {
+    headers.Authorization = `Bearer ${accessKey}`;
+  }
+  return headers;
+}
+
+function handleUnauthorized(response: Response): void {
+  if (response.status !== 401) return;
+  clearWebAccessKey();
+  window.dispatchEvent(new CustomEvent(WEB_AUTH_REQUIRED_EVENT));
+}
+
 export const getWebApiBase = (): string => {
   const configured = import.meta.env.VITE_LOCAL_API_BASE?.trim();
   return configured && configured.length > 0
@@ -233,11 +271,10 @@ async function getErrorMessage(
 async function requestJson<T>(path: string): Promise<T> {
   logWebRequest("GET", path);
   const response = await fetch(`${getWebApiBase()}${path}`, {
-    headers: {
-      Accept: "application/json",
-    },
+    headers: webRequestHeaders("application/json"),
   });
 
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -256,12 +293,13 @@ async function requestWithBody<T>(
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method,
     headers: {
-      Accept: "application/json",
+      ...webRequestHeaders("application/json"),
       "Content-Type": "application/json",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for ${method} ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -283,12 +321,11 @@ async function requestFormData<T>(
   logWebRequest("POST", path, formData);
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-    },
+    headers: webRequestHeaders("application/json"),
     body: formData,
   });
 
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for POST ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -332,6 +369,24 @@ export async function getWebSettings(): Promise<Settings> {
       error,
     );
     return getDefaultSettings();
+  }
+}
+
+export interface WebAuthStatus {
+  required: boolean;
+}
+
+export async function getWebAuthStatus(): Promise<WebAuthStatus> {
+  return requestJson<WebAuthStatus>("/api/auth/status");
+}
+
+export async function verifyWebAccessKey(accessKey: string): Promise<void> {
+  setWebAccessKey(accessKey);
+  try {
+    await requestJson<boolean>("/api/auth/verify");
+  } catch (error) {
+    clearWebAccessKey();
+    throw error;
   }
 }
 
@@ -803,8 +858,9 @@ export async function fetchWebWindowsEnvPaths(): Promise<
   logWebRequest("GET", path, undefined);
   const response = await fetch(`${getWebApiBase()}${path}`, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: webRequestHeaders("application/json"),
   });
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for GET ${path}`;
     throw new Error(await getErrorMessage(response, fallback));
@@ -1387,11 +1443,12 @@ export async function downloadWebConfigExport(
     `${getWebApiBase()}/api/config/export?filename=${encodeURIComponent(defaultName)}`,
     {
       headers: {
-        Accept: "application/sql,text/plain,*/*",
+        ...webRequestHeaders("application/sql,text/plain,*/*"),
       },
     },
   );
 
+  handleUnauthorized(response);
   if (!response.ok) {
     const fallback = `HTTP ${response.status} for GET /api/config/export`;
     throw new Error(await getErrorMessage(response, fallback));

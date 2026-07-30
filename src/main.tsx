@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import { Toaster } from "@/components/ui/sonner";
 import { UpdateProvider } from "@/contexts/UpdateContext";
+import { AccessKeyGate } from "@/components/AccessKeyGate";
 import {
   MODELS_DEV_SYNC_CONFIG_QUERY_KEY,
   syncModelsDevPricingOnStartup,
@@ -30,7 +31,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
         <UpdateProvider>
-          <App />
+          <AccessKeyGate>
+            <App />
+          </AccessKeyGate>
           <Toaster />
         </UpdateProvider>
       </ThemeProvider>

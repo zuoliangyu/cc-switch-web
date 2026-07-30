@@ -3,6 +3,18 @@
     "title": "CC Switch Web",
     "description": "CC Switch 的 Web 分支，采用浏览器界面与本地 Rust 服务"
   },
+  "auth": {
+    "accessKey": "访问密钥",
+    "checking": "正在检查访问权限",
+    "prompt": "请输入访问密钥以继续",
+    "signIn": "登录",
+    "signingIn": "正在登录...",
+    "invalidKey": "访问密钥无效",
+    "serviceUnavailable": "服务暂时不可用",
+    "retry": "重试",
+    "showKey": "显示访问密钥",
+    "hideKey": "隐藏访问密钥"
+  },
   "common": {
     "add": "添加",
     "edit": "编辑",

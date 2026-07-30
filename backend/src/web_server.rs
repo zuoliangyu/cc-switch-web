@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
-use axum::http::{header, HeaderValue, StatusCode, Uri};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, get_service, post, put};
@@ -40,6 +40,7 @@ use crate::services::skill::{
 use crate::services::speedtest::EndpointLatency;
 use crate::settings::WebDavSyncSettings;
 use crate::store::AppState;
+use crate::web_auth::WebAccessKey;
 use tokio::sync::RwLock;
 
 static EMBEDDED_FRONTEND_DIST: Dir<'static> = include_dir!("$CC_SWITCH_WEB_EMBED_DIST_DIR");
@@ -50,6 +51,7 @@ struct WebApiState {
     copilot_auth_state: Arc<RwLock<CopilotAuthManager>>,
     codex_oauth_state: Arc<RwLock<CodexOAuthManager>>,
     xai_oauth_state: Arc<RwLock<XaiOAuthManager>>,
+    access_key: WebAccessKey,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,6 +59,12 @@ struct WebApiState {
 struct HealthResponse {
     status: &'static str,
     mode: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebAuthStatus {
+    required: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -581,6 +589,44 @@ async fn api_request_logger(request: axum::extract::Request, next: Next) -> Resp
     }
 
     response
+}
+
+fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+    let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
+    let (scheme, token) = value.split_once(' ')?;
+    (scheme.eq_ignore_ascii_case("bearer") && !token.trim().is_empty()).then_some(token.trim())
+}
+
+fn unauthorized_response() -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ErrorResponse {
+            error: "invalid or missing access key".to_string(),
+        }),
+    )
+        .into_response()
+}
+
+async fn require_access_key(
+    State(state): State<WebApiState>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    if !state.access_key.is_required()
+        || matches!(
+            path,
+            "/api/health" | "/api/auth/status" | "/api/auth/verify"
+        )
+    {
+        return next.run(request).await;
+    }
+
+    if state.access_key.verify(bearer_token(request.headers())) {
+        next.run(request).await
+    } else {
+        unauthorized_response()
+    }
 }
 
 fn profile_api_error(error: crate::error::AppError) -> ApiError {
@@ -1957,6 +2003,23 @@ async fn health() -> Json<HealthResponse> {
         status: "ok",
         mode: "local-rust-service",
     })
+}
+
+async fn web_auth_status(State(state): State<WebApiState>) -> Json<WebAuthStatus> {
+    Json(WebAuthStatus {
+        required: state.access_key.is_required(),
+    })
+}
+
+async fn verify_web_access_key(
+    State(state): State<WebApiState>,
+    headers: HeaderMap,
+) -> Result<Json<bool>, Response> {
+    if state.access_key.verify(bearer_token(&headers)) {
+        Ok(Json(true))
+    } else {
+        Err(unauthorized_response())
+    }
 }
 
 async fn get_settings() -> Json<crate::settings::AppSettings> {
@@ -3450,6 +3513,7 @@ pub async fn run_web_server() -> Result<(), String> {
 }
 
 pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<(), String> {
+    let access_key = WebAccessKey::from_env()?;
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     match db.init_default_skill_repos() {
         Ok(count) if count > 0 => {
@@ -3488,6 +3552,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         copilot_auth_state: app_state.copilot_auth_state.clone(),
         codex_oauth_state: app_state.codex_oauth_state.clone(),
         xai_oauth_state: app_state.xai_oauth_state.clone(),
+        access_key,
         app_state,
     };
     let bind_options = resolve_bind_options(&options)?;
@@ -3495,6 +3560,8 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
     let mut app = Router::new()
         .route("/api", get(root))
         .route("/api/health", get(health))
+        .route("/api/auth/status", get(web_auth_status))
+        .route("/api/auth/verify", get(verify_web_access_key))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
         .route("/api/settings", get(get_settings).put(save_settings))
@@ -3949,6 +4016,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(get_circuit_breaker_config).put(update_circuit_breaker_config),
         )
         .layer(middleware::from_fn(api_request_logger))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_access_key,
+        ))
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(state);

@@ -89,16 +89,16 @@ export function ProfileSwitcher({ activeApp }: { activeApp: AppId }) {
             aria-expanded={open}
             title={t(`profiles.switcherTooltip.${scope}`)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
+              "inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors md:px-2.5",
               "hover:bg-black/5 dark:hover:bg-white/5",
               currentProfile ? "text-foreground" : "text-muted-foreground",
             )}
           >
             <FolderOpen className="h-4 w-4 shrink-0 opacity-70" />
-            <span className="max-w-36 truncate">
+            <span className="hidden max-w-36 truncate md:inline">
               {currentProfile?.name ?? t("profiles.none")}
             </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+            <ChevronsUpDown className="hidden h-3.5 w-3.5 shrink-0 opacity-50 md:block" />
           </button>
         </PopoverTrigger>
         <PopoverContent

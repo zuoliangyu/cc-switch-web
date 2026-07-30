@@ -20,6 +20,7 @@ import {
   Shield,
   Cpu,
   LayoutDashboard,
+  MoreHorizontal,
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
@@ -72,6 +73,13 @@ import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type View =
   | "providers"
@@ -1064,7 +1072,124 @@ function App() {
                       compact={isToolbarCompact}
                     />
 
-                    <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 md:hidden"
+                          title={t("common.more", "更多")}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-48 md:hidden"
+                      >
+                        {activeApp === "openclaw" ? (
+                          <>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("workspace")}
+                            >
+                              <FolderOpen className="h-4 w-4" />
+                              {t("workspace.manage")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("sessions")}
+                            >
+                              <History className="h-4 w-4" />
+                              {t("sessionManager.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("openclawEnv")}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              {t("openclaw.env.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("openclawTools")}
+                            >
+                              <Shield className="h-4 w-4" />
+                              {t("openclaw.tools.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() =>
+                                handleViewChange("openclawAgents")
+                              }
+                            >
+                              <Cpu className="h-4 w-4" />
+                              {t("openclaw.agents.title")}
+                            </DropdownMenuItem>
+                          </>
+                        ) : activeApp === "hermes" ? (
+                          <>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("skills")}
+                            >
+                              <Wrench className="h-4 w-4" />
+                              {t("skills.manage")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("hermesMemory")}
+                            >
+                              <Book className="h-4 w-4" />
+                              {t("hermes.memory.title")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => void openHermesWebUI()}
+                            >
+                              <LayoutDashboard className="h-4 w-4" />
+                              {t("hermes.webui.open")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("mcp")}
+                            >
+                              <McpIcon size={16} />
+                              {t("mcp.title")}
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            {hasSkillsSupport && (
+                              <DropdownMenuItem
+                                onSelect={() => handleViewChange("skills")}
+                              >
+                                <Wrench className="h-4 w-4" />
+                                {t("skills.manage")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("prompts")}
+                            >
+                              <Book className="h-4 w-4" />
+                              {t("prompts.manage")}
+                            </DropdownMenuItem>
+                            {hasSessionSupport && (
+                              <DropdownMenuItem
+                                onSelect={() => handleViewChange("sessions")}
+                              >
+                                <History className="h-4 w-4" />
+                                {t("sessionManager.title")}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onSelect={() => handleViewChange("mcp")}
+                            >
+                              <McpIcon size={16} />
+                              {t("mcp.title")}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => setIsAddOpen(true)}>
+                          <Plus className="h-4 w-4" />
+                          {t("header.addProvider")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div className="hidden items-center gap-1 rounded-xl bg-muted p-1 md:flex">
                       <AnimatePresence mode="wait">
                         <motion.div
                           key={
@@ -1230,7 +1355,7 @@ function App() {
                     <Button
                       onClick={() => setIsAddOpen(true)}
                       size="icon"
-                      className={`ml-2 ${addActionButtonClass}`}
+                      className={`ml-2 hidden md:inline-flex ${addActionButtonClass}`}
                     >
                       <Plus className="w-5 h-5" />
                     </Button>

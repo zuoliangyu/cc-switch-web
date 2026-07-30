@@ -206,6 +206,50 @@ base_url = "http://localhost:8080"
     }
 
     #[test]
+    fn codex_live_shared_changes_replace_common_config_on_switch() {
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
+        );
+        db.set_config_snippet(
+            AppType::Codex.as_str(),
+            Some("disable_response_storage = true".to_string()),
+        )
+        .expect("seed snippet");
+        let state = AppState::new(db.clone());
+        let mut provider = Provider::with_id(
+            "codex-source".to_string(),
+            "Codex Source".to_string(),
+            json!({}),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            common_config_enabled: Some(true),
+            ..Default::default()
+        });
+        let live = json!({
+            "config": "model = \"gpt-5.6\"\ndisable_response_storage = false\n\n[model_providers.remote]\nbase_url = \"https://example.com/v1\"\n"
+        });
+        let mut result = SwitchResult::default();
+
+        ProviderService::sync_common_config_snippet_from_live(
+            &state,
+            &AppType::Codex,
+            &provider,
+            &live,
+            &mut result,
+        );
+
+        let snippet = db
+            .get_config_snippet(AppType::Codex.as_str())
+            .expect("read snippet")
+            .expect("snippet");
+        assert!(snippet.contains("disable_response_storage = false"));
+        assert!(!snippet.contains("model_providers"));
+        assert!(!snippet.contains("https://example.com"));
+        assert!(result.warnings.is_empty());
+    }
+
+    #[test]
     fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
         for key in [
             "GOOGLE_API_KEY",
@@ -940,6 +984,13 @@ impl ProviderService {
                     // Only backfill when switching to a different provider
                     if let Ok(live_config) = read_live_settings(app_type.clone()) {
                         if let Some(mut current_provider) = providers.get(&current_id).cloned() {
+                            Self::sync_common_config_snippet_from_live(
+                                state,
+                                &app_type,
+                                &current_provider,
+                                &live_config,
+                                &mut result,
+                            );
                             current_provider.settings_config =
                                 strip_common_config_from_live_settings(
                                     state.db.as_ref(),
@@ -1137,6 +1188,71 @@ impl ProviderService {
         }
 
         Self::migrate_legacy_common_config_usage(state, app_type, &snippet)
+    }
+
+    /// 切走前把 Claude/Codex live 中的共享改动整体重提取回通用配置片段。
+    fn sync_common_config_snippet_from_live(
+        state: &AppState,
+        app_type: &AppType,
+        provider: &Provider,
+        live_config: &Value,
+        result: &mut SwitchResult,
+    ) {
+        if !matches!(app_type, AppType::Claude | AppType::Codex)
+            || provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.common_config_enabled)
+                != Some(true)
+        {
+            return;
+        }
+
+        match state.db.is_config_snippet_cleared(app_type.as_str()) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                log::warn!(
+                    "读取 {} 通用配置清空标记失败: {error}",
+                    app_type.as_str()
+                );
+                return;
+            }
+        }
+
+        let new_snippet = match Self::extract_common_config_snippet_from_settings(
+            app_type.clone(),
+            live_config,
+        ) {
+            Ok(snippet) => snippet,
+            Err(error) => {
+                log::warn!(
+                    "从 {} Provider '{}' live 配置提取通用配置失败: {error}",
+                    app_type.as_str(),
+                    provider.id
+                );
+                return;
+            }
+        };
+        if state.db.get_config_snippet(app_type.as_str()).ok().flatten().as_deref()
+            == Some(new_snippet.as_str())
+        {
+            return;
+        }
+
+        if let Err(error) = state
+            .db
+            .set_config_snippet(app_type.as_str(), Some(new_snippet))
+        {
+            log::warn!(
+                "保存 {} Provider '{}' 自动同步的通用配置失败: {error}",
+                app_type.as_str(),
+                provider.id
+            );
+            result
+                .warnings
+                .push(format!("common_config_sync_failed:{}", provider.id));
+        }
     }
 
     /// Extract common config snippet from current provider

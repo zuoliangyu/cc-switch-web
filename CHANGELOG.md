@@ -14,6 +14,7 @@
 - Codex MCP 与 OpenCode 遇到非法配置结构时归一化或报错，不再覆盖原配置或 panic。
 - Codex 默认模型写入严格转义 TOML 字符串，远端 `/models` 返回的异常模型 ID 不再能注入额外配置行。
 - Codex 通用配置改由后端 `toml_edit` 结构化合并与剥离，保留用户注释和键顺序；异步结果不会覆盖更新的开关操作或手工编辑。
+- 切换 Claude 或 Codex Provider 前会把 live 配置中的共享改动重新提取回通用配置片段，同时尊重用户显式清空状态并继续剥离凭据、端点、模型和 MCP 注入项。
 - 通用配置合并拒绝 `__proto__`、`constructor`、`prototype` 原型链键。
 - Deeplink 确认页完整显示 MCP 参数和用量脚本，标记高风险命令、环境变量及私网端点，支持 URL-safe Base64；导入用量脚本默认关闭。
 - 托管账号接管按类型只写入一个正确的 Claude 认证占位符。

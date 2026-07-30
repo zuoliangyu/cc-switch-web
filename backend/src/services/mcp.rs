@@ -180,21 +180,51 @@ impl McpService {
         Ok(())
     }
 
-    /// 手动同步所有启用的 MCP 服务器到对应的应用
+    /// 逐应用 best-effort 同步所有启用状态，结束后聚合上报失败。
     pub fn sync_all_enabled(state: &AppState) -> Result<(), AppError> {
         let servers = Self::get_all_servers(state)?;
+        let mut failures = Vec::new();
 
         for app in AppType::all() {
-            if matches!(app, AppType::OpenClaw) {
-                continue;
+            if let Err(error) = Self::project_servers_to_app(state, &servers, &app) {
+                log::warn!("同步 MCP 到 {app:?} 失败: {error}");
+                failures.push(format!("{}: {error}", app.as_str()));
             }
+        }
 
-            for server in servers.values() {
-                if server.apps.is_enabled_for(&app) {
-                    Self::sync_server_to_app(state, server, &app)?;
-                } else {
-                    Self::remove_server_from_app(state, &server.id, &app)?;
-                }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::Message(format!(
+                "部分应用 MCP 同步失败: {}",
+                failures.join("; ")
+            )))
+        }
+    }
+
+    /// 只重投影目标应用，避免无关应用配置损坏牵连关键路径。
+    pub fn sync_enabled_for_app(state: &AppState, app: &AppType) -> Result<(), AppError> {
+        let servers = Self::get_all_servers(state)?;
+        Self::project_servers_to_app(state, &servers, app)
+    }
+
+    fn project_servers_to_app(
+        state: &AppState,
+        servers: &IndexMap<String, McpServer>,
+        app: &AppType,
+    ) -> Result<(), AppError> {
+        if matches!(
+            app,
+            AppType::OpenClaw | AppType::Hermes | AppType::ClaudeDesktop
+        ) {
+            return Ok(());
+        }
+
+        for server in servers.values() {
+            if server.apps.is_enabled_for(app) {
+                Self::sync_server_to_app(state, server, app)?;
+            } else {
+                Self::remove_server_from_app(state, &server.id, app)?;
             }
         }
 
@@ -356,5 +386,45 @@ mod tests {
         assert!(error.to_string().contains("codex"));
         let servers = db.get_all_mcp_servers().expect("servers");
         assert!(servers.get("alpha").is_some_and(|server| server.apps.claude));
+    }
+
+    #[test]
+    #[serial]
+    fn sync_all_reports_broken_app_but_projects_the_rest() {
+        let _home = TestHome::new();
+        std::fs::write(crate::config::get_claude_mcp_path(), "not json")
+            .expect("write invalid claude config");
+        let codex_path = crate::codex_config::get_codex_config_path();
+        std::fs::create_dir_all(codex_path.parent().expect("codex parent"))
+            .expect("create codex dir");
+        std::fs::write(&codex_path, "").expect("write codex config");
+
+        let db = Arc::new(crate::database::Database::memory().expect("database"));
+        db.save_mcp_server(&McpServer {
+            id: "alpha".to_string(),
+            name: "Alpha".to_string(),
+            server: serde_json::json!({ "type": "stdio", "command": "echo" }),
+            apps: crate::app_config::McpApps {
+                codex: true,
+                ..Default::default()
+            },
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: Vec::new(),
+        })
+        .expect("save server");
+        let state = AppState::new(db);
+
+        let error = McpService::sync_all_enabled(&state)
+            .expect_err("invalid Claude config must be reported");
+        assert!(error.to_string().contains("claude"));
+        assert!(
+            std::fs::read_to_string(&codex_path)
+                .expect("read codex config")
+                .contains("[mcp_servers.alpha]")
+        );
+        McpService::sync_enabled_for_app(&state, &AppType::Codex)
+            .expect("targeted Codex projection ignores broken Claude config");
     }
 }

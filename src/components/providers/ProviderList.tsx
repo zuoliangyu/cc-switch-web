@@ -21,6 +21,7 @@ import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
+import { extractErrorMessage } from "@/utils/errorUtils";
 import { useDragSort } from "@/hooks/useDragSort";
 import {
   useOpenClawLiveProviderIds,
@@ -260,8 +261,10 @@ export function ProviderList({
         toast.info(t("provider.noProviders"));
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error) || t("settings.importFailed"));
+      // 失败前可能已导入部分条目，仍需刷新列表呈现真实状态。
+      queryClient.invalidateQueries({ queryKey: ["providers", appId] });
     },
   });
 

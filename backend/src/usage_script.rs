@@ -15,6 +15,32 @@ pub async fn execute_usage_script(
     user_id: Option<&str>,
     template_type: Option<&str>,
 ) -> Result<Value, AppError> {
+    const USAGE_SCRIPT_TIMEOUT_SECS: u64 = 5;
+    const USAGE_SCRIPT_MEMORY_LIMIT_BYTES: usize = 16 * 1024 * 1024;
+
+    fn create_script_runtime() -> Result<Runtime, AppError> {
+        let runtime = Runtime::new().map_err(|e| {
+            AppError::localized(
+                "usage_script.runtime_create_failed",
+                format!("创建 JS 运行时失败: {e}"),
+                format!("Failed to create JS runtime: {e}"),
+            )
+        })?;
+        runtime.set_memory_limit(USAGE_SCRIPT_MEMORY_LIMIT_BYTES);
+        runtime.set_max_stack_size(256 * 1024);
+        let deadline = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_secs(USAGE_SCRIPT_TIMEOUT_SECS))
+            .ok_or_else(|| {
+                AppError::localized(
+                    "usage_script.invalid_timeout",
+                    "无法计算脚本执行截止时间",
+                    "Unable to compute script execution deadline",
+                )
+            })?;
+        runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
+        Ok(runtime)
+    }
+
     // 检测是否为自定义模板模式
     // 优先使用前端传递的 template_type
     let is_custom_template = template_type.map(|t| t == "custom").unwrap_or(false);
@@ -31,13 +57,7 @@ pub async fn execute_usage_script(
 
     // 3. 在独立作用域中提取 request 配置（确保 Runtime/Context 在 await 前释放）
     let request_config = {
-        let runtime = Runtime::new().map_err(|e| {
-            AppError::localized(
-                "usage_script.runtime_create_failed",
-                format!("创建 JS 运行时失败: {e}"),
-                format!("Failed to create JS runtime: {e}"),
-            )
-        })?;
+        let runtime = create_script_runtime()?;
         let context = Context::full(&runtime).map_err(|e| {
             AppError::localized(
                 "usage_script.context_create_failed",
@@ -113,13 +133,7 @@ pub async fn execute_usage_script(
 
     // 7. 在独立作用域中执行 extractor（确保 Runtime/Context 在函数结束前释放）
     let result: Value = {
-        let runtime = Runtime::new().map_err(|e| {
-            AppError::localized(
-                "usage_script.runtime_create_failed",
-                format!("创建 JS 运行时失败: {e}"),
-                format!("Failed to create JS runtime: {e}"),
-            )
-        })?;
+        let runtime = create_script_runtime()?;
         let context = Context::full(&runtime).map_err(|e| {
             AppError::localized(
                 "usage_script.context_create_failed",
@@ -892,5 +906,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn infinite_loop_usage_script_is_interrupted() {
+        let script = r#"
+            (function(){ while (true) { Math.sqrt(Math.random()); } })();
+            ({ request: { url: "https://example.com", method: "GET" } })
+        "#;
+        let start = std::time::Instant::now();
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+            .block_on(execute_usage_script(
+                script,
+                "sk-test",
+                "https://api.example.com",
+                30,
+                None,
+                None,
+                None,
+            ));
+
+        assert!(result.is_err());
+        assert!(start.elapsed() < std::time::Duration::from_secs(15));
     }
 }

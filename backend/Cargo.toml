@@ -32,6 +32,7 @@ toml_edit = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "socks", "blocking"] }
 flate2 = "1"
 brotli = "7"
+zstd = "0.13"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 futures = "0.3"
 async-stream = "0.3"
@@ -74,6 +75,7 @@ semver = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 # Optimize release binary size to reduce packaged binary footprint
 [profile.release]

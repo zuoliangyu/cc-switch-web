@@ -73,19 +73,35 @@ pub fn sync_grokbuild_usage(db: &Database) -> Result<SessionSyncResult, AppError
 fn collect_grok_updates_files() -> Vec<PathBuf> {
     let mut files = Vec::new();
     for root in crate::session_manager::grokbuild_session_roots() {
-        collect_files_named(&root, "updates.jsonl", &mut files);
+        collect_files_named(&root, "updates.jsonl", &mut files, 0);
     }
     files
 }
 
-fn collect_files_named(root: &Path, name: &str, files: &mut Vec<PathBuf>) {
+const MAX_GROK_FILE_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_COLLECT_DEPTH: usize = 16;
+
+fn collect_files_named(root: &Path, name: &str, files: &mut Vec<PathBuf>, depth: usize) {
+    if depth > MAX_COLLECT_DEPTH {
+        log::warn!(
+            "Grok session directory traversal exceeded max depth {} at {}",
+            MAX_COLLECT_DEPTH,
+            root.display()
+        );
+        return;
+    }
     let Ok(entries) = fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            collect_files_named(&path, name, files);
+        let metadata = entry.metadata();
+        if metadata.as_ref().is_ok_and(|m| m.is_symlink()) {
+            log::info!("[GROK-SYNC] 跳过符号链接（不跟随）: {}", path.display());
+            continue;
+        }
+        if metadata.as_ref().is_ok_and(|m| m.is_dir()) {
+            collect_files_named(&path, name, files, depth + 1);
         } else if path.file_name().and_then(|value| value.to_str()) == Some(name) {
             files.push(path);
         }
@@ -97,6 +113,15 @@ fn sync_single_grok_file(db: &Database, file_path: &Path) -> Result<SessionSyncR
     let metadata = fs::metadata(file_path)
         .map_err(|error| AppError::Config(format!("无法读取文件元数据: {error}")))?;
     let file_modified = metadata_modified_nanos(&metadata);
+
+    if metadata.len() > MAX_GROK_FILE_BYTES {
+        log::warn!(
+            "Grok session log too large ({} bytes), skipping: {}",
+            metadata.len(),
+            file_path.display()
+        );
+        return Ok(SessionSyncResult::default());
+    }
     let (last_modified, _) = get_sync_state(db, &file_path_str)?;
     if file_modified <= last_modified {
         return Ok(SessionSyncResult::default());
@@ -615,5 +640,57 @@ mod tests {
             Decimal::from(ticks) / Decimal::from(10_000_000_000u64)
         );
         Ok(())
+    }
+
+    #[test]
+    fn oversized_updates_jsonl_is_skipped() {
+        let db = Database::memory().unwrap();
+        let temp = tempdir().unwrap();
+        let path = write_session_file(temp.path(), "huge", &[]);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(MAX_GROK_FILE_BYTES + 1)
+            .unwrap();
+
+        assert_eq!(sync_single_grok_file(&db, &path).unwrap().imported, 0);
+    }
+
+    #[test]
+    fn collector_stops_beyond_depth_limit() {
+        let temp = tempdir().unwrap();
+        let mut dir = temp.path().to_path_buf();
+        for _ in 0..=MAX_COLLECT_DEPTH {
+            dir = dir.join("nested");
+            fs::create_dir(&dir).unwrap();
+        }
+        fs::write(dir.join("updates.jsonl"), b"{}\n").unwrap();
+
+        let mut files = Vec::new();
+        collect_files_named(temp.path(), "updates.jsonl", &mut files, 0);
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn collector_skips_symlinks() {
+        let temp = tempdir().unwrap();
+        let real = temp.path().join("real");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("updates.jsonl"), b"{}\n").unwrap();
+        let link = temp.path().join("linked");
+
+        #[cfg(unix)]
+        if std::os::unix::fs::symlink(&real, &link).is_err() {
+            return;
+        }
+        #[cfg(windows)]
+        if std::os::windows::fs::symlink_dir(&real, &link).is_err() {
+            return;
+        }
+
+        let mut files = Vec::new();
+        collect_files_named(&link, "updates.jsonl", &mut files, 0);
+        assert!(files.is_empty());
     }
 }

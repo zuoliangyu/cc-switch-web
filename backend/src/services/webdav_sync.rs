@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 use tempfile::tempdir;
 
 use crate::error::AppError;
+use crate::services::skill::{skill_state_read_guard, skill_state_write_guard};
 use crate::services::webdav::{
     auth_from_credentials, build_remote_url, ensure_remote_directories, get_bytes, head_etag,
     path_segments, put_bytes, test_connection, WebDavAuth,
@@ -302,6 +303,8 @@ fn build_local_snapshot(
     db: &crate::database::Database,
     _settings: &WebDavSyncSettings,
 ) -> Result<LocalSnapshot, AppError> {
+    let _skill_state_guard = skill_state_read_guard();
+
     // Export database to SQL string
     let sql_string = db.export_sql_string_for_sync()?;
     let db_sql = sql_string.into_bytes();
@@ -599,6 +602,7 @@ fn apply_snapshot(
             format!("SQL is not valid UTF-8: {e}"),
         )
     })?;
+    let _skill_state_guard = skill_state_write_guard();
     let skills_backup = backup_current_skills()?;
 
     // 先替换 skills，再导入数据库；若导入失败则回滚 skills，避免“半恢复”。
@@ -669,6 +673,39 @@ fn validate_artifact_size_limit(artifact_name: &str, size: u64) -> Result<(), Ap
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::skill::SkillStorageLocation;
+    use serial_test::serial;
+
+    struct TestSkillHome {
+        _dir: tempfile::TempDir,
+        previous_home: Option<std::ffi::OsString>,
+        previous_storage: SkillStorageLocation,
+    }
+
+    impl TestSkillHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let previous_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            let previous_storage = crate::settings::get_skill_storage_location();
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            crate::settings::set_skill_storage_location(SkillStorageLocation::CcSwitch).unwrap();
+            Self {
+                _dir: dir,
+                previous_home,
+                previous_storage,
+            }
+        }
+    }
+
+    impl Drop for TestSkillHome {
+        fn drop(&mut self) {
+            let _ = crate::settings::set_skill_storage_location(self.previous_storage);
+            match self.previous_home.as_ref() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
 
     fn artifact(sha256: &str, size: u64) -> ArtifactMeta {
         ArtifactMeta {
@@ -686,6 +723,34 @@ mod tests {
         let id1 = compute_snapshot_id(&artifacts);
         let id2 = compute_snapshot_id(&artifacts);
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    #[serial]
+    fn failed_database_import_rolls_back_skills() {
+        let _home = TestSkillHome::new();
+        let ssot = crate::services::skill::SkillService::get_ssot_dir().unwrap();
+        let old_skill = ssot.join("old-skill");
+        fs::create_dir_all(&old_skill).unwrap();
+        fs::write(old_skill.join("SKILL.md"), "old").unwrap();
+
+        fs::remove_dir_all(&old_skill).unwrap();
+        let new_skill = ssot.join("new-skill");
+        fs::create_dir_all(&new_skill).unwrap();
+        fs::write(new_skill.join("SKILL.md"), "new").unwrap();
+        let zip_dir = tempfile::tempdir().unwrap();
+        let zip_path = zip_dir.path().join("skills.zip");
+        zip_skills_ssot(&zip_path).unwrap();
+        let replacement_zip = fs::read(zip_path).unwrap();
+
+        fs::remove_dir_all(&new_skill).unwrap();
+        fs::create_dir_all(&old_skill).unwrap();
+        fs::write(old_skill.join("SKILL.md"), "old").unwrap();
+
+        let db = crate::database::Database::memory().unwrap();
+        assert!(apply_snapshot(&db, b"not a valid SQL export", &replacement_zip).is_err());
+        assert!(old_skill.join("SKILL.md").exists());
+        assert!(!new_skill.exists());
     }
 
     #[test]

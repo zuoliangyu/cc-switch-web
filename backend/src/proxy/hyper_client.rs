@@ -72,6 +72,9 @@ fn global_hyper_client() -> &'static HyperClient {
     })
 }
 
+/// 响应体读取上限（128 MiB）。
+pub(crate) const MAX_RESPONSE_BODY_BYTES: usize = 128 * 1024 * 1024;
+
 /// Unified response wrapper that can hold either a hyper or reqwest response.
 ///
 /// The hyper variant is used for the main (direct) path with header-case preservation.
@@ -137,20 +140,29 @@ impl ProxyResponse {
         })
     }
 
-    /// Consume the response and collect the full body into `Bytes`.
-    pub async fn bytes(self) -> Result<Bytes, ProxyError> {
-        match self {
-            Self::Hyper(r) => {
-                let collected = r.into_body().collect().await.map_err(|e| {
-                    ProxyError::ForwardFailed(format!("Failed to read response body: {e}"))
-                })?;
-                Ok(collected.to_bytes())
+    /// Consume the response and collect at most `max_bytes`, aborting mid-stream on overflow.
+    pub async fn bytes_with_limit(self, max_bytes: usize) -> Result<Bytes, ProxyError> {
+        use futures::StreamExt;
+
+        if let Self::Buffered { body, .. } = self {
+            if body.len() > max_bytes {
+                return Err(ProxyError::ResponseBodyTooLarge(body.len()));
             }
-            Self::Reqwest(r) => r.bytes().await.map_err(|e| {
-                ProxyError::ForwardFailed(format!("Failed to read response body: {e}"))
-            }),
-            Self::Buffered { body, .. } => Ok(body),
+            return Ok(body);
         }
+
+        let mut stream = self.bytes_stream();
+        let mut body = bytes::BytesMut::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| {
+                ProxyError::ForwardFailed(format!("Failed to read response body: {e}"))
+            })?;
+            if body.len() + chunk.len() > max_bytes {
+                return Err(ProxyError::ResponseBodyTooLarge(body.len() + chunk.len()));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body.freeze())
     }
 
     /// Consume the response and return a byte-chunk stream (for SSE pass-through).
@@ -711,5 +723,23 @@ impl<S: Unpin> tokio::io::AsyncWrite for WriteFilter<S> {
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         std::task::Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bytes_with_limit_rejects_oversized_buffered_response() {
+        let response = ProxyResponse::buffered(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(b"12345"),
+        );
+        assert!(matches!(
+            response.bytes_with_limit(4).await,
+            Err(ProxyError::ResponseBodyTooLarge(5))
+        ));
     }
 }

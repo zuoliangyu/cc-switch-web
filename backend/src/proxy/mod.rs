@@ -5,6 +5,7 @@
 pub(crate) mod body_filter;
 pub(crate) mod cache_injector;
 pub(crate) mod circuit_breaker;
+pub(crate) mod content_encoding;
 pub(crate) mod error;
 pub(crate) mod error_mapper;
 pub(crate) mod failover_switch;

@@ -576,6 +576,8 @@ export function DeepLinkImportDialog() {
                     request.usageEnabled !== undefined ||
                     request.usageApiKey ||
                     request.usageBaseUrl ||
+                    request.usageAccessToken ||
+                    request.usageUserId ||
                     request.usageAutoInterval !== undefined) && (
                     <PreviewCard title={t("deeplink.usageScript")}>
                       <div className="space-y-3">
@@ -623,6 +625,23 @@ export function DeepLinkImportDialog() {
                               mono
                             />
                           )}
+                        {request.usageAccessToken && (
+                          <InfoRow
+                            label={t("deeplink.usageAccessToken")}
+                            value={maskValue(
+                              "usageAccessToken",
+                              request.usageAccessToken,
+                            )}
+                            mono
+                          />
+                        )}
+                        {request.usageUserId && (
+                          <InfoRow
+                            label={t("deeplink.usageUserId")}
+                            value={request.usageUserId}
+                            mono
+                          />
+                        )}
                         {request.usageAutoInterval &&
                           request.usageAutoInterval > 0 && (
                             <InfoRow

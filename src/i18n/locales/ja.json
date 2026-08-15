@@ -2818,6 +2818,8 @@
     "usageScriptWarning": "この JavaScript は有効化後、使用量の照会時に実行されます。信頼できる提供元の場合のみインポートしてください。",
     "usageApiKey": "使用量 API キー",
     "usageBaseUrl": "使用量クエリ URL",
+    "usageAccessToken": "使用量アクセストークン",
+    "usageUserId": "使用量ユーザー ID",
     "usageAutoInterval": "自動クエリ",
     "usageAutoIntervalValue": "{{minutes}} 分ごと",
     "warning": "インポート後はローカル設定へ即時反映されます。リンク元が信頼できるか確認してください。",

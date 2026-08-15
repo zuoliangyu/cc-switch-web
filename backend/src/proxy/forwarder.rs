@@ -1619,7 +1619,13 @@ impl RequestForwarder {
             Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
-            let body_text = String::from_utf8(response.bytes().await?.to_vec()).ok();
+            let body_text = String::from_utf8(
+                response
+                    .bytes_with_limit(super::hyper_client::MAX_RESPONSE_BODY_BYTES)
+                    .await?
+                    .to_vec(),
+            )
+            .ok();
 
             Err(ProxyError::UpstreamError {
                 status: status_code,
@@ -1634,7 +1640,9 @@ impl RequestForwarder {
     ) -> Result<ProxyResponse, ProxyError> {
         let status = response.status();
         let headers = response.headers().clone();
-        let body = response.bytes().await?;
+        let body = response
+            .bytes_with_limit(super::hyper_client::MAX_RESPONSE_BODY_BYTES)
+            .await?;
         if let Some(message) = codex_anthropic_error_envelope_message(&body) {
             return Err(ProxyError::TransformError(format!(
                 "Anthropic upstream returned a 2xx failure: {message}"

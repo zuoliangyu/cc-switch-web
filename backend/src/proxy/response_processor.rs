@@ -3,9 +3,10 @@
 //! 统一处理流式和非流式 API 响应
 
 use super::{
+    content_encoding::{decompress_body_with_limit, get_content_encoding, DecompressError},
     handler_config::UsageParserConfig,
     handler_context::{RequestContext, StreamingTimeoutConfig},
-    hyper_client::ProxyResponse,
+    hyper_client::{ProxyResponse, MAX_RESPONSE_BODY_BYTES},
     server::ProxyState,
     sse::strip_sse_field,
     usage::parser::TokenUsage,
@@ -17,7 +18,6 @@ use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use serde_json::Value;
 use std::{
-    io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -25,48 +25,6 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Mutex;
-
-// ============================================================================
-// 响应解压
-// ============================================================================
-
-/// 根据 content-encoding 解压响应体字节
-///
-/// reqwest 自动解压已禁用（为了透传 accept-encoding），需要手动解压。
-fn decompress_body(content_encoding: &str, body: &[u8]) -> Result<Vec<u8>, std::io::Error> {
-    match content_encoding {
-        "gzip" | "x-gzip" => {
-            let mut decoder = flate2::read::GzDecoder::new(body);
-            let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)?;
-            Ok(decompressed)
-        }
-        "deflate" => {
-            let mut decoder = flate2::read::DeflateDecoder::new(body);
-            let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)?;
-            Ok(decompressed)
-        }
-        "br" => {
-            let mut decompressed = Vec::new();
-            brotli::BrotliDecompress(&mut std::io::Cursor::new(body), &mut decompressed)?;
-            Ok(decompressed)
-        }
-        _ => {
-            log::warn!("未知的 content-encoding: {content_encoding}，跳过解压");
-            Ok(body.to_vec())
-        }
-    }
-}
-
-/// 从响应头提取 content-encoding（忽略 identity 和 chunked）
-fn get_content_encoding(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("content-encoding")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim().to_lowercase())
-        .filter(|s| !s.is_empty() && s != "identity")
-}
 
 /// 移除在重建响应体后会失真的实体头。
 pub(crate) fn strip_entity_headers_for_rebuilt_body(headers: &mut HeaderMap) {
@@ -87,10 +45,11 @@ pub(crate) async fn read_decoded_body(
 ) -> Result<(HeaderMap, http::StatusCode, Bytes), ProxyError> {
     let mut headers = response.headers().clone();
     let status = response.status();
+    let bytes_future = response.bytes_with_limit(MAX_RESPONSE_BODY_BYTES);
     let raw_bytes = if body_timeout.is_zero() {
-        response.bytes().await?
+        bytes_future.await?
     } else {
-        tokio::time::timeout(body_timeout, response.bytes())
+        tokio::time::timeout(body_timeout, bytes_future)
             .await
             .map_err(|_| {
                 ProxyError::Timeout(format!(
@@ -112,12 +71,16 @@ pub(crate) async fn read_decoded_body(
 
     if let Some(encoding) = get_content_encoding(&headers) {
         log::debug!("[{tag}] 解压非流式响应: content-encoding={encoding}");
-        match decompress_body(&encoding, &raw_bytes) {
-            Ok(decompressed) => {
+        match decompress_body_with_limit(&encoding, &raw_bytes, MAX_RESPONSE_BODY_BYTES) {
+            Ok(Some(decompressed)) => {
                 body_bytes = Bytes::from(decompressed);
                 decoded = true;
             }
-            Err(e) => {
+            Ok(None) => {}
+            Err(DecompressError::TooLarge { .. }) => {
+                return Err(ProxyError::ResponseBodyTooLarge(MAX_RESPONSE_BODY_BYTES));
+            }
+            Err(DecompressError::Io(e)) => {
                 log::warn!("[{tag}] 解压失败 ({encoding}): {e}，使用原始数据");
             }
         }

@@ -37,6 +37,7 @@ const APP_FILTER_OPTIONS: AppTypeFilter[] = [
   "codex",
   "gemini",
   "grokbuild",
+  "pi",
 ];
 
 export function UsageDashboard() {

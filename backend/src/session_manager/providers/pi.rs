@@ -10,8 +10,8 @@ use crate::session_manager::{SessionMessage, SessionMeta};
 
 use super::utils::{extract_text, parse_timestamp_to_ms, path_basename, truncate_summary};
 
-const MAX_SESSION_BYTES: u64 = 128 * 1024 * 1024;
-const MAX_TREE_ENTRIES: usize = 500_000;
+pub(crate) const MAX_SESSION_BYTES: u64 = 128 * 1024 * 1024;
+pub(crate) const MAX_TREE_ENTRIES: usize = 500_000;
 const MAX_TREE_ID_BYTES: usize = 256;
 const TITLE_MAX_CHARS: usize = 80;
 
@@ -67,6 +67,21 @@ pub fn session_roots() -> Vec<PathBuf> {
     match resolve_session_root() {
         SessionRootResolution::Available { root, .. } => vec![root],
         _ => Vec::new(),
+    }
+}
+
+pub(crate) fn session_files() -> Result<Vec<PathBuf>, String> {
+    match resolve_session_root() {
+        SessionRootResolution::Available { root, layout } => {
+            let mut files = Vec::new();
+            collect_jsonl_files(&root, layout, &mut files, false);
+            files.sort();
+            Ok(files)
+        }
+        SessionRootResolution::RequiresProjectContext { configured_path } => Err(format!(
+            "Pi sessionDir '{configured_path}' requires a project cwd and cannot be globally enumerated"
+        )),
+        SessionRootResolution::Unavailable { reason } => Err(reason),
     }
 }
 
@@ -153,7 +168,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
         return Vec::new();
     };
     let mut files = Vec::new();
-    collect_jsonl_files(&root, layout, &mut files);
+    collect_jsonl_files(&root, layout, &mut files, true);
     files
         .into_iter()
         .filter_map(|path| parse_session(&path).ok())
@@ -486,7 +501,7 @@ fn validate_size(path: &Path) -> Result<(), String> {
     }
 }
 
-fn is_valid_tree_id(id: &str) -> bool {
+pub(crate) fn is_valid_tree_id(id: &str) -> bool {
     let bytes = id.as_bytes();
     !bytes.is_empty()
         && bytes.len() <= MAX_TREE_ID_BYTES
@@ -497,14 +512,19 @@ fn is_valid_tree_id(id: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
-fn collect_jsonl_files(root: &Path, layout: SessionLayout, output: &mut Vec<PathBuf>) {
+fn collect_jsonl_files(
+    root: &Path,
+    layout: SessionLayout,
+    output: &mut Vec<PathBuf>,
+    enforce_size_limit: bool,
+) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
         match layout {
             SessionLayout::Flat if entry.file_type().is_ok_and(|kind| kind.is_file()) => {
-                push_jsonl(entry.path(), output);
+                push_jsonl(entry.path(), output, enforce_size_limit);
             }
             SessionLayout::ProjectDirectories
                 if entry.file_type().is_ok_and(|kind| kind.is_dir()) =>
@@ -512,7 +532,7 @@ fn collect_jsonl_files(root: &Path, layout: SessionLayout, output: &mut Vec<Path
                 if let Ok(children) = fs::read_dir(entry.path()) {
                     for child in children.flatten() {
                         if child.file_type().is_ok_and(|kind| kind.is_file()) {
-                            push_jsonl(child.path(), output);
+                            push_jsonl(child.path(), output, enforce_size_limit);
                         }
                     }
                 }
@@ -522,9 +542,10 @@ fn collect_jsonl_files(root: &Path, layout: SessionLayout, output: &mut Vec<Path
     }
 }
 
-fn push_jsonl(path: PathBuf, output: &mut Vec<PathBuf>) {
+fn push_jsonl(path: PathBuf, output: &mut Vec<PathBuf>, enforce_size_limit: bool) {
     if path.extension().and_then(|value| value.to_str()) == Some("jsonl")
-        && fs::metadata(&path).is_ok_and(|metadata| metadata.len() <= MAX_SESSION_BYTES)
+        && (!enforce_size_limit
+            || fs::metadata(&path).is_ok_and(|metadata| metadata.len() <= MAX_SESSION_BYTES))
     {
         output.push(path);
     }
@@ -548,6 +569,24 @@ mod tests {
             "content": [{"type": "toolCall", "name": "read"}]
         });
         assert_eq!(parse_message(&message).unwrap().1, "[Tool: read]");
+    }
+
+    #[test]
+    fn usage_discovery_reports_oversized_files() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("oversized.jsonl");
+        File::create(&path)
+            .expect("create session")
+            .set_len(MAX_SESSION_BYTES + 1)
+            .expect("size session");
+
+        let mut browser_files = Vec::new();
+        collect_jsonl_files(temp.path(), SessionLayout::Flat, &mut browser_files, true);
+        assert!(browser_files.is_empty());
+
+        let mut usage_files = Vec::new();
+        collect_jsonl_files(temp.path(), SessionLayout::Flat, &mut usage_files, false);
+        assert_eq!(usage_files, vec![path]);
     }
 
     #[test]

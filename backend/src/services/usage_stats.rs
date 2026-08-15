@@ -711,6 +711,7 @@ impl Database {
 
         let mut stmt = conn.prepare(&sql)?;
         let row_mapper = |row: &rusqlite::Row| {
+            let provider_id: String = row.get(0)?;
             let request_count: i64 = row.get(3)?;
             let success_count: i64 = row.get(6)?;
             let success_rate = if request_count > 0 {
@@ -720,10 +721,14 @@ impl Database {
             };
 
             Ok(ProviderStats {
-                provider_id: row.get(0)?,
-                provider_name: row
-                    .get::<_, Option<String>>(2)?
-                    .unwrap_or_else(|| "Unknown".to_string()),
+                provider_id: provider_id.clone(),
+                provider_name: row.get::<_, Option<String>>(2)?.unwrap_or_else(|| {
+                    if provider_id == "_pi_session" {
+                        "Pi (Session)".to_string()
+                    } else {
+                        "Unknown".to_string()
+                    }
+                }),
                 request_count: request_count as u64,
                 total_tokens: row.get::<_, i64>(4)? as u64,
                 total_cost: format!("{:.6}", row.get::<_, f64>(5)?),

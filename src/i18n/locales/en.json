@@ -1339,7 +1339,8 @@
       "claude": "Claude Code",
       "codex": "Codex",
       "gemini": "Gemini",
-      "grokbuild": "Grok Build"
+      "grokbuild": "Grok Build",
+      "pi": "Pi"
     },
     "dataSource": {
       "proxy": "Proxy",
@@ -1347,7 +1348,8 @@
       "codex_db": "Codex DB",
       "codex_session": "Codex Session",
       "gemini_session": "Gemini Session",
-      "grok_session": "Grok Build Session"
+      "grok_session": "Grok Build Session",
+      "pi_session": "Pi Session"
     },
     "sessionSync": {
       "trigger": "Sync session logs",

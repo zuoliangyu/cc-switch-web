@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W7 已完成，W8 待开始）
+> 状态：实施中（W0–W8 已完成，W9 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -250,12 +250,12 @@ Pi 按上游最终契约一次落地，但复用现有 OpenCode/Hermes/Provider 
 
 ### W8：Pi Session Usage 与数据库迁移
 
-- [ ] 增加 `session_usage_pi`，解析 Pi JSONL 树、分支重写和请求语义。
-- [ ] 新增持久 `session_usage_dedup` 账本，明细 rollup/prune 后仍可去重。
-- [ ] Pi usage 接入统一同步调度、统计筛选、Dashboard 和数据源类型。
-- [ ] 数据库从 Web `v13` 迁移到下一版本，不照抄上游版本号。
-- [ ] SQL 备份、WebDAV 同步和本地保留策略覆盖去重账本。
-- [ ] Pi 文件重写、fork、缺失 entry ID、重复导入和删除源文件场景保持幂等。
+- [x] 增加 `session_usage_pi`，解析 Pi JSONL 树、分支重写和请求语义。
+- [x] 新增持久 `session_usage_dedup` 账本，明细 rollup/prune 后仍可去重。
+- [x] Pi usage 接入统一同步调度、统计筛选、Dashboard 和数据源类型。
+- [x] 数据库从 Web `v13` 迁移到下一版本，不照抄上游版本号。
+- [x] SQL 备份、WebDAV 同步和本地保留策略覆盖去重账本。
+- [x] Pi 文件重写、fork、缺失 entry ID、重复导入和删除源文件场景保持幂等。
 
 主要上游提交：`40d747c0`。
 
@@ -523,3 +523,5 @@ W0 基线修复
 - W6 验证：管理列表、批量操作、账号额度、导航溢出和浏览器活动状态共 10 个定向 Vitest 文件 25/25 通过；MCP DAO 并发测试 2/2 通过；`pnpm typecheck`、`git diff --check` 通过。
 - 2026-08-16：完成 W7。Pi 接入应用注册、目录、Provider、Prompts、Skills 和 Sessions；`models.json.providers` 使用 additive 原生适配并保留未知字段，不触碰 `auth.json` 或默认 Provider/Model。Pi 原生 Prompt 文件和模板使用 revision 防止陈旧覆盖，`AGENTS.md` 外部内容先备份；Proxy、failover、takeover、OAuth 和 managed account 均明确排除。前端采用精简表单与离线预设，完整 JSON 保留所有扩展字段，自定义模型不猜测能力。
 - W7 验证：Pi 表单、预设、三语、目录设置、Provider 操作、应用入口、Prompts、Skills 和 Sessions 共 12 个定向 Vitest 文件 57/57 通过；Rust `pi` 过滤测试 286/286 通过，覆盖 Pi 配置、Provider、Prompt 外部修改保护、原生 Prompt 文件与 Session 边界；`pnpm typecheck`、W7 新增 Rust 文件 `rustfmt --check`、`git diff --check` 通过。
+- 2026-08-16：完成 W8。Pi JSONL usage 接入统一同步调度，支持 assistant、tool result、compaction、branch summary、失败状态、追加/截断/同尺寸重写和 fork；请求 ID 与无 ID 语义哈希写入持久去重账本，明细 rollup/prune、源文件删除后恢复均不会重复计费。数据库按 Web 独立迁移链升级到 v14；账本由 SQL/WebDAV 远端载荷跳过并在本地恢复时保留。Usage 页面增加 Pi 筛选和三语数据源名称。
+- W8 验证：Pi usage 15 个上游定向测试全部通过，另增源文件删除/恢复和超限文件发现各 1/1；v14 新库/升级 1/1；同步跳过与本地保留各 1/1；Pi Dashboard 筛选 1/1；`pnpm typecheck`、W8 Rust 文件 `rustfmt --check`、`git diff --check` 通过。

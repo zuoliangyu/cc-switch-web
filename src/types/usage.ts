@@ -143,7 +143,13 @@ export interface UsageRangeSelection {
   customEndDate?: number;
 }
 
-export type AppTypeFilter = "all" | "claude" | "codex" | "gemini" | "grokbuild";
+export type AppTypeFilter =
+  | "all"
+  | "claude"
+  | "codex"
+  | "gemini"
+  | "grokbuild"
+  | "pi";
 
 export interface StatsFilters {
   timeRange: UsageRangePreset;

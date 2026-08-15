@@ -1339,7 +1339,8 @@
       "claude": "Claude Code",
       "codex": "Codex",
       "gemini": "Gemini",
-      "grokbuild": "Grok Build"
+      "grokbuild": "Grok Build",
+      "pi": "Pi"
     },
     "dataSource": {
       "proxy": "プロキシ",
@@ -1347,7 +1348,8 @@
       "codex_db": "Codex DB",
       "codex_session": "Codex セッション",
       "gemini_session": "Gemini セッション",
-      "grok_session": "Grok Build セッション"
+      "grok_session": "Grok Build セッション",
+      "pi_session": "Pi セッション"
     },
     "sessionSync": {
       "trigger": "セッションログを同期",

@@ -296,8 +296,7 @@ fn schema_migration_from_v7_preserves_skills_columns() {
     Database::create_tables_on_conn(&conn).expect("create tables");
     Database::set_user_version(&conn, 7).expect("set user_version=7");
 
-    Database::apply_schema_migrations_on_conn(&conn)
-        .expect("apply migrations from v7 to current");
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations from v7 to current");
 
     assert_eq!(
         Database::get_user_version(&conn).expect("version after migration"),
@@ -865,4 +864,27 @@ fn ensure_incremental_auto_vacuum_rebuilds_existing_file_db() {
         2,
         "file db should persist INCREMENTAL auto_vacuum after VACUUM rebuild"
     );
+}
+
+#[test]
+fn schema_v14_creates_session_usage_dedup_for_new_and_existing_databases() {
+    let fresh = Database::memory().expect("create fresh database");
+    let fresh_conn = fresh.conn.lock().expect("lock fresh database");
+    assert!(Database::table_exists(&fresh_conn, "session_usage_dedup").expect("check fresh ledger"));
+
+    let conn = Connection::open_in_memory().expect("open existing database");
+    Database::set_user_version(&conn, 13).expect("set v13");
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate v13 to v14");
+
+    assert_eq!(
+        Database::get_user_version(&conn).expect("read migrated version"),
+        SCHEMA_VERSION
+    );
+    conn.execute(
+        "INSERT INTO session_usage_dedup
+         (data_source, request_id, semantic_id, has_entry_id)
+         VALUES ('pi_session', 'request', 'semantic', 1)",
+        [],
+    )
+    .expect("insert ledger row");
 }

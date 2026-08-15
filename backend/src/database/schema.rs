@@ -290,6 +290,19 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS session_usage_dedup (
+                data_source TEXT NOT NULL,
+                request_id TEXT NOT NULL,
+                semantic_id TEXT NOT NULL,
+                has_entry_id INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (data_source, request_id)
+             );
+             CREATE INDEX IF NOT EXISTS idx_session_usage_dedup_semantic
+             ON session_usage_dedup(data_source, semantic_id, has_entry_id);",
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         // 19. Profiles 表（全应用共享项目，payload 按 app 分槽）
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
@@ -462,6 +475,11 @@ impl Database {
                         log::info!("迁移数据库从 v12 到 v13（添加 Grok Build 独立代理配置）");
                         Self::migrate_v12_to_v13(conn)?;
                         Self::set_user_version(conn, 13)?;
+                    }
+                    13 => {
+                        log::info!("迁移数据库从 v13 到 v14（添加会话用量持久去重账本）");
+                        Self::migrate_v13_to_v14(conn)?;
+                        Self::set_user_version(conn, 14)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1321,6 +1339,22 @@ impl Database {
             [],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    fn migrate_v13_to_v14(conn: &Connection) -> Result<(), AppError> {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS session_usage_dedup (
+                data_source TEXT NOT NULL,
+                request_id TEXT NOT NULL,
+                semantic_id TEXT NOT NULL,
+                has_entry_id INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (data_source, request_id)
+             );
+             CREATE INDEX IF NOT EXISTS idx_session_usage_dedup_semantic
+             ON session_usage_dedup(data_source, semantic_id, has_entry_id);",
+        )
+        .map_err(|e| AppError::Database(format!("创建会话用量去重账本失败: {e}")))?;
         Ok(())
     }
 
@@ -2825,9 +2859,7 @@ impl Database {
         Ok(false)
     }
 
-    fn create_request_logs_dedup_index_if_supported(
-        conn: &Connection,
-    ) -> Result<(), AppError> {
+    fn create_request_logs_dedup_index_if_supported(conn: &Connection) -> Result<(), AppError> {
         if !Self::table_exists(conn, "proxy_request_logs")? {
             return Ok(());
         }

@@ -1,6 +1,5 @@
 import { invoke } from "@/lib/runtime/client/core";
 import type {
-  ProxyConfig,
   ProxyStatus,
   ProxyServerInfo,
   ProxyTakeoverStatus,
@@ -26,24 +25,6 @@ export const proxyApi = {
     return invoke("get_proxy_status");
   },
 
-  // 检查代理服务器是否正在运行
-  async isProxyRunning(): Promise<boolean> {
-    return invoke("is_proxy_running");
-  },
-
-  // 检查是否处于接管模式
-  async isLiveTakeoverActive(): Promise<boolean> {
-    return invoke("is_live_takeover_active");
-  },
-
-  // 代理模式下切换供应商
-  async switchProxyProvider(
-    appType: string,
-    providerId: string,
-  ): Promise<void> {
-    return invoke("switch_proxy_provider", { appType, providerId });
-  },
-
   // ========== 接管状态 API ==========
 
   // 获取各应用接管状态
@@ -57,18 +38,6 @@ export const proxyApi = {
     enabled: boolean,
   ): Promise<void> {
     return invoke("set_proxy_takeover_for_app", { appType, enabled });
-  },
-
-  // ========== 聚合代理配置 API ==========
-
-  // 获取聚合后的代理配置
-  async getProxyConfig(): Promise<ProxyConfig> {
-    return invoke("get_proxy_config");
-  },
-
-  // 更新聚合后的代理配置
-  async updateProxyConfig(config: ProxyConfig): Promise<void> {
-    return invoke("update_proxy_config", { config });
   },
 
   // ========== v3+ 全局/应用级配置 API ==========
@@ -118,4 +87,3 @@ export const proxyApi = {
     return invoke("set_pricing_model_source", { appType, value });
   },
 };
-

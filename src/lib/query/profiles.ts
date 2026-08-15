@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { profilesApi } from "@/lib/api";
 import type { ProfileScope } from "@/lib/api/profiles";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { proxyKeys } from "@/lib/query/proxy";
 
 const profileErrorDetail = (error: Error, fallback: string) =>
   extractErrorMessage(error) || fallback;
@@ -114,9 +115,8 @@ export const useApplyProfileMutation = () => {
         queryClient.invalidateQueries({ queryKey: ["providers"] }),
         queryClient.invalidateQueries({ queryKey: ["mcp", "all"] }),
         queryClient.invalidateQueries({ queryKey: ["skills"] }),
-        queryClient.invalidateQueries({ queryKey: ["proxyStatus"] }),
-        queryClient.invalidateQueries({ queryKey: ["proxyRunning"] }),
-        queryClient.invalidateQueries({ queryKey: ["proxyTakeoverStatus"] }),
+        queryClient.invalidateQueries({ queryKey: proxyKeys.status }),
+        queryClient.invalidateQueries({ queryKey: proxyKeys.takeoverStatus }),
       ]);
 
       if (warnings.length > 0) {

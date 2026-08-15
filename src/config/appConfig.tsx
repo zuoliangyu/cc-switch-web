@@ -23,6 +23,7 @@ export const APP_IDS: AppId[] = [
   "grokbuild",
   "opencode",
   "openclaw",
+  "hermes",
 ];
 
 /** App IDs shown in MCP & Skills panels (excludes OpenClaw) */
@@ -32,7 +33,12 @@ export const MCP_SKILLS_APP_IDS: AppId[] = [
   "gemini",
   "grokbuild",
   "opencode",
+  "hermes",
 ];
+
+export function getAppLabel(appId: string): string {
+  return APP_ICON_MAP[appId as AppId]?.label ?? appId;
+}
 
 export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   claude: {

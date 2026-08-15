@@ -6,8 +6,8 @@ use serde_json::{json, Value};
 use toml_edit::{DocumentMut, Item, TableLike};
 
 use crate::app_config::AppType;
-use crate::codex_config::{get_codex_auth_path, write_codex_live_atomic_with_stable_provider};
-use crate::config::{get_claude_settings_path, read_json_file, write_json_file, write_text_file};
+use crate::codex_config::get_codex_auth_path;
+use crate::config::{get_claude_settings_path, read_json_file, write_json_file};
 use crate::database::Database;
 use crate::error::AppError;
 use crate::provider::Provider;
@@ -682,27 +682,22 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             crate::codex_config::apply_codex_unified_session_bucket_to_settings(
                 provider.category.as_deref(),
                 &mut settings,
-            )
-            .map_err(AppError::Config)?;
+            )?;
             let obj = settings
                 .as_object()
                 .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
             let auth = obj
                 .get("auth")
                 .ok_or_else(|| AppError::Config("Codex 供应商配置缺少 'auth' 字段".to_string()))?;
-            let config_str = obj.get("config").and_then(|v| v.as_str()).ok_or_else(|| {
-                AppError::Config("Codex 供应商配置缺少 'config' 字段或不是字符串".to_string())
-            })?;
-
-            if crate::proxy::providers::is_codex_official_provider(provider) {
-                // 官方条目不持有凭据；只恢复 config.toml，保留 Codex 原生 ChatGPT 登录。
-                write_text_file(&crate::codex_config::get_codex_config_path(), config_str)?;
-            } else {
-                // 走 with_stable_provider 路径：写下去之前会先把 model_provider 归一化到
-                // 稳定 id（优先复用 anchor / 当前 live 中已有的自定义 id），
-                // 让 Codex resume history 不会因为切换 provider 漂移。
-                write_codex_live_atomic_with_stable_provider(auth, Some(config_str))?;
-            }
+            let config_str = obj.get("config").and_then(Value::as_str);
+            let profile = crate::proxy::providers::resolve_codex_catalog_tool_profile(provider);
+            crate::codex_config::write_codex_provider_live_with_catalog(
+                &settings,
+                provider.category.as_deref(),
+                auth,
+                config_str,
+                profile,
+            )?;
         }
         AppType::Gemini => {
             // Delegate to write_gemini_live which handles env file writing correctly
@@ -923,17 +918,15 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
 pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
     match app_type {
         AppType::Codex => {
-            let auth_path = get_codex_auth_path();
-            if !auth_path.exists() {
-                return Err(AppError::localized(
-                    "codex.auth.missing",
-                    "Codex 配置文件不存在：缺少 auth.json",
-                    "Codex configuration missing: auth.json not found",
-                ));
+            let mut result = crate::codex_config::read_codex_live_settings()?;
+            if let Ok(Some(model_catalog)) =
+                crate::codex_config::read_codex_model_catalog_simplified_from_live()
+            {
+                if let Some(obj) = result.as_object_mut() {
+                    obj.insert("modelCatalog".to_string(), model_catalog);
+                }
             }
-            let auth: Value = read_json_file(&auth_path)?;
-            let cfg_text = crate::codex_config::read_and_validate_codex_config_text()?;
-            Ok(json!({ "auth": auth, "config": cfg_text }))
+            Ok(result)
         }
         AppType::Claude | AppType::ClaudeDesktop => {
             let path = get_claude_settings_path();

@@ -189,6 +189,9 @@ pub struct AppSettings {
     /// 是否在主页面启用本地代理功能（默认关闭）
     #[serde(default)]
     pub enable_local_proxy: bool,
+    /// 切换第三方 Codex Provider 时保留原生 ChatGPT 登录材料。
+    #[serde(default)]
+    pub preserve_codex_official_auth_on_switch: bool,
     /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
     #[serde(default)]
     pub unify_codex_session_history: bool,
@@ -312,6 +315,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             enable_local_proxy: false,
+            preserve_codex_official_auth_on_switch: false,
             unify_codex_session_history: false,
             unify_codex_migrate_existing: None,
             proxy_confirmed: None,
@@ -599,6 +603,10 @@ pub fn unify_codex_session_history() -> bool {
             e.into_inner()
         })
         .unify_codex_session_history
+}
+
+pub fn preserve_codex_official_auth_on_switch() -> bool {
+    get_settings().preserve_codex_official_auth_on_switch
 }
 
 pub fn unify_codex_migrate_existing_requested() -> bool {

@@ -15,7 +15,6 @@ interface AppSwitcherProps {
   activeApp: AppId;
   onSwitch: (app: AppId) => void;
   visibleApps?: VisibleApps;
-  compact?: boolean;
 }
 
 const ALL_APPS: AppId[] = [
@@ -34,7 +33,6 @@ export function AppSwitcher({
   activeApp,
   onSwitch,
   visibleApps,
-  compact,
 }: AppSwitcherProps) {
   const handleSwitch = (app: AppId) => {
     if (app === activeApp) return;
@@ -112,6 +110,8 @@ export function AppSwitcher({
             key={app}
             type="button"
             onClick={() => handleSwitch(app)}
+            title={appDisplayName[app]}
+            aria-label={appDisplayName[app]}
             className={cn(
               "group inline-flex items-center px-3 h-8 rounded-md text-sm font-medium transition-all duration-200",
               activeApp === app
@@ -124,16 +124,6 @@ export function AppSwitcher({
               name={appDisplayName[app]}
               size={iconSize}
             />
-            <span
-              className={cn(
-                "transition-all duration-200 whitespace-nowrap overflow-hidden",
-                compact
-                  ? "max-w-0 opacity-0 ml-0"
-                  : "max-w-[80px] opacity-100 ml-2",
-              )}
-            >
-              {appDisplayName[app]}
-            </span>
           </button>
         ))}
       </div>

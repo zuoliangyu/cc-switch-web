@@ -8,7 +8,9 @@ describe("AppSwitcher", () => {
     const onSwitch = vi.fn();
     render(<AppSwitcher activeApp="claude" onSwitch={onSwitch} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /^Claude$/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Claude$/, expanded: false }),
+    );
     await userEvent.click(screen.getByRole("menuitemradio", { name: /Codex/ }));
 
     expect(onSwitch).toHaveBeenCalledWith("codex");

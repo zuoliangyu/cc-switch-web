@@ -103,7 +103,7 @@ describe("useProxyStatus", () => {
     const { result } = renderHook(() => useProxyStatus(), { wrapper });
 
     await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
+      expect(result.current.isInitialStatusPending).toBe(false);
     });
 
     await act(async () => {

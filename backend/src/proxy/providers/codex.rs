@@ -198,10 +198,7 @@ pub fn codex_provider_uses_anthropic(provider: &Provider) -> bool {
         .unwrap_or(false)
 }
 
-pub fn should_convert_codex_responses_to_anthropic(
-    provider: &Provider,
-    endpoint: &str,
-) -> bool {
+pub fn should_convert_codex_responses_to_anthropic(provider: &Provider, endpoint: &str) -> bool {
     let path = endpoint
         .split_once('?')
         .map_or(endpoint, |(path, _query)| path);
@@ -215,6 +212,27 @@ pub fn should_convert_codex_responses_to_anthropic(
 /// 原生 Responses 上游是否需要展开 Codex 私有 namespace 工具。
 pub fn provider_needs_responses_namespace_flatten(provider: &Provider) -> bool {
     provider.is_xai_oauth()
+}
+
+/// 使用与代理路由相同的判定生成 Codex model catalog，避免目录声明的工具形态
+/// 与实际转换协议不一致。
+pub fn resolve_codex_catalog_tool_profile(
+    provider: &Provider,
+) -> crate::codex_config::CodexCatalogToolProfile {
+    use crate::codex_config::CodexCatalogToolProfile;
+
+    if is_codex_official_provider(provider) || provider.is_xai_oauth() {
+        return CodexCatalogToolProfile::NativeResponses;
+    }
+    if codex_provider_uses_anthropic(provider) {
+        return CodexCatalogToolProfile::Anthropic;
+    }
+    CodexCatalogToolProfile::from_api_format(
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.api_format.as_deref()),
+    )
 }
 
 /// 提取 Codex 供应商实际使用的上游模型。
@@ -839,7 +857,10 @@ context_window = 500000
             adapter.extract_base_url(&provider).unwrap(),
             "https://relay.example.com/v1"
         );
-        assert_eq!(adapter.extract_auth(&provider).unwrap().api_key, "grok-secret");
+        assert_eq!(
+            adapter.extract_auth(&provider).unwrap().api_key,
+            "grok-secret"
+        );
         assert_eq!(
             codex_provider_upstream_model(&provider).as_deref(),
             Some("upstream-grok-model")
@@ -975,6 +996,19 @@ wire_api = "chat"
             &unknown,
             "/v1/responses"
         ));
+    }
+
+    #[test]
+    fn catalog_profile_uses_same_anthropic_detection_as_proxy() {
+        let provider = create_provider(json!({
+            "apiFormat": "anthropic",
+            "base_url": "https://example.com/v1/messages"
+        }));
+
+        assert_eq!(
+            resolve_codex_catalog_tool_profile(&provider),
+            crate::codex_config::CodexCatalogToolProfile::Anthropic
+        );
     }
 
     #[test]

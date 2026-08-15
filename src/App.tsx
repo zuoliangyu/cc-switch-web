@@ -34,7 +34,6 @@ import {
 } from "@/hooks/useHermes";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
-import { useAutoCompact } from "@/hooks/useAutoCompact";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
@@ -298,9 +297,6 @@ function App() {
 
   const effectiveEditingProvider = useLastValidValue(editingProvider);
   const effectiveUsageProvider = useLastValidValue(usageProvider);
-
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const isToolbarCompact = useAutoCompact(toolbarRef);
 
   const promptPanelRef = useRef<any>(null);
   const mcpPanelRef = useRef<any>(null);
@@ -957,10 +953,7 @@ function App() {
                   <ProfileSwitcher activeApp={activeApp} />
                 </div>
               )}
-            <div
-              ref={toolbarRef}
-              className="flex flex-1 min-w-0 overflow-x-hidden items-center"
-            >
+            <div className="flex flex-1 min-w-0 overflow-x-hidden items-center">
               <div className="flex shrink-0 items-center gap-1.5 ml-auto">
                 {currentView === "prompts" && (
                   <Button
@@ -1069,7 +1062,6 @@ function App() {
                       activeApp={activeApp}
                       onSwitch={setActiveApp}
                       visibleApps={visibleApps}
-                      compact={isToolbarCompact}
                     />
 
                     <DropdownMenu>

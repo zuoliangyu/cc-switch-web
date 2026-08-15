@@ -1007,6 +1007,14 @@ async fn fetch_provider_models(
     Ok(Json(models))
 }
 
+async fn get_opencode_models(
+) -> Result<Json<Vec<crate::commands::OpenCodeModelRef>>, ApiError> {
+    crate::commands::get_opencode_models_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
 async fn fetch_xai_oauth_models(
     State(state): State<WebApiState>,
     Query(query): Query<ManagedAccountModelsQuery>,
@@ -3736,6 +3744,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             post(test_usage_script),
         )
         .route("/api/providers/models/fetch", post(fetch_provider_models))
+        .route("/api/opencode/models", get(get_opencode_models))
         .route("/api/providers/endpoints/test", post(test_api_endpoints))
         .route(
             "/api/providers/:app/:id/custom-endpoints",

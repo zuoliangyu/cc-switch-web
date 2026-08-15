@@ -850,6 +850,12 @@ export async function fetchWebProviderModels(
   );
 }
 
+export async function getWebOpenCodeModels(): Promise<
+  import("@/lib/api/model-fetch").OpenCodeModelRef[]
+> {
+  return requestJson("/api/opencode/models");
+}
+
 /// 取后端进程能读到的 Windows 环境变量白名单映射，供前端展开 %USERPROFILE% 类占位符。
 export async function fetchWebWindowsEnvPaths(): Promise<
   Record<string, string>

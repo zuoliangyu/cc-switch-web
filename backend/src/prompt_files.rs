@@ -26,7 +26,8 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Claude | AppType::ClaudeDesktop => "CLAUDE.md",
         AppType::Codex => "AGENTS.md",
         AppType::Gemini => "GEMINI.md",
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => "AGENTS.md",
+        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => "AGENTS.md",
+        AppType::Hermes => "SOUL.md",
     };
 
     Ok(base_dir.join(filename))
@@ -47,4 +48,20 @@ fn get_base_dir_with_fallback(
                 format!("Cannot determine {fallback_dir} config directory: user home not found"),
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn w3_hermes_uses_soul_prompt_file() {
+        assert_eq!(
+            prompt_file_path(&AppType::Hermes)
+                .unwrap()
+                .file_name()
+                .and_then(|name| name.to_str()),
+            Some("SOUL.md")
+        );
+    }
 }

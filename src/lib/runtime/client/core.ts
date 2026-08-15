@@ -73,6 +73,7 @@ import {
   getWebProviderHealth,
   getWebProviderUsage,
   fetchWebProviderModels,
+  getWebOpenCodeModels,
   fetchWebWindowsEnvPaths,
   getWebProxyConfig,
   getWebProxyConfigForApp,
@@ -332,6 +333,8 @@ export async function invoke<T>(
         args?.modelsUrl as string | undefined,
         args?.customUserAgent as string | undefined,
       )) as T;
+    case "get_opencode_models":
+      return (await getWebOpenCodeModels()) as T;
     case "get_xai_oauth_models":
       return (await getWebXaiOauthModels(
         args?.accountId as string | null | undefined,

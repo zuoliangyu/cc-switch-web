@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W2 已完成，W3 待开始）
+> 状态：实施中（W0–W3 已完成，W4 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -153,13 +153,13 @@
 
 ### W3：Skills、Prompts、OMO 与原生配置
 
-- [ ] Skill 源目录以真实 `SKILL.md` 锚点解析，不被同名包装目录误导。
-- [ ] README URL 使用最终解析出的真实源目录。
-- [ ] SSOT 目录缺失时报告可更新，允许现有 update 流程重建。
-- [ ] Hermes Prompt 改用 `SOUL.md`。
-- [ ] OMO 优先写统一 `omo.jsonc` / `omo.json` 的 `[opencode]` 节点，保持注释、顺序和换行；round-trip 不安全时拒绝写入。
-- [ ] OMO 模型选择器合并 `opencode models` 运行时结果，固定安全工作目录、禁用项目插件发现并设置超时。
-- [ ] OpenCode Go、DeepSeek context window 及相关直连语义对齐。
+- [x] Skill 源目录以真实 `SKILL.md` 锚点解析，不被同名包装目录误导。
+- [x] README URL 使用最终解析出的真实源目录。
+- [x] SSOT 目录缺失时报告可更新，允许现有 update 流程重建。
+- [x] Hermes Prompt 改用 `SOUL.md`。
+- [x] OMO 优先写统一 `omo.jsonc` / `omo.json` 的 `[opencode]` 节点，保持注释、顺序和换行；round-trip 不安全时拒绝写入。
+- [x] OMO 模型选择器合并 `opencode models` 运行时结果，固定安全工作目录、禁用项目插件发现并设置超时。
+- [x] OpenCode Go、DeepSeek context window 及相关直连语义对齐。
 
 主要上游提交：`83830767`、`eb356e15`、`40b6376b`、`0345fad6`、`92ca95ff`、`967daa1a`、`390102a2`、`16cc0d7f`、`bef46cd5`。
 
@@ -513,3 +513,5 @@ W0 基线修复
 - W1 验证：content encoding 15/15、usage script timeout 1/1、Grok session 9/9、Proxy body limit 1/1、Deeplink 1/1、备份模块 34/34（另 2 项性能诊断测试按设计 ignored）通过；Skills 锁、WebDAV 排队抑制、导入失败 Skills 回滚、Windows 原子替换各 1/1 通过；`pnpm typecheck` 通过。
 - 2026-08-15：完成 W2。Codex session usage 对 fork timeline、交错计数、批量事务与 cursor 原子推进完成最终语义适配；Chat 转换补齐 dropped tool call 失败行为；Grok Build 固定 Responses 接管并补全 usage；Claude Desktop proxy/session 单向去重；Codex official 切换与接管恢复不再覆盖有效 ChatGPT 登录。Kimi、Zhipu 规则同步完成；Copilot 现代占位符与 `[1M]` 清理经审计已在 Web 基线存在，未制造重复实现。
 - W2 验证：Codex session usage 44/44（另 1 项 ignored）、streaming/non-streaming dropped tool call 各 1/1、Grok input token details 1/1、Kimi/DeepSeek reasoning 各 1/1、Zhipu `CREDIT_LIMIT` 1/1、Grok conversation header 1/1、Grok takeover Responses 1/1、Claude Desktop/session 去重 1/1、Codex 接管恢复保留登录 1/1、陈旧第三方 auth 识别 1/1 通过；`git diff --check` 通过。
+- 2026-08-15：完成 W3。Skills 安装以真实 `SKILL.md` 定位嵌套源目录并生成正确文档 URL，缺失 SSOT 不再被缓存哈希掩盖；Hermes Prompt 切换为 `SOUL.md`。OMO 支持统一 `~/.omo/omo.jsonc|json` 的 `[opencode]` 节点，保留 JSON5 注释、顺序、缩进和换行，写入前后校验语义并在并发修改时拒绝覆盖；旧 OMO 文件继续兼容。模型选择器合并隔离执行的 `opencode models` 结果，命令固定配置目录、禁用项目配置、20 秒超时。OpenCode Go 直连与 DeepSeek context window 同步完成。
+- W3 验证：OMO service 25/25、Skills/Hermes/OpenCode 命令边界 6/6、Claude/Claude Desktop 预设 15/15 通过；`pnpm typecheck`、`git diff --check` 通过。

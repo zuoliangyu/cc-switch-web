@@ -455,6 +455,76 @@ impl SkillService {
         Some(path.to_string())
     }
 
+    fn doc_path_for_source(repo_root: &Path, source: &Path) -> Option<String> {
+        let rel = source.strip_prefix(repo_root).ok()?;
+        let mut parts: Vec<String> = rel
+            .components()
+            .filter_map(|component| match component {
+                std::path::Component::Normal(part) => Some(part.to_string_lossy().to_string()),
+                _ => None,
+            })
+            .collect();
+        parts.push("SKILL.md".to_string());
+        Some(parts.join("/"))
+    }
+
+    fn choose_doc_path(
+        resolved_source_doc_path: Option<String>,
+        readme_url: Option<&str>,
+        directory: &str,
+    ) -> String {
+        if let Some(path) = resolved_source_doc_path {
+            return path;
+        }
+        if let Some(path) = readme_url.and_then(Self::extract_doc_path_from_url) {
+            if path.ends_with("/SKILL.md") || path == "SKILL.md" {
+                return path;
+            }
+            return format!("{}/SKILL.md", path.trim_end_matches('/'));
+        }
+        format!("{}/SKILL.md", directory.trim_end_matches('/'))
+    }
+
+    fn find_skill_dir_by_name(root: &Path, target_name: &str) -> Option<PathBuf> {
+        fn walk(dir: &Path, target: &str, depth: usize) -> Option<PathBuf> {
+            if depth > 3 {
+                return None;
+            }
+            for entry in fs::read_dir(dir).ok()?.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with('.') {
+                    continue;
+                }
+                if name.eq_ignore_ascii_case(target) && path.join("SKILL.md").is_file() {
+                    return Some(path);
+                }
+                if let Some(found) = walk(&path, target, depth + 1) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        walk(root, target_name, 0)
+    }
+
+    fn resolve_skill_source_dir(root: &Path, raw_directory: &str) -> Option<PathBuf> {
+        let source_rel = Self::sanitize_skill_source_path(raw_directory)?;
+        let install_name = source_rel.file_name()?.to_string_lossy().to_string();
+        let direct = root.join(&source_rel);
+        if direct.is_dir() && direct.join("SKILL.md").is_file() {
+            return Some(direct);
+        }
+        if let Some(found) = Self::find_skill_dir_by_name(root, &install_name) {
+            return Some(found);
+        }
+        root.join("SKILL.md").is_file().then(|| root.to_path_buf())
+    }
+
     // ========== 路径管理 ==========
 
     fn ssot_dir_for_location(location: SkillStorageLocation) -> PathBuf {
@@ -634,6 +704,7 @@ impl SkillService {
         let dest = ssot_dir.join(&install_name);
 
         let mut repo_branch = skill.repo_branch.clone();
+        let mut resolved_doc_path = None;
         let mut downloaded_source: Option<(tempfile::TempDir, PathBuf)> = None;
 
         // 如果已存在则跳过下载
@@ -666,14 +737,13 @@ impl SkillService {
             repo_branch = used_branch;
 
             // 复制到 SSOT
-            let source = temp_dir.join(&source_rel);
-            if !source.exists() {
-                return Err(anyhow!(format_skill_error(
+            let source = Self::resolve_skill_source_dir(temp_dir, &skill.directory).ok_or_else(|| {
+                anyhow!(format_skill_error(
                     "SKILL_DIR_NOT_FOUND",
-                    &[("path", &source.display().to_string())],
+                    &[("path", &temp_dir.join(&source_rel).display().to_string())],
                     Some("checkRepoUrl"),
-                )));
-            }
+                ))
+            })?;
 
             let canonical_temp = temp_dir
                 .canonicalize()
@@ -693,6 +763,7 @@ impl SkillService {
                 )));
             }
 
+            resolved_doc_path = Self::doc_path_for_source(&canonical_temp, &canonical_source);
             downloaded_source = Some((temp_guard, canonical_source));
 
             // 使用实际下载成功的分支，避免 readme_url / repo_branch 与真实分支不一致。
@@ -707,18 +778,11 @@ impl SkillService {
             }
         }
 
-        let doc_path = skill
-            .readme_url
-            .as_deref()
-            .and_then(Self::extract_doc_path_from_url)
-            .map(|path| {
-                if path.ends_with("/SKILL.md") || path == "SKILL.md" {
-                    path
-                } else {
-                    format!("{}/SKILL.md", path.trim_end_matches('/'))
-                }
-            })
-            .unwrap_or_else(|| format!("{}/SKILL.md", skill.directory.trim_end_matches('/')));
+        let doc_path = Self::choose_doc_path(
+            resolved_doc_path,
+            skill.readme_url.as_deref(),
+            &skill.directory,
+        );
 
         let readme_url = Some(Self::build_skill_doc_url(
             &skill.repo_owner,
@@ -875,6 +939,30 @@ impl SkillService {
         Ok(())
     }
 
+    fn local_hash_for_update_check(
+        ssot_dir: &Path,
+        raw_directory: &str,
+        cached_hash: Option<&str>,
+    ) -> Option<(String, bool)> {
+        let directory = match Self::require_valid_directory(raw_directory) {
+            Ok(directory) => directory,
+            Err(err) => {
+                log::warn!("Skill directory 非法，跳过本地目录检查: {err}");
+                return cached_hash.map(|hash| (hash.to_string(), false));
+            }
+        };
+        let local_dir = ssot_dir.join(directory);
+        if !local_dir.exists() {
+            return None;
+        }
+        if let Some(hash) = cached_hash {
+            return Some((hash.to_string(), false));
+        }
+        Self::compute_dir_hash(&local_dir)
+            .ok()
+            .map(|hash| (hash, true))
+    }
+
     /// 检查所有已安装 Skill 的更新
     ///
     /// 仅检查有 repo_owner 的 Skill（本地 Skill 跳过），
@@ -958,26 +1046,18 @@ impl SkillService {
                     }
                 };
 
-                let local_hash = match &skill.content_hash {
-                    Some(hash) => Some(hash.clone()),
-                    None => {
-                        let Ok(directory) = Self::require_valid_directory(&skill.directory) else {
-                            log::warn!("跳过非法 directory 的哈希计算: {:?}", skill.directory);
-                            continue;
-                        };
-                        let local_dir = ssot_dir.join(directory);
-                        if local_dir.exists() {
-                            match Self::compute_dir_hash(&local_dir) {
-                                Ok(hash) => {
-                                    let _ = db.update_skill_hash(&skill.id, &hash, 0);
-                                    Some(hash)
-                                }
-                                Err(_) => None,
-                            }
-                        } else {
-                            None
+                let local_hash = match Self::local_hash_for_update_check(
+                    &ssot_dir,
+                    &skill.directory,
+                    skill.content_hash.as_deref(),
+                ) {
+                    Some((hash, freshly_computed)) => {
+                        if freshly_computed {
+                            let _ = db.update_skill_hash(&skill.id, &hash, 0);
                         }
+                        Some(hash)
                     }
+                    None => None,
                 };
 
                 if local_hash.as_deref() != Some(&remote_hash) {
@@ -3555,5 +3635,46 @@ mod tests {
         assert!(dest.join("SKILL.md").is_file());
         assert!(!temp.path().join("nested").join("escaped.txt").exists());
         assert!(!dest.join("dir").join("link").exists());
+    }
+
+    #[test]
+    fn w3_source_resolution_uses_inner_skill_instead_of_same_name_wrapper() {
+        let temp = tempfile::tempdir().unwrap();
+        let wrapper = temp.path().join("ast-grep");
+        fs::create_dir_all(wrapper.join(".claude-plugin")).unwrap();
+        let real_skill = wrapper.join("skills").join("ast-grep");
+        write_skill(&real_skill, "ast-grep");
+
+        assert_eq!(
+            SkillService::resolve_skill_source_dir(temp.path(), "ast-grep"),
+            Some(real_skill)
+        );
+    }
+
+    #[test]
+    fn w3_resolved_source_builds_nested_readme_path() {
+        let root = Path::new("repo");
+        let source = root.join("skills").join("category").join("demo");
+        assert_eq!(
+            SkillService::doc_path_for_source(root, &source),
+            Some("skills/category/demo/SKILL.md".to_string())
+        );
+        assert_eq!(
+            SkillService::choose_doc_path(
+                Some("skills/category/demo/SKILL.md".to_string()),
+                Some("https://github.com/o/r"),
+                "demo",
+            ),
+            "skills/category/demo/SKILL.md"
+        );
+    }
+
+    #[test]
+    fn w3_update_check_ignores_cached_hash_when_ssot_dir_is_missing() {
+        let ssot = tempfile::tempdir().unwrap();
+        assert_eq!(
+            SkillService::local_hash_for_update_check(ssot.path(), "demo", Some("cached")),
+            None
+        );
     }
 }

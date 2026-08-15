@@ -796,7 +796,7 @@ export const claudeDesktopProviderPresets: ClaudeDesktopProviderPreset[] = [
     category: "third_party",
     baseUrl: "https://api.githubcopilot.com",
     mode: "proxy",
-    apiFormat: "openai_chat",
+    apiFormat: "anthropic",
     providerType: "github_copilot",
     requiresOAuth: true,
     modelRoutes: brandedRoutes(

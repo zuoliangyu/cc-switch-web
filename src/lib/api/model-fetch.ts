@@ -7,6 +7,15 @@ export interface FetchedModel {
   ownedBy: string | null;
 }
 
+export interface OpenCodeModelRef {
+  providerId: string;
+  modelId: string;
+}
+
+export async function getOpenCodeModels(): Promise<OpenCodeModelRef[]> {
+  return invoke("get_opencode_models");
+}
+
 export async function fetchModelsForConfig(
   baseUrl: string,
   apiKey: string,

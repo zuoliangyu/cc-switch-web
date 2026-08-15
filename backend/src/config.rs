@@ -213,8 +213,11 @@ fn sort_json_keys(value: &Value) -> Value {
     }
 }
 
-/// 写入 JSON 配置文件（键按字母排序，确保确定性输出）
-pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppError> {
+/// 写入 JSON 配置文件并返回实际写入的字节。
+pub fn write_json_file_with_contents<T: Serialize>(
+    path: &Path,
+    data: &T,
+) -> Result<Vec<u8>, AppError> {
     // 确保目录存在
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
@@ -225,7 +228,14 @@ pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppErr
     let json = serde_json::to_string_pretty(&sorted_value)
         .map_err(|e| AppError::JsonSerialize { source: e })?;
 
-    atomic_write(path, json.as_bytes())
+    let contents = json.into_bytes();
+    atomic_write(path, &contents)?;
+    Ok(contents)
+}
+
+/// 写入 JSON 配置文件（键按字母排序，确保确定性输出）
+pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppError> {
+    write_json_file_with_contents(path, data).map(|_| ())
 }
 
 /// 原子写入文本文件（用于 TOML/纯文本）

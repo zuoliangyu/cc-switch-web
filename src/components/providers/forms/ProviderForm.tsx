@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Form, FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { ImeSafeInput } from "@/components/ui/ime-safe-input";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
 import {
   buildLocalProxyRequestOverrides,
@@ -152,9 +152,8 @@ const codexApiFormatFromWireApi = (
 
 const codexCatalogCountFromSettings = (settingsConfig: unknown): number => {
   if (!settingsConfig || typeof settingsConfig !== "object") return 0;
-  const models = (
-    settingsConfig as { modelCatalog?: { models?: unknown } }
-  ).modelCatalog?.models;
+  const models = (settingsConfig as { modelCatalog?: { models?: unknown } })
+    .modelCatalog?.models;
   return Array.isArray(models) ? models.length : 0;
 };
 
@@ -231,6 +230,9 @@ const normalizeCodexChatReasoningForSave = (
     outputFormat: value?.outputFormat ?? "auto",
   };
 };
+
+const normalizeProviderKey = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9-]/g, "");
 
 export interface ProviderFormProps {
   appId: AppId;
@@ -569,8 +571,8 @@ function ProviderFormFull({
 
   // Codex API 格式（跟随上游 cc-switch 1c82b8a3）：优先 meta.apiFormat，
   // 其次从 TOML config 里的 wire_api 推断，回退到 openai_responses。
-  const [localCodexApiFormat, setLocalCodexApiFormat] = useState<CodexApiFormat>(
-    () => {
+  const [localCodexApiFormat, setLocalCodexApiFormat] =
+    useState<CodexApiFormat>(() => {
       if (initialData?.meta?.apiFormat === "openai_chat") return "openai_chat";
       if (initialData?.meta?.apiFormat === "openai_responses")
         return "openai_responses";
@@ -583,8 +585,7 @@ function ProviderFormFull({
           ),
         ) ?? "openai_responses"
       );
-    },
-  );
+    });
   const [codexTakeoverEnabled, setCodexTakeoverEnabled] = useState(
     () => codexCatalogCountFromSettings(initialData?.settingsConfig) > 0,
   );
@@ -1059,9 +1060,7 @@ function ProviderFormFull({
         toast.error(t("opencode.providerKeyInvalid"));
         return;
       }
-      if (
-        isProviderKeyLockStateLoading
-      ) {
+      if (isProviderKeyLockStateLoading) {
         toast.error(
           t("providerForm.providerKeyStatusLoading", {
             defaultValue: "正在加载供应商标识状态，请稍后再试",
@@ -1093,9 +1092,7 @@ function ProviderFormFull({
         toast.error(t("openclaw.providerKeyInvalid"));
         return;
       }
-      if (
-        isProviderKeyLockStateLoading
-      ) {
+      if (isProviderKeyLockStateLoading) {
         toast.error(
           t("providerForm.providerKeyStatusLoading", {
             defaultValue: "正在加载供应商标识状态，请稍后再试",
@@ -1804,532 +1801,531 @@ function ProviderFormFull({
           onSubmit={form.handleSubmit(handleSubmit)}
           className="space-y-6 glass rounded-xl p-6 border border-white/10"
         >
-        {!initialData && (
-          <ProviderPresetSelector
-            selectedPresetId={selectedPresetId}
-            presetEntries={presetEntries}
-            presetCategoryLabels={presetCategoryLabels}
-            onPresetChange={handlePresetChange}
-            onUniversalPresetSelect={onUniversalPresetSelect}
-            onManageUniversalProviders={onManageUniversalProviders}
-            category={category}
-          />
-        )}
-
-        <BasicFormFields
-          form={form}
-          beforeNameSlot={
-            appId === "opencode" && !isAnyOmoCategory ? (
-              <div className="space-y-2">
-                <Label htmlFor="opencode-key">
-                  {t("opencode.providerKey")}
-                  <span className="text-destructive ml-1">*</span>
-                </Label>
-                <Input
-                  id="opencode-key"
-                  value={opencodeForm.opencodeProviderKey}
-                  onChange={(e) =>
-                    opencodeForm.setOpencodeProviderKey(
-                      e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-                    )
-                  }
-                  placeholder={t("opencode.providerKeyPlaceholder")}
-                  disabled={
-                    isProviderKeyLocked || isProviderKeyLockStateLoading
-                  }
-                  className={
-                    (additiveExistingProviderKeys.includes(
-                      opencodeForm.opencodeProviderKey,
-                    ) &&
-                      !isProviderKeyLocked) ||
-                    (opencodeForm.opencodeProviderKey.trim() !== "" &&
-                      !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                        opencodeForm.opencodeProviderKey,
-                      ))
-                      ? "border-destructive"
-                      : ""
-                  }
-                />
-                {additiveExistingProviderKeys.includes(
-                  opencodeForm.opencodeProviderKey,
-                ) &&
-                  !isProviderKeyLocked && (
-                    <p className="text-xs text-destructive">
-                      {t("opencode.providerKeyDuplicate")}
-                    </p>
-                  )}
-                {opencodeForm.opencodeProviderKey.trim() !== "" &&
-                  !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                    opencodeForm.opencodeProviderKey,
-                  ) && (
-                    <p className="text-xs text-destructive">
-                      {t("opencode.providerKeyInvalid")}
-                    </p>
-                  )}
-                {!(
-                  additiveExistingProviderKeys.includes(
-                    opencodeForm.opencodeProviderKey,
-                  ) && !isProviderKeyLocked
-                ) &&
-                  (opencodeForm.opencodeProviderKey.trim() === "" ||
-                    /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                      opencodeForm.opencodeProviderKey,
-                    )) && (
-                    <p className="text-xs text-muted-foreground">
-                      {isProviderKeyLocked
-                        ? t("opencode.providerKeyLockedHint", {
-                            defaultValue:
-                              "该供应商已添加到应用配置中，供应商标识不可修改",
-                          })
-                        : t("opencode.providerKeyHint")}
-                    </p>
-                  )}
-              </div>
-            ) : appId === "openclaw" ? (
-              <div className="space-y-2">
-                <Label htmlFor="openclaw-key">
-                  {t("openclaw.providerKey")}
-                  <span className="text-destructive ml-1">*</span>
-                </Label>
-                <Input
-                  id="openclaw-key"
-                  value={openclawForm.openclawProviderKey}
-                  onChange={(e) =>
-                    openclawForm.setOpenclawProviderKey(
-                      e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-                    )
-                  }
-                  placeholder={t("openclaw.providerKeyPlaceholder")}
-                  disabled={
-                    isProviderKeyLocked || isProviderKeyLockStateLoading
-                  }
-                  className={
-                    (additiveExistingProviderKeys.includes(
-                      openclawForm.openclawProviderKey,
-                    ) &&
-                      !isProviderKeyLocked) ||
-                    (openclawForm.openclawProviderKey.trim() !== "" &&
-                      !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                        openclawForm.openclawProviderKey,
-                      ))
-                      ? "border-destructive"
-                      : ""
-                  }
-                />
-                {additiveExistingProviderKeys.includes(
-                  openclawForm.openclawProviderKey,
-                ) &&
-                  !isProviderKeyLocked && (
-                    <p className="text-xs text-destructive">
-                      {t("openclaw.providerKeyDuplicate")}
-                    </p>
-                  )}
-                {openclawForm.openclawProviderKey.trim() !== "" &&
-                  !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                    openclawForm.openclawProviderKey,
-                  ) && (
-                    <p className="text-xs text-destructive">
-                      {t("openclaw.providerKeyInvalid")}
-                    </p>
-                  )}
-                {!(
-                  additiveExistingProviderKeys.includes(
-                    openclawForm.openclawProviderKey,
-                  ) && !isProviderKeyLocked
-                ) &&
-                  (openclawForm.openclawProviderKey.trim() === "" ||
-                    /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                      openclawForm.openclawProviderKey,
-                    )) && (
-                    <p className="text-xs text-muted-foreground">
-                      {isProviderKeyLocked
-                        ? t("openclaw.providerKeyLockedHint", {
-                            defaultValue:
-                              "该供应商已添加到应用配置中，供应商标识不可修改",
-                          })
-                        : t("openclaw.providerKeyHint")}
-                    </p>
-                  )}
-              </div>
-            ) : appId === "hermes" ? (
-              <div className="space-y-2">
-                <Label htmlFor="hermes-key">
-                  {t("hermes.form.providerKey")}
-                  <span className="text-destructive ml-1">*</span>
-                </Label>
-                <Input
-                  id="hermes-key"
-                  value={hermesForm.hermesProviderKey}
-                  onChange={(e) =>
-                    hermesForm.setHermesProviderKey(
-                      e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-                    )
-                  }
-                  placeholder={t("hermes.form.providerKeyPlaceholder")}
-                  disabled={
-                    isProviderKeyLocked || isProviderKeyLockStateLoading
-                  }
-                  className={
-                    (additiveExistingProviderKeys.includes(
-                      hermesForm.hermesProviderKey,
-                    ) &&
-                      !isProviderKeyLocked) ||
-                    (hermesForm.hermesProviderKey.trim() !== "" &&
-                      !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                        hermesForm.hermesProviderKey,
-                      ))
-                      ? "border-destructive"
-                      : ""
-                  }
-                />
-                {additiveExistingProviderKeys.includes(
-                  hermesForm.hermesProviderKey,
-                ) &&
-                  !isProviderKeyLocked && (
-                    <p className="text-xs text-destructive">
-                      {t("hermes.form.providerKeyDuplicate")}
-                    </p>
-                  )}
-                {hermesForm.hermesProviderKey.trim() !== "" &&
-                  !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                    hermesForm.hermesProviderKey,
-                  ) && (
-                    <p className="text-xs text-destructive">
-                      {t("hermes.form.providerKeyInvalid")}
-                    </p>
-                  )}
-                {!(
-                  additiveExistingProviderKeys.includes(
-                    hermesForm.hermesProviderKey,
-                  ) && !isProviderKeyLocked
-                ) &&
-                  (hermesForm.hermesProviderKey.trim() === "" ||
-                    /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
-                      hermesForm.hermesProviderKey,
-                    )) && (
-                    <p className="text-xs text-muted-foreground">
-                      {isProviderKeyLocked
-                        ? t("hermes.form.providerKeyLockedHint")
-                        : t("hermes.form.providerKeyHint")}
-                    </p>
-                  )}
-              </div>
-            ) : undefined
-          }
-        />
-
-        {appId === "claude" && (
-          <ClaudeFormFields
-            providerId={providerId}
-            shouldShowApiKey={
-              (category !== "cloud_provider" ||
-                hasApiKeyField(form.getValues("settingsConfig"), "claude")) &&
-              shouldShowApiKey(form.getValues("settingsConfig"), isEditMode)
-            }
-            apiKey={apiKey}
-            onApiKeyChange={handleApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowClaudeApiKeyLink}
-            websiteUrl={claudeWebsiteUrl}
-            isPartner={isClaudePartner}
-            partnerPromotionKey={claudePartnerPromotionKey}
-            isCopilotPreset={
-              presetProviderType === "github_copilot" ||
-              initialData?.meta?.providerType === "github_copilot" ||
-              baseUrl.includes("githubcopilot.com")
-            }
-            isCodexOauthPreset={
-              presetProviderType === "codex_oauth" ||
-              initialData?.meta?.providerType === "codex_oauth"
-            }
-            isXaiOauthPreset={
-              presetProviderType === "xai_oauth" ||
-              initialData?.meta?.providerType === "xai_oauth"
-            }
-            usesOAuth={
-              templatePreset?.requiresOAuth === true ||
-              presetProviderType === "github_copilot" ||
-              presetProviderType === "codex_oauth" ||
-              presetProviderType === "xai_oauth" ||
-              initialData?.meta?.providerType === "github_copilot" ||
-              initialData?.meta?.providerType === "codex_oauth" ||
-              initialData?.meta?.providerType === "xai_oauth" ||
-              baseUrl.includes("githubcopilot.com")
-            }
-            isCopilotAuthenticated={isCopilotAuthenticated}
-            isCodexOauthAuthenticated={isCodexOauthAuthenticated}
-            selectedGitHubAccountId={selectedGitHubAccountId}
-            onGitHubAccountSelect={setSelectedGitHubAccountId}
-            selectedCodexAccountId={selectedCodexAccountId}
-            onCodexAccountSelect={setSelectedCodexAccountId}
-            selectedXaiAccountId={selectedXaiAccountId}
-            onXaiAccountSelect={setSelectedXaiAccountId}
-            templateValueEntries={templateValueEntries}
-            templateValues={templateValues}
-            templatePresetName={templatePreset?.name || ""}
-            onTemplateValueChange={handleTemplateValueChange}
-            shouldShowSpeedTest={shouldShowSpeedTest}
-            baseUrl={baseUrl}
-            onBaseUrlChange={handleClaudeBaseUrlChange}
-            isEndpointModalOpen={isEndpointModalOpen}
-            onEndpointModalToggle={setIsEndpointModalOpen}
-            onCustomEndpointsChange={
-              isEditMode ? undefined : setDraftCustomEndpoints
-            }
-            autoSelect={endpointAutoSelect}
-            onAutoSelectChange={setEndpointAutoSelect}
-            shouldShowModelSelector={category !== "official"}
-            claudeModel={claudeModel}
-            reasoningModel={reasoningModel}
-            defaultHaikuModel={defaultHaikuModel}
-            defaultSonnetModel={defaultSonnetModel}
-            defaultOpusModel={defaultOpusModel}
-            onModelChange={handleModelChange}
-            speedTestEndpoints={speedTestEndpoints}
-            apiFormat={localApiFormat}
-            onApiFormatChange={handleApiFormatChange}
-            apiKeyField={localApiKeyField}
-            onApiKeyFieldChange={handleApiKeyFieldChange}
-            isFullUrl={localIsFullUrl}
-            onFullUrlChange={setLocalIsFullUrl}
-            customUserAgent={customUserAgent}
-            onCustomUserAgentChange={setCustomUserAgent}
-            localProxyHeadersOverride={localProxyHeadersOverride}
-            onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
-            localProxyBodyOverride={localProxyBodyOverride}
-            onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
-          />
-        )}
-
-        {appId === "codex" && (
-          <CodexFormFields
-            providerId={providerId}
-            isXaiOauthPreset={
-              presetProviderType === "xai_oauth" ||
-              initialData?.meta?.providerType === "xai_oauth"
-            }
-            isXaiOauthAuthenticated={isXaiOauthAuthenticated}
-            selectedXaiAccountId={selectedXaiAccountId}
-            onXaiAccountSelect={setSelectedXaiAccountId}
-            codexApiKey={codexApiKey}
-            onApiKeyChange={handleCodexApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
-            websiteUrl={codexWebsiteUrl}
-            isPartner={isCodexPartner}
-            partnerPromotionKey={codexPartnerPromotionKey}
-            shouldShowSpeedTest={shouldShowSpeedTest}
-            codexBaseUrl={codexBaseUrl}
-            onBaseUrlChange={handleCodexBaseUrlChange}
-            isFullUrl={localIsFullUrl}
-            onFullUrlChange={setLocalIsFullUrl}
-            isEndpointModalOpen={isCodexEndpointModalOpen}
-            onEndpointModalToggle={setIsCodexEndpointModalOpen}
-            onCustomEndpointsChange={
-              isEditMode ? undefined : setDraftCustomEndpoints
-            }
-            autoSelect={endpointAutoSelect}
-            onAutoSelectChange={setEndpointAutoSelect}
-            takeoverEnabled={codexTakeoverEnabled}
-            onTakeoverEnabledChange={setCodexTakeoverEnabled}
-            apiFormat={localCodexApiFormat}
-            onApiFormatChange={handleCodexApiFormatChange}
-            shouldShowModelField={category !== "official"}
-            modelName={codexModelName}
-            onModelNameChange={handleCodexModelNameChange}
-            codexChatReasoning={codexChatReasoning}
-            onCodexChatReasoningChange={setCodexChatReasoning}
-            promptCacheRouting={promptCacheRouting}
-            onPromptCacheRoutingChange={setPromptCacheRouting}
-            catalogModels={codexCatalogModels}
-            onCatalogModelsChange={setCodexCatalogModels}
-            speedTestEndpoints={speedTestEndpoints}
-            customUserAgent={customUserAgent}
-            onCustomUserAgentChange={setCustomUserAgent}
-            localProxyHeadersOverride={localProxyHeadersOverride}
-            onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
-            localProxyBodyOverride={localProxyBodyOverride}
-            onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
-          />
-        )}
-
-        {appId === "gemini" && (
-          <GeminiFormFields
-            providerId={providerId}
-            shouldShowApiKey={shouldShowApiKey(
-              form.getValues("settingsConfig"),
-              isEditMode,
-            )}
-            apiKey={geminiApiKey}
-            onApiKeyChange={handleGeminiApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowGeminiApiKeyLink}
-            websiteUrl={geminiWebsiteUrl}
-            isPartner={isGeminiPartner}
-            partnerPromotionKey={geminiPartnerPromotionKey}
-            shouldShowSpeedTest={shouldShowSpeedTest}
-            baseUrl={geminiBaseUrl}
-            onBaseUrlChange={handleGeminiBaseUrlChange}
-            isEndpointModalOpen={isEndpointModalOpen}
-            onEndpointModalToggle={setIsEndpointModalOpen}
-            onCustomEndpointsChange={setDraftCustomEndpoints}
-            autoSelect={endpointAutoSelect}
-            onAutoSelectChange={setEndpointAutoSelect}
-            shouldShowModelField={true}
-            model={geminiModel}
-            onModelChange={handleGeminiModelChange}
-            speedTestEndpoints={speedTestEndpoints}
-          />
-        )}
-
-        {appId === "opencode" && !isAnyOmoCategory && (
-          <OpenCodeFormFields
-            npm={opencodeForm.opencodeNpm}
-            onNpmChange={opencodeForm.handleOpencodeNpmChange}
-            apiKey={opencodeForm.opencodeApiKey}
-            onApiKeyChange={opencodeForm.handleOpencodeApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowOpencodeApiKeyLink}
-            websiteUrl={opencodeWebsiteUrl}
-            isPartner={isOpencodePartner}
-            partnerPromotionKey={opencodePartnerPromotionKey}
-            baseUrl={opencodeForm.opencodeBaseUrl}
-            onBaseUrlChange={opencodeForm.handleOpencodeBaseUrlChange}
-            models={opencodeForm.opencodeModels}
-            onModelsChange={opencodeForm.handleOpencodeModelsChange}
-            extraOptions={opencodeForm.opencodeExtraOptions}
-            onExtraOptionsChange={opencodeForm.handleOpencodeExtraOptionsChange}
-          />
-        )}
-
-        {appId === "opencode" &&
-          (category === "omo" || category === "omo-slim") && (
-            <OmoFormFields
-              modelOptions={omoModelOptions}
-              modelVariantsMap={omoModelVariantsMap}
-              presetMetaMap={omoPresetMetaMap}
-              agents={omoDraft.omoAgents}
-              onAgentsChange={omoDraft.setOmoAgents}
-              categories={
-                category === "omo" ? omoDraft.omoCategories : undefined
-              }
-              onCategoriesChange={
-                category === "omo" ? omoDraft.setOmoCategories : undefined
-              }
-              otherFieldsStr={omoDraft.omoOtherFieldsStr}
-              onOtherFieldsStrChange={omoDraft.setOmoOtherFieldsStr}
-              isSlim={category === "omo-slim"}
+          {!initialData && (
+            <ProviderPresetSelector
+              selectedPresetId={selectedPresetId}
+              presetEntries={presetEntries}
+              presetCategoryLabels={presetCategoryLabels}
+              onPresetChange={handlePresetChange}
+              onUniversalPresetSelect={onUniversalPresetSelect}
+              onManageUniversalProviders={onManageUniversalProviders}
+              category={category}
             />
           )}
 
-        {/* OpenClaw 专属字段 */}
-        {appId === "openclaw" && (
-          <OpenClawFormFields
-            baseUrl={openclawForm.openclawBaseUrl}
-            onBaseUrlChange={openclawForm.handleOpenclawBaseUrlChange}
-            apiKey={openclawForm.openclawApiKey}
-            onApiKeyChange={openclawForm.handleOpenclawApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowOpenclawApiKeyLink}
-            websiteUrl={openclawWebsiteUrl}
-            isPartner={isOpenclawPartner}
-            partnerPromotionKey={openclawPartnerPromotionKey}
-            api={openclawForm.openclawApi}
-            onApiChange={openclawForm.handleOpenclawApiChange}
-            models={openclawForm.openclawModels}
-            onModelsChange={openclawForm.handleOpenclawModelsChange}
-            userAgent={openclawForm.openclawUserAgent}
-            onUserAgentChange={openclawForm.handleOpenclawUserAgentChange}
-          />
-        )}
-
-        {appId === "hermes" && (
-          <HermesFormFields
-            baseUrl={hermesForm.hermesBaseUrl}
-            onBaseUrlChange={hermesForm.handleHermesBaseUrlChange}
-            apiKey={hermesForm.hermesApiKey}
-            onApiKeyChange={hermesForm.handleHermesApiKeyChange}
-            category={category}
-            shouldShowApiKeyLink={shouldShowHermesApiKeyLink}
-            websiteUrl={hermesWebsiteUrl}
-            isPartner={isHermesPartner}
-            partnerPromotionKey={hermesPartnerPromotionKey}
-            apiMode={hermesForm.hermesApiMode}
-            onApiModeChange={hermesForm.handleHermesApiModeChange}
-            models={hermesForm.hermesModels}
-            onModelsChange={hermesForm.handleHermesModelsChange}
-            rateLimitDelay={hermesForm.hermesRateLimitDelay}
-            onRateLimitDelayChange={
-              hermesForm.handleHermesRateLimitDelayChange
+          <BasicFormFields
+            form={form}
+            beforeNameSlot={
+              appId === "opencode" && !isAnyOmoCategory ? (
+                <div className="space-y-2">
+                  <Label htmlFor="opencode-key">
+                    {t("opencode.providerKey")}
+                    <span className="text-destructive ml-1">*</span>
+                  </Label>
+                  <ImeSafeInput
+                    id="opencode-key"
+                    value={opencodeForm.opencodeProviderKey}
+                    onValueChange={opencodeForm.setOpencodeProviderKey}
+                    normalize={normalizeProviderKey}
+                    placeholder={t("opencode.providerKeyPlaceholder")}
+                    disabled={
+                      isProviderKeyLocked || isProviderKeyLockStateLoading
+                    }
+                    className={
+                      (additiveExistingProviderKeys.includes(
+                        opencodeForm.opencodeProviderKey,
+                      ) &&
+                        !isProviderKeyLocked) ||
+                      (opencodeForm.opencodeProviderKey.trim() !== "" &&
+                        !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                          opencodeForm.opencodeProviderKey,
+                        ))
+                        ? "border-destructive"
+                        : ""
+                    }
+                  />
+                  {additiveExistingProviderKeys.includes(
+                    opencodeForm.opencodeProviderKey,
+                  ) &&
+                    !isProviderKeyLocked && (
+                      <p className="text-xs text-destructive">
+                        {t("opencode.providerKeyDuplicate")}
+                      </p>
+                    )}
+                  {opencodeForm.opencodeProviderKey.trim() !== "" &&
+                    !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                      opencodeForm.opencodeProviderKey,
+                    ) && (
+                      <p className="text-xs text-destructive">
+                        {t("opencode.providerKeyInvalid")}
+                      </p>
+                    )}
+                  {!(
+                    additiveExistingProviderKeys.includes(
+                      opencodeForm.opencodeProviderKey,
+                    ) && !isProviderKeyLocked
+                  ) &&
+                    (opencodeForm.opencodeProviderKey.trim() === "" ||
+                      /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                        opencodeForm.opencodeProviderKey,
+                      )) && (
+                      <p className="text-xs text-muted-foreground">
+                        {isProviderKeyLocked
+                          ? t("opencode.providerKeyLockedHint", {
+                              defaultValue:
+                                "该供应商已添加到应用配置中，供应商标识不可修改",
+                            })
+                          : t("opencode.providerKeyHint")}
+                      </p>
+                    )}
+                </div>
+              ) : appId === "openclaw" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="openclaw-key">
+                    {t("openclaw.providerKey")}
+                    <span className="text-destructive ml-1">*</span>
+                  </Label>
+                  <ImeSafeInput
+                    id="openclaw-key"
+                    value={openclawForm.openclawProviderKey}
+                    onValueChange={openclawForm.setOpenclawProviderKey}
+                    normalize={normalizeProviderKey}
+                    placeholder={t("openclaw.providerKeyPlaceholder")}
+                    disabled={
+                      isProviderKeyLocked || isProviderKeyLockStateLoading
+                    }
+                    className={
+                      (additiveExistingProviderKeys.includes(
+                        openclawForm.openclawProviderKey,
+                      ) &&
+                        !isProviderKeyLocked) ||
+                      (openclawForm.openclawProviderKey.trim() !== "" &&
+                        !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                          openclawForm.openclawProviderKey,
+                        ))
+                        ? "border-destructive"
+                        : ""
+                    }
+                  />
+                  {additiveExistingProviderKeys.includes(
+                    openclawForm.openclawProviderKey,
+                  ) &&
+                    !isProviderKeyLocked && (
+                      <p className="text-xs text-destructive">
+                        {t("openclaw.providerKeyDuplicate")}
+                      </p>
+                    )}
+                  {openclawForm.openclawProviderKey.trim() !== "" &&
+                    !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                      openclawForm.openclawProviderKey,
+                    ) && (
+                      <p className="text-xs text-destructive">
+                        {t("openclaw.providerKeyInvalid")}
+                      </p>
+                    )}
+                  {!(
+                    additiveExistingProviderKeys.includes(
+                      openclawForm.openclawProviderKey,
+                    ) && !isProviderKeyLocked
+                  ) &&
+                    (openclawForm.openclawProviderKey.trim() === "" ||
+                      /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                        openclawForm.openclawProviderKey,
+                      )) && (
+                      <p className="text-xs text-muted-foreground">
+                        {isProviderKeyLocked
+                          ? t("openclaw.providerKeyLockedHint", {
+                              defaultValue:
+                                "该供应商已添加到应用配置中，供应商标识不可修改",
+                            })
+                          : t("openclaw.providerKeyHint")}
+                      </p>
+                    )}
+                </div>
+              ) : appId === "hermes" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="hermes-key">
+                    {t("hermes.form.providerKey")}
+                    <span className="text-destructive ml-1">*</span>
+                  </Label>
+                  <ImeSafeInput
+                    id="hermes-key"
+                    value={hermesForm.hermesProviderKey}
+                    onValueChange={hermesForm.setHermesProviderKey}
+                    normalize={normalizeProviderKey}
+                    placeholder={t("hermes.form.providerKeyPlaceholder")}
+                    disabled={
+                      isProviderKeyLocked || isProviderKeyLockStateLoading
+                    }
+                    className={
+                      (additiveExistingProviderKeys.includes(
+                        hermesForm.hermesProviderKey,
+                      ) &&
+                        !isProviderKeyLocked) ||
+                      (hermesForm.hermesProviderKey.trim() !== "" &&
+                        !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                          hermesForm.hermesProviderKey,
+                        ))
+                        ? "border-destructive"
+                        : ""
+                    }
+                  />
+                  {additiveExistingProviderKeys.includes(
+                    hermesForm.hermesProviderKey,
+                  ) &&
+                    !isProviderKeyLocked && (
+                      <p className="text-xs text-destructive">
+                        {t("hermes.form.providerKeyDuplicate")}
+                      </p>
+                    )}
+                  {hermesForm.hermesProviderKey.trim() !== "" &&
+                    !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                      hermesForm.hermesProviderKey,
+                    ) && (
+                      <p className="text-xs text-destructive">
+                        {t("hermes.form.providerKeyInvalid")}
+                      </p>
+                    )}
+                  {!(
+                    additiveExistingProviderKeys.includes(
+                      hermesForm.hermesProviderKey,
+                    ) && !isProviderKeyLocked
+                  ) &&
+                    (hermesForm.hermesProviderKey.trim() === "" ||
+                      /^[a-z0-9]+(-[a-z0-9]+)*$/.test(
+                        hermesForm.hermesProviderKey,
+                      )) && (
+                      <p className="text-xs text-muted-foreground">
+                        {isProviderKeyLocked
+                          ? t("hermes.form.providerKeyLockedHint")
+                          : t("hermes.form.providerKeyHint")}
+                      </p>
+                    )}
+                </div>
+              ) : undefined
             }
           />
-        )}
 
-        {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器 */}
-        {appId === "codex" ? (
-          <>
-            <CodexConfigEditor
-              authValue={codexAuth}
-              configValue={codexConfig}
-              onAuthChange={setCodexAuth}
-              onConfigChange={handleCodexConfigChange}
-              useCommonConfig={useCodexCommonConfigFlag}
-              onCommonConfigToggle={handleCodexCommonConfigToggle}
-              commonConfigSnippet={codexCommonConfigSnippet}
-              onCommonConfigSnippetChange={handleCodexCommonConfigSnippetChange}
-              onCommonConfigErrorClear={clearCodexCommonConfigError}
-              commonConfigError={codexCommonConfigError}
-              authError={codexAuthError}
-              configError={codexConfigError}
-              onExtract={handleCodexExtract}
-              isExtracting={isCodexExtracting}
-            />
-            {settingsConfigErrorField}
-          </>
-        ) : appId === "gemini" ? (
-          <>
-            <GeminiConfigEditor
-              envValue={geminiEnv}
-              configValue={geminiConfig}
-              onEnvChange={handleGeminiEnvChange}
-              onConfigChange={handleGeminiConfigChange}
-              useCommonConfig={useGeminiCommonConfigFlag}
-              onCommonConfigToggle={handleGeminiCommonConfigToggle}
-              commonConfigSnippet={geminiCommonConfigSnippet}
-              onCommonConfigSnippetChange={
-                handleGeminiCommonConfigSnippetChange
+          {appId === "claude" && (
+            <ClaudeFormFields
+              providerId={providerId}
+              shouldShowApiKey={
+                (category !== "cloud_provider" ||
+                  hasApiKeyField(form.getValues("settingsConfig"), "claude")) &&
+                shouldShowApiKey(form.getValues("settingsConfig"), isEditMode)
               }
-              onCommonConfigErrorClear={clearGeminiCommonConfigError}
-              commonConfigError={geminiCommonConfigError}
-              envError={envError}
-              configError={geminiConfigError}
-              onExtract={handleGeminiExtract}
-              isExtracting={isGeminiExtracting}
+              apiKey={apiKey}
+              onApiKeyChange={handleApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowClaudeApiKeyLink}
+              websiteUrl={claudeWebsiteUrl}
+              isPartner={isClaudePartner}
+              partnerPromotionKey={claudePartnerPromotionKey}
+              isCopilotPreset={
+                presetProviderType === "github_copilot" ||
+                initialData?.meta?.providerType === "github_copilot" ||
+                baseUrl.includes("githubcopilot.com")
+              }
+              isCodexOauthPreset={
+                presetProviderType === "codex_oauth" ||
+                initialData?.meta?.providerType === "codex_oauth"
+              }
+              isXaiOauthPreset={
+                presetProviderType === "xai_oauth" ||
+                initialData?.meta?.providerType === "xai_oauth"
+              }
+              usesOAuth={
+                templatePreset?.requiresOAuth === true ||
+                presetProviderType === "github_copilot" ||
+                presetProviderType === "codex_oauth" ||
+                presetProviderType === "xai_oauth" ||
+                initialData?.meta?.providerType === "github_copilot" ||
+                initialData?.meta?.providerType === "codex_oauth" ||
+                initialData?.meta?.providerType === "xai_oauth" ||
+                baseUrl.includes("githubcopilot.com")
+              }
+              isCopilotAuthenticated={isCopilotAuthenticated}
+              isCodexOauthAuthenticated={isCodexOauthAuthenticated}
+              selectedGitHubAccountId={selectedGitHubAccountId}
+              onGitHubAccountSelect={setSelectedGitHubAccountId}
+              selectedCodexAccountId={selectedCodexAccountId}
+              onCodexAccountSelect={setSelectedCodexAccountId}
+              selectedXaiAccountId={selectedXaiAccountId}
+              onXaiAccountSelect={setSelectedXaiAccountId}
+              templateValueEntries={templateValueEntries}
+              templateValues={templateValues}
+              templatePresetName={templatePreset?.name || ""}
+              onTemplateValueChange={handleTemplateValueChange}
+              shouldShowSpeedTest={shouldShowSpeedTest}
+              baseUrl={baseUrl}
+              onBaseUrlChange={handleClaudeBaseUrlChange}
+              isEndpointModalOpen={isEndpointModalOpen}
+              onEndpointModalToggle={setIsEndpointModalOpen}
+              onCustomEndpointsChange={
+                isEditMode ? undefined : setDraftCustomEndpoints
+              }
+              autoSelect={endpointAutoSelect}
+              onAutoSelectChange={setEndpointAutoSelect}
+              shouldShowModelSelector={category !== "official"}
+              claudeModel={claudeModel}
+              reasoningModel={reasoningModel}
+              defaultHaikuModel={defaultHaikuModel}
+              defaultSonnetModel={defaultSonnetModel}
+              defaultOpusModel={defaultOpusModel}
+              onModelChange={handleModelChange}
+              speedTestEndpoints={speedTestEndpoints}
+              apiFormat={localApiFormat}
+              onApiFormatChange={handleApiFormatChange}
+              apiKeyField={localApiKeyField}
+              onApiKeyFieldChange={handleApiKeyFieldChange}
+              isFullUrl={localIsFullUrl}
+              onFullUrlChange={setLocalIsFullUrl}
+              customUserAgent={customUserAgent}
+              onCustomUserAgentChange={setCustomUserAgent}
+              localProxyHeadersOverride={localProxyHeadersOverride}
+              onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
+              localProxyBodyOverride={localProxyBodyOverride}
+              onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
             />
-            {settingsConfigErrorField}
-          </>
-        ) : appId === "opencode" &&
-          (category === "omo" || category === "omo-slim") ? (
-          <div className="space-y-2">
-            <Label>{t("provider.configJson")}</Label>
-            <JsonEditor
-              value={omoDraft.mergedOmoJsonPreview}
-              onChange={() => {}}
-              rows={14}
-              showValidation={false}
-              language="json"
+          )}
+
+          {appId === "codex" && (
+            <CodexFormFields
+              providerId={providerId}
+              isXaiOauthPreset={
+                presetProviderType === "xai_oauth" ||
+                initialData?.meta?.providerType === "xai_oauth"
+              }
+              isXaiOauthAuthenticated={isXaiOauthAuthenticated}
+              selectedXaiAccountId={selectedXaiAccountId}
+              onXaiAccountSelect={setSelectedXaiAccountId}
+              codexApiKey={codexApiKey}
+              onApiKeyChange={handleCodexApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
+              websiteUrl={codexWebsiteUrl}
+              isPartner={isCodexPartner}
+              partnerPromotionKey={codexPartnerPromotionKey}
+              shouldShowSpeedTest={shouldShowSpeedTest}
+              codexBaseUrl={codexBaseUrl}
+              onBaseUrlChange={handleCodexBaseUrlChange}
+              isFullUrl={localIsFullUrl}
+              onFullUrlChange={setLocalIsFullUrl}
+              isEndpointModalOpen={isCodexEndpointModalOpen}
+              onEndpointModalToggle={setIsCodexEndpointModalOpen}
+              onCustomEndpointsChange={
+                isEditMode ? undefined : setDraftCustomEndpoints
+              }
+              autoSelect={endpointAutoSelect}
+              onAutoSelectChange={setEndpointAutoSelect}
+              takeoverEnabled={codexTakeoverEnabled}
+              onTakeoverEnabledChange={setCodexTakeoverEnabled}
+              apiFormat={localCodexApiFormat}
+              onApiFormatChange={handleCodexApiFormatChange}
+              shouldShowModelField={category !== "official"}
+              modelName={codexModelName}
+              onModelNameChange={handleCodexModelNameChange}
+              codexChatReasoning={codexChatReasoning}
+              onCodexChatReasoningChange={setCodexChatReasoning}
+              promptCacheRouting={promptCacheRouting}
+              onPromptCacheRoutingChange={setPromptCacheRouting}
+              catalogModels={codexCatalogModels}
+              onCatalogModelsChange={setCodexCatalogModels}
+              speedTestEndpoints={speedTestEndpoints}
+              customUserAgent={customUserAgent}
+              onCustomUserAgentChange={setCustomUserAgent}
+              localProxyHeadersOverride={localProxyHeadersOverride}
+              onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
+              localProxyBodyOverride={localProxyBodyOverride}
+              onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
             />
-          </div>
-        ) : appId === "opencode" &&
-          category !== "omo" &&
-          category !== "omo-slim" ? (
-          <>
+          )}
+
+          {appId === "gemini" && (
+            <GeminiFormFields
+              providerId={providerId}
+              shouldShowApiKey={shouldShowApiKey(
+                form.getValues("settingsConfig"),
+                isEditMode,
+              )}
+              apiKey={geminiApiKey}
+              onApiKeyChange={handleGeminiApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowGeminiApiKeyLink}
+              websiteUrl={geminiWebsiteUrl}
+              isPartner={isGeminiPartner}
+              partnerPromotionKey={geminiPartnerPromotionKey}
+              shouldShowSpeedTest={shouldShowSpeedTest}
+              baseUrl={geminiBaseUrl}
+              onBaseUrlChange={handleGeminiBaseUrlChange}
+              isEndpointModalOpen={isEndpointModalOpen}
+              onEndpointModalToggle={setIsEndpointModalOpen}
+              onCustomEndpointsChange={setDraftCustomEndpoints}
+              autoSelect={endpointAutoSelect}
+              onAutoSelectChange={setEndpointAutoSelect}
+              shouldShowModelField={true}
+              model={geminiModel}
+              onModelChange={handleGeminiModelChange}
+              speedTestEndpoints={speedTestEndpoints}
+            />
+          )}
+
+          {appId === "opencode" && !isAnyOmoCategory && (
+            <OpenCodeFormFields
+              npm={opencodeForm.opencodeNpm}
+              onNpmChange={opencodeForm.handleOpencodeNpmChange}
+              apiKey={opencodeForm.opencodeApiKey}
+              onApiKeyChange={opencodeForm.handleOpencodeApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowOpencodeApiKeyLink}
+              websiteUrl={opencodeWebsiteUrl}
+              isPartner={isOpencodePartner}
+              partnerPromotionKey={opencodePartnerPromotionKey}
+              baseUrl={opencodeForm.opencodeBaseUrl}
+              onBaseUrlChange={opencodeForm.handleOpencodeBaseUrlChange}
+              headers={opencodeForm.opencodeHeaders}
+              onHeadersChange={opencodeForm.handleOpencodeHeadersChange}
+              models={opencodeForm.opencodeModels}
+              onModelsChange={opencodeForm.handleOpencodeModelsChange}
+              extraOptions={opencodeForm.opencodeExtraOptions}
+              onExtraOptionsChange={
+                opencodeForm.handleOpencodeExtraOptionsChange
+              }
+            />
+          )}
+
+          {appId === "opencode" &&
+            (category === "omo" || category === "omo-slim") && (
+              <OmoFormFields
+                modelOptions={omoModelOptions}
+                modelVariantsMap={omoModelVariantsMap}
+                presetMetaMap={omoPresetMetaMap}
+                agents={omoDraft.omoAgents}
+                onAgentsChange={omoDraft.setOmoAgents}
+                categories={
+                  category === "omo" ? omoDraft.omoCategories : undefined
+                }
+                onCategoriesChange={
+                  category === "omo" ? omoDraft.setOmoCategories : undefined
+                }
+                otherFieldsStr={omoDraft.omoOtherFieldsStr}
+                onOtherFieldsStrChange={omoDraft.setOmoOtherFieldsStr}
+                isSlim={category === "omo-slim"}
+              />
+            )}
+
+          {/* OpenClaw 专属字段 */}
+          {appId === "openclaw" && (
+            <OpenClawFormFields
+              baseUrl={openclawForm.openclawBaseUrl}
+              onBaseUrlChange={openclawForm.handleOpenclawBaseUrlChange}
+              apiKey={openclawForm.openclawApiKey}
+              onApiKeyChange={openclawForm.handleOpenclawApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowOpenclawApiKeyLink}
+              websiteUrl={openclawWebsiteUrl}
+              isPartner={isOpenclawPartner}
+              partnerPromotionKey={openclawPartnerPromotionKey}
+              api={openclawForm.openclawApi}
+              onApiChange={openclawForm.handleOpenclawApiChange}
+              models={openclawForm.openclawModels}
+              onModelsChange={openclawForm.handleOpenclawModelsChange}
+              userAgent={openclawForm.openclawUserAgent}
+              onUserAgentChange={openclawForm.handleOpenclawUserAgentChange}
+            />
+          )}
+
+          {appId === "hermes" && (
+            <HermesFormFields
+              baseUrl={hermesForm.hermesBaseUrl}
+              onBaseUrlChange={hermesForm.handleHermesBaseUrlChange}
+              apiKey={hermesForm.hermesApiKey}
+              onApiKeyChange={hermesForm.handleHermesApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={shouldShowHermesApiKeyLink}
+              websiteUrl={hermesWebsiteUrl}
+              isPartner={isHermesPartner}
+              partnerPromotionKey={hermesPartnerPromotionKey}
+              apiMode={hermesForm.hermesApiMode}
+              onApiModeChange={hermesForm.handleHermesApiModeChange}
+              models={hermesForm.hermesModels}
+              onModelsChange={hermesForm.handleHermesModelsChange}
+              rateLimitDelay={hermesForm.hermesRateLimitDelay}
+              onRateLimitDelayChange={
+                hermesForm.handleHermesRateLimitDelayChange
+              }
+            />
+          )}
+
+          {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器 */}
+          {appId === "codex" ? (
+            <>
+              <CodexConfigEditor
+                authValue={codexAuth}
+                configValue={codexConfig}
+                onAuthChange={setCodexAuth}
+                onConfigChange={handleCodexConfigChange}
+                useCommonConfig={useCodexCommonConfigFlag}
+                onCommonConfigToggle={handleCodexCommonConfigToggle}
+                commonConfigSnippet={codexCommonConfigSnippet}
+                onCommonConfigSnippetChange={
+                  handleCodexCommonConfigSnippetChange
+                }
+                onCommonConfigErrorClear={clearCodexCommonConfigError}
+                commonConfigError={codexCommonConfigError}
+                authError={codexAuthError}
+                configError={codexConfigError}
+                onExtract={handleCodexExtract}
+                isExtracting={isCodexExtracting}
+              />
+              {settingsConfigErrorField}
+            </>
+          ) : appId === "gemini" ? (
+            <>
+              <GeminiConfigEditor
+                envValue={geminiEnv}
+                configValue={geminiConfig}
+                onEnvChange={handleGeminiEnvChange}
+                onConfigChange={handleGeminiConfigChange}
+                useCommonConfig={useGeminiCommonConfigFlag}
+                onCommonConfigToggle={handleGeminiCommonConfigToggle}
+                commonConfigSnippet={geminiCommonConfigSnippet}
+                onCommonConfigSnippetChange={
+                  handleGeminiCommonConfigSnippetChange
+                }
+                onCommonConfigErrorClear={clearGeminiCommonConfigError}
+                commonConfigError={geminiCommonConfigError}
+                envError={envError}
+                configError={geminiConfigError}
+                onExtract={handleGeminiExtract}
+                isExtracting={isGeminiExtracting}
+              />
+              {settingsConfigErrorField}
+            </>
+          ) : appId === "opencode" &&
+            (category === "omo" || category === "omo-slim") ? (
             <div className="space-y-2">
-              <Label htmlFor="settingsConfig">{t("provider.configJson")}</Label>
+              <Label>{t("provider.configJson")}</Label>
               <JsonEditor
-                value={form.getValues("settingsConfig")}
-                onChange={(config) => form.setValue("settingsConfig", config)}
-                placeholder={`{
+                value={omoDraft.mergedOmoJsonPreview}
+                onChange={() => {}}
+                rows={3}
+                showValidation={false}
+                language="json"
+              />
+            </div>
+          ) : appId === "opencode" &&
+            category !== "omo" &&
+            category !== "omo-slim" ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="settingsConfig">
+                  {t("provider.configJson")}
+                </Label>
+                <JsonEditor
+                  value={form.getValues("settingsConfig")}
+                  onChange={(config) => form.setValue("settingsConfig", config)}
+                  placeholder={`{
   "npm": "@ai-sdk/openai-compatible",
   "options": {
     "baseURL": "https://your-api-endpoint.com",
@@ -2337,82 +2333,84 @@ function ProviderFormFull({
   },
   "models": {}
 }`}
-                rows={14}
-                showValidation={true}
-                language="json"
-              />
-            </div>
-            {settingsConfigErrorField}
-          </>
-        ) : appId === "openclaw" || appId === "hermes" ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="settingsConfig">{t("provider.configJson")}</Label>
-              <JsonEditor
-                value={form.getValues("settingsConfig")}
-                onChange={(config) => form.setValue("settingsConfig", config)}
-              placeholder={
-                appId === "hermes"
-                  ? `{
+                  rows={3}
+                  showValidation={true}
+                  language="json"
+                />
+              </div>
+              {settingsConfigErrorField}
+            </>
+          ) : appId === "openclaw" || appId === "hermes" ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="settingsConfig">
+                  {t("provider.configJson")}
+                </Label>
+                <JsonEditor
+                  value={form.getValues("settingsConfig")}
+                  onChange={(config) => form.setValue("settingsConfig", config)}
+                  placeholder={
+                    appId === "hermes"
+                      ? `{
   "name": "my-provider",
   "base_url": "https://api.example.com/v1",
   "api_key": ""
 }`
-                  : `{
+                      : `{
   "baseUrl": "https://api.example.com/v1",
   "apiKey": "your-api-key-here",
   "api": "openai-completions",
   "models": []
 }`
-              }
-                rows={14}
-                showValidation={true}
-                language="json"
+                  }
+                  rows={3}
+                  showValidation={true}
+                  language="json"
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="settingsConfig"
+                render={() => (
+                  <FormItem className="space-y-0">
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <FormField
-              control={form.control}
-              name="settingsConfig"
-              render={() => (
-                <FormItem className="space-y-0">
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
-        ) : (
-          <>
-            <CommonConfigEditor
-              value={form.getValues("settingsConfig")}
-              onChange={(value) => form.setValue("settingsConfig", value)}
-              useCommonConfig={useCommonConfig}
-              onCommonConfigToggle={handleCommonConfigToggle}
-              commonConfigSnippet={commonConfigSnippet}
-              onCommonConfigSnippetChange={handleCommonConfigSnippetChange}
-              commonConfigError={commonConfigError}
-              onEditClick={() => setIsCommonConfigModalOpen(true)}
-              isModalOpen={isCommonConfigModalOpen}
-              onModalClose={() => setIsCommonConfigModalOpen(false)}
-              onExtract={handleClaudeExtract}
-              isExtracting={isClaudeExtracting}
-            />
-            {settingsConfigErrorField}
-          </>
-        )}
+            </>
+          ) : (
+            <>
+              <CommonConfigEditor
+                value={form.getValues("settingsConfig")}
+                onChange={(value) => form.setValue("settingsConfig", value)}
+                useCommonConfig={useCommonConfig}
+                onCommonConfigToggle={handleCommonConfigToggle}
+                commonConfigSnippet={commonConfigSnippet}
+                onCommonConfigSnippetChange={handleCommonConfigSnippetChange}
+                commonConfigError={commonConfigError}
+                onEditClick={() => setIsCommonConfigModalOpen(true)}
+                isModalOpen={isCommonConfigModalOpen}
+                onModalClose={() => setIsCommonConfigModalOpen(false)}
+                onExtract={handleClaudeExtract}
+                isExtracting={isClaudeExtracting}
+              />
+              {settingsConfigErrorField}
+            </>
+          )}
 
-        {!isAnyOmoCategory &&
-          appId !== "opencode" &&
-          appId !== "openclaw" &&
-          appId !== "hermes" && (
-          <ProviderAdvancedConfig
-            testConfig={testConfig}
-            proxyConfig={proxyConfig}
-            pricingConfig={pricingConfig}
-            onTestConfigChange={setTestConfig}
-            onProxyConfigChange={setProxyConfig}
-            onPricingConfigChange={setPricingConfig}
-          />
-        )}
+          {!isAnyOmoCategory &&
+            appId !== "opencode" &&
+            appId !== "openclaw" &&
+            appId !== "hermes" && (
+              <ProviderAdvancedConfig
+                testConfig={testConfig}
+                proxyConfig={proxyConfig}
+                pricingConfig={pricingConfig}
+                onTestConfigChange={setTestConfig}
+                onProxyConfigChange={setProxyConfig}
+                onPricingConfigChange={setPricingConfig}
+              />
+            )}
 
           {showButtons && (
             <div className="flex justify-end gap-2">

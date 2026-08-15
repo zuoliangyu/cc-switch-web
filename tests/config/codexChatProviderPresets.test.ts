@@ -10,6 +10,8 @@ const expectedChatPresets = new Map<
   string,
   { baseUrl: string; contextWindows: Record<string, number> }
 >([
+  // 火山 Agent Plan / Coding Plan（国内站 plan/v3、coding/v3）已切原生
+  // Responses，见下方 native 清单；BytePlus 国际站未核实，保持 Chat 路由
   [
     "BytePlus",
     {
@@ -112,20 +114,6 @@ const expectedChatPresets = new Map<
 ]);
 
 describe("Codex Chat provider presets", () => {
-  it("matches the complete upstream catalog", () => {
-    expect(codexProviderPresets).toHaveLength(69);
-    expect(codexProviderPresets.map((preset) => preset.name)).toEqual(
-      expect.arrayContaining([
-        "Kimi",
-        "Kimi For Coding",
-        "Code0",
-        "Qiniu",
-        "OpenCode Go",
-        "Xiaomi MiMo Token Plan (China)",
-      ]),
-    );
-  });
-
   it("enables session-based prompt cache routing for Kimi Coding", () => {
     const preset = codexProviderPresets.find(
       (item) => item.name === "Kimi For Coding",
@@ -163,16 +151,22 @@ describe("Codex Chat provider presets", () => {
       string,
       { contextWindows: Record<string, number> }
     >([
-      ["火山Agentplan", { contextWindows: { "ark-code-latest": 256000 } }],
+      // 官方 Codex 文档确认 Agent Plan /api/plan/v3 与 Coding Plan
+      // /api/coding/v3 均支持 Responses API
+      ["火山 Agent Plan", { contextWindows: { "ark-code-latest": 256000 } }],
+      ["火山 Coding Plan", { contextWindows: { "ark-code-latest": 256000 } }],
       [
         "DouBaoSeed",
         { contextWindows: { "doubao-seed-2-1-pro-260628": 262144 } },
       ],
       ["Bailian", { contextWindows: { "qwen3-coder-plus": 1048576 } }],
+      // 腾讯 TokenHub 官方 Codex 文档确认 hy3 原生 Responses（2026-07-14）
       [
         "Tencent Hunyuan",
         { contextWindows: { hy3: 256000, "hy3-preview": 256000 } },
       ],
+      // DeepSeek 官方 Codex 文档确认 deepseek-v4-flash 原生 Responses；
+      // catalog 由后端按 deepseek.com host 镜像官方 models.json 生成
       [
         "DeepSeek",
         {

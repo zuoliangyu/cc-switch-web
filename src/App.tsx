@@ -50,6 +50,7 @@ import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { DeepLinkImportDialog } from "@/components/deeplink/DeepLinkImportDialog";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { ProxyToggle } from "@/components/proxy/ProxyToggle";
+import { RoutingActivationBrand } from "@/components/proxy/RoutingActivationBrand";
 import { FailoverToggle } from "@/components/proxy/FailoverToggle";
 import UsageScriptModal from "@/components/UsageScriptModal";
 import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
@@ -880,21 +881,13 @@ function App() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div className="relative inline-flex items-center">
-                  <a
-                    href="https://github.com/zuoliangyu/zuoliangyu-cc-switch-web"
-                    target="_blank"
-                    rel="noreferrer"
-                    className={cn(
-                      "text-xl font-semibold transition-colors",
-                      isProxyRunning && isCurrentAppTakeoverActive
-                        ? "theme-success-link"
-                        : "theme-primary-link",
-                    )}
-                  >
-                    CC Switch Web
-                  </a>
-                </div>
+                <RoutingActivationBrand
+                  active={isProxyRunning && isCurrentAppTakeoverActive}
+                  contextKey={activeApp}
+                  ready={
+                    proxyStatus !== undefined && takeoverStatus !== undefined
+                  }
+                />
                 <Button
                   variant="ghost"
                   size="icon"

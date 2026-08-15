@@ -1,30 +1,17 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { parse as parseToml } from "smol-toml";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GrokBuildProviderForm } from "@/components/providers/forms/GrokBuildProviderForm";
 
-const toastErrorMock = vi.hoisted(() => vi.fn());
-
-vi.mock("sonner", () => ({
-  toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
-}));
-
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock("@/components/providers/forms/BasicFormFields", () => ({
-  BasicFormFields: ({ form }: any) => (
-    <>
-      <input aria-label="name" {...form.register("name")} />
-      <input aria-label="website" {...form.register("websiteUrl")} />
-      <input aria-label="notes" {...form.register("notes")} />
-    </>
-  ),
-}));
-
 vi.mock("@/components/JsonEditor", () => ({
-  default: ({ value, onChange }: any) => (
+  default: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
     <textarea
       aria-label="raw-config"
       value={value}
@@ -33,7 +20,210 @@ vi.mock("@/components/JsonEditor", () => ({
   ),
 }));
 
-const envConfig = `[models]
+describe("GrokBuildProviderForm", () => {
+  it("offers curated Grok Build presets and applies one", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <GrokBuildProviderForm
+        submitLabel="Save"
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    // 国产官方直连（cn_official）不在 Grok Build 预设列表里
+    expect(screen.queryByRole("button", { name: /BytePlus/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Kimi/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /PatewayAI/ }));
+
+    const baseUrlInput =
+      container.querySelector<HTMLInputElement>("#codexBaseUrl");
+    const nameInput =
+      container.querySelector<HTMLInputElement>('input[name="name"]');
+    expect(baseUrlInput?.value).toBe("https://api.pateway.ai/v1");
+    expect(nameInput?.value).toBe("PatewayAI");
+  });
+
+  it("submits a complete config.toml payload with Grok defaults", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const { container } = render(
+      <GrokBuildProviderForm
+        submitLabel="Save"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+
+    const nameInput =
+      container.querySelector<HTMLInputElement>('input[name="name"]');
+    const baseUrlInput =
+      container.querySelector<HTMLInputElement>("#codexBaseUrl");
+    expect(nameInput).not.toBeNull();
+    expect(baseUrlInput).not.toBeNull();
+
+    fireEvent.change(nameInput!, { target: { value: "Example Relay" } });
+    fireEvent.change(baseUrlInput!, {
+      target: { value: "https://relay.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("API Key"), {
+      target: { value: "secret-key" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted.icon).toBe("");
+    const settings = JSON.parse(submitted.settingsConfig);
+    const config = parseToml(settings.config) as any;
+
+    expect(config.models.default).toBe("grok-4.5");
+    expect(config.model["grok-4.5"]).toEqual({
+      model: "grok-4.5",
+      base_url: "https://relay.example.com/v1",
+      name: "Example Relay",
+      api_key: "secret-key",
+      api_backend: "responses",
+      context_window: 500000,
+    });
+  });
+
+  it("uses the Codex-style advanced section without redundant Grok fields", () => {
+    const { container } = render(
+      <GrokBuildProviderForm
+        submitLabel="Save"
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(container.querySelector("#grokbuild-profile")).toBeNull();
+    expect(container.querySelector("#grokbuild-api-backend")).toBeNull();
+    expect(
+      screen.getByText(/高级选项|providerForm\.advancedOptionsToggle/),
+    ).toBeInTheDocument();
+    expect(container.querySelector("#grokbuild-context-window")).toHaveValue(
+      500000,
+    );
+    expect(
+      screen.getByText(/上游格式|codexConfig\.upstreamFormatLabel/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the Grok client on Responses when the upstream uses Chat", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const configToml = `[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://relay.example.com/v1"
+name = "Chat Relay"
+api_key = "secret-key"
+api_backend = "chat_completions"
+context_window = 500000
+`;
+    render(
+      <GrokBuildProviderForm
+        providerId="chat-relay"
+        submitLabel="Save"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+        initialData={{
+          name: "Chat Relay",
+          category: "custom",
+          settingsConfig: { config: configToml },
+          meta: { apiFormat: "openai_chat" },
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const submitted = onSubmit.mock.calls[0][0];
+    const settings = JSON.parse(submitted.settingsConfig);
+    const config = parseToml(settings.config) as any;
+    expect(submitted.meta.apiFormat).toBe("openai_chat");
+    const selected = config.model[config.models.default];
+    expect(selected.api_backend).toBe("responses");
+    expect(selected.model).toBe("grok-4.5");
+    expect(selected.base_url).toBe("https://relay.example.com/v1");
+  });
+
+  it("renders localized validation feedback for malformed TOML", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <GrokBuildProviderForm
+        submitLabel="Save"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("raw-config"), {
+      target: { value: "[models" },
+    });
+
+    expect(screen.getByText(/Invalid config\.toml:/)).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("loads edit-mode values and does not resubmit stale custom endpoints", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const config = `[models]
+default = "existing-profile"
+
+[model."existing-profile"]
+model = "grok-upstream"
+base_url = "https://existing.example.com/v1"
+name = "Existing Relay"
+api_key = "existing-key"
+api_backend = "responses"
+context_window = 250000
+`;
+    const { container } = render(
+      <GrokBuildProviderForm
+        providerId="existing-provider"
+        submitLabel="Save"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+        initialData={{
+          name: "Existing Relay",
+          settingsConfig: { config },
+          meta: {
+            custom_endpoints: {
+              "https://deleted.example.com/v1": {
+                url: "https://deleted.example.com/v1",
+                addedAt: 1,
+              },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector("#grokbuild-profile")).toBeNull();
+    expect(
+      container.querySelector<HTMLInputElement>("#codexModelName")?.value,
+    ).toBe("grok-upstream");
+    expect(
+      container.querySelector<HTMLInputElement>("#codexBaseUrl")?.value,
+    ).toBe("https://existing.example.com/v1");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].meta.custom_endpoints).toBeUndefined();
+  });
+
+  it("preserves env_key while updating structured fields", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const config = `[models]
 default = "grok-profile"
 
 [model."grok-profile"]
@@ -44,55 +234,47 @@ env_key = "XAI_API_KEY"
 api_backend = "responses"
 context_window = 500000
 `;
-
-describe("GrokBuildProviderForm", () => {
-  beforeEach(() => toastErrorMock.mockClear());
-
-  it("保存自定义配置时保留 env_key 并更新结构化字段", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    render(
+    const { container } = render(
       <GrokBuildProviderForm
-        submitLabel="save"
+        submitLabel="Save"
         onSubmit={onSubmit}
-        onCancel={vi.fn()}
+        onCancel={() => {}}
         initialData={{
           name: "Env Relay",
           category: "custom",
-          settingsConfig: { config: envConfig },
-          meta: { customUserAgent: "claude-code/0.1.0" },
+          settingsConfig: { config },
         }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("grokBuild.baseUrl"), {
+    fireEvent.change(container.querySelector("#codexBaseUrl")!, {
       target: { value: "https://new.example.com/v1" },
     });
-    fireEvent.change(screen.getByLabelText("providerForm.customUserAgent"), {
+    fireEvent.change(container.querySelector("#codex-custom-user-agent")!, {
       target: { value: "claude-cli/2.1.161" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     const payload = onSubmit.mock.calls[0][0];
-    const parsedSettings = JSON.parse(payload.settingsConfig);
-    const parsedToml = parseToml(parsedSettings.config) as Record<string, any>;
-    expect(parsedToml.model["grok-profile"]).toMatchObject({
+    const settings = JSON.parse(payload.settingsConfig);
+    const parsed = parseToml(settings.config) as any;
+    expect(parsed.model["grok-profile"]).toMatchObject({
       base_url: "https://new.example.com/v1",
       env_key: "XAI_API_KEY",
+      api_backend: "responses",
     });
-    expect(parsedToml.model["grok-profile"]).not.toHaveProperty("api_key");
-    expect(payload.meta.apiFormat).toBe("openai_responses");
+    expect(parsed.model["grok-profile"]).not.toHaveProperty("api_key");
     expect(payload.meta.customUserAgent).toBe("claude-cli/2.1.161");
-    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it("允许官方 Provider 以空 config 保存元信息", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
+  it("allows official providers to save empty config metadata", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
     render(
       <GrokBuildProviderForm
-        submitLabel="save"
+        submitLabel="Save"
         onSubmit={onSubmit}
-        onCancel={vi.fn()}
+        onCancel={() => {}}
         initialData={{
           name: "Grok Official",
           category: "official",
@@ -103,43 +285,11 @@ describe("GrokBuildProviderForm", () => {
       />,
     );
 
-    expect(screen.queryByLabelText("grokBuild.baseUrl")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     const payload = onSubmit.mock.calls[0][0];
     expect(JSON.parse(payload.settingsConfig)).toEqual({ config: "" });
     expect(payload.presetCategory).toBe("official");
     expect(payload.meta.customUserAgent).toBeUndefined();
-    expect(toastErrorMock).not.toHaveBeenCalled();
-  });
-
-  it("应用 Grok 预设并生成对应 TOML", async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
-    render(
-      <GrokBuildProviderForm
-        submitLabel="save"
-        onSubmit={onSubmit}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /PackyCode/ }));
-    fireEvent.change(screen.getByLabelText("API Key"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "save" }));
-
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    const payload = onSubmit.mock.calls[0][0];
-    const parsedSettings = JSON.parse(payload.settingsConfig);
-    const parsedToml = parseToml(parsedSettings.config) as Record<string, any>;
-    expect(parsedToml.model["grok-4.5"]).toMatchObject({
-      model: "grok-4.5",
-      base_url: "https://www.packyapi.ai/v1",
-      api_key: "secret",
-    });
-    expect(payload.presetId).toBe("grokbuild-0");
-    expect(payload.presetCategory).toBe("third_party");
   });
 });

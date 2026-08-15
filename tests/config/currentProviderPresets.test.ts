@@ -89,7 +89,11 @@ describe("current provider presets", () => {
       expect(locale.providerForm.partnerPromotion.apinebula).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.etok).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.subrouter).toBeTruthy();
-      expect(locale.providerForm.partnerPromotion.unity2).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.kimi).toBeTruthy();
+      expect(locale.providerForm.partnerPromotion.xycai).toBeTruthy();
+      expect(
+        locale.providerForm.partnerPromotion.volcengine_codingplan,
+      ).toBeTruthy();
     }
   });
 
@@ -99,9 +103,9 @@ describe("current provider presets", () => {
       "PackyCode",
       "APINebula",
       "AICodeMirror",
-      "Unity2.ai",
       "Shengsuanyun",
       "AIGoCode",
+      "Qiniu",
       "AICoding",
       "SubRouter",
       "APIKEY.FUN",
@@ -111,8 +115,8 @@ describe("current provider presets", () => {
       "ETok.ai",
       "Cubence",
       "CrazyRouter",
-      "Qiniu",
       "SudoCode.us",
+      "XycAi",
       "E-FlowCode",
       "CherryIN",
       "OpenRouter",
@@ -128,12 +132,16 @@ describe("current provider presets", () => {
         "ZetaAPI",
         "APINebula",
         "FennoAI",
-        "Unity2.ai",
         "SubRouter",
         "APIKEY.FUN",
         "Code0",
+        "火山 Agent Plan",
+        "火山 Coding Plan",
+        "XycAi",
         "OpenCode Go",
         "CherryIN",
+        "PPIO",
+        "JieKou AI",
       ]),
     );
     for (const retired of [
@@ -147,14 +155,10 @@ describe("current provider presets", () => {
       expect(names).not.toContain(retired);
     }
     expect(
-      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/openai"].map(
-        (model) => model.id,
-      ),
+      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/openai"].map((model) => model.id),
     ).toContain("gpt-5.6-sol");
     expect(
-      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/google"].map(
-        (model) => model.id,
-      ),
+      OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/google"].map((model) => model.id),
     ).toContain("gemini-3.6-flash");
     expect(
       OPENCODE_PRESET_MODEL_VARIANTS["@ai-sdk/amazon-bedrock"].map(
@@ -176,14 +180,15 @@ describe("current provider presets", () => {
         "ZetaAPI",
         "APINebula",
         "FennoAI",
-        "Unity2.ai",
         "SubRouter",
         "Code0",
-        "NekoCode",
         "AtlasCloud",
         "CCSub",
         "Qiniu",
+        "XycAi",
         "CherryIN",
+        "PPIO",
+        "JieKou AI",
       ]),
     );
     for (const retired of [
@@ -198,9 +203,23 @@ describe("current provider presets", () => {
     for (const locale of [zh, en, ja]) {
       expect(locale.providerForm.partnerPromotion.atlascloud).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.ccsub).toBeTruthy();
-      expect(locale.providerForm.partnerPromotion.nekocode).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.sudocode).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.teamorouter).toBeTruthy();
+    }
+  });
+
+  it("removes retired Unity2.ai and NekoCode presets", () => {
+    for (const presets of [
+      providerPresets,
+      codexProviderPresets,
+      geminiProviderPresets,
+      grokBuildProviderPresets,
+      openclawProviderPresets,
+      opencodeProviderPresets,
+    ]) {
+      const names = presets.map((preset) => preset.name);
+      expect(names).not.toContain("Unity2.ai");
+      expect(names).not.toContain("NekoCode");
     }
   });
 });

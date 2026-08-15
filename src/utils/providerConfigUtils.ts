@@ -3,6 +3,7 @@
 import type { TemplateValueConfig } from "../config/claudeProviderPresets";
 import { normalizeTomlText } from "@/utils/textNormalization";
 import { parse as parseToml } from "smol-toml";
+import type { CodexApiFormat } from "@/types";
 
 const isPlainObject = (value: unknown): value is Record<string, any> => {
   return Object.prototype.toString.call(value) === "[object Object]";
@@ -670,6 +671,18 @@ export const isCodexAnthropicWireApi = (
     "messages",
     "claude",
   ].includes((wireApi ?? "").trim().toLowerCase());
+
+export const codexApiFormatFromWireApi = (
+  wireApi: string | undefined | null,
+): CodexApiFormat | undefined => {
+  if (isCodexChatWireApi(wireApi)) return "openai_chat";
+  if (isCodexAnthropicWireApi(wireApi)) return undefined;
+  return ["responses", "openai_responses", "openai-responses"].includes(
+    (wireApi ?? "").trim().toLowerCase(),
+  )
+    ? "openai_responses"
+    : undefined;
+};
 
 // 从 Codex 的 TOML 配置文本中提取 wire_api（支持单/双引号）
 export const extractCodexWireApi = (

@@ -12,6 +12,7 @@ import relaxcodeLogo from "@/assets/icons/relaxcode.png";
 import huoshanLogo from "@/assets/icons/huoshan.png";
 import byteplusLogo from "@/assets/icons/byteplus.png";
 import a6apiLogo from "@/assets/icons/a6-icon.png";
+import xycaiLogo from "@/assets/icons/xycai-icon.png";
 
 const localIcons: Record<string, string> = {
   a6api: a6apiLogo,
@@ -28,6 +29,7 @@ const localIcons: Record<string, string> = {
   relaxcode: relaxcodeLogo,
   huoshan: huoshanLogo,
   byteplus: byteplusLogo,
+  xycai: xycaiLogo,
 };
 
 export const localIconList = Object.keys(localIcons);

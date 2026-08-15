@@ -139,7 +139,8 @@ export function CommonConfigEditor({
 
   const handleExpandSnippet = useCallback(async () => {
     try {
-      const { text, replaced } = await expandWindowsEnvVars(commonConfigSnippet);
+      const { text, replaced } =
+        await expandWindowsEnvVars(commonConfigSnippet);
       onCommonConfigSnippetChange(text);
       toast.success(t("claudeConfig.winEnvDone", { count: replaced }));
     } catch (e) {
@@ -318,7 +319,7 @@ export function CommonConfigEditor({
   }
 }`}
           darkMode={isDarkMode}
-          rows={14}
+          rows={3}
           showValidation={true}
           language="json"
         />

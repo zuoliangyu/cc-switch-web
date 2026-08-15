@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W4 已完成，W5 待开始）
+> 状态：实施中（W0–W5 已完成，W6 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -183,16 +183,16 @@
 
 ### W5：Provider 生态与表单体验
 
-- [ ] 移除 Unity2.ai、NekoCode 已下架预设及对应三语文案。
-- [ ] 更新 RunAPI 域名与备用端点、Kimi/RunAPI/FennoAI 信息和 Qiniu 排序。
-- [ ] 新增 PPIO、JieKou AI、XycAi 跨应用预设。
-- [ ] Volcengine 拆分 Agent Plan 与 Coding Plan。
-- [ ] 去除 Provider 卡片合作方星标，保留分类和必要促销信息。
-- [ ] 模型映射下拉支持模糊搜索并完成共用组件收口。
-- [ ] Claude、Claude Desktop、Grok Build、OpenCode、OpenClaw、Hermes 表单层级与高级选项对齐。
-- [ ] 统一 checkbox 视觉与 IME-safe input，macOS 中文输入组合期间不重建输入框。
-- [ ] 路由激活反馈使用克制动画并支持 reduced motion。
-- [ ] 消除 Provider 编辑器无意义空白，保证移动端和窄屏无裁切。
+- [x] 移除 Unity2.ai、NekoCode 已下架预设及对应三语文案。
+- [x] 更新 RunAPI 域名与备用端点、Kimi/RunAPI/FennoAI 信息和 Qiniu 排序。
+- [x] 新增 PPIO、JieKou AI、XycAi 跨应用预设。
+- [x] Volcengine 拆分 Agent Plan 与 Coding Plan。
+- [x] 去除 Provider 卡片合作方星标，保留分类和必要促销信息。
+- [x] 模型映射下拉支持模糊搜索并完成共用组件收口。
+- [x] Claude、Claude Desktop、Grok Build、OpenCode、OpenClaw、Hermes 表单层级与高级选项对齐。
+- [x] 统一 checkbox 视觉与 IME-safe input，macOS 中文输入组合期间不重建输入框。
+- [x] 路由激活反馈使用克制动画并支持 reduced motion。
+- [x] 消除 Provider 编辑器无意义空白，保证移动端和窄屏无裁切。
 
 主要上游提交：`ebbf141f`、`996d512f`、`4d3e2c35`、`0e604b75`、`5b697abc`、`3711e1a0`、`7e152d75`、`076c2744`、`95b95da6`、`619a592c`、`5b77da2b`、`c0050623`、`58d92e56`、`ec842156`、`ccc86298`、`580a4d7b`、`7e5007d5`、`7de63227`、`bc7f5f41`、`8673e9d8`、`5f6072ce`、`c99550e0`、`a7f073e9`、`5b8bf1fe`、`eb69e492`、`d9d4a660`、`f748f3ac`。
 
@@ -517,3 +517,5 @@ W0 基线修复
 - W3 验证：OMO service 25/25、Skills/Hermes/OpenCode 命令边界 6/6、Claude/Claude Desktop 预设 15/15 通过；`pnpm typecheck`、`git diff --check` 通过。
 - 2026-08-15：完成 W4。Codex 的 DeepSeek 与火山 Agentplan 预设切换为 native Responses，DeepSeek context window 对齐 1048576；新增腾讯混元 TokenHub 及双端点。W0 已提前落地并验证 catalog 镜像、用户目录所有权、显式字段优先、推理档位与 `ultra` 映射，本包未重复实现。模型定价种子与精确修复函数逐字同步到上游 `40cac1a6`，仅在字段仍等于历史默认值时修复，保留用户自定义价格。
 - W4 验证：定价修复回归 1/1、现有模型定价匹配 1/1、Codex 预设与 catalog 表单 Vitest 6/6 通过；`pnpm typecheck`、`git diff --check` 通过。
+- 2026-08-16：完成 W5。Provider 预设同步到上游最终状态，新增 PPIO、JieKou AI、XycAi 并拆分火山双 Plan；移除已下架预设和卡片合作星标。Provider 表单复用共用模型搜索、Codex 字段和请求头编辑能力，补齐 Claude Desktop、Grok Build、OpenCode、OpenClaw、Hermes 层级；统一原生 checkbox、IME-safe input、窄屏间距和路由激活反馈。
+- W5 验证：14 个定向 Vitest 文件共 92/92 通过，覆盖预设、三语键、表单 load/save、IME composition、搜索、Proxy 初始状态和 reduced-motion；`pnpm typecheck`、`git diff --check` 通过。

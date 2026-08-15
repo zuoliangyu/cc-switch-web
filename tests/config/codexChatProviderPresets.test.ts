@@ -11,27 +11,10 @@ const expectedChatPresets = new Map<
   { baseUrl: string; contextWindows: Record<string, number> }
 >([
   [
-    "火山Agentplan",
-    {
-      baseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
-      contextWindows: { "ark-code-latest": 256000 },
-    },
-  ],
-  [
     "BytePlus",
     {
       baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
       contextWindows: { "ark-code-latest": 256000 },
-    },
-  ],
-  [
-    "DeepSeek",
-    {
-      baseUrl: "https://api.deepseek.com",
-      contextWindows: {
-        "deepseek-v4-flash": 1000000,
-        "deepseek-v4-pro": 1000000,
-      },
     },
   ],
   [
@@ -130,7 +113,7 @@ const expectedChatPresets = new Map<
 
 describe("Codex Chat provider presets", () => {
   it("matches the complete upstream catalog", () => {
-    expect(codexProviderPresets).toHaveLength(68);
+    expect(codexProviderPresets).toHaveLength(69);
     expect(codexProviderPresets.map((preset) => preset.name)).toEqual(
       expect.arrayContaining([
         "Kimi",
@@ -180,11 +163,25 @@ describe("Codex Chat provider presets", () => {
       string,
       { contextWindows: Record<string, number> }
     >([
+      ["火山Agentplan", { contextWindows: { "ark-code-latest": 256000 } }],
       [
         "DouBaoSeed",
         { contextWindows: { "doubao-seed-2-1-pro-260628": 262144 } },
       ],
       ["Bailian", { contextWindows: { "qwen3-coder-plus": 1048576 } }],
+      [
+        "Tencent Hunyuan",
+        { contextWindows: { hy3: 256000, "hy3-preview": 256000 } },
+      ],
+      [
+        "DeepSeek",
+        {
+          contextWindows: {
+            "deepseek-v4-flash": 1048576,
+            "deepseek-v4-pro": 1048576,
+          },
+        },
+      ],
       ["Longcat", { contextWindows: { "LongCat-2.0": 1048576 } }],
       ["MiniMax", { contextWindows: { "MiniMax-M3": 1000000 } }],
       ["MiniMax en", { contextWindows: { "MiniMax-M3": 1000000 } }],

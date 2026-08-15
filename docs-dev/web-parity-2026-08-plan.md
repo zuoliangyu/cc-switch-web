@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W3 已完成，W4 待开始）
+> 状态：实施中（W0–W4 已完成，W5 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -167,15 +167,15 @@
 
 ### W4：Codex 目录、原生 Responses 与定价
 
-- [ ] DeepSeek 官方模型目录镜像和 native Responses 直连。
-- [ ] Volcengine Agent Plan 使用 `/api/coding/v3` native Responses；Coding Plan 保留独立产品语义。
-- [ ] 新增腾讯混元 TokenHub native Responses 预设。
-- [ ] `displayName`、`contextWindow` 改为显式优先，官方目录值不被默认值覆盖。
-- [ ] 用户自有 `model_catalog_json` 不被生成器覆盖。
-- [ ] 修复 DeepSeek 官方目录中被 HTML 提取误删的尖括号文本。
-- [ ] 每模型支持 `reasoningLevels`、`defaultReasoningLevel`，按规范顺序过滤并支持 Auto。
-- [ ] Proxy transform 补齐 `ultra` reasoning 映射。
-- [ ] 同步 v3.19.1、v3.19.2 和未发布区间的全部最终定价种子与精确修复条件。
+- [x] DeepSeek 官方模型目录镜像和 native Responses 直连。
+- [x] Volcengine Agent Plan 使用 `/api/coding/v3` native Responses；Coding Plan 保留独立产品语义。
+- [x] 新增腾讯混元 TokenHub native Responses 预设。
+- [x] `displayName`、`contextWindow` 改为显式优先，官方目录值不被默认值覆盖。
+- [x] 用户自有 `model_catalog_json` 不被生成器覆盖。
+- [x] 修复 DeepSeek 官方目录中被 HTML 提取误删的尖括号文本。
+- [x] 每模型支持 `reasoningLevels`、`defaultReasoningLevel`，按规范顺序过滤并支持 Auto。
+- [x] Proxy transform 补齐 `ultra` reasoning 映射。
+- [x] 同步 v3.19.1、v3.19.2 和未发布区间的全部最终定价种子与精确修复条件。
 
 主要上游提交：`8ae1ce85`、`56a66eea`、`58dd376d`、`f42534ed`、`f38722a4`、`413c09e0`、`5602324b`、`7dc0a725`、`40cac1a6`。
 
@@ -515,3 +515,5 @@ W0 基线修复
 - W2 验证：Codex session usage 44/44（另 1 项 ignored）、streaming/non-streaming dropped tool call 各 1/1、Grok input token details 1/1、Kimi/DeepSeek reasoning 各 1/1、Zhipu `CREDIT_LIMIT` 1/1、Grok conversation header 1/1、Grok takeover Responses 1/1、Claude Desktop/session 去重 1/1、Codex 接管恢复保留登录 1/1、陈旧第三方 auth 识别 1/1 通过；`git diff --check` 通过。
 - 2026-08-15：完成 W3。Skills 安装以真实 `SKILL.md` 定位嵌套源目录并生成正确文档 URL，缺失 SSOT 不再被缓存哈希掩盖；Hermes Prompt 切换为 `SOUL.md`。OMO 支持统一 `~/.omo/omo.jsonc|json` 的 `[opencode]` 节点，保留 JSON5 注释、顺序、缩进和换行，写入前后校验语义并在并发修改时拒绝覆盖；旧 OMO 文件继续兼容。模型选择器合并隔离执行的 `opencode models` 结果，命令固定配置目录、禁用项目配置、20 秒超时。OpenCode Go 直连与 DeepSeek context window 同步完成。
 - W3 验证：OMO service 25/25、Skills/Hermes/OpenCode 命令边界 6/6、Claude/Claude Desktop 预设 15/15 通过；`pnpm typecheck`、`git diff --check` 通过。
+- 2026-08-15：完成 W4。Codex 的 DeepSeek 与火山 Agentplan 预设切换为 native Responses，DeepSeek context window 对齐 1048576；新增腾讯混元 TokenHub 及双端点。W0 已提前落地并验证 catalog 镜像、用户目录所有权、显式字段优先、推理档位与 `ultra` 映射，本包未重复实现。模型定价种子与精确修复函数逐字同步到上游 `40cac1a6`，仅在字段仍等于历史默认值时修复，保留用户自定义价格。
+- W4 验证：定价修复回归 1/1、现有模型定价匹配 1/1、Codex 预设与 catalog 表单 Vitest 6/6 通过；`pnpm typecheck`、`git diff --check` 通过。

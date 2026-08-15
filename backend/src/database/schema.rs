@@ -1329,9 +1329,69 @@ impl Database {
     /// 注意: model_id 使用短横线格式（如 claude-haiku-4-5），与 API 返回的模型名称标准化后一致
     fn seed_model_pricing(conn: &Connection) -> Result<(), AppError> {
         let pricing_data = [
-            // Claude Opus 5（fast mode 使用独立计费，不写入默认价格）
+            // Claude Fable 5（Opus 之上的新档）
+            (
+                "claude-fable-5",
+                "Claude Fable 5",
+                "10",
+                "50",
+                "1.00",
+                "12.50",
+            ),
+            (
+                "claude-mythos-5",
+                "Claude Mythos 5",
+                "10",
+                "50",
+                "1.00",
+                "12.50",
+            ),
+            // Claude Opus 5（与 Opus 4.8 同价位；fast mode $10/$50 不入表）
             ("claude-opus-5", "Claude Opus 5", "5", "25", "0.50", "6.25"),
-            // Claude 4.6 系列
+            // Claude 4.8 系列
+            (
+                "claude-opus-4-8",
+                "Claude Opus 4.8",
+                "5",
+                "25",
+                "0.50",
+                "6.25",
+            ),
+            // Claude Sonnet 5（list 价，与 Sonnet 4.6 一致；促销 $2/$10 至 2026-08-31 不入表）
+            (
+                "claude-sonnet-5",
+                "Claude Sonnet 5",
+                "3",
+                "15",
+                "0.30",
+                "3.75",
+            ),
+            // Claude 4.7 系列
+            (
+                "claude-opus-4-7",
+                "Claude Opus 4.7",
+                "5",
+                "25",
+                "0.50",
+                "6.25",
+            ),
+            // Claude 4.6 系列（裸 id 行覆盖无日期后缀的日志变体，与 dated 行同价）
+            (
+                "claude-opus-4-6",
+                "Claude Opus 4.6",
+                "5",
+                "25",
+                "0.50",
+                "6.25",
+            ),
+            (
+                "claude-sonnet-4-6",
+                "Claude Sonnet 4.6",
+                "3",
+                "15",
+                "0.30",
+                "3.75",
+            ),
             (
                 "claude-opus-4-6-20260206",
                 "Claude Opus 4.6",
@@ -1415,24 +1475,27 @@ impl Database {
                 "0.30",
                 "3.75",
             ),
-            // GPT-5.6 系列（5.6 起 cache write 按输入价 1.25 倍计费）
+            // GPT-5.6 系列（Sol / Terra / Luna，2026-06 发布）
+            // 5.6 家族起 cache write 收 1.25× 输入价（此前 GPT 模型写缓存免费，勿回填旧系列）
             ("gpt-5.6-sol", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
+            // 2026-07-30 OpenAI 降价：luna -80%、terra -20%，sol 不变（Fast mode 2× 价不入表）
+            ("gpt-5.6-terra", "GPT-5.6 Terra", "2", "12", "0.20", "2.50"),
             (
-                "gpt-5.6-terra",
-                "GPT-5.6 Terra",
-                "2.50",
-                "15",
+                "gpt-5.6-luna",
+                "GPT-5.6 Luna",
+                "0.20",
+                "1.20",
+                "0.02",
                 "0.25",
-                "3.125",
             ),
-            ("gpt-5.6-luna", "GPT-5.6 Luna", "1", "6", "0.10", "1.25"),
+            // 裸名 gpt-5.6 是 sol 的官方别名；effort 后缀对齐 gpt-5.5 系列的记账形态
             ("gpt-5.6", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             ("gpt-5.6-low", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             ("gpt-5.6-medium", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             ("gpt-5.6-high", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             ("gpt-5.6-xhigh", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
             ("gpt-5.6-minimal", "GPT-5.6 Sol", "5", "30", "0.50", "6.25"),
-            // GPT-5.5 系列（GPT-5.5 family default pricing 用于补 dashboard ghost-zero-cost 行）
+            // GPT-5.5 系列
             ("gpt-5.5", "GPT-5.5", "5", "30", "0.50", "0"),
             ("gpt-5.5-low", "GPT-5.5", "5", "30", "0.50", "0"),
             ("gpt-5.5-medium", "GPT-5.5", "5", "30", "0.50", "0"),
@@ -1484,6 +1547,14 @@ impl Database {
             ),
             // GPT-5.3 Codex 系列
             ("gpt-5.3-codex", "GPT-5.3 Codex", "1.75", "14", "0.175", "0"),
+            (
+                "gpt-5.3-codex-spark",
+                "GPT-5.3 Codex Spark",
+                "1.75",
+                "14",
+                "0.175",
+                "0",
+            ),
             (
                 "gpt-5.3-codex-low",
                 "GPT-5.3 Codex",
@@ -1603,6 +1674,64 @@ impl Database {
                 "0.125",
                 "0",
             ),
+            // OpenAI Reasoning 系列
+            ("o3", "OpenAI o3", "2", "8", "0.50", "0"),
+            ("o4-mini", "OpenAI o4-mini", "1.10", "4.40", "0.275", "0"),
+            // GPT-4.1 系列
+            ("gpt-4.1", "GPT-4.1", "2", "8", "0.50", "0"),
+            ("gpt-4.1-mini", "GPT-4.1 Mini", "0.40", "1.60", "0.10", "0"),
+            ("gpt-4.1-nano", "GPT-4.1 Nano", "0.10", "0.40", "0.025", "0"),
+            // Gemini 3.6 系列
+            (
+                "gemini-3.6-flash",
+                "Gemini 3.6 Flash",
+                "1.50",
+                "7.50",
+                "0.15",
+                "0",
+            ),
+            // Gemini 3.5 系列
+            (
+                "gemini-3.5-flash",
+                "Gemini 3.5 Flash",
+                "1.50",
+                "9.00",
+                "0.15",
+                "0",
+            ),
+            (
+                "gemini-3.5-flash-lite",
+                "Gemini 3.5 Flash Lite",
+                "0.30",
+                "2.50",
+                "0.03",
+                "0",
+            ),
+            // Gemini 3.1 系列
+            (
+                "gemini-3.1-pro-preview",
+                "Gemini 3.1 Pro Preview",
+                "2",
+                "12",
+                "0.20",
+                "0",
+            ),
+            (
+                "gemini-3.1-flash-lite",
+                "Gemini 3.1 Flash Lite",
+                "0.25",
+                "1.50",
+                "0.025",
+                "0",
+            ),
+            (
+                "gemini-3.1-flash-lite-preview",
+                "Gemini 3.1 Flash Lite Preview",
+                "0.25",
+                "1.50",
+                "0.025",
+                "0",
+            ),
             // Gemini 3 系列
             (
                 "gemini-3-pro-preview",
@@ -1637,11 +1766,32 @@ impl Database {
                 "0.03",
                 "0",
             ),
-            // Grok 系列
-            ("grok-4.5", "Grok 4.5", "2", "6", "0.50", "0"),
-            // Grok CLI 官方 OAuth 态使用的内部模型名
-            ("grok-4.5-build", "Grok 4.5 Build", "2", "6", "0.30", "0"),
+            (
+                "gemini-2.5-flash-lite",
+                "Gemini 2.5 Flash Lite",
+                "0.10",
+                "0.40",
+                "0.01",
+                "0",
+            ),
+            // Gemini 2.0 系列
+            (
+                "gemini-2.0-flash",
+                "Gemini 2.0 Flash",
+                "0.10",
+                "0.40",
+                "0.025",
+                "0",
+            ),
             // StepFun 系列
+            (
+                "step-3.7-flash",
+                "Step 3.7 Flash",
+                "0.19",
+                "1.13",
+                "0.04",
+                "0",
+            ),
             (
                 "step-3.5-flash",
                 "Step 3.5 Flash",
@@ -1650,90 +1800,941 @@ impl Database {
                 "0.02",
                 "0",
             ),
-            // ====== 国产模型 (CNY/1M tokens) ======
+            (
+                "step-3.5-flash-2603",
+                "Step 3.5 Flash 2603",
+                "0.10",
+                "0.30",
+                "0.02",
+                "0",
+            ),
+            // ====== 国产模型 (USD/1M tokens) ======
             // Doubao (字节跳动)
+            // Seed 2.1 系列（2026-06 火山引擎官方 list 价，CNY 按 ~7.14 折算）：
+            //   pro   输入 6 元 / 输出 30 元 / 命中 1.2 元
+            //   turbo 输入 3 元 / 输出 15 元 / 命中 0.6 元
+            // 「缓存存储 0.017 元/M/小时」是按时长计费的存储费，与本表 cache_creation（按 token 写入价）口径不同，置 0。
+            (
+                "doubao-seed-2-1-pro",
+                "Doubao Seed 2.1 Pro",
+                "0.84",
+                "4.2",
+                "0.17",
+                "0",
+            ),
+            (
+                "doubao-seed-2-1-turbo",
+                "Doubao Seed 2.1 Turbo",
+                "0.42",
+                "2.1",
+                "0.08",
+                "0",
+            ),
             (
                 "doubao-seed-code",
                 "Doubao Seed Code",
-                "1.20",
-                "8.00",
-                "0.24",
+                "0.17",
+                "1.11",
+                "0.02",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-pro",
+                "Doubao Seed 2.0 Pro",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-code",
+                "Doubao Seed 2.0 Code",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-code-preview-latest",
+                "Doubao Seed 2.0 Code Preview",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-lite",
+                "Doubao Seed 2.0 Lite",
+                "0.08",
+                "0.50",
+                "0.017",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-mini",
+                "Doubao Seed 2.0 Mini",
+                "0.03",
+                "0.31",
+                "0.0056",
                 "0",
             ),
             // DeepSeek 系列
             (
                 "deepseek-v3.2",
                 "DeepSeek V3.2",
-                "2.00",
-                "3.00",
-                "0.40",
+                "0.28",
+                "0.42",
+                "0.028",
                 "0",
             ),
             (
                 "deepseek-v3.1",
                 "DeepSeek V3.1",
-                "4.00",
-                "12.00",
-                "0.80",
+                "0.55",
+                "1.67",
+                "0.055",
                 "0",
             ),
-            ("deepseek-v3", "DeepSeek V3", "2.00", "8.00", "0.40", "0"),
+            ("deepseek-v3", "DeepSeek V3", "0.28", "1.11", "0.028", "0"),
+            // deepseek-chat / deepseek-reasoner 自 2026-07 起为 V4 Flash 的 legacy 别名（同价）
+            (
+                "deepseek-chat",
+                "DeepSeek Chat",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+            ),
+            (
+                "deepseek-reasoner",
+                "DeepSeek Reasoner",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+            ),
+            // DeepSeek V4 系列（官方 CNY 按 1 USD ≈ 7.14 折算）
+            (
+                "deepseek-v4-flash",
+                "DeepSeek V4 Flash",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+            ),
+            // 部分上游（如阿里百炼）回传 4 位 MMDD 日期变体。查价的
+            // strip_model_date_suffix 只剥 ISO / 8 位 YYYYMMDD / 6 位 YYMMDD，
+            // 剥不到裸 id，前缀兜底也只匹配更长的行 —— 不补别名会静默按 0 计费
+            (
+                "deepseek-v4-flash-0731",
+                "DeepSeek V4 Flash",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+            ),
+            (
+                "deepseek-v4-pro",
+                "DeepSeek V4 Pro",
+                "0.435",
+                "0.87",
+                "0.003625",
+                "0",
+            ),
             // Kimi (月之暗面)
             (
                 "kimi-k2-thinking",
                 "Kimi K2 Thinking",
-                "4.00",
-                "16.00",
-                "1.00",
+                "0.55",
+                "2.20",
+                "0.10",
                 "0",
             ),
-            ("kimi-k2-0905", "Kimi K2", "4.00", "16.00", "1.00", "0"),
+            ("kimi-k2-0905", "Kimi K2", "0.55", "2.20", "0.10", "0"),
             (
                 "kimi-k2-turbo",
                 "Kimi K2 Turbo",
+                "1.11",
+                "8.06",
+                "0.14",
+                "0",
+            ),
+            ("kimi-k2.5", "Kimi K2.5", "0.60", "3.00", "0.10", "0"),
+            ("kimi-k2.6", "Kimi K2.6", "0.95", "4.00", "0.16", "0"),
+            (
+                "kimi-k2.7-code",
+                "Kimi K2.7 Code",
+                "0.95",
+                "4.00",
+                "0.19",
+                "0",
+            ),
+            // HighSpeed 加速档=本体 2 倍价（Kimi 官方一贯模式，同 K2 Turbo）
+            (
+                "kimi-k2.7-code-highspeed",
+                "Kimi K2.7 Code HighSpeed",
+                "1.90",
                 "8.00",
-                "58.00",
-                "1.00",
+                "0.38",
                 "0",
             ),
             ("kimi-k3", "Kimi K3", "3.00", "15.00", "0.30", "0"),
+            // Kimi For Coding 套餐里 K3 的裸名（无 kimi- 前缀），同标准 list 价
+            ("k3", "Kimi K3", "3.00", "15.00", "0.30", "0"),
+            // 腾讯混元 (Tencent Hunyuan)（官方 CNY 1/4/0.25 按 1 USD ≈ 7.14 折算；Hy3 阶梯计价取最低档）
+            ("hunyuan-hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
+            ("hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
             // MiniMax 系列
-            ("minimax-m2.1", "MiniMax M2.1", "2.10", "8.40", "0.21", "0"),
+            ("minimax-m2.1", "MiniMax M2.1", "0.27", "0.95", "0.03", "0"),
             (
                 "minimax-m2.1-lightning",
                 "MiniMax M2.1 Lightning",
-                "2.10",
-                "16.80",
-                "0.21",
+                "0.27",
+                "2.33",
+                "0.03",
                 "0",
             ),
-            ("minimax-m2", "MiniMax M2", "2.10", "8.40", "0.21", "0"),
+            ("minimax-m2", "MiniMax M2", "0.27", "0.95", "0.03", "0"),
+            ("minimax-m2.5", "MiniMax M2.5", "0.15", "0.95", "0.03", "0"),
+            (
+                "minimax-m2.5-lightning",
+                "MiniMax M2.5 Lightning",
+                "0.30",
+                "2.40",
+                "0.03",
+                "0",
+            ),
+            (
+                "minimax-m2.7",
+                "MiniMax M2.7",
+                "0.30",
+                "1.20",
+                "0.06",
+                "0.375",
+            ),
+            (
+                "minimax-m2.7-highspeed",
+                "MiniMax M2.7 Highspeed",
+                "0.60",
+                "2.40",
+                "0.06",
+                "0.375",
+            ),
+            ("minimax-m3", "MiniMax M3", "0.30", "1.20", "0.06", "0"),
             // GLM (智谱)
-            ("glm-4.7", "GLM-4.7", "2.00", "8.00", "0.40", "0"),
-            ("glm-4.6", "GLM-4.6", "2.00", "8.00", "0.40", "0"),
-            // Mimo (小米)
-            ("mimo-v2-flash", "Mimo V2 Flash", "0", "0", "0", "0"),
+            ("glm-4.7", "GLM-4.7", "0.6", "2.2", "0.11", "0"),
+            ("glm-4.6", "GLM-4.6", "0.6", "2.2", "0.11", "0"),
+            ("glm-5", "GLM-5", "1", "3.2", "0.2", "0"),
+            ("glm-5.1", "GLM-5.1", "1.4", "4.4", "0.26", "0"),
+            ("glm-5.2", "GLM-5.2", "1.4", "4.4", "0.26", "0"),
+            ("glm-5-turbo", "GLM-5-Turbo", "1.2", "4", "0.24", "0"),
+            ("glm-5v-turbo", "GLM-5V-Turbo", "1.2", "4", "0.24", "0"),
+            // MiMo (小米)
+            (
+                "mimo-v2-flash",
+                "MiMo V2 Flash",
+                "0.09",
+                "0.29",
+                "0.009",
+                "0",
+            ),
+            ("mimo-v2-pro", "MiMo V2 Pro", "0.435", "0.87", "0.0036", "0"),
+            ("mimo-v2.5", "MiMo V2.5", "0.14", "0.29", "0.0028", "0"),
+            (
+                "mimo-v2.5-pro",
+                "MiMo V2.5 Pro",
+                "0.435",
+                "0.87",
+                "0.0036",
+                "0",
+            ),
+            // Qwen 系列 (阿里巴巴)
+            ("qwen3.8-max", "Qwen3.8 Max", "2", "6", "0.25", "2.50"),
+            ("qwen3.7-max", "Qwen3.7 Max", "2.50", "7.50", "0.25", "0"),
+            ("qwen3.7-plus", "Qwen3.7 Plus", "0.40", "1.60", "0.08", "0"),
+            (
+                "qwen3.6-plus",
+                "Qwen3.6 Plus",
+                "0.325",
+                "1.95",
+                "0.065",
+                "0",
+            ),
+            (
+                "qwen3.6-flash",
+                "Qwen3.6 Flash",
+                "0.1875",
+                "1.125",
+                "0.0375",
+                "0",
+            ),
+            ("qwen3.5-plus", "Qwen3.5 Plus", "0.26", "1.56", "0.052", "0"),
+            ("qwen3-max", "Qwen3 Max", "0.78", "3.90", "0", "0"),
+            (
+                "qwen3-235b-a22b",
+                "Qwen3 235B-A22B",
+                "0.70",
+                "8.40",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3-coder-plus",
+                "Qwen3 Coder Plus",
+                "0.65",
+                "3.25",
+                "0.13",
+                "0",
+            ),
+            (
+                "qwen3-coder-480b",
+                "Qwen3 Coder 480B",
+                "0.65",
+                "3.25",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3-coder-480b-a35b-instruct",
+                "Qwen3 Coder 480B-A35B Instruct",
+                "0.65",
+                "3.25",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3-coder-flash",
+                "Qwen3 Coder Flash",
+                "0.195",
+                "0.975",
+                "0.039",
+                "0",
+            ),
+            (
+                "qwen3-coder-next",
+                "Qwen3 Coder Next",
+                "0.12",
+                "0.75",
+                "0",
+                "0",
+            ),
+            ("qwq-plus", "QwQ Plus", "0.80", "2.40", "0", "0"),
+            ("qwq-32b", "QwQ 32B", "0.20", "0.60", "0", "0"),
+            ("qwen3-32b", "Qwen3 32B", "0.16", "0.64", "0", "0"),
+            // Grok 系列 (xAI)
+            // 4.5/4.6 均为分档计价：prompt ≥200K 时单价翻倍（4/12，cached 亦翻倍）。
+            // 本表无档位列，统一取基础档（<200K），与其它分档厂商口径一致
+            ("grok-4.6", "Grok 4.6", "2", "6", "0.50", "0"),
+            ("grok-4.5", "Grok 4.5", "2", "6", "0.30", "0"),
+            // Grok CLI 官方 OAuth 态 modelUsage 上报的内部别名。定价由
+            // costUsdTicks（1 tick = 1e-10 USD）双轮实测反推：input/output 与
+            // grok-4.5 同为 2/6，cache read 同为 0.30
+            ("grok-4.5-build", "Grok 4.5 Build", "2", "6", "0.30", "0"),
+            ("grok-4.3", "Grok 4.3", "1.25", "2.50", "0.20", "0"),
+            (
+                "grok-4.20-0309-reasoning",
+                "Grok 4.20 Reasoning",
+                "1.25",
+                "2.50",
+                "0.20",
+                "0",
+            ),
+            (
+                "grok-4.20-0309-non-reasoning",
+                "Grok 4.20",
+                "1.25",
+                "2.50",
+                "0.20",
+                "0",
+            ),
+            (
+                "grok-4-1-fast-reasoning",
+                "Grok 4.1 Fast Reasoning",
+                "0.20",
+                "0.50",
+                "0.05",
+                "0",
+            ),
+            (
+                "grok-4-1-fast-non-reasoning",
+                "Grok 4.1 Fast",
+                "0.20",
+                "0.50",
+                "0.05",
+                "0",
+            ),
+            ("grok-4", "Grok 4", "3", "15", "0.75", "0"),
+            (
+                "grok-code-fast-1",
+                "Grok Build 0.1 (Code Fast Alias)",
+                "1",
+                "2",
+                "0.20",
+                "0",
+            ),
+            ("grok-build-0.1", "Grok Build 0.1", "1", "2", "0.20", "0"),
+            ("grok-3", "Grok 3", "3", "15", "0.75", "0"),
+            ("grok-3-mini", "Grok 3 Mini", "0.25", "0.50", "0.075", "0"),
+            // Mistral 系列
+            (
+                "mistral-medium-3.5",
+                "Mistral Medium 3.5",
+                "1.50",
+                "7.50",
+                "0",
+                "0",
+            ),
+            (
+                "mistral-small-4",
+                "Mistral Small 4",
+                "0.10",
+                "0.30",
+                "0.01",
+                "0",
+            ),
+            (
+                "devstral-small-2-2512",
+                "Devstral Small 2",
+                "0.10",
+                "0.30",
+                "0.01",
+                "0",
+            ),
+            (
+                "magistral-small",
+                "Magistral Small",
+                "0.50",
+                "1.50",
+                "0",
+                "0",
+            ),
+            ("codestral-2508", "Codestral", "0.30", "0.90", "0.03", "0"),
+            (
+                "devstral-small-1.1",
+                "Devstral Small 1.1",
+                "0.07",
+                "0.28",
+                "0.01",
+                "0",
+            ),
+            ("devstral-2-2512", "Devstral 2", "0.40", "2", "0.04", "0"),
+            (
+                "devstral-medium",
+                "Devstral Medium",
+                "0.40",
+                "2",
+                "0.04",
+                "0",
+            ),
+            (
+                "mistral-large-3-2512",
+                "Mistral Large 3",
+                "0.50",
+                "1.50",
+                "0.05",
+                "0",
+            ),
+            (
+                "mistral-medium-3.1",
+                "Mistral Medium 3.1",
+                "0.40",
+                "2",
+                "0.04",
+                "0",
+            ),
+            (
+                "mistral-small-3.2-24b",
+                "Mistral Small 3.2",
+                "0.075",
+                "0.20",
+                "0.01",
+                "0",
+            ),
+            ("magistral-medium", "Magistral Medium", "2", "5", "0", "0"),
+            // Cohere 系列
+            ("command-a", "Cohere Command A", "2.50", "10", "0", "0"),
+            (
+                "command-r-plus",
+                "Cohere Command R+",
+                "2.50",
+                "10",
+                "0",
+                "0",
+            ),
+            ("command-r", "Cohere Command R", "0.15", "0.60", "0", "0"),
+            // OpenAI 补充
+            ("o3-pro", "OpenAI o3-pro", "20", "80", "0", "0"),
+            ("o3-mini", "OpenAI o3-mini", "0.55", "2.20", "0.55", "0"),
+            ("o1", "OpenAI o1", "15", "60", "7.50", "0"),
+            ("o1-mini", "OpenAI o1-mini", "0.55", "2.20", "0.55", "0"),
+            ("codex-mini", "Codex Mini", "0.75", "3", "0.025", "0"),
+            ("gpt-5-mini", "GPT-5 Mini", "0.25", "2", "0.025", "0"),
+            ("gpt-5-nano", "GPT-5 Nano", "0.05", "0.40", "0.005", "0"),
         ];
 
-        for (model_id, display_name, input, output, cache_read, cache_creation) in pricing_data {
-            conn.execute(
+        let mut stmt = conn
+            .prepare(
                 "INSERT OR IGNORE INTO model_pricing (
                     model_id, display_name, input_cost_per_million, output_cost_per_million,
                     cache_read_cost_per_million, cache_creation_cost_per_million
                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )
+            .map_err(|e| AppError::Database(format!("准备模型定价语句失败: {e}")))?;
+        for (model_id, display_name, input, output, cache_read, cache_creation) in pricing_data {
+            stmt.execute(rusqlite::params![
+                model_id,
+                display_name,
+                input,
+                output,
+                cache_read,
+                cache_creation
+            ])
+            .map_err(|e| AppError::Database(format!("插入模型定价失败: {e}")))?;
+        }
+
+        log::info!("已插入 {} 条默认模型定价数据", pricing_data.len());
+        Ok(())
+    }
+
+    fn repair_current_model_pricing(conn: &Connection) -> Result<(), AppError> {
+        let pricing_fixes = [
+            // 2026-08-13 models.dev 审计核价：grok-4.5 的 cached input 官方挂牌为 0.30
+            // （docs.x.ai 现行价表），与 grok-4.5-build 的实测计费一致；早先按 0.50
+            // 录入的行在此校正。注意 0.50 是 grok-4.6 的 cached 价，勿两者互串
+            (
+                "grok-4.5", "Grok 4.5", "2", "6", "0.30", "0", "2", "6", "0.50", "0",
+            ),
+            // 2026-07-30 OpenAI GPT-5.6 降价：luna -80%、terra -20%（sol 不变）。
+            // 每档两条守卫：主守卫匹配 ≥v3.19（已跑过 07-12 cache_write 修正），
+            // 0 态守卫匹配 <v3.19 直升用户（cache_write 仍为旧 seed 的 0）
+            (
+                "gpt-5.6-luna",
+                "GPT-5.6 Luna",
+                "0.20",
+                "1.20",
+                "0.02",
+                "0.25",
+                "1",
+                "6",
+                "0.10",
+                "1.25",
+            ),
+            (
+                "gpt-5.6-luna",
+                "GPT-5.6 Luna",
+                "0.20",
+                "1.20",
+                "0.02",
+                "0.25",
+                "1",
+                "6",
+                "0.10",
+                "0",
+            ),
+            (
+                "gpt-5.6-terra",
+                "GPT-5.6 Terra",
+                "2",
+                "12",
+                "0.20",
+                "2.50",
+                "2.50",
+                "15",
+                "0.25",
+                "3.125",
+            ),
+            (
+                "gpt-5.6-terra",
+                "GPT-5.6 Terra",
+                "2",
+                "12",
+                "0.20",
+                "2.50",
+                "2.50",
+                "15",
+                "0.25",
+                "0",
+            ),
+            // 2026-07-31 models.dev 审计核价：DeepSeek V4 发布后 chat/reasoner 降为 V4 Flash
+            // 别名价；MiniMax M3 官方 standard 档 0.3/1.2（旧值疑似录了加速档）
+            (
+                "deepseek-chat",
+                "DeepSeek Chat",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+                "0.27",
+                "1.10",
+                "0.07",
+                "0",
+            ),
+            (
+                "deepseek-reasoner",
+                "DeepSeek Reasoner",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+                "0.55",
+                "2.19",
+                "0.14",
+                "0",
+            ),
+            (
+                "minimax-m3",
+                "MiniMax M3",
+                "0.30",
+                "1.20",
+                "0.06",
+                "0",
+                "0.60",
+                "2.40",
+                "0.12",
+                "0",
+            ),
+            // 2026-07-12 GPT-5.6 家族 cache write=1.25× 输入价（OpenAI 5.6 起的新规），
+            // 修正早期 seed 的 0 值；只匹配未被用户改过的行
+            (
+                "gpt-5.6-sol",
+                "GPT-5.6 Sol",
+                "5",
+                "30",
+                "0.50",
+                "6.25",
+                "5",
+                "30",
+                "0.50",
+                "0",
+            ),
+            (
+                "gpt-5.6-terra",
+                "GPT-5.6 Terra",
+                "2.50",
+                "15",
+                "0.25",
+                "3.125",
+                "2.50",
+                "15",
+                "0.25",
+                "0",
+            ),
+            (
+                "gpt-5.6-luna",
+                "GPT-5.6 Luna",
+                "1",
+                "6",
+                "0.10",
+                "1.25",
+                "1",
+                "6",
+                "0.10",
+                "0",
+            ),
+            // 2026-06-10 全量核价（厂商官方 list 价；CNY 按 ~7.14 折算）
+            // GLM 4.6/4.7：旧值是中转/OpenRouter 折扣价，统一到 Z.ai 官方（与 glm-5/5.1 一致）
+            (
+                "glm-4.7", "GLM-4.7", "0.6", "2.2", "0.11", "0", "0.39", "1.75", "0.04", "0",
+            ),
+            (
+                "glm-4.6", "GLM-4.6", "0.6", "2.2", "0.11", "0", "0.28", "1.11", "0.03", "0",
+            ),
+            // Grok 4.20：xAI 已降价 2/6 → 1.25/2.50
+            (
+                "grok-4.20-0309-reasoning",
+                "Grok 4.20 Reasoning",
+                "1.25",
+                "2.50",
+                "0.20",
+                "0",
+                "2",
+                "6",
+                "0.20",
+                "0",
+            ),
+            (
+                "grok-4.20-0309-non-reasoning",
+                "Grok 4.20",
+                "1.25",
+                "2.50",
+                "0.20",
+                "0",
+                "2",
+                "6",
+                "0.20",
+                "0",
+            ),
+            // Kimi K2.5 官方 output 3.00
+            (
+                "kimi-k2.5",
+                "Kimi K2.5",
+                "0.60",
+                "3.00",
+                "0.10",
+                "0",
+                "0.60",
+                "2.50",
+                "0.10",
+                "0",
+            ),
+            // MiniMax M2.5 input 0.15
+            (
+                "minimax-m2.5",
+                "MiniMax M2.5",
+                "0.15",
+                "0.95",
+                "0.03",
+                "0",
+                "0.12",
+                "0.95",
+                "0.03",
+                "0",
+            ),
+            // Mistral Devstral 2 output 0.90 → 2（与同表 devstral-medium 一致）
+            (
+                "devstral-2-2512",
+                "Devstral 2",
+                "0.40",
+                "2",
+                "0.04",
+                "0",
+                "0.40",
+                "0.90",
+                "0.04",
+                "0",
+            ),
+            // Doubao Seed 2.0：lite 旧价贵 3-4 倍 + 全系补 cache 命中价
+            (
+                "doubao-seed-2-0-lite",
+                "Doubao Seed 2.0 Lite",
+                "0.08",
+                "0.50",
+                "0.017",
+                "0",
+                "0.25",
+                "2",
+                "0",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-pro",
+                "Doubao Seed 2.0 Pro",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+                "0.47",
+                "2.37",
+                "0",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-code",
+                "Doubao Seed 2.0 Code",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+                "0.47",
+                "2.37",
+                "0",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-code-preview-latest",
+                "Doubao Seed 2.0 Code Preview",
+                "0.47",
+                "2.37",
+                "0.09",
+                "0",
+                "0.47",
+                "2.37",
+                "0",
+                "0",
+            ),
+            (
+                "doubao-seed-2-0-mini",
+                "Doubao Seed 2.0 Mini",
+                "0.03",
+                "0.31",
+                "0.0056",
+                "0",
+                "0.03",
+                "0.31",
+                "0",
+                "0",
+            ),
+            // MiMo：5/27 永久降价，旧值是旧价
+            (
+                "mimo-v2-pro",
+                "MiMo V2 Pro",
+                "0.435",
+                "0.87",
+                "0.0036",
+                "0",
+                "1",
+                "3",
+                "0",
+                "0",
+            ),
+            (
+                "mimo-v2.5",
+                "MiMo V2.5",
+                "0.14",
+                "0.29",
+                "0.0028",
+                "0",
+                "0.09",
+                "0.29",
+                "0.009",
+                "0",
+            ),
+            (
+                "mimo-v2.5-pro",
+                "MiMo V2.5 Pro",
+                "0.435",
+                "0.87",
+                "0.0036",
+                "0",
+                "1",
+                "3",
+                "0",
+                "0",
+            ),
+            // Qwen：官方"隐式缓存 = 输入 20%"补 cache 命中价
+            (
+                "qwen3.6-plus",
+                "Qwen3.6 Plus",
+                "0.325",
+                "1.95",
+                "0.065",
+                "0",
+                "0.325",
+                "1.95",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3.5-plus",
+                "Qwen3.5 Plus",
+                "0.26",
+                "1.56",
+                "0.052",
+                "0",
+                "0.26",
+                "1.56",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3-coder-plus",
+                "Qwen3 Coder Plus",
+                "0.65",
+                "3.25",
+                "0.13",
+                "0",
+                "0.65",
+                "3.25",
+                "0",
+                "0",
+            ),
+            (
+                "qwen3-coder-flash",
+                "Qwen3 Coder Flash",
+                "0.195",
+                "0.975",
+                "0.039",
+                "0",
+                "0.195",
+                "0.975",
+                "0",
+                "0",
+            ),
+            (
+                "deepseek-v4-flash",
+                "DeepSeek V4 Flash",
+                "0.14",
+                "0.28",
+                "0.0028",
+                "0",
+                "0.14",
+                "0.28",
+                "0.028",
+                "0",
+            ),
+            (
+                "deepseek-v4-pro",
+                "DeepSeek V4 Pro",
+                "0.435",
+                "0.87",
+                "0.003625",
+                "0",
+                "1.68",
+                "3.36",
+                "0.14",
+                "0",
+            ),
+            (
+                "glm-5", "GLM-5", "1", "3.2", "0.2", "0", "0.72", "2.30", "0", "0",
+            ),
+            (
+                "glm-5.1", "GLM-5.1", "1.4", "4.4", "0.26", "0", "0.95", "3.15", "0", "0",
+            ),
+            (
+                "grok-code-fast-1",
+                "Grok Build 0.1 (Code Fast Alias)",
+                "1",
+                "2",
+                "0.20",
+                "0",
+                "0.20",
+                "1.50",
+                "0.02",
+                "0",
+            ),
+        ];
+
+        for (
+            model_id,
+            display_name,
+            input,
+            output,
+            cache_read,
+            cache_creation,
+            old_input,
+            old_output,
+            old_cache_read,
+            old_cache_creation,
+        ) in pricing_fixes
+        {
+            conn.execute(
+                "UPDATE model_pricing SET
+                    display_name = ?2,
+                    input_cost_per_million = ?3,
+                    output_cost_per_million = ?4,
+                    cache_read_cost_per_million = ?5,
+                    cache_creation_cost_per_million = ?6
+                 WHERE model_id = ?1
+                   AND input_cost_per_million = ?7
+                   AND output_cost_per_million = ?8
+                   AND cache_read_cost_per_million = ?9
+                   AND cache_creation_cost_per_million = ?10",
                 rusqlite::params![
                     model_id,
                     display_name,
                     input,
                     output,
                     cache_read,
-                    cache_creation
+                    cache_creation,
+                    old_input,
+                    old_output,
+                    old_cache_read,
+                    old_cache_creation
                 ],
             )
-            .map_err(|e| AppError::Database(format!("插入模型定价失败: {e}")))?;
+            .map_err(|e| AppError::Database(format!("修复模型 {model_id} 定价失败: {e}")))?;
         }
 
-        log::info!("已插入 {} 条默认模型定价数据", pricing_data.len());
         Ok(())
     }
 
@@ -1744,8 +2745,9 @@ impl Database {
     }
 
     pub(crate) fn ensure_model_pricing_seeded_on_conn(conn: &Connection) -> Result<(), AppError> {
-        // 每次启动都执行 INSERT OR IGNORE，增量追加新模型，已有数据不覆盖
-        Self::seed_model_pricing(conn)
+        // 每次启动都执行 INSERT OR IGNORE，增量追加新模型；仅修复仍等于旧内置值的定价。
+        Self::seed_model_pricing(conn)?;
+        Self::repair_current_model_pricing(conn)
     }
 
     // --- 辅助方法 ---
@@ -1891,5 +2893,44 @@ impl Database {
             .map_err(|e| AppError::Database(format!("为表 {table} 添加列 {column} 失败: {e}")))?;
         log::info!("已为表 {table} 添加缺失列 {column}");
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod pricing_tests {
+    use super::*;
+
+    #[test]
+    fn w4_pricing_repairs_known_defaults_but_preserves_custom_values() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let conn = lock_conn!(db.conn);
+        conn.execute(
+            "UPDATE model_pricing
+             SET cache_read_cost_per_million = '0.50'
+             WHERE model_id = 'grok-4.5'",
+            [],
+        )?;
+        conn.execute(
+            "UPDATE model_pricing
+             SET output_cost_per_million = '99'
+             WHERE model_id = 'gpt-5.6-terra'",
+            [],
+        )?;
+
+        Database::ensure_model_pricing_seeded_on_conn(&conn)?;
+
+        let grok_cache: String = conn.query_row(
+            "SELECT cache_read_cost_per_million FROM model_pricing WHERE model_id = 'grok-4.5'",
+            [],
+            |row| row.get(0),
+        )?;
+        let custom_output: String = conn.query_row(
+            "SELECT output_cost_per_million FROM model_pricing WHERE model_id = 'gpt-5.6-terra'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(grok_cache, "0.30");
+        assert_eq!(custom_output, "99");
+        Ok(())
     }
 }

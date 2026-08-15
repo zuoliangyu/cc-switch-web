@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增
+
+- Pi 成为完整应用目标，接入显式 Provider、原生 Prompts、Skills、Sessions 与 JSONL Usage；`/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管继续由 Pi 原生管理。
+- 数据库升级到 Web Schema v14，以持久去重账本保证 Pi 会话文件重写、fork、源文件删除恢复及明细归档后仍不会重复计费。
+- Codex 模型目录补齐 DeepSeek、火山 Agent Plan、腾讯混元 TokenHub 的 native Responses，以及模型级推理档位和最终定价。
+
+### 改进
+
+- Provider 目录和表单同步上游最终状态，补齐 PPIO、JieKou AI、XycAi 与火山双 Plan，移除下架预设和合作星标，并统一模型搜索、IME 输入与窄屏布局。
+- MCP、Prompts、Skills、Sessions、Usage 与 Auth Center 的管理体验完成收口，支持搜索、批量启停、导航溢出、浏览器可见性和 Pi 数据筛选。
+- CI 由 Corepack 读取 `packageManager` 中的 pnpm 版本，并补全 Web workflow 路径过滤；纯文档改动不触发前后端重验证。
+
 ### 安全
 
 - 新增可选的 `CC_SWITCH_WEB_ACCESS_KEY` Web 访问密钥；服务端拒绝短于 16 字符的配置，以固定长度摘要比较 Bearer 密钥，并统一保护除健康检查和认证接口外的所有 API。
@@ -11,6 +23,9 @@
 
 ### 修复
 
+- 修复 SQL 备份/恢复、WebDAV 同步与 Windows/WSL 原子替换边界，失败时不发布半成品数据库或 Skills 状态。
+- 修复 Codex/Claude Desktop/Grok Build 会话用量去重、官方登录恢复、Chat 工具调用失败语义、代理响应边界及 Kimi/Zhipu 特例。
+- Skills、Prompts、OMO 和 Codex catalog 写入改为保留未知字段、注释与用户所有权，并拒绝不安全的并发覆盖。
 - Web API 默认改为同源 `/api`，Vite 开发环境同步代理到本地 Rust 服务；修复浏览器远程访问 Docker/Linux 服务时错误请求浏览器自身 `127.0.0.1:8890`，导致欢迎弹窗无法确认的问题。
 - 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
 - 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。

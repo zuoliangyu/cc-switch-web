@@ -1,4 +1,7 @@
 packages: []
 
+overrides:
+  baseline-browser-mapping: ^2.10.21
+
 onlyBuiltDependencies:
   - '@tailwindcss/oxide'

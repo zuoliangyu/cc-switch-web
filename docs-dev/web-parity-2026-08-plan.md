@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W8 已完成，W9 待开始）
+> 状态：已完成（W0–W9）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -263,14 +263,14 @@ Pi 按上游最终契约一次落地，但复用现有 OpenCode/Hermes/Provider 
 
 ### W9：CI、文档与收口
 
-- [ ] CI 使用 `packageManager` pin 对应的 Corepack，避免第二套 pnpm 版本来源。
-- [ ] 检查 Web workflow 的 path filter；纯文档提交不运行前后端重验证。
-- [ ] Windows job 增加 WSL 文件系统原子替换回归；若 GitHub runner 不具备稳定 WSL 条件，保留 Rust 平台测试而不引入脆弱 job。
-- [ ] 删除经 import/依赖扫描确认无调用方的旧代码和依赖。
-- [ ] 更新 `CHANGELOG.md`。
-- [ ] 同步更新三语 README 的应用范围、Pi 能力和明确边界。
-- [ ] 将 Pi 四份上游设计资料整理为 Web 正式文档，删除 Tauri 专属描述。
-- [ ] 在本文持续追加每个工作包的完成提交、验证证据和剩余差异。
+- [x] CI 使用 `packageManager` pin 对应的 Corepack，避免第二套 pnpm 版本来源。
+- [x] 检查 Web workflow 的 path filter；纯文档提交不运行前后端重验证。
+- [x] Windows job 增加 WSL 文件系统原子替换回归；若 GitHub runner 不具备稳定 WSL 条件，保留 Rust 平台测试而不引入脆弱 job。
+- [x] 删除经 import/依赖扫描确认无调用方的旧代码和依赖。
+- [x] 更新 `CHANGELOG.md`。
+- [x] 同步更新三语 README 的应用范围、Pi 能力和明确边界。
+- [x] 将 Pi 四份上游设计资料整理为 Web 正式文档，删除 Tauri 专属描述。
+- [x] 在本文持续追加每个工作包的完成提交、验证证据和剩余差异。
 
 相关上游提交：`6b13d018`、`3b9d0593`、`c0ff89b9`、`b3a20e58`、`28529620`、`a4bba43f`、`fbf52cff`、`425e932b`、`43eaf073`、`ceef0a52`、`36ed280d`、`c98cc3a9`、`290b65c0`、`3c592d93`。
 
@@ -525,3 +525,7 @@ W0 基线修复
 - W7 验证：Pi 表单、预设、三语、目录设置、Provider 操作、应用入口、Prompts、Skills 和 Sessions 共 12 个定向 Vitest 文件 57/57 通过；Rust `pi` 过滤测试 286/286 通过，覆盖 Pi 配置、Provider、Prompt 外部修改保护、原生 Prompt 文件与 Session 边界；`pnpm typecheck`、W7 新增 Rust 文件 `rustfmt --check`、`git diff --check` 通过。
 - 2026-08-16：完成 W8。Pi JSONL usage 接入统一同步调度，支持 assistant、tool result、compaction、branch summary、失败状态、追加/截断/同尺寸重写和 fork；请求 ID 与无 ID 语义哈希写入持久去重账本，明细 rollup/prune、源文件删除后恢复均不会重复计费。数据库按 Web 独立迁移链升级到 v14；账本由 SQL/WebDAV 远端载荷跳过并在本地恢复时保留。Usage 页面增加 Pi 筛选和三语数据源名称。
 - W8 验证：Pi usage 15 个上游定向测试全部通过，另增源文件删除/恢复和超限文件发现各 1/1；v14 新库/升级 1/1；同步跳过与本地保留各 1/1；Pi Dashboard 筛选 1/1；`pnpm typecheck`、W8 Rust 文件 `rustfmt --check`、`git diff --check` 通过。
+- 2026-08-16：完成 W9。两份 Web workflow 改由 Corepack 读取 `packageManager`，CI 路径覆盖前后端、测试、构建配置和部署输入，纯文档改动不触发重验证。保留 W1 的 Windows `ReplaceFileW`/WSL 安全回退及原子替换 Rust 平台测试，不引入依赖 Hosted Runner WSL2 状态、单次约 6 分钟且完整套件超过 50 分钟的脆弱 job。引用扫描后删除 5 个零调用前端文件、2 个废弃图标脚本及 4 个无直接调用依赖。Pi 四份上游资料整理为 Web 正式文档，CHANGELOG 与三语 README 同步完成。
+- W9 验证：Corepack 解析 pnpm `10.20.0`；`pnpm install --lockfile-only --frozen-lockfile`、`pnpm typecheck` 通过；Windows 原子替换契约测试 1/1 通过；workflow、`package.json`、脚本文档与 Pi 文档 Prettier 检查通过；CI 路径、Pi 文档边界、三语关键语义、旧文件/依赖静态断言及 `git diff --check` 通过。
+- 工作包提交：W0 `1defe63`、W1 `b4ca49c`、W2 `32a73cf`、W3 `f2e8f70`、W4 `56fa066`、W5 `9ba8df5`、W6 `cf2fa73`、W7 `05c170c`、W8 `884e533`；W9 由提交 `chore: 完成 W9 CI 文档与收口` 交付。
+- 剩余差异：计划内 88 个上游提交均已处置；Sponsors、WiX 与 WSL2 Hosted Runner job 按既定 Web 边界排除。全量 `pnpm check`、完整 Rust 测试、Docker build/smoke 和多平台 CI 仍按本计划约束留待用户单独确认。

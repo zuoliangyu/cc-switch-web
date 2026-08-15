@@ -15,17 +15,20 @@ CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web �
 
 ## 使い方
 
-CC Switch Web はローカルで Rust サービスを起動し、Claude、Codex、Gemini、OpenClaw など複数の AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
+CC Switch Web はローカルで Rust サービスを起動し、Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi などの AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
 
 Web ブランチで既に利用できる機能:
 
-- Claude、Codex、Gemini、OpenClaw のプロバイダーモデル取得
+- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi の Provider 管理
+- Pi の Provider、Prompts、Skills、Sessions、Usage。Pi の `/login`、`auth.json`、デフォルト Provider/Model、プロキシ、フェイルオーバー、OAuth 管理は Pi 本体が所有
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
 - ChatGPT（Codex OAuth）の管理アカウントセンター、Claude プリセット、クォータ表示
 - 環境変数競合の検出と整理入口
 - `?deeplink=...` または手動入力した `ccswitch://...` による Deep Link 取り込み
 - About ページから GitHub の最新リリースページを開く入口
 - Provider、Settings、Skills、Sessions の各ページをワークスペース型 UI へ統一
+
+Pi の設定所有権、同期ルール、モデル能力、UI 制約は [Pi ネイティブ契約と実装境界](docs/pi-native-contract-zh.md) および同じディレクトリの Pi 関連文書を参照してください。
 
 ### クイックスタート
 

@@ -55,12 +55,9 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
+      - name: Enable Corepack
         if: runner.os != 'Linux'
-        uses: pnpm/action-setup@v2
-        with:
-          version: 10.12.3
-          run_install: false
+        run: corepack enable
 
       - name: Setup Rust
         if: runner.os != 'Linux'

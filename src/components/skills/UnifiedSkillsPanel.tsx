@@ -5,6 +5,7 @@ import {
   FileArchive,
   Loader2,
   RefreshCw,
+  Search,
   Sparkles,
   Trash2,
   Upload,
@@ -23,6 +24,7 @@ import {
   useInstalledSkills,
   useSkillBackups,
   useRestoreSkillBackup,
+  useBulkToggleSkillApp,
   useToggleSkillApp,
   useUninstallSkill,
   useUpdateSkill,
@@ -38,6 +40,7 @@ import { MCP_SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
+import { ManagementListSearch } from "@/components/common/ManagementListSearch";
 import {
   Dialog,
   DialogContent,
@@ -123,6 +126,7 @@ const UnifiedSkillsPanel = React.forwardRef<
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [archiveFiles, setArchiveFiles] = useState<File[]>([]);
   const [isArchiveDragActive, setIsArchiveDragActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const archiveInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: skills, isLoading } = useInstalledSkills();
@@ -133,6 +137,7 @@ const UnifiedSkillsPanel = React.forwardRef<
   } = useSkillBackups();
   const deleteBackupMutation = useDeleteSkillBackup();
   const toggleAppMutation = useToggleSkillApp();
+  const bulkToggleAppMutation = useBulkToggleSkillApp();
   const uninstallMutation = useUninstallSkill();
   const restoreBackupMutation = useRestoreSkillBackup();
   const { data: unmanagedSkills, refetch: scanUnmanaged } =
@@ -175,11 +180,49 @@ const UnifiedSkillsPanel = React.forwardRef<
     return counts;
   }, [skills]);
 
+  const filteredSkills = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return skills ?? [];
+    return (skills ?? []).filter((skill) =>
+      [
+        skill.id,
+        skill.name,
+        skill.description,
+        skill.repoOwner,
+        skill.repoName,
+        skill.directory,
+      ].some((value) => value?.toLowerCase().includes(query)),
+    );
+  }, [searchQuery, skills]);
+
+  const writePending =
+    toggleAppMutation.isPending || bulkToggleAppMutation.isPending;
+
   const handleToggleApp = async (id: string, app: AppId, enabled: boolean) => {
+    if (writePending) return;
     try {
       await toggleAppMutation.mutateAsync({ id, app, enabled });
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
+    }
+  };
+
+  const handleToggleAll = async (app: AppId, enabled: boolean) => {
+    if (writePending) return;
+    const ids = (skills ?? [])
+      .filter((skill) => Boolean(skill.apps[app]) !== enabled)
+      .map((skill) => skill.id);
+    if (ids.length === 0) return;
+
+    const result = await bulkToggleAppMutation.mutateAsync({
+      ids,
+      app,
+      enabled,
+    });
+    if (result.failed.length > 0) {
+      toast.error(
+        t("common.bulkToggleFailed", { count: result.failed.length }),
+      );
     }
   };
 
@@ -509,6 +552,10 @@ const UnifiedSkillsPanel = React.forwardRef<
           totalLabel={t("skills.installed", { count: skills?.length || 0 })}
           counts={enabledCounts}
           appIds={MCP_SKILLS_APP_IDS}
+          totalCount={skills?.length ?? 0}
+          onToggleAll={handleToggleAll}
+          pendingApp={bulkToggleAppMutation.variables?.app ?? null}
+          disabled={writePending}
         />
         <div className="flex items-center gap-1.5">
           {skillUpdates && skillUpdates.length > 0 ? (
@@ -550,6 +597,14 @@ const UnifiedSkillsPanel = React.forwardRef<
         </div>
       </div>
 
+      <ManagementListSearch
+        value={searchQuery}
+        onValueChange={setSearchQuery}
+        placeholder={t("skills.installedSearchPlaceholder")}
+        ariaLabel={t("skills.installedSearchAriaLabel")}
+        clearLabel={t("common.clear")}
+      />
+
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24">
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -567,10 +622,15 @@ const UnifiedSkillsPanel = React.forwardRef<
               {t("skills.noInstalledDescription")}
             </p>
           </div>
+        ) : filteredSkills.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            <Search className="mb-4 h-10 w-10 opacity-40" />
+            <p className="text-sm">{t("skills.noInstalledSearchResults")}</p>
+          </div>
         ) : (
           <TooltipProvider delayDuration={300}>
             <div className="rounded-xl border border-border-default overflow-hidden">
-              {skills.map((skill, index) => (
+              {filteredSkills.map((skill, index) => (
                 <InstalledSkillListItem
                   key={skill.id}
                   skill={skill}
@@ -582,7 +642,8 @@ const UnifiedSkillsPanel = React.forwardRef<
                   onToggleApp={handleToggleApp}
                   onUninstall={() => handleUninstall(skill)}
                   onUpdate={() => handleUpdateSkill(skill)}
-                  isLast={index === skills.length - 1}
+                  actionsDisabled={writePending}
+                  isLast={index === filteredSkills.length - 1}
                 />
               ))}
             </div>
@@ -662,6 +723,7 @@ interface InstalledSkillListItemProps {
   skill: InstalledSkill;
   hasUpdate?: boolean;
   isUpdating?: boolean;
+  actionsDisabled?: boolean;
   onToggleApp: (id: string, app: AppId, enabled: boolean) => void;
   onUninstall: () => void;
   onUpdate?: () => void;
@@ -672,6 +734,7 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
   skill,
   hasUpdate,
   isUpdating,
+  actionsDisabled,
   onToggleApp,
   onUninstall,
   onUpdate,
@@ -734,6 +797,7 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
         apps={skill.apps}
         onToggle={(app, enabled) => onToggleApp(skill.id, app, enabled)}
         appIds={MCP_SKILLS_APP_IDS}
+        disabled={actionsDisabled}
       />
 
       <div
@@ -747,7 +811,7 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
             size="icon"
             className="h-7 w-7 hover:text-blue-500 hover:bg-blue-100 dark:hover:text-blue-400 dark:hover:bg-blue-500/10"
             onClick={onUpdate}
-            disabled={isUpdating}
+            disabled={actionsDisabled || isUpdating}
             title={t("skills.update")}
           >
             {isUpdating ? (
@@ -763,6 +827,7 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
           size="icon"
           className="h-7 w-7 hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
           onClick={onUninstall}
+          disabled={actionsDisabled}
           title={t("skills.uninstall")}
         >
           <Trash2 size={14} />

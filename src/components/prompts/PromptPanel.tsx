@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText } from "lucide-react";
+import { FileText, Search } from "lucide-react";
 import { type AppId } from "@/lib/api";
 import { usePromptActions } from "@/hooks/usePromptActions";
 import PromptListItem from "./PromptListItem";
 import PromptFormPanel from "./PromptFormPanel";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { ManagementListSearch } from "@/components/common/ManagementListSearch";
 
 interface PromptPanelProps {
   open: boolean;
@@ -22,6 +23,7 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
     const { t } = useTranslation();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
     const [confirmDialog, setConfirmDialog] = useState<{
       isOpen: boolean;
       titleKey: string;
@@ -89,6 +91,15 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
     };
 
     const promptEntries = useMemo(() => Object.entries(prompts), [prompts]);
+    const filteredPromptEntries = useMemo(() => {
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return promptEntries;
+      return promptEntries.filter(([id, prompt]) =>
+        [id, prompt.id, prompt.name, prompt.description, prompt.content].some(
+          (value) => value?.toLowerCase().includes(query),
+        ),
+      );
+    }, [promptEntries, searchQuery]);
 
     const enabledPrompt = promptEntries.find(([_, p]) => p.enabled);
 
@@ -102,6 +113,14 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
               : t("prompts.noneEnabled")}
           </div>
         </div>
+
+        <ManagementListSearch
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          placeholder={t("prompts.searchPlaceholder")}
+          ariaLabel={t("prompts.searchAriaLabel")}
+          clearLabel={t("common.clear")}
+        />
 
         <div className="flex-1 overflow-y-auto pb-16">
           {loading ? (
@@ -120,9 +139,14 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
                 {t("prompts.emptyDescription")}
               </p>
             </div>
+          ) : filteredPromptEntries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+              <Search className="mb-4 h-10 w-10 opacity-40" />
+              <p className="text-sm">{t("prompts.noSearchResults")}</p>
+            </div>
           ) : (
             <div className="space-y-3">
-              {promptEntries.map(([id, prompt]) => (
+              {filteredPromptEntries.map(([id, prompt]) => (
                 <PromptListItem
                   key={id}
                   id={id}

@@ -1,5 +1,6 @@
 import { createRef } from "react";
 import { render, screen, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import UnifiedSkillsPanel, {
@@ -13,6 +14,8 @@ const importSkillsMock = vi.fn();
 const installFromZipMock = vi.fn();
 const deleteSkillBackupMock = vi.fn();
 const restoreSkillBackupMock = vi.fn();
+const bulkToggleSkillAppMock = vi.fn();
+let installedSkills: any[] = [];
 
 vi.mock("sonner", () => ({
   toast: {
@@ -24,7 +27,7 @@ vi.mock("sonner", () => ({
 
 vi.mock("@/hooks/useSkills", () => ({
   useInstalledSkills: () => ({
-    data: [],
+    data: installedSkills,
     isLoading: false,
   }),
   useSkillBackups: () => ({
@@ -38,6 +41,12 @@ vi.mock("@/hooks/useSkills", () => ({
   }),
   useToggleSkillApp: () => ({
     mutateAsync: toggleSkillAppMock,
+    isPending: false,
+  }),
+  useBulkToggleSkillApp: () => ({
+    mutateAsync: bulkToggleSkillAppMock,
+    isPending: false,
+    variables: undefined,
   }),
   useRestoreSkillBackup: () => ({
     mutateAsync: restoreSkillBackupMock,
@@ -96,6 +105,9 @@ describe("UnifiedSkillsPanel", () => {
     installFromZipMock.mockReset();
     deleteSkillBackupMock.mockReset();
     restoreSkillBackupMock.mockReset();
+    bulkToggleSkillAppMock.mockReset();
+    bulkToggleSkillAppMock.mockResolvedValue({ succeeded: [], failed: [] });
+    installedSkills = [];
   });
 
   it("opens the import dialog without crashing when app toggles render", async () => {
@@ -117,6 +129,39 @@ describe("UnifiedSkillsPanel", () => {
       expect(screen.getByText("skills.import")).toBeInTheDocument();
       expect(screen.getByText("Shared Skill")).toBeInTheDocument();
       expect(screen.getByText("/tmp/shared-skill")).toBeInTheDocument();
+    });
+  });
+
+  it("搜索过滤时批量开关仍作用于全部 Skill", async () => {
+    installedSkills = [
+      {
+        id: "alpha",
+        name: "Alpha",
+        directory: "alpha",
+        apps: {},
+        installedAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: "beta",
+        name: "Beta",
+        directory: "beta",
+        apps: {},
+        installedAt: 1,
+        updatedAt: 1,
+      },
+    ];
+
+    render(
+      <UnifiedSkillsPanel onOpenDiscovery={() => {}} currentApp="claude" />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "Alpha");
+    await userEvent.click(screen.getAllByRole("checkbox")[0]);
+
+    expect(bulkToggleSkillAppMock).toHaveBeenCalledWith({
+      ids: ["alpha", "beta"],
+      app: "claude",
+      enabled: true,
     });
   });
 });

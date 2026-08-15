@@ -775,3 +775,32 @@ input[type="password"]::-ms-clear {
     animation: none;
   }
 }
+/* 只在可见且聚焦时运行路由状态呼吸，后台标签页保持静态。 */
+.status-heartbeat {
+  opacity: 1;
+  transition:
+    color 150ms ease,
+    opacity 300ms ease-out;
+}
+
+html[data-window-active="true"][data-status-heartbeat="true"]
+  .status-heartbeat {
+  opacity: 0.5;
+}
+
+html[data-window-active="false"] .status-heartbeat {
+  opacity: 1;
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-heartbeat {
+    opacity: 1;
+    transition-property: color;
+  }
+
+  html[data-window-active="true"][data-status-heartbeat="true"]
+    .status-heartbeat {
+    opacity: 1;
+  }
+}

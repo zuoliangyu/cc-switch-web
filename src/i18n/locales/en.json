@@ -48,6 +48,9 @@
     "import": "Import",
     "all": "All",
     "search": "Search",
+    "enableAllForApp": "Enable all for {{app}}",
+    "disableAllForApp": "Disable all for {{app}}",
+    "bulkToggleFailed": "{{count}} updates failed",
     "reset": "Reset",
     "actions": "Actions",
     "deleting": "Deleting...",
@@ -733,6 +736,9 @@
     "opencode": "OpenCode",
     "openclaw": "OpenClaw",
     "hermes": "Hermes"
+  },
+  "appSwitcher": {
+    "more": "More apps"
   },
   "grokBuild": {
     "profile": "Client model profile",
@@ -1579,6 +1585,9 @@
       "enabledApps": "Enabled Apps",
       "noImportFound": "No MCP servers to import found. All servers are already managed by CC Switch.",
       "importSuccess": "Successfully imported {{count}} MCP servers",
+      "searchPlaceholder": "Search MCP names, descriptions, tags, or commands...",
+      "searchAriaLabel": "Search managed MCP servers",
+      "noSearchResults": "No matching MCP servers found",
       "apps": {
         "claude": "Claude",
         "codex": "Codex",
@@ -1736,6 +1745,9 @@
     "empty": "No prompts yet",
     "emptyDescription": "Click the button above to add or import prompts",
     "loading": "Loading...",
+    "searchPlaceholder": "Search prompt names, descriptions, or content...",
+    "searchAriaLabel": "Search managed prompts",
+    "noSearchResults": "No matching prompts found",
     "name": "Name",
     "namePlaceholder": "e.g., Default Project Prompt",
     "description": "Description",
@@ -2085,6 +2097,9 @@
     "noResults": "No matching skills found",
     "noInstalled": "No skills installed",
     "noInstalledDescription": "Discover and install skills from repositories, or import existing skills",
+    "installedSearchPlaceholder": "Search installed skill names, descriptions, or repositories...",
+    "installedSearchAriaLabel": "Search installed skills",
+    "noInstalledSearchResults": "No matching installed skills found",
     "discover": "Discover Skills",
     "import": "Import Existing",
     "importDescription": "Select skills to import into CC Switch unified management",

@@ -23,15 +23,18 @@ import {
 } from "lucide-react";
 import { useManagedAuth } from "./hooks/useManagedAuth";
 import { copyText } from "@/lib/clipboard";
+import CodexOauthAccountQuota from "@/components/CodexOauthAccountQuota";
 
 interface CodexOAuthSectionProps {
   className?: string;
+  showAccountQuota?: boolean;
   selectedAccountId?: string | null;
   onAccountSelect?: (accountId: string | null) => void;
 }
 
 export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
   className,
+  showAccountQuota = false,
   selectedAccountId,
   onAccountSelect,
 }) => {
@@ -138,47 +141,54 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
             {accounts.map((account) => (
               <div
                 key={account.id}
-                className="flex items-center justify-between rounded-md border bg-muted/30 p-2"
+                className="space-y-2 rounded-md border bg-muted/30 p-2"
               >
-                <div className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">{account.login}</span>
-                  {defaultAccountId === account.id && (
-                    <Badge variant="secondary" className="text-xs">
-                      {t("codexOauth.defaultAccount", "默认")}
-                    </Badge>
-                  )}
-                  {selectedAccountId === account.id && (
-                    <Badge variant="outline" className="text-xs">
-                      {t("codexOauth.selected", "已选中")}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {defaultAccountId !== account.id && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm font-medium">{account.login}</span>
+                    {defaultAccountId === account.id && (
+                      <Badge variant="secondary" className="text-xs">
+                        {t("codexOauth.defaultAccount", "默认")}
+                      </Badge>
+                    )}
+                    {selectedAccountId === account.id && (
+                      <Badge variant="outline" className="text-xs">
+                        {t("codexOauth.selected", "已选中")}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {defaultAccountId !== account.id && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground"
+                        onClick={() => setDefaultAccount(account.id)}
+                        disabled={isSettingDefaultAccount}
+                      >
+                        {t("codexOauth.setAsDefault", "设为默认")}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs text-muted-foreground"
-                      onClick={() => setDefaultAccount(account.id)}
-                      disabled={isSettingDefaultAccount}
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                      onClick={(event) =>
+                        handleRemoveAccount(account.id, event)
+                      }
+                      disabled={isRemovingAccount}
+                      title={t("codexOauth.removeAccount", "移除账号")}
                     >
-                      {t("codexOauth.setAsDefault", "设为默认")}
+                      <X className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                    onClick={(event) => handleRemoveAccount(account.id, event)}
-                    disabled={isRemovingAccount}
-                    title={t("codexOauth.removeAccount", "移除账号")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  </div>
                 </div>
+                {showAccountQuota && (
+                  <CodexOauthAccountQuota accountId={account.id} />
+                )}
               </div>
             ))}
           </div>
@@ -254,7 +264,12 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
           </div>
 
           <div className="text-center">
-            <Button type="button" variant="ghost" size="sm" onClick={cancelAuth}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={cancelAuth}
+            >
               {t("common.cancel", "取消")}
             </Button>
           </div>
@@ -265,10 +280,20 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
         <div className="space-y-2">
           <p className="text-sm text-red-500">{error}</p>
           <div className="flex gap-2">
-            <Button type="button" onClick={addAccount} variant="outline" size="sm">
+            <Button
+              type="button"
+              onClick={addAccount}
+              variant="outline"
+              size="sm"
+            >
               {t("codexOauth.retry", "重试")}
             </Button>
-            <Button type="button" onClick={cancelAuth} variant="ghost" size="sm">
+            <Button
+              type="button"
+              onClick={cancelAuth}
+              variant="ghost"
+              size="sm"
+            >
               {t("common.cancel", "取消")}
             </Button>
           </div>

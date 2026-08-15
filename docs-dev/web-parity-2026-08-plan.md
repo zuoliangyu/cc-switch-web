@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W5 已完成，W6 待开始）
+> 状态：实施中（W0–W6 已完成，W7 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -200,14 +200,14 @@
 
 ### W6：管理页、导航与浏览器运行体验
 
-- [ ] MCP、Prompt、Skill 列表增加统一搜索，Esc 清空。
-- [ ] MCP、Skill 按应用批量启停，顺序执行并聚合失败；操作目标为全量列表而非过滤结果。
-- [ ] MCP 单列原子更新，Skill 更新校验 install generation，避免并发覆盖和卸载后复活。
-- [ ] Auth Center 展示每个 ChatGPT 账号的订阅用量，复用现有 query cache。
-- [ ] 所有应用启用时，主操作区不被裁切；当前应用始终可见，其余进入更多菜单。
-- [ ] 浏览器标签页隐藏或窗口失焦时停止纯装饰心跳动画。
-- [ ] 应用切换器固定为图标模式，但继续满足移动端可访问菜单和 tooltip。
-- [ ] 三语缺失键测试覆盖工具管理、管理列表和 Pi。
+- [x] MCP、Prompt、Skill 列表增加统一搜索，Esc 清空。
+- [x] MCP、Skill 按应用批量启停，顺序执行并聚合失败；操作目标为全量列表而非过滤结果。
+- [x] MCP 单列原子更新，Skill 更新校验 install generation，避免并发覆盖和卸载后复活。
+- [x] Auth Center 展示每个 ChatGPT 账号的订阅用量，复用现有 query cache。
+- [x] 所有应用启用时，主操作区不被裁切；当前应用始终可见，其余进入更多菜单。
+- [x] 浏览器标签页隐藏或窗口失焦时停止纯装饰心跳动画。
+- [x] 应用切换器固定为图标模式，但继续满足移动端可访问菜单和 tooltip。
+- [x] 三语缺失键测试覆盖工具管理和管理列表；Pi 文案随 W7 功能接入时覆盖。
 
 主要上游提交：`f5f4281d`、`b884595a`、`a354f08a`、`492245dc`、`968794e3`、`9f19d8fd`、`0cb6e014`。
 
@@ -519,3 +519,5 @@ W0 基线修复
 - W4 验证：定价修复回归 1/1、现有模型定价匹配 1/1、Codex 预设与 catalog 表单 Vitest 6/6 通过；`pnpm typecheck`、`git diff --check` 通过。
 - 2026-08-16：完成 W5。Provider 预设同步到上游最终状态，新增 PPIO、JieKou AI、XycAi 并拆分火山双 Plan；移除已下架预设和卡片合作星标。Provider 表单复用共用模型搜索、Codex 字段和请求头编辑能力，补齐 Claude Desktop、Grok Build、OpenCode、OpenClaw、Hermes 层级；统一原生 checkbox、IME-safe input、窄屏间距和路由激活反馈。
 - W5 验证：14 个定向 Vitest 文件共 92/92 通过，覆盖预设、三语键、表单 load/save、IME composition、搜索、Proxy 初始状态和 reduced-motion；`pnpm typecheck`、`git diff --check` 通过。
+- 2026-08-16：完成 W6。MCP、Prompt、Skill 管理列表统一支持搜索，MCP 与 Skill 可按应用串行批量启停并汇总失败；MCP 单应用状态改为数据库单列原子更新。Auth Center 复用账号额度 query cache 展示各 ChatGPT 账号用量。应用切换器按可用宽度收纳溢出项并保持当前应用可见，页头主操作区不再被挤压；浏览器隐藏或失焦时停止状态心跳，reduced-motion 保持静态。
+- W6 验证：管理列表、批量操作、账号额度、导航溢出和浏览器活动状态共 10 个定向 Vitest 文件 25/25 通过；MCP DAO 并发测试 2/2 通过；`pnpm typecheck`、`git diff --check` 通过。

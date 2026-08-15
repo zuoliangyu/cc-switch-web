@@ -32,8 +32,18 @@ export function useCodexOauthQuota(
     autoQuery?: boolean;
   } = {},
 ) {
-  const { enabled = true, autoQuery = false } = options;
   const accountId = resolveManagedAccountId(meta, PROVIDER_TYPES.CODEX_OAUTH);
+  return useCodexOauthQuotaByAccountId(accountId, options);
+}
+
+export function useCodexOauthQuotaByAccountId(
+  accountId: string | null,
+  options: {
+    enabled?: boolean;
+    autoQuery?: boolean;
+  } = {},
+) {
+  const { enabled = true, autoQuery = false } = options;
 
   return useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],

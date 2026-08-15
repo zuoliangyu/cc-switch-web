@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Server } from "lucide-react";
+import { Search, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   useAllMcpServers,
+  useBulkToggleMcpApp,
   useToggleMcpApp,
   useDeleteMcpServer,
   useImportMcpFromApps,
@@ -21,6 +22,7 @@ import { MCP_SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
+import { ManagementListSearch } from "@/components/common/ManagementListSearch";
 
 interface UnifiedMcpPanelProps {
   onOpenChange: (open: boolean) => void;
@@ -38,6 +40,7 @@ const UnifiedMcpPanel = React.forwardRef<
   const { t } = useTranslation();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -47,6 +50,7 @@ const UnifiedMcpPanel = React.forwardRef<
 
   const { data: serversMap, isLoading } = useAllMcpServers();
   const toggleAppMutation = useToggleMcpApp();
+  const bulkToggleAppMutation = useBulkToggleMcpApp();
   const deleteServerMutation = useDeleteMcpServer();
   const importMutation = useImportMcpFromApps();
 
@@ -54,6 +58,34 @@ const UnifiedMcpPanel = React.forwardRef<
     if (!serversMap) return [];
     return Object.entries(serversMap);
   }, [serversMap]);
+
+  const filteredServerEntries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return serverEntries;
+    return serverEntries.filter(([id, server]) => {
+      const spec = server.server ?? {};
+      const searchable = [
+        id,
+        server.name,
+        server.description,
+        ...(server.tags ?? []),
+        spec.type,
+        spec.command,
+        ...(spec.args ?? []),
+        spec.cwd,
+        spec.url,
+        server.homepage,
+        server.docs,
+      ];
+      return searchable.some(
+        (value) =>
+          typeof value === "string" && value.toLowerCase().includes(query),
+      );
+    });
+  }, [searchQuery, serverEntries]);
+
+  const writePending =
+    toggleAppMutation.isPending || bulkToggleAppMutation.isPending;
 
   const enabledCounts = useMemo(() => {
     const counts = {
@@ -79,10 +111,30 @@ const UnifiedMcpPanel = React.forwardRef<
     app: AppId,
     enabled: boolean,
   ) => {
+    if (writePending) return;
     try {
       await toggleAppMutation.mutateAsync({ serverId, app, enabled });
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
+    }
+  };
+
+  const handleToggleAll = async (app: AppId, enabled: boolean) => {
+    if (writePending) return;
+    const serverIds = serverEntries
+      .filter(([_, server]) => Boolean(server.apps[app]) !== enabled)
+      .map(([id]) => id);
+    if (serverIds.length === 0) return;
+
+    const result = await bulkToggleAppMutation.mutateAsync({
+      serverIds,
+      app,
+      enabled,
+    });
+    if (result.failed.length > 0) {
+      toast.error(
+        t("common.bulkToggleFailed", { count: result.failed.length }),
+      );
     }
   };
 
@@ -146,6 +198,18 @@ const UnifiedMcpPanel = React.forwardRef<
         totalLabel={t("mcp.serverCount", { count: serverEntries.length })}
         counts={enabledCounts}
         appIds={MCP_SKILLS_APP_IDS}
+        totalCount={serverEntries.length}
+        onToggleAll={handleToggleAll}
+        pendingApp={bulkToggleAppMutation.variables?.app ?? null}
+        disabled={writePending}
+      />
+
+      <ManagementListSearch
+        value={searchQuery}
+        onValueChange={setSearchQuery}
+        placeholder={t("mcp.unifiedPanel.searchPlaceholder")}
+        ariaLabel={t("mcp.unifiedPanel.searchAriaLabel")}
+        clearLabel={t("common.clear")}
       />
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24">
@@ -165,10 +229,15 @@ const UnifiedMcpPanel = React.forwardRef<
               {t("mcp.emptyDescription")}
             </p>
           </div>
+        ) : filteredServerEntries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            <Search className="mb-4 h-10 w-10 opacity-40" />
+            <p className="text-sm">{t("mcp.unifiedPanel.noSearchResults")}</p>
+          </div>
         ) : (
           <TooltipProvider delayDuration={300}>
             <div className="rounded-xl border border-border-default overflow-hidden">
-              {serverEntries.map(([id, server], index) => (
+              {filteredServerEntries.map(([id, server], index) => (
                 <UnifiedMcpListItem
                   key={id}
                   id={id}
@@ -176,7 +245,8 @@ const UnifiedMcpPanel = React.forwardRef<
                   onToggleApp={handleToggleApp}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
-                  isLast={index === serverEntries.length - 1}
+                  disabled={writePending}
+                  isLast={index === filteredServerEntries.length - 1}
                 />
               ))}
             </div>
@@ -221,6 +291,7 @@ interface UnifiedMcpListItemProps {
   onToggleApp: (serverId: string, app: AppId, enabled: boolean) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  disabled?: boolean;
   isLast?: boolean;
 }
 
@@ -230,6 +301,7 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
   onToggleApp,
   onEdit,
   onDelete,
+  disabled,
   isLast,
 }) => {
   const { t } = useTranslation();
@@ -288,6 +360,7 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
         apps={server.apps}
         onToggle={(app, enabled) => onToggleApp(id, app, enabled)}
         appIds={MCP_SKILLS_APP_IDS}
+        disabled={disabled}
       />
 
       <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -297,6 +370,7 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
           size="icon"
           className="h-7 w-7"
           onClick={() => onEdit(id)}
+          disabled={disabled}
           title={t("common.edit")}
         >
           <Edit3 size={14} />
@@ -307,6 +381,7 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
           size="icon"
           className="h-7 w-7 hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
           onClick={() => onDelete(id)}
+          disabled={disabled}
           title={t("common.delete")}
         >
           <Trash2 size={14} />

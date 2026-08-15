@@ -13,6 +13,9 @@ import {
   MODELS_DEV_SYNC_CONFIG_QUERY_KEY,
   syncModelsDevPricingOnStartup,
 } from "@/lib/modelsDevAutoSync";
+import { initializeWindowActivity } from "@/lib/windowActivity";
+
+initializeWindowActivity();
 
 // 根据平台添加 body class，便于平台特定样式
 try {

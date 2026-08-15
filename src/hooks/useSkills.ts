@@ -15,6 +15,7 @@ import {
   type SkillUpdateInfo,
 } from "@/lib/api/skills";
 import type { AppId } from "@/lib/api/types";
+import { runSequentialBulkAction } from "@/lib/utils/sequentialBulkAction";
 
 function mergeInstalledSkills(
   existing: InstalledSkill[] | undefined,
@@ -199,6 +200,26 @@ export function useToggleSkillApp() {
   });
 }
 
+export function useBulkToggleSkillApp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ids,
+      app,
+      enabled,
+    }: {
+      ids: string[];
+      app: AppId;
+      enabled: boolean;
+    }) =>
+      runSequentialBulkAction(ids, (id) =>
+        skillsApi.toggleApp(id, app, enabled),
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["skills", "installed"] }),
+  });
+}
+
 /**
  * 扫描未管理的 Skills
  */
@@ -279,13 +300,8 @@ export function useRemoveSkillRepo() {
 export function useInstallSkillArchives() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      files,
-      currentApp,
-    }: {
-      files: File[];
-      currentApp: AppId;
-    }) => skillsApi.installFromArchives(files, currentApp),
+    mutationFn: ({ files, currentApp }: { files: File[]; currentApp: AppId }) =>
+      skillsApi.installFromArchives(files, currentApp),
     onSuccess: (results) => {
       const installedSkills = results.flatMap((result) => result.installed);
       if (installedSkills.length === 0) {

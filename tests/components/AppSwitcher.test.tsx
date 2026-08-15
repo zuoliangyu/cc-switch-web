@@ -15,4 +15,39 @@ describe("AppSwitcher", () => {
 
     expect(onSwitch).toHaveBeenCalledWith("codex");
   });
+
+  it("空间不足时保留当前应用并把其余应用放入更多菜单", async () => {
+    const onSwitch = vi.fn();
+    const originalResizeObserver = globalThis.ResizeObserver;
+    const offsetWidth = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockReturnValue(40);
+    const clientWidth = vi
+      .spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockReturnValue(120);
+    globalThis.ResizeObserver = class ResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.callback(
+          [{ target } as ResizeObserverEntry],
+          this as unknown as ResizeObserver,
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+
+    render(<AppSwitcher activeApp="codex" onSwitch={onSwitch} />);
+
+    expect(screen.getAllByRole("button", { name: "Codex" })).toHaveLength(2);
+    await userEvent.click(
+      screen.getByRole("button", { name: "appSwitcher.more" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Hermes$/ }));
+    expect(onSwitch).toHaveBeenCalledWith("hermes");
+
+    offsetWidth.mockRestore();
+    clientWidth.mockRestore();
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
 });

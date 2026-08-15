@@ -72,15 +72,13 @@ impl McpService {
         app: AppType,
         enabled: bool,
     ) -> Result<(), AppError> {
-        let mut servers = state.db.get_all_mcp_servers()?;
-
-        if let Some(server) = servers.get_mut(server_id) {
-            server.apps.set_enabled_for(&app, enabled);
-            state.db.save_mcp_server(server)?;
-
+        if let Some(server) = state
+            .db
+            .update_mcp_server_app_enabled(server_id, &app, enabled)?
+        {
             // 同步到对应应用
             if enabled {
-                Self::sync_server_to_app(state, server, &app)?;
+                Self::sync_server_to_app(state, &server, &app)?;
             } else {
                 Self::remove_server_from_app(state, server_id, &app)?;
             }
@@ -385,7 +383,9 @@ mod tests {
 
         assert!(error.to_string().contains("codex"));
         let servers = db.get_all_mcp_servers().expect("servers");
-        assert!(servers.get("alpha").is_some_and(|server| server.apps.claude));
+        assert!(servers
+            .get("alpha")
+            .is_some_and(|server| server.apps.claude));
     }
 
     #[test]
@@ -419,11 +419,9 @@ mod tests {
         let error = McpService::sync_all_enabled(&state)
             .expect_err("invalid Claude config must be reported");
         assert!(error.to_string().contains("claude"));
-        assert!(
-            std::fs::read_to_string(&codex_path)
-                .expect("read codex config")
-                .contains("[mcp_servers.alpha]")
-        );
+        assert!(std::fs::read_to_string(&codex_path)
+            .expect("read codex config")
+            .contains("[mcp_servers.alpha]"));
         McpService::sync_enabled_for_app(&state, &AppType::Codex)
             .expect("targeted Codex projection ignores broken Claude config");
     }

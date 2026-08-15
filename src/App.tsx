@@ -946,7 +946,16 @@ function App() {
                   <ProfileSwitcher activeApp={activeApp} />
                 </div>
               )}
-            <div className="flex flex-1 min-w-0 overflow-x-hidden items-center">
+            <div className="flex min-w-0 flex-1 items-center justify-end overflow-hidden">
+              {currentView === "providers" && (
+                <AppSwitcher
+                  activeApp={activeApp}
+                  onSwitch={setActiveApp}
+                  visibleApps={visibleApps}
+                />
+              )}
+            </div>
+            <div className="flex shrink-0 items-center">
               <div className="flex shrink-0 items-center gap-1.5 ml-auto">
                 {currentView === "prompts" && (
                   <Button
@@ -1051,12 +1060,6 @@ function App() {
                 )}
                 {currentView === "providers" && (
                   <>
-                    <AppSwitcher
-                      activeApp={activeApp}
-                      onSwitch={setActiveApp}
-                      visibleApps={visibleApps}
-                    />
-
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button

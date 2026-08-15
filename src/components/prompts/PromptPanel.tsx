@@ -7,6 +7,7 @@ import PromptListItem from "./PromptListItem";
 import PromptFormPanel from "./PromptFormPanel";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { ManagementListSearch } from "@/components/common/ManagementListSearch";
+import { PiNativePromptResources } from "./PiNativePromptResources";
 
 interface PromptPanelProps {
   open: boolean;
@@ -121,6 +122,8 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
           ariaLabel={t("prompts.searchAriaLabel")}
           clearLabel={t("common.clear")}
         />
+
+        {appId === "pi" && <PiNativePromptResources />}
 
         <div className="flex-1 overflow-y-auto pb-16">
           {loading ? (

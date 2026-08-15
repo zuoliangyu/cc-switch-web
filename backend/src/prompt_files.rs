@@ -20,6 +20,7 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::OpenCode => get_opencode_dir(),
         AppType::OpenClaw => get_openclaw_dir(),
         AppType::Hermes => crate::hermes_config::get_hermes_dir(),
+        AppType::Pi => crate::pi_config::get_pi_agent_dir()?,
     };
 
     let filename = match app {
@@ -28,6 +29,7 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Gemini => "GEMINI.md",
         AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => "AGENTS.md",
         AppType::Hermes => "SOUL.md",
+        AppType::Pi => "AGENTS.md",
     };
 
     Ok(base_dir.join(filename))

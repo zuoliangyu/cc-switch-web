@@ -90,6 +90,7 @@ describe("useDirectorySettings", () => {
       opencode: "/remote/opencode",
       openclaw: "/remote/opencode",
       hermes: "/remote/opencode",
+      pi: "/remote/opencode",
     });
   });
 
@@ -190,6 +191,9 @@ describe("useDirectorySettings", () => {
         "/server/gemini",
         "/server/grokbuild",
         "/server/opencode",
+        undefined,
+        undefined,
+        "/server/pi",
       );
     });
 
@@ -198,5 +202,6 @@ describe("useDirectorySettings", () => {
     expect(result.current.resolvedDirs.gemini).toBe("/server/gemini");
     expect(result.current.resolvedDirs.grokbuild).toBe("/server/grokbuild");
     expect(result.current.resolvedDirs.opencode).toBe("/server/opencode");
+    expect(result.current.resolvedDirs.pi).toBe("/server/pi");
   });
 });

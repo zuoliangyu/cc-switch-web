@@ -169,6 +169,7 @@ function App() {
     opencode: true,
     openclaw: true,
     hermes: true,
+    pi: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -180,6 +181,7 @@ function App() {
     if (visibleApps.opencode) return "opencode";
     if (visibleApps.openclaw) return "openclaw";
     if (visibleApps.hermes) return "hermes";
+    if (visibleApps.pi) return "pi";
     return "claude"; // fallback
   };
 
@@ -198,7 +200,8 @@ function App() {
       activeApp !== "grokbuild" &&
       activeApp !== "opencode" &&
       activeApp !== "openclaw" &&
-      activeApp !== "gemini"
+      activeApp !== "gemini" &&
+      activeApp !== "pi"
     ) {
       setCurrentView("providers");
     }
@@ -310,7 +313,8 @@ function App() {
     takeoverStatus,
     status: proxyStatus,
   } = useProxyStatus();
-  const isCurrentAppTakeoverActive = takeoverStatus?.[activeApp] || false;
+  const isCurrentAppTakeoverActive =
+    activeApp !== "pi" && (takeoverStatus?.[activeApp] || false);
   const activeProviderId = useMemo(() => {
     const target = proxyStatus?.active_targets?.find(
       (t) => t.app_type === activeApp,
@@ -344,7 +348,8 @@ function App() {
     activeApp === "grokbuild" ||
     activeApp === "opencode" ||
     activeApp === "openclaw" ||
-    activeApp === "gemini";
+    activeApp === "gemini" ||
+    activeApp === "pi";
 
   const {
     addProvider,
@@ -488,6 +493,9 @@ function App() {
         await queryClient.invalidateQueries({
           queryKey: hermesKeys.liveProviderIds,
         });
+      } else if (activeApp === "pi") {
+        await queryClient.invalidateQueries({ queryKey: ["piLiveProviderIds"] });
+        await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
       }
       toast.success(
         t("notifications.removeFromConfigSuccess", {
@@ -541,7 +549,8 @@ function App() {
     if (
       activeApp === "opencode" ||
       activeApp === "openclaw" ||
-      activeApp === "hermes"
+      activeApp === "hermes" ||
+      activeApp === "pi"
     ) {
       let liveProviderIds: string[] = [];
       try {
@@ -556,10 +565,15 @@ function App() {
                   queryKey: openclawKeys.liveProviderIds,
                   queryFn: () => providersApi.getOpenClawLiveProviderIds(),
                 })
-              : await queryClient.ensureQueryData({
-                  queryKey: hermesKeys.liveProviderIds,
-                  queryFn: () => providersApi.getHermesLiveProviderIds(),
-                });
+              : activeApp === "hermes"
+                ? await queryClient.ensureQueryData({
+                    queryKey: hermesKeys.liveProviderIds,
+                    queryFn: () => providersApi.getHermesLiveProviderIds(),
+                  })
+                : await queryClient.ensureQueryData({
+                    queryKey: ["piLiveProviderIds"],
+                    queryFn: () => providersApi.getPiLiveProviderIds(),
+                  });
       } catch (error) {
         console.error(
           "[App] Failed to load live provider IDs for duplication",
@@ -745,7 +759,8 @@ function App() {
                       onRemoveFromConfig={
                         activeApp === "opencode" ||
                         activeApp === "openclaw" ||
-                        activeApp === "hermes"
+                        activeApp === "hermes" ||
+                        activeApp === "pi"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined
@@ -881,13 +896,15 @@ function App() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <RoutingActivationBrand
-                  active={isProxyRunning && isCurrentAppTakeoverActive}
-                  contextKey={activeApp}
-                  ready={
-                    proxyStatus !== undefined && takeoverStatus !== undefined
-                  }
-                />
+                {activeApp !== "pi" && (
+                  <RoutingActivationBrand
+                    active={isProxyRunning && isCurrentAppTakeoverActive}
+                    contextKey={activeApp}
+                    ready={
+                      proxyStatus !== undefined && takeoverStatus !== undefined
+                    }
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -930,7 +947,8 @@ function App() {
             {currentView === "providers" &&
               activeApp !== "opencode" &&
               activeApp !== "openclaw" &&
-              activeApp !== "hermes" && (
+              activeApp !== "hermes" &&
+              activeApp !== "pi" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableLocalProxy && (
                     <ProxyToggle activeApp={activeApp} />

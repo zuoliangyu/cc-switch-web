@@ -448,7 +448,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi => return Err("该应用不支持代理功能".to_string()),
         };
 
         self.sync_live_config_to_provider(app_type, &live_config)
@@ -717,7 +717,7 @@ impl ProxyService {
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
-            AppType::Hermes => {}
+            AppType::Hermes | AppType::Pi => {}
         }
 
         Ok(())
@@ -809,7 +809,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi => return Err("该应用不支持代理功能".to_string()),
         };
 
         if Self::live_has_proxy_placeholder_for_app(app_type, &config) {
@@ -1058,7 +1058,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes => return Err("Hermes 不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi => return Err("该应用不支持代理功能".to_string()),
         }
 
         Ok(())
@@ -1147,7 +1147,7 @@ impl ProxyService {
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
-            AppType::Hermes => {}
+            AppType::Hermes | AppType::Pi => {}
         }
 
         Ok(())
@@ -1201,7 +1201,7 @@ impl ProxyService {
             AppType::OpenClaw => {
                 // OpenClaw doesn't support proxy features, skip silently
             }
-            AppType::Hermes => {}
+            AppType::Hermes | AppType::Pi => {}
         }
 
         Ok(())
@@ -1307,7 +1307,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 Err("OpenClaw 不支持代理功能".to_string())
             }
-            AppType::Hermes => Err("Hermes 不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi => Err("该应用不支持代理功能".to_string()),
         }
     }
 
@@ -1339,7 +1339,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy takeover
                 false
             }
-            AppType::Hermes => false,
+            AppType::Hermes | AppType::Pi => false,
         }
     }
 
@@ -1390,7 +1390,7 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 Ok(())
             }
-            AppType::Hermes => Ok(()),
+            AppType::Hermes | AppType::Pi => Ok(()),
         }
     }
 
@@ -1682,7 +1682,7 @@ impl ProxyService {
             }
             AppType::GrokBuild => serde_json::to_string(&effective_settings)
                 .map_err(|e| format!("序列化 Grok Build 配置失败: {e}"))?,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi => {
                 return Err(format!("未知的应用类型: {app_type}"));
             }
         };

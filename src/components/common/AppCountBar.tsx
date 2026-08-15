@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 interface AppCountBarProps {
   totalLabel: string;
   counts: Partial<Record<AppId, number>>;
-  appIds?: AppId[];
+  appIds?: readonly AppId[];
   totalCount?: number;
   onToggleAll?: (app: AppId, enabled: boolean) => void | Promise<void>;
   pendingApp?: AppId | null;

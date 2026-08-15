@@ -72,7 +72,7 @@ impl Database {
             AppType::GrokBuild => Some("enabled_grokbuild"),
             AppType::OpenCode => Some("enabled_opencode"),
             AppType::Hermes => Some("enabled_hermes"),
-            AppType::ClaudeDesktop | AppType::OpenClaw => None,
+            AppType::ClaudeDesktop | AppType::OpenClaw | AppType::Pi => None,
         };
 
         if let Some(column) = column {

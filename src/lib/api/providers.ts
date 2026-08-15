@@ -116,6 +116,14 @@ export const providersApi = {
     return await invoke("import_openclaw_providers_from_live");
   },
 
+  async getPiLiveProviderIds(): Promise<string[]> {
+    return await invoke("get_pi_live_provider_ids");
+  },
+
+  async importPiFromLive(): Promise<number> {
+    return await invoke("import_pi_providers_from_live");
+  },
+
   /**
    * 获取 Hermes live 配置中的供应商 ID 列表
    */
@@ -164,4 +172,3 @@ export const universalProvidersApi = {
     return await invoke("sync_universal_provider", { id });
   },
 };
-

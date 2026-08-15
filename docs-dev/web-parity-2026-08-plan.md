@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W6 已完成，W7 待开始）
+> 状态：实施中（W0–W7 已完成，W8 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -219,30 +219,30 @@ Pi 按上游最终契约一次落地，但复用现有 OpenCode/Hermes/Provider 
 
 #### W7.1 应用与配置
 
-- [ ] 增加 `AppType::Pi`、前端 `AppId`、图标、可见性和目录设置。
-- [ ] 管理 `~/.pi/agent/models.json.providers` 中的全部显式节点。
-- [ ] Provider ID 精确匹配；内置 ID 的显式覆盖也作为普通可管理配置。
-- [ ] 保存只替换目标 Provider，未知字段和其他顶层字段无损保留。
-- [ ] `auth.json` 始终不读、不写；不改变 `defaultProvider`、`defaultModel`。
-- [ ] Provider 为 additive 模式，启用/移除只增删显式节点，数据库卡片保留。
-- [ ] 模型列表获取只填 ID/名称，不为自定义模型猜测能力。
-- [ ] 预设离线提供模型能力和稀疏 `thinkingLevelMap`。
+- [x] 增加 `AppType::Pi`、前端 `AppId`、图标、可见性和目录设置。
+- [x] 管理 `~/.pi/agent/models.json.providers` 中的全部显式节点。
+- [x] Provider ID 精确匹配；内置 ID 的显式覆盖也作为普通可管理配置。
+- [x] 保存只替换目标 Provider，未知字段和其他顶层字段无损保留。
+- [x] `auth.json` 始终不读、不写；不改变 `defaultProvider`、`defaultModel`。
+- [x] Provider 为 additive 模式，启用/移除只增删显式节点，数据库卡片保留。
+- [x] 模型列表获取只填 ID/名称，不为自定义模型猜测能力。
+- [x] 预设离线提供模型能力和稀疏 `thinkingLevelMap`。
 
 #### W7.2 Prompts、Skills 与 Sessions
 
-- [ ] 全局 Prompt 管理 `AGENTS.md`，外部内容先入库再覆盖。
-- [ ] 原生系统提示管理 `SYSTEM.md`、`APPEND_SYSTEM.md`。
-- [ ] 原生模板管理 `prompts/*.md`，空模板仍是有效文件。
-- [ ] Skills 以 Pi 原生目录存在性为唯一启用状态。
-- [ ] Sessions 读取绝对 `sessionDir`、`~` 和默认目录；相对路径明确提示缺少项目上下文。
-- [ ] 删除 Session 前验证根目录和 session ID。
+- [x] 全局 Prompt 管理 `AGENTS.md`，外部内容先入库再覆盖。
+- [x] 原生系统提示管理 `SYSTEM.md`、`APPEND_SYSTEM.md`。
+- [x] 原生模板管理 `prompts/*.md`，空模板仍是有效文件。
+- [x] Skills 以 Pi 原生目录存在性为唯一启用状态。
+- [x] Sessions 读取绝对 `sessionDir`、`~` 和默认目录；相对路径明确提示缺少项目上下文。
+- [x] 删除 Session 前验证根目录和 session ID。
 
 #### W7.3 Web 边界
 
-- [ ] 新增 Pi API、query 和 runtime client 映射。
-- [ ] 所有 Pi API 经过 Web access key 保护。
-- [ ] Proxy、failover、takeover、OAuth 和 managed account 对 Pi 显式返回不支持或从 UI 隐藏。
-- [ ] 三语文案、键盘、深浅主题、移动端布局和可访问名称完整。
+- [x] 新增 Pi API、query 和 runtime client 映射。
+- [x] 所有 Pi API 经过 Web access key 保护。
+- [x] Proxy、failover、takeover、OAuth 和 managed account 对 Pi 显式返回不支持或从 UI 隐藏。
+- [x] 三语文案、键盘、深浅主题、移动端布局和可访问名称完整。
 
 主要上游提交：`84e75ad2`。
 
@@ -521,3 +521,5 @@ W0 基线修复
 - W5 验证：14 个定向 Vitest 文件共 92/92 通过，覆盖预设、三语键、表单 load/save、IME composition、搜索、Proxy 初始状态和 reduced-motion；`pnpm typecheck`、`git diff --check` 通过。
 - 2026-08-16：完成 W6。MCP、Prompt、Skill 管理列表统一支持搜索，MCP 与 Skill 可按应用串行批量启停并汇总失败；MCP 单应用状态改为数据库单列原子更新。Auth Center 复用账号额度 query cache 展示各 ChatGPT 账号用量。应用切换器按可用宽度收纳溢出项并保持当前应用可见，页头主操作区不再被挤压；浏览器隐藏或失焦时停止状态心跳，reduced-motion 保持静态。
 - W6 验证：管理列表、批量操作、账号额度、导航溢出和浏览器活动状态共 10 个定向 Vitest 文件 25/25 通过；MCP DAO 并发测试 2/2 通过；`pnpm typecheck`、`git diff --check` 通过。
+- 2026-08-16：完成 W7。Pi 接入应用注册、目录、Provider、Prompts、Skills 和 Sessions；`models.json.providers` 使用 additive 原生适配并保留未知字段，不触碰 `auth.json` 或默认 Provider/Model。Pi 原生 Prompt 文件和模板使用 revision 防止陈旧覆盖，`AGENTS.md` 外部内容先备份；Proxy、failover、takeover、OAuth 和 managed account 均明确排除。前端采用精简表单与离线预设，完整 JSON 保留所有扩展字段，自定义模型不猜测能力。
+- W7 验证：Pi 表单、预设、三语、目录设置、Provider 操作、应用入口、Prompts、Skills 和 Sessions 共 12 个定向 Vitest 文件 57/57 通过；Rust `pi` 过滤测试 286/286 通过，覆盖 Pi 配置、Provider、Prompt 外部修改保护、原生 Prompt 文件与 Session 边界；`pnpm typecheck`、W7 新增 Rust 文件 `rustfmt --check`、`git diff --check` 通过。

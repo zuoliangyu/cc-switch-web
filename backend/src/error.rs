@@ -9,6 +9,8 @@ pub enum AppError {
     Config(String),
     #[error("无效输入: {0}")]
     InvalidInput(String),
+    #[error("配置已发生变化: {0}")]
+    Conflict(String),
     #[error("IO 错误: {path}: {source}")]
     Io {
         path: String,

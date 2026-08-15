@@ -214,7 +214,7 @@ impl StreamCheckService {
 
         if matches!(
             app_type,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi
         ) {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
@@ -295,7 +295,7 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi => {
                 unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
@@ -713,6 +713,16 @@ impl StreamCheckService {
             }
             AppType::Hermes => {
                 Self::check_hermes_stream(
+                    &client,
+                    provider,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                )
+                .await
+            }
+            AppType::Pi => {
+                Self::check_openclaw_stream(
                     &client,
                     provider,
                     &model_to_test,
@@ -1291,6 +1301,9 @@ impl StreamCheckService {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| "gpt-4o".to_string())
             }
             AppType::Hermes => {
+                Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
+            }
+            AppType::Pi => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }

@@ -249,6 +249,7 @@ describe("useSettings hook", () => {
       undefined, // opencodeConfigDir
       undefined, // openclawConfigDir
       undefined, // hermesConfigDir
+      undefined, // piConfigDir
     );
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
   });

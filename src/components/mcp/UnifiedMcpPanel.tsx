@@ -122,7 +122,10 @@ const UnifiedMcpPanel = React.forwardRef<
   const handleToggleAll = async (app: AppId, enabled: boolean) => {
     if (writePending) return;
     const serverIds = serverEntries
-      .filter(([_, server]) => Boolean(server.apps[app]) !== enabled)
+      .filter(
+        ([_, server]) =>
+          Boolean(server.apps[app as keyof typeof server.apps]) !== enabled,
+      )
       .map(([id]) => id);
     if (serverIds.length === 0) return;
 

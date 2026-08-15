@@ -10,6 +10,7 @@ const sections = [
   "claudeDesktop",
   "grokBuild",
   "hermes",
+  "pi",
 ] as const;
 
 describe("Provider form locales", () => {

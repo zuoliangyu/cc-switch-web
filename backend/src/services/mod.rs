@@ -6,6 +6,8 @@ pub(crate) mod mcp;
 pub(crate) mod model_fetch;
 pub(crate) mod model_pricing;
 pub(crate) mod omo;
+pub(crate) mod pi_prompt_files;
+pub(crate) mod pi_state;
 pub(crate) mod profile;
 pub(crate) mod prompt;
 pub(crate) mod provider;

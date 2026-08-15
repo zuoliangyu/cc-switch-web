@@ -10,7 +10,7 @@ import { APP_IDS, APP_ICON_MAP } from "@/config/appConfig";
 interface AppToggleGroupProps {
   apps: Partial<Record<AppId, boolean>>;
   onToggle: (app: AppId, enabled: boolean) => void;
-  appIds?: AppId[];
+  appIds?: readonly AppId[];
   disabled?: boolean;
 }
 

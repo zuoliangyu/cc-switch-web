@@ -587,6 +587,7 @@ impl SkillService {
                     return Ok(custom.join("skills"));
                 }
             }
+            AppType::Pi => return Ok(crate::pi_config::get_pi_agent_dir()?.join("skills")),
         }
 
         // 默认路径：回退到用户主目录下的标准位置
@@ -600,6 +601,7 @@ impl SkillService {
             AppType::OpenCode => home.join(".config").join("opencode").join("skills"),
             AppType::OpenClaw => home.join(".openclaw").join("skills"),
             AppType::Hermes => home.join(".hermes").join("skills"),
+            AppType::Pi => home.join(".pi").join("agent").join("skills"),
         })
     }
 
@@ -607,7 +609,11 @@ impl SkillService {
 
     /// 获取所有已安装的 Skills
     pub fn get_all_installed(db: &Arc<Database>) -> Result<Vec<InstalledSkill>> {
-        let skills = db.get_all_installed_skills()?;
+        let mut skills = db.get_all_installed_skills()?;
+        let pi_dir = Self::get_app_skills_dir(&AppType::Pi)?;
+        for skill in skills.values_mut() {
+            skill.apps.pi = pi_dir.join(&skill.directory).is_dir();
+        }
         Ok(skills.into_values().collect())
     }
 
@@ -1434,8 +1440,10 @@ impl SkillService {
             Self::remove_from_app(&skill.directory, app)?;
         }
 
-        // 更新数据库
-        db.update_skill_apps(id, &skill.apps)?;
+        // Pi 以原生目录存在性为唯一状态，不增加数据库影子字段。
+        if !matches!(app, AppType::Pi) {
+            db.update_skill_apps(id, &skill.apps)?;
+        }
 
         log::info!("Skill {} 的 {:?} 状态已更新为 {}", skill.name, app, enabled);
 
@@ -1770,6 +1778,9 @@ impl SkillService {
     }
 
     fn sync_to_app_unlocked(db: &Arc<Database>, app: &AppType) -> Result<()> {
+        if matches!(app, AppType::Pi) {
+            return Ok(());
+        }
         let skills = db.get_all_installed_skills()?;
         let ssot_dir = Self::get_ssot_dir()?;
         let app_dir = Self::get_app_skills_dir(app)?;
@@ -3265,6 +3276,7 @@ mod tests {
                     grokbuild: false,
                     opencode: true,
                     hermes: false,
+                    pi: false,
                 },
             }],
         )
@@ -3310,6 +3322,7 @@ mod tests {
                 grokbuild: false,
                 opencode: false,
                 hermes: false,
+                pi: false,
             },
             installed_at: 0,
             content_hash: Some("disabled-hash".to_string()),
@@ -3387,6 +3400,7 @@ mod tests {
                 grokbuild: false,
                 opencode: false,
                 hermes: false,
+                pi: false,
             },
             installed_at: 123,
             content_hash: Some("backup-hash".to_string()),
@@ -3446,6 +3460,7 @@ mod tests {
                 grokbuild: false,
                 opencode: false,
                 hermes: false,
+                pi: false,
             },
             installed_at: 456,
             content_hash: Some("restore-hash".to_string()),
@@ -3518,6 +3533,7 @@ mod tests {
                 grokbuild: false,
                 opencode: false,
                 hermes: false,
+                pi: false,
             },
             installed_at: 789,
             content_hash: Some("delete-backup-hash".to_string()),

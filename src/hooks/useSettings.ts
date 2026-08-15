@@ -108,6 +108,7 @@ export function useSettings(): UseSettingsResult {
       sanitizeDir(data?.opencodeConfigDir),
       sanitizeDir(data?.openclawConfigDir),
       sanitizeDir(data?.hermesConfigDir),
+      sanitizeDir(data?.piConfigDir),
     );
     setRequiresRestart(false);
   }, [
@@ -138,6 +139,7 @@ export function useSettings(): UseSettingsResult {
           mergedSettings.openclawConfigDir,
         );
         const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
+        const sanitizedPiDir = sanitizeDir(mergedSettings.piConfigDir);
         const { webdavSync: _ignoredWebdavSync, ...restSettings } =
           mergedSettings;
 
@@ -150,6 +152,7 @@ export function useSettings(): UseSettingsResult {
           opencodeConfigDir: sanitizedOpencodeDir,
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
+          piConfigDir: sanitizedPiDir,
           language: mergedSettings.language,
         };
 

@@ -13,6 +13,14 @@ export { claudeDesktopApi } from "./claudeDesktop";
 export { openclawApi } from "./openclaw";
 export { hermesApi } from "./hermes";
 export { sessionsApi } from "./sessions";
+export { piApi } from "./pi";
+export type {
+  PiCurrentState,
+  PiPromptFileKind,
+  PiPromptFileSnapshot,
+  PiPromptTemplate,
+  PiSessionDiscovery,
+} from "./pi";
 export { workspaceApi } from "./workspace";
 export * as modelFetchApi from "./model-fetch";
 export { subscriptionApi } from "./subscription";

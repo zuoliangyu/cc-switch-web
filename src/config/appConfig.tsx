@@ -24,17 +24,23 @@ export const APP_IDS: AppId[] = [
   "opencode",
   "openclaw",
   "hermes",
+  "pi",
 ];
 
-/** App IDs shown in MCP & Skills panels (excludes OpenClaw) */
-export const MCP_SKILLS_APP_IDS: AppId[] = [
+/** App IDs shown in MCP panel (Pi 不支持 MCP 投影) */
+export const MCP_SKILLS_APP_IDS = [
   "claude",
   "codex",
   "gemini",
   "grokbuild",
   "opencode",
   "hermes",
-];
+] as const satisfies readonly AppId[];
+
+export const SKILLS_APP_IDS = [
+  ...MCP_SKILLS_APP_IDS,
+  "pi",
+] as const satisfies readonly AppId[];
 
 export function getAppLabel(appId: string): string {
   return APP_ICON_MAP[appId as AppId]?.label ?? appId;
@@ -100,6 +106,12 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   hermes: {
     label: "Hermes",
     icon: <ProviderIcon icon="hermes" name="Hermes" size={14} />,
+    activeClass: "theme-chip-primary",
+    badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
+  pi: {
+    label: "Pi",
+    icon: <ProviderIcon icon="pi" name="Pi" size={14} />,
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
   },

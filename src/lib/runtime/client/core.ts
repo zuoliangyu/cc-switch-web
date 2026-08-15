@@ -1,4 +1,5 @@
 import { getDefaultAppProxyConfig } from "./defaults";
+import type { AppId } from "@/lib/api/types";
 import {
   addWebProviderToFailoverQueue,
   addWebProvider,
@@ -220,9 +221,15 @@ import {
   enableWebPrompt,
   upsertWebUniversalProvider,
   deleteWebUniversalProvider,
+  getWebPiState,
+  getWebPiPromptFile,
+  saveWebPiPromptFile,
+  deleteWebPiPromptFile,
+  listWebPiPromptTemplates,
+  saveWebPiPromptTemplate,
+  deleteWebPiPromptTemplate,
+  getWebPiSessionDiscovery,
 } from "./web";
-
-type AppId = "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes";
 
 type InvokeArgs = Record<string, unknown> | undefined;
 
@@ -461,10 +468,14 @@ export async function invoke<T>(
       return (await getWebLiveProviderIds("opencode")) as T;
     case "get_openclaw_live_provider_ids":
       return (await getWebLiveProviderIds("openclaw")) as T;
+    case "get_pi_live_provider_ids":
+      return (await getWebLiveProviderIds("pi")) as T;
     case "import_opencode_providers_from_live":
       return (await importWebProvidersFromLive("opencode")) as T;
     case "import_openclaw_providers_from_live":
       return (await importWebProvidersFromLive("openclaw")) as T;
+    case "import_pi_providers_from_live":
+      return (await importWebProvidersFromLive("pi")) as T;
     case "import_default_config":
       return (await importWebDefaultProviderConfig(args?.app as AppId)) as T;
     case "remove_provider_from_live_config":
@@ -790,6 +801,37 @@ export async function invoke<T>(
           sourcePath: string;
         }[]) ?? [],
       )) as T;
+    case "get_pi_current_state":
+      return (await getWebPiState()) as T;
+    case "get_pi_prompt_file":
+      return (await getWebPiPromptFile(args?.kind as any)) as T;
+    case "save_pi_prompt_file":
+      return (await saveWebPiPromptFile(
+        args?.kind as any,
+        args?.expectedRevision as string,
+        args?.content as string,
+      )) as T;
+    case "delete_pi_prompt_file":
+      return (await deleteWebPiPromptFile(
+        args?.kind as any,
+        args?.expectedRevision as string,
+      )) as T;
+    case "list_pi_prompt_templates":
+      return (await listWebPiPromptTemplates()) as T;
+    case "save_pi_prompt_template":
+      return (await saveWebPiPromptTemplate(
+        args?.slug as string,
+        args?.originalSlug as string | undefined,
+        args?.expectedRevision as string,
+        args?.content as string,
+      )) as T;
+    case "delete_pi_prompt_template":
+      return (await deleteWebPiPromptTemplate(
+        args?.slug as string,
+        args?.expectedRevision as string,
+      )) as T;
+    case "get_pi_session_discovery":
+      return (await getWebPiSessionDiscovery()) as T;
     case "get_usage_summary":
       return (await getWebUsageSummary(
         args?.startDate as number | undefined,

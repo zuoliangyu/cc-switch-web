@@ -12,7 +12,8 @@ type DirectoryKey =
   | "grokbuild"
   | "opencode"
   | "openclaw"
-  | "hermes";
+  | "hermes"
+  | "pi";
 
 export interface ResolvedDirectories {
   appConfig: string;
@@ -23,6 +24,7 @@ export interface ResolvedDirectories {
   opencode: string;
   openclaw: string;
   hermes: string;
+  pi: string;
 }
 
 const sanitizeDir = (value?: string | null): string | undefined => {
@@ -55,6 +57,7 @@ export interface UseDirectorySettingsResult {
     opencodeDir?: string,
     openclawDir?: string,
     hermesDir?: string,
+    piDir?: string,
   ) => void;
 }
 
@@ -85,6 +88,7 @@ export function useDirectorySettings({
     opencode: "",
     openclaw: "",
     hermes: "",
+    pi: "",
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -97,6 +101,7 @@ export function useDirectorySettings({
     opencode: "",
     openclaw: "",
     hermes: "",
+    pi: "",
   });
   const initialAppConfigDirRef = useRef<string | undefined>(undefined);
 
@@ -117,6 +122,7 @@ export function useDirectorySettings({
           opencodeDir,
           openclawDir,
           hermesDir,
+          piDir,
           defaultAppConfig,
           defaultClaudeDir,
           defaultCodexDir,
@@ -125,6 +131,7 @@ export function useDirectorySettings({
           defaultOpencodeDir,
           defaultOpenclawDir,
           defaultHermesDir,
+          defaultPiDir,
         ] = await Promise.all([
           settingsApi.getAppConfigDirOverride(),
           settingsApi.getAppConfigDir(),
@@ -135,6 +142,7 @@ export function useDirectorySettings({
           settingsApi.getConfigDir("opencode"),
           settingsApi.getConfigDir("openclaw"),
           settingsApi.getConfigDir("hermes"),
+          settingsApi.getConfigDir("pi"),
           settingsApi.getDefaultAppConfigDir(),
           settingsApi.getDefaultConfigDir("claude"),
           settingsApi.getDefaultConfigDir("codex"),
@@ -143,6 +151,7 @@ export function useDirectorySettings({
           settingsApi.getDefaultConfigDir("opencode"),
           settingsApi.getDefaultConfigDir("openclaw"),
           settingsApi.getDefaultConfigDir("hermes"),
+          settingsApi.getDefaultConfigDir("pi"),
         ]);
 
         if (!active) return;
@@ -158,6 +167,7 @@ export function useDirectorySettings({
           opencode: defaultOpencodeDir ?? "",
           openclaw: defaultOpenclawDir ?? "",
           hermes: defaultHermesDir ?? "",
+          pi: defaultPiDir ?? "",
         };
 
         setAppConfigDir(normalizedOverride);
@@ -175,6 +185,7 @@ export function useDirectorySettings({
           opencode: opencodeDir || defaultsRef.current.opencode,
           openclaw: openclawDir || defaultsRef.current.openclaw,
           hermes: hermesDir || defaultsRef.current.hermes,
+          pi: piDir || defaultsRef.current.pi,
         });
       } catch (error) {
         console.error(
@@ -211,9 +222,11 @@ export function useDirectorySettings({
                   ? { grokConfigDir: sanitized }
                   : key === "opencode"
                     ? { opencodeConfigDir: sanitized }
-                    : key === "openclaw"
-                      ? { openclawConfigDir: sanitized }
-                      : { hermesConfigDir: sanitized },
+                  : key === "openclaw"
+                    ? { openclawConfigDir: sanitized }
+                    : key === "hermes"
+                      ? { hermesConfigDir: sanitized }
+                      : { piConfigDir: sanitized },
         );
       }
 
@@ -247,7 +260,9 @@ export function useDirectorySettings({
                   ? "opencode"
                   : app === "openclaw"
                     ? "openclaw"
-                    : "hermes",
+                    : app === "hermes"
+                      ? "hermes"
+                      : "pi",
         value,
       );
     },
@@ -286,9 +301,11 @@ export function useDirectorySettings({
                 ? "grokbuild"
                 : app === "opencode"
                   ? "opencode"
-                  : app === "openclaw"
-                    ? "openclaw"
-                    : "hermes";
+                : app === "openclaw"
+                  ? "openclaw"
+                  : app === "hermes"
+                    ? "hermes"
+                    : "pi";
       if (!defaultsRef.current[key]) {
         try {
           const fallback = await settingsApi.getDefaultConfigDir(app);
@@ -335,6 +352,7 @@ export function useDirectorySettings({
       opencodeDir?: string,
       openclawDir?: string,
       hermesDir?: string,
+      piDir?: string,
     ) => {
       setAppConfigDir(initialAppConfigDirRef.current);
       setResolvedDirs({
@@ -347,6 +365,7 @@ export function useDirectorySettings({
         opencode: opencodeDir ?? defaultsRef.current.opencode,
         openclaw: openclawDir ?? defaultsRef.current.openclaw,
         hermes: hermesDir ?? defaultsRef.current.hermes,
+        pi: piDir ?? defaultsRef.current.pi,
       });
     },
     [],

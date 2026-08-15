@@ -160,9 +160,14 @@ export function ProviderCard({
   // OMO and OMO Slim share the same card behavior
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
-  const isAdditiveMode = appId === "opencode" && !isAnyOmo;
+  const isAdditiveMode =
+    (appId === "opencode" && !isAnyOmo) || appId === "pi";
 
-  const { data: health } = useProviderHealth(provider.id, appId);
+  const { data: health } = useProviderHealth(
+    provider.id,
+    appId,
+    appId !== "pi",
+  );
 
   const fallbackUrlText = t("provider.notConfigured", {
     defaultValue: "未配置接口地址",
@@ -202,7 +207,10 @@ export function ProviderCard({
   // 获取用量数据以判断是否有多套餐
   // 累加模式应用（OpenCode/OpenClaw/Hermes）：使用 isInConfig 代替 isCurrent
   const shouldAutoQuery =
-    appId === "opencode" || appId === "openclaw" || appId === "hermes"
+    appId === "opencode" ||
+    appId === "openclaw" ||
+    appId === "hermes" ||
+    appId === "pi"
       ? isInConfig
       : isCurrent;
   const autoQueryInterval = shouldAutoQuery
@@ -261,6 +269,8 @@ export function ProviderCard({
       ? Boolean(isDefaultModel)
       : appId === "opencode"
         ? false
+        : appId === "pi"
+          ? false
         : isAutoFailoverEnabled
           ? activeProviderId === provider.id
           : isCurrent;

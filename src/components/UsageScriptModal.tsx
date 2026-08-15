@@ -211,6 +211,11 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           apiKey: (config as any).apiKey,
           baseUrl: (config as any).baseUrl,
         };
+      } else if (appId === "pi") {
+        return {
+          apiKey: (config as any).apiKey,
+          baseUrl: (config as any).baseUrl,
+        };
       }
       return { apiKey: undefined, baseUrl: undefined };
     } catch (error) {

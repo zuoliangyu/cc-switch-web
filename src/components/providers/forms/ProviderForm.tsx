@@ -118,6 +118,7 @@ import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { useHermesLiveProviderIds } from "@/hooks/useHermes";
 import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
 import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
+import { PiProviderForm } from "./PiProviderForm";
 
 type PresetEntry = {
   id: string;
@@ -2447,6 +2448,9 @@ export type ProviderFormValues = ProviderFormData & {
 };
 
 export function ProviderForm(props: ProviderFormProps) {
+  if (props.appId === "pi") {
+    return <PiProviderForm {...props} />;
+  }
   if (props.appId === "claude-desktop") {
     return <ClaudeDesktopProviderForm {...props} />;
   }

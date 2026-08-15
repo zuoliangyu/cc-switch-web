@@ -379,7 +379,11 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
             }
             _ => false,
         },
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => false,
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => false,
     }
 }
 
@@ -449,7 +453,11 @@ pub(crate) fn remove_common_config_from_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => {
             Ok(settings.clone())
         }
     }
@@ -506,7 +514,11 @@ fn apply_common_config_to_settings(
             }
             Ok(result)
         }
-        AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::GrokBuild
+        | AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi => {
             Ok(settings.clone())
         }
     }
@@ -808,6 +820,11 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             crate::hermes_config::set_provider(&provider.id, provider.settings_config.clone())?;
             log::info!("Hermes provider '{}' written to live config", provider.id);
         }
+        AppType::Pi => {
+            return Err(AppError::InvalidInput(
+                "Pi providers must use the native models.json adapter".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -817,6 +834,10 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
 /// Writes all providers from the database to the live configuration file.
 /// Used for OpenCode and other additive mode applications.
 fn sync_all_providers_to_live(state: &AppState, app_type: &AppType) -> Result<(), AppError> {
+    // Pi 的 models.json 成员关系由原生文件决定；全局恢复不能把数据库目录全部启用。
+    if *app_type == AppType::Pi {
+        return Ok(());
+    }
     let providers = state.db.get_all_providers(app_type.as_str())?;
     let mut synced_count = 0usize;
 
@@ -850,6 +871,9 @@ pub(crate) fn sync_current_provider_for_app_to_live(
     state: &AppState,
     app_type: &AppType,
 ) -> Result<(), AppError> {
+    if *app_type == AppType::Pi {
+        return Ok(());
+    }
     if app_type.is_additive_mode() {
         sync_all_providers_to_live(state, app_type)?;
     } else {
@@ -1004,6 +1028,8 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             Ok(config)
         }
         AppType::Hermes => Ok(Value::Object(crate::hermes_config::get_providers()?)),
+        AppType::Pi => serde_json::to_value(crate::pi_config::read_pi_native_providers()?)
+            .map_err(|source| AppError::JsonSerialize { source }),
     }
 }
 
@@ -1101,7 +1127,7 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             settings
         }
         // Additive mode apps are handled by the early return above.
-        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes => {
+        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi => {
             unreachable!("additive mode apps are handled by early return")
         }
     };

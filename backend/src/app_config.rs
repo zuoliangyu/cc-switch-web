@@ -35,7 +35,7 @@ impl McpApps {
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
             AppType::Hermes => self.hermes,
-            AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 MCP
+            AppType::ClaudeDesktop | AppType::Pi => false,
         }
     }
 
@@ -49,7 +49,7 @@ impl McpApps {
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
             AppType::Hermes => self.hermes = enabled,
-            AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 MCP
+            AppType::ClaudeDesktop | AppType::Pi => {}
         }
     }
 
@@ -93,6 +93,8 @@ pub struct SkillApps {
     pub opencode: bool,
     #[serde(default)]
     pub hermes: bool,
+    #[serde(default)]
+    pub pi: bool,
 }
 
 impl SkillApps {
@@ -106,6 +108,7 @@ impl SkillApps {
             AppType::OpenCode => self.opencode,
             AppType::OpenClaw => false, // OpenClaw doesn't support Skills
             AppType::Hermes => self.hermes,
+            AppType::Pi => self.pi,
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -120,6 +123,7 @@ impl SkillApps {
             AppType::OpenCode => self.opencode = enabled,
             AppType::OpenClaw => {} // OpenClaw doesn't support Skills, ignore
             AppType::Hermes => self.hermes = enabled,
+            AppType::Pi => self.pi = enabled,
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -145,6 +149,9 @@ impl SkillApps {
         if self.hermes {
             apps.push(AppType::Hermes);
         }
+        if self.pi {
+            apps.push(AppType::Pi);
+        }
         apps
     }
 
@@ -156,6 +163,7 @@ impl SkillApps {
             && !self.grokbuild
             && !self.opencode
             && !self.hermes
+            && !self.pi
     }
 
     /// 仅启用指定应用（其他应用设为禁用）
@@ -349,6 +357,7 @@ pub enum AppType {
     OpenCode,
     OpenClaw,
     Hermes,
+    Pi,
 }
 
 impl AppType {
@@ -362,6 +371,7 @@ impl AppType {
             AppType::OpenCode => "opencode",
             AppType::OpenClaw => "openclaw",
             AppType::Hermes => "hermes",
+            AppType::Pi => "pi",
         }
     }
 
@@ -372,7 +382,7 @@ impl AppType {
     pub fn is_additive_mode(&self) -> bool {
         matches!(
             self,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi
         )
     }
 
@@ -386,6 +396,7 @@ impl AppType {
             AppType::OpenCode,
             AppType::OpenClaw,
             AppType::Hermes,
+            AppType::Pi,
         ]
         .into_iter()
     }
@@ -404,10 +415,11 @@ impl FromStr for AppType {
             "opencode" => Ok(AppType::OpenCode),
             "openclaw" => Ok(AppType::OpenClaw),
             "hermes" => Ok(AppType::Hermes),
+            "pi" => Ok(AppType::Pi),
             other => Err(AppError::localized(
                 "unsupported_app",
-                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, grokbuild, opencode, openclaw, hermes。"),
-                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, grokbuild, opencode, openclaw, hermes."),
+                format!("不支持的应用标识: '{other}'。可选值: claude, codex, gemini, grokbuild, opencode, openclaw, hermes, pi。"),
+                format!("Unsupported app id: '{other}'. Allowed: claude, codex, gemini, grokbuild, opencode, openclaw, hermes, pi."),
             )),
         }
     }
@@ -742,6 +754,7 @@ impl MultiAppConfig {
             AppType::OpenCode => &mut config.prompts.opencode.prompts,
             AppType::OpenClaw => &mut config.prompts.openclaw.prompts,
             AppType::Hermes => &mut config.prompts.hermes.prompts,
+            AppType::Pi => return Ok(false),
         };
 
         prompts.insert(id, prompt);
@@ -786,6 +799,7 @@ impl MultiAppConfig {
                 AppType::OpenClaw => continue, // OpenClaw MCP is still in development, skip
                 AppType::Hermes => continue,
                 AppType::ClaudeDesktop => continue, // C-Phase0：claude-desktop 暂不支持 MCP
+                AppType::Pi => continue,
             };
 
             for (id, entry) in old_servers {

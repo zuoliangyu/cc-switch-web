@@ -82,8 +82,8 @@ pub fn extract_text(content: &Value) -> String {
 fn extract_text_from_item(item: &Value) -> Option<String> {
     let item_type = item.get("type").and_then(Value::as_str).unwrap_or("");
 
-    // tool_use: show tool name
-    if item_type == "tool_use" {
+    // Anthropic uses tool_use; Pi uses toolCall.
+    if matches!(item_type, "tool_use" | "toolCall") {
         let name = item
             .get("name")
             .and_then(Value::as_str)
@@ -169,6 +169,14 @@ mod tests {
         assert_eq!(
             parse_timestamp_to_ms(&json!("1970-01-01T00:00:01Z")),
             Some(1_000)
+        );
+    }
+
+    #[test]
+    fn extract_text_supports_pi_tool_calls() {
+        assert_eq!(
+            extract_text(&json!([{ "type": "toolCall", "name": "read" }])),
+            "[Tool: read]"
         );
     }
 }

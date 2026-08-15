@@ -49,6 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api/settings";
+import { invalidatePiProviderCaches } from "@/lib/query/pi";
 
 interface ProviderListProps {
   providers: Record<string, Provider>;
@@ -106,6 +107,12 @@ export function ProviderList({
     enabled: appId === "opencode",
   });
 
+  const { data: piLiveIds } = useQuery({
+    queryKey: ["piLiveProviderIds"],
+    queryFn: () => providersApi.getPiLiveProviderIds(),
+    enabled: appId === "pi",
+  });
+
   // OpenClaw: 查询 live 配置中的供应商 ID 列表，用于判断 isInConfig
   const { data: openclawLiveIds } = useOpenClawLiveProviderIds(
     appId === "openclaw",
@@ -127,9 +134,12 @@ export function ProviderList({
       if (appId === "hermes") {
         return hermesLiveIds?.includes(providerId) ?? false;
       }
+      if (appId === "pi") {
+        return piLiveIds?.includes(providerId) ?? false;
+      }
       return true; // 其他应用始终返回 true
     },
-    [appId, opencodeLiveIds, openclawLiveIds, hermesLiveIds],
+    [appId, opencodeLiveIds, openclawLiveIds, hermesLiveIds, piLiveIds],
   );
 
   // OpenClaw: query default model to determine which provider is default
@@ -146,8 +156,17 @@ export function ProviderList({
   );
 
   // 故障转移相关
-  const { data: isAutoFailoverEnabled } = useAutoFailoverEnabled(appId);
-  const { data: failoverQueue } = useFailoverQueue(appId);
+  const supportsFailover = ![
+    "opencode",
+    "openclaw",
+    "hermes",
+    "pi",
+  ].includes(appId);
+  const { data: isAutoFailoverEnabled } = useAutoFailoverEnabled(
+    appId,
+    supportsFailover,
+  );
+  const { data: failoverQueue } = useFailoverQueue(appId, supportsFailover);
   const addToQueue = useAddToFailoverQueue();
   const removeFromQueue = useRemoveFromFailoverQueue();
 
@@ -248,6 +267,10 @@ export function ProviderList({
         const count = await providersApi.importOpenClawFromLive();
         return count > 0;
       }
+      if (appId === "pi") {
+        const count = await providersApi.importPiFromLive();
+        return count > 0;
+      }
       return providersApi.importDefault(appId);
     },
     onSuccess: (imported) => {
@@ -255,6 +278,9 @@ export function ProviderList({
         queryClient.invalidateQueries({ queryKey: ["providers", appId] });
         if (appId === "claude-desktop") {
           queryClient.invalidateQueries({ queryKey: ["claudeDesktopStatus"] });
+        }
+        if (appId === "pi") {
+          void invalidatePiProviderCaches(queryClient);
         }
         toast.success(t("provider.importCurrentDescription"));
       } else {

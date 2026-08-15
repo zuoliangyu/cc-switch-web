@@ -33,6 +33,7 @@ const ALL_APPS: AppId[] = [
   "opencode",
   "openclaw",
   "hermes",
+  "pi",
 ];
 const STORAGE_KEY = "cc-switch-last-app";
 
@@ -59,6 +60,7 @@ export function AppSwitcher({
     opencode: "opencode",
     openclaw: "openclaw",
     hermes: "hermes",
+    pi: "pi",
   };
   const appDisplayName: Record<AppId, string> = {
     claude: "Claude",
@@ -69,6 +71,7 @@ export function AppSwitcher({
     opencode: "OpenCode",
     openclaw: "OpenClaw",
     hermes: "Hermes",
+    pi: "Pi",
   };
 
   // Filter apps based on visibility settings (default all visible)

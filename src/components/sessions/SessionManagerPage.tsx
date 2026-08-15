@@ -15,6 +15,7 @@ import {
   FolderOpen,
   X,
   CheckSquare,
+  AlertTriangle,
 } from "lucide-react";
 import {
   useDeleteSessionMutation,
@@ -47,6 +48,7 @@ import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
+import { usePiSessionDiscovery } from "@/lib/query/pi";
 import {
   formatSessionTitle,
   formatTimestamp,
@@ -63,13 +65,15 @@ type ProviderFilter =
   | "claude"
   | "opencode"
   | "openclaw"
-  | "gemini";
+  | "gemini"
+  | "pi";
 
 export function SessionManagerPage({ appId }: { appId: string }) {
   const { t } = useTranslation();
   const isWebMode = isWebRuntime();
   const queryClient = useQueryClient();
   const { data, isLoading, refetch } = useSessionsQuery();
+  const { data: piSessionDiscovery } = usePiSessionDiscovery(appId === "pi");
   const sessions = data ?? [];
   const detailRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -516,6 +520,29 @@ export function SessionManagerPage({ appId }: { appId: string }) {
             </div>
           </div>
 
+          {appId === "pi" &&
+            piSessionDiscovery &&
+            piSessionDiscovery.status !== "available" && (
+              <div
+                role="status"
+                className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-medium">
+                    {t("pi.sessions.discoveryUnavailable")}
+                  </p>
+                  <p className="mt-1 text-xs leading-5">
+                    {piSessionDiscovery.status === "requires_project_context"
+                      ? t("pi.sessions.requiresProjectContext", {
+                          path: piSessionDiscovery.configuredPath,
+                        })
+                      : piSessionDiscovery.reason}
+                  </p>
+                </div>
+              </div>
+            )}
+
           {/* 主内容区域 - 左右分栏 */}
           <div className="flex-1 overflow-hidden grid gap-4 md:grid-cols-[340px_1fr]">
             {/* 左侧会话列表 */}
@@ -759,6 +786,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                   size={14}
                                 />
                                 <span>Gemini CLI</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="pi">
+                              <div className="flex items-center gap-2">
+                                <ProviderIcon icon="pi" name="Pi" size={14} />
+                                <span>Pi</span>
                               </div>
                             </SelectItem>
                           </SelectContent>

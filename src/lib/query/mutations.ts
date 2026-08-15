@@ -13,6 +13,7 @@ import {
   CODEX_OFFICIAL_PROVIDER_ID,
   GROKBUILD_OFFICIAL_PROVIDER_ID,
 } from "@/utils/providerCapabilities";
+import { invalidatePiProviderCaches } from "./pi";
 
 export const useAddProviderMutation = (appId: AppId) => {
   const queryClient = useQueryClient();
@@ -48,7 +49,12 @@ export const useAddProviderMutation = (appId: AppId) => {
 
       let id: string;
 
-      if (appId === "opencode" || appId === "openclaw" || appId === "hermes") {
+      if (
+        appId === "opencode" ||
+        appId === "openclaw" ||
+        appId === "hermes" ||
+        appId === "pi"
+      ) {
         if (
           providerInput.category === "omo" ||
           providerInput.category === "omo-slim"
@@ -104,6 +110,9 @@ export const useAddProviderMutation = (appId: AppId) => {
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
       }
+      if (appId === "pi") {
+        await invalidatePiProviderCaches(queryClient);
+      }
 
       toast.success(
         t("notifications.providerAdded", {
@@ -150,6 +159,9 @@ export const useUpdateProviderMutation = (appId: AppId) => {
       }
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
+      }
+      if (appId === "pi") {
+        await invalidatePiProviderCaches(queryClient);
       }
       toast.success(
         t("notifications.updateSuccess", {
@@ -206,6 +218,10 @@ export const useDeleteProviderMutation = (appId: AppId) => {
 
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
+      }
+
+      if (appId === "pi") {
+        await invalidatePiProviderCaches(queryClient);
       }
 
       toast.success(
@@ -265,6 +281,9 @@ export const useSwitchProviderMutation = (appId: AppId) => {
       }
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
+      }
+      if (appId === "pi") {
+        await invalidatePiProviderCaches(queryClient);
       }
     },
     onError: (error: Error) => {

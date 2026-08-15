@@ -135,7 +135,10 @@ export function AddProviderDialog({
 
       // 累加模式应用：传递 providerKey 作为 Provider ID
       if (
-        (appId === "opencode" || appId === "openclaw" || appId === "hermes") &&
+        (appId === "opencode" ||
+          appId === "openclaw" ||
+          appId === "hermes" ||
+          appId === "pi") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;

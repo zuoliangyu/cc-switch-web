@@ -297,7 +297,8 @@ export function useProviderActions(
           const isMultiProviderApp =
             activeApp === "opencode" ||
             activeApp === "openclaw" ||
-            activeApp === "hermes";
+            activeApp === "hermes" ||
+            activeApp === "pi";
           const messageKey = isMultiProviderApp
             ? "notifications.addToConfigSuccess"
             : "notifications.switchSuccess";

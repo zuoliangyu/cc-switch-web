@@ -248,6 +248,21 @@ pub fn write_text_file(path: &Path, data: &str) -> Result<(), AppError> {
 
 /// 原子写入：写入临时文件后 rename 替换，避免半写状态
 pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
+    atomic_write_with_unix_mode(path, data, None)
+}
+
+/// 原子写入包含凭据的文件。Unix 上固定使用 0600。
+pub fn atomic_write_private(path: &Path, data: &[u8]) -> Result<(), AppError> {
+    atomic_write_with_unix_mode(path, data, Some(0o600))
+}
+
+fn atomic_write_with_unix_mode(
+    path: &Path,
+    data: &[u8],
+    unix_mode: Option<u32>,
+) -> Result<(), AppError> {
+    #[cfg(not(unix))]
+    let _ = unix_mode;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
@@ -276,7 +291,10 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), AppError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = fs::metadata(path) {
+        if let Some(mode) = unix_mode {
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))
+                .map_err(|e| AppError::io(&tmp, e))?;
+        } else if let Ok(meta) = fs::metadata(path) {
             let perm = meta.permissions().mode();
             let _ = fs::set_permissions(&tmp, fs::Permissions::from_mode(perm));
         }

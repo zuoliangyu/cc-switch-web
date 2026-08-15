@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use crate::config::{get_home_dir, write_text_file};
 use crate::error::AppError;
+
+const DEFAULT_API_BACKEND: &str = "responses";
 use crate::provider::Provider;
 
 pub const OFFICIAL_PROVIDER_ID: &str = "grokbuild-official";
@@ -252,7 +254,8 @@ pub fn apply_proxy_takeover(
     token_placeholder: &str,
 ) -> Result<String, AppError> {
     let updated = update_selected_model_string(config_toml, "base_url", proxy_base_url)?;
-    update_selected_model_string(&updated, "api_key", token_placeholder)
+    let updated = update_selected_model_string(&updated, "api_key", token_placeholder)?;
+    update_selected_model_string(&updated, "api_backend", DEFAULT_API_BACKEND)
 }
 
 pub fn update_api_key(config_toml: &str, api_key: &str) -> Result<String, AppError> {
@@ -381,7 +384,11 @@ context_window = 500000
 
     #[test]
     fn proxy_takeover_updates_only_selected_model_route_and_key() {
-        let config = format!("{}\n[mcp_servers.echo]\ncommand = \"echo\"\n", valid_config());
+        let direct = valid_config().replace(
+            "api_backend = \"responses\"",
+            "api_backend = \"chat_completions\"",
+        );
+        let config = format!("{direct}\n[mcp_servers.echo]\ncommand = \"echo\"\n");
         let updated = apply_proxy_takeover(
             &config,
             "http://127.0.0.1:15721/grokbuild/v1",
@@ -390,11 +397,9 @@ context_window = 500000
         .expect("apply takeover");
         let selected = extract_model_config(&updated).expect("selected model");
 
-        assert_eq!(
-            selected.base_url,
-            "http://127.0.0.1:15721/grokbuild/v1"
-        );
+        assert_eq!(selected.base_url, "http://127.0.0.1:15721/grokbuild/v1");
         assert_eq!(selected.api_key.as_deref(), Some("PROXY_MANAGED"));
+        assert_eq!(selected.api_backend, DEFAULT_API_BACKEND);
         assert!(has_proxy_placeholder(&updated, "PROXY_MANAGED"));
         assert!(updated.contains("[mcp_servers.echo]"));
     }

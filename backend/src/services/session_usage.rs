@@ -197,8 +197,7 @@ fn collect_jsonl_files(projects_dir: &Path) -> Vec<PathBuf> {
                         if let Ok(agent_entries) = fs::read_dir(&subagents_dir) {
                             for agent_entry in agent_entries.flatten() {
                                 let agent_path = agent_entry.path();
-                                if agent_path.extension().and_then(|e| e.to_str())
-                                    == Some("jsonl")
+                                if agent_path.extension().and_then(|e| e.to_str()) == Some("jsonl")
                                 {
                                     files.push(agent_path);
                                 }
@@ -382,10 +381,7 @@ fn sync_single_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppEr
 }
 
 /// 获取文件的同步状态
-pub(crate) fn get_sync_state(
-    db: &Database,
-    file_path: &str,
-) -> Result<(i64, i64), AppError> {
+pub(crate) fn get_sync_state(db: &Database, file_path: &str) -> Result<(i64, i64), AppError> {
     let conn = lock_conn!(db.conn);
     let result = conn.query_row(
         "SELECT last_modified, last_line_offset FROM session_log_sync WHERE file_path = ?1",
@@ -411,17 +407,26 @@ pub(crate) fn update_sync_state(
     last_modified: i64,
     last_offset: i64,
 ) -> Result<(), AppError> {
+    let conn = lock_conn!(db.conn);
+    update_sync_state_on_conn(&conn, file_path, last_modified, last_offset)
+}
+
+pub(crate) fn update_sync_state_on_conn(
+    conn: &rusqlite::Connection,
+    file_path: &str,
+    last_modified: i64,
+    last_offset: i64,
+) -> Result<(), AppError> {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
-    let conn = lock_conn!(db.conn);
-    conn.execute(
+    conn.prepare_cached(
         "INSERT OR REPLACE INTO session_log_sync (file_path, last_modified, last_line_offset, last_synced_at)
          VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![file_path, last_modified, last_offset, now],
     )
+    .and_then(|mut stmt| stmt.execute(rusqlite::params![file_path, last_modified, last_offset, now]))
     .map_err(|e| AppError::Database(format!("更新同步状态失败: {e}")))?;
     Ok(())
 }

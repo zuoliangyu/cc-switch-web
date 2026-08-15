@@ -123,6 +123,12 @@ pub struct RequestLogDetail {
 /// session log 写入延迟，又不至于让相邻请求被误判为同一笔。
 pub(crate) const SESSION_PROXY_DEDUP_WINDOW_SECONDS: i64 = 10 * 60;
 
+fn dedup_app_type_match_sql(left: &str, right: &str) -> String {
+    format!(
+        "{left} IN ({right}, CASE WHEN {right} = 'claude' THEN 'claude-desktop' ELSE {right} END)"
+    )
+}
+
 /// 在聚合查询里排除"已被 proxy 行覆盖的 session 行"的 SQL 片段。
 ///
 /// 7 维指纹：`(app_type, input_tokens, output_tokens, cache_read_tokens,
@@ -130,6 +136,8 @@ pub(crate) const SESSION_PROXY_DEDUP_WINDOW_SECONDS: i64 = 10 * 60;
 /// + 仅 2xx 状态。`cache_creation_tokens` 在 codex/gemini session 上不暴露，
 /// 这两个 app 的 session 行只要其它字段都对得上就放过 proxy 任意值。
 pub(crate) fn effective_usage_log_filter(log_alias: &str) -> String {
+    let app_type_match =
+        dedup_app_type_match_sql("proxy_dedup.app_type", &format!("{log_alias}.app_type"));
     format!(
         "NOT (
             {log_alias}.data_source IN ('session_log', 'codex_session', 'gemini_session')
@@ -137,7 +145,7 @@ pub(crate) fn effective_usage_log_filter(log_alias: &str) -> String {
                 SELECT 1
                 FROM proxy_request_logs proxy_dedup
                 WHERE proxy_dedup.data_source = 'proxy'
-                  AND proxy_dedup.app_type = {log_alias}.app_type
+                  AND {app_type_match}
                   AND proxy_dedup.status_code >= 200
                   AND proxy_dedup.status_code < 300
                   AND proxy_dedup.input_tokens = {log_alias}.input_tokens
@@ -211,12 +219,15 @@ pub(crate) fn has_matching_proxy_usage_log(
     let allow_missing_cache_creation =
         matches!(key.app_type, "codex" | "gemini") && key.cache_creation_tokens == 0;
 
+    let app_type_match = dedup_app_type_match_sql("l.app_type", "?1");
+
     conn.query_row(
-        "SELECT EXISTS (
+        &format!(
+            "SELECT EXISTS (
             SELECT 1
             FROM proxy_request_logs l
             WHERE l.data_source = 'proxy'
-              AND l.app_type = ?1
+              AND {app_type_match}
               AND l.status_code >= 200
               AND l.status_code < 300
               AND l.input_tokens = ?3
@@ -229,7 +240,8 @@ pub(crate) fn has_matching_proxy_usage_log(
                   OR LOWER(l.model) = 'unknown'
                   OR LOWER(?2) = 'unknown'
               )
-        )",
+        )"
+        ),
         params![
             key.app_type,
             key.model,
@@ -721,8 +733,7 @@ impl Database {
         };
         let mut all_params = detail_params;
         all_params.extend(rollup_params);
-        let param_refs: Vec<&dyn rusqlite::ToSql> =
-            all_params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt.query_map(param_refs.as_slice(), row_mapper)?;
 
         let mut stats = Vec::new();
@@ -826,8 +837,7 @@ impl Database {
         };
         let mut all_params = detail_params;
         all_params.extend(rollup_params);
-        let param_refs: Vec<&dyn rusqlite::ToSql> =
-            all_params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
         let rows = stmt.query_map(param_refs.as_slice(), row_mapper)?;
 
         let mut stats = Vec::new();
@@ -1448,6 +1458,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn claude_session_matches_claude_desktop_proxy_usage() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let conn = lock_conn!(db.conn);
+        conn.execute(
+            "INSERT INTO proxy_request_logs (
+                request_id, provider_id, app_type, model, input_tokens, output_tokens,
+                cache_read_tokens, cache_creation_tokens, latency_ms, status_code, created_at, data_source
+             ) VALUES ('desktop-proxy', 'p1', 'claude-desktop', 'claude-sonnet-4-5',
+                100, 20, 10, 5, 0, 200, 1000, 'proxy')",
+            [],
+        )?;
+        let key = DedupKey {
+            app_type: "claude",
+            model: "claude-sonnet-4-5",
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_tokens: 10,
+            cache_creation_tokens: 5,
+            created_at: 1060,
+        };
+        assert!(has_matching_proxy_usage_log(&conn, &key)?);
+        Ok(())
+    }
+
+    #[test]
     fn test_get_usage_summary() -> Result<(), AppError> {
         let db = Database::memory()?;
 
@@ -1606,7 +1641,10 @@ mod tests {
             )?;
         }
 
-        assert_eq!(db.backfill_missing_usage_costs_for_model("custom-model")?, 1);
+        assert_eq!(
+            db.backfill_missing_usage_costs_for_model("custom-model")?,
+            1
+        );
         let conn = lock_conn!(db.conn);
         let total_cost: String = conn.query_row(
             "SELECT total_cost_usd FROM proxy_request_logs WHERE request_id = ?1",

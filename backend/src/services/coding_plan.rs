@@ -48,7 +48,11 @@ fn extract_reset_time(value: &serde_json::Value) -> Option<String> {
         return Some(raw.to_string());
     }
     if let Some(raw) = value.as_i64() {
-        let ms = if raw < 1_000_000_000_000 { raw * 1000 } else { raw };
+        let ms = if raw < 1_000_000_000_000 {
+            raw * 1000
+        } else {
+            raw
+        };
         return millis_to_iso8601(ms);
     }
     None
@@ -185,7 +189,9 @@ fn parse_zhipu_token_tiers(data: &serde_json::Value) -> Vec<QuotaTier> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             // 大小写不敏感比较：上游若把 "TOKENS_LIMIT" 改成小写或驼峰，依然能识别
-            if !limit_type.eq_ignore_ascii_case("TOKENS_LIMIT") {
+            if !(limit_type.eq_ignore_ascii_case("TOKENS_LIMIT")
+                || limit_type.eq_ignore_ascii_case("CREDIT_LIMIT"))
+            {
                 continue;
             }
             let percentage = limit_item
@@ -384,9 +390,7 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
                 .get("current_weekly_usage_count")
                 .and_then(|value| value.as_f64())
                 .unwrap_or(0.0);
-            let weekly_end = item
-                .get("weekly_end_time")
-                .and_then(|value| value.as_i64());
+            let weekly_end = item.get("weekly_end_time").and_then(|value| value.as_i64());
 
             if weekly_total > 0.0 {
                 tiers.push(QuotaTier {
@@ -508,6 +512,18 @@ mod tests {
         assert_eq!(tiers.len(), 2);
         assert_eq!(tiers[0].utilization, 12.0);
         assert_eq!(tiers[1].utilization, 34.0);
+    }
+
+    #[test]
+    fn zhipu_accepts_credit_limit_entries() {
+        let data = json!({
+            "limits": [
+                { "type": "CREDIT_LIMIT", "percentage": 21.0, "nextResetTime": 1_000_000_000_000_i64 }
+            ]
+        });
+        let tiers = parse_zhipu_token_tiers(&data);
+        assert_eq!(tiers.len(), 1);
+        assert_eq!(tiers[0].utilization, 21.0);
     }
 
     #[test]

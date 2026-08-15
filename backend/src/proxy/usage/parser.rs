@@ -30,6 +30,13 @@ fn openai_cache_write_tokens(usage: &Value) -> u32 {
 /// Session 日志 request_id 前缀，与 `session_usage.rs` 中的格式保持一致
 pub const SESSION_REQUEST_ID_PREFIX: &str = "session:";
 
+pub fn dedup_scope_for_app<'a>(
+    app_type: &'a str,
+    provider_id: &'a str,
+) -> Option<(&'a str, &'a str)> {
+    (!matches!(app_type, "claude" | "claude-desktop")).then_some((app_type, provider_id))
+}
+
 fn response_id(body: &Value, field: &str) -> Option<String> {
     body.get(field)
         .and_then(Value::as_str)
@@ -531,6 +538,20 @@ impl TokenUsage {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn claude_apps_share_session_request_ids() {
+        let usage = TokenUsage {
+            message_id: Some("msg_123".to_string()),
+            ..Default::default()
+        };
+        for app in ["claude", "claude-desktop"] {
+            assert_eq!(
+                usage.dedup_request_id(dedup_scope_for_app(app, "provider")),
+                "session:msg_123"
+            );
+        }
+    }
 
     #[test]
     fn response_ids_produce_scoped_dedup_keys_and_empty_ids_fall_back() {

@@ -85,9 +85,11 @@ pub fn claude_api_format_needs_transform(api_format: &str) -> bool {
     )
 }
 
-fn is_moonshot_or_kimi_identifier(value: &str) -> bool {
+fn is_reasoning_vendor_identifier(value: &str) -> bool {
     let value = value.to_ascii_lowercase();
-    value.contains("moonshot") || value.contains("kimi")
+    ["deepseek", "mimo", "xiaomimimo"]
+        .iter()
+        .any(|hint| value.contains(hint))
 }
 
 fn should_preserve_reasoning_content_for_openai_chat(
@@ -97,7 +99,7 @@ fn should_preserve_reasoning_content_for_openai_chat(
     if body
         .get("model")
         .and_then(|m| m.as_str())
-        .is_some_and(is_moonshot_or_kimi_identifier)
+        .is_some_and(is_reasoning_vendor_identifier)
     {
         return true;
     }
@@ -116,7 +118,7 @@ fn should_preserve_reasoning_content_for_openai_chat(
     base_urls
         .into_iter()
         .flatten()
-        .any(is_moonshot_or_kimi_identifier)
+        .any(is_reasoning_vendor_identifier)
 }
 
 pub fn transform_claude_request_for_api_format(
@@ -1196,9 +1198,14 @@ mod tests {
             "max_tokens": 128
         });
 
-        let transformed =
-            transform_claude_request_for_api_format(body, &provider, "openai_responses", None, None)
-                .unwrap();
+        let transformed = transform_claude_request_for_api_format(
+            body,
+            &provider,
+            "openai_responses",
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(transformed["model"], "gpt-5.4");
         assert!(transformed.get("input").is_some());
@@ -1241,7 +1248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transform_openai_chat_preserves_reasoning_content_for_kimi_provider() {
+    fn test_transform_openai_chat_skips_reasoning_content_for_kimi_provider() {
         let provider = create_provider_with_meta(
             json!({
                 "env": {
@@ -1271,7 +1278,43 @@ mod tests {
                 .unwrap();
 
         let msg = &transformed["messages"][0];
-        assert_eq!(msg["reasoning_content"], "I should call the tool.");
         assert!(msg.get("tool_calls").is_some());
+        assert!(msg.get("reasoning_content").is_none());
+    }
+
+    #[test]
+    fn test_transform_openai_chat_preserves_reasoning_content_for_deepseek_provider() {
+        let provider = create_provider_with_meta(
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/v1",
+                    "ANTHROPIC_API_KEY": "test-key"
+                }
+            }),
+            ProviderMeta {
+                api_format: Some("openai_chat".to_string()),
+                ..Default::default()
+            },
+        );
+        let body = json!({
+            "model": "deepseek-reasoner",
+            "max_tokens": 64,
+            "messages": [{
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "I should call the tool."},
+                    {"type": "tool_use", "id": "call_123", "name": "get_weather", "input": {"location": "Tokyo"}}
+                ]
+            }]
+        });
+
+        let transformed =
+            transform_claude_request_for_api_format(body, &provider, "openai_chat", None, None)
+                .unwrap();
+
+        assert_eq!(
+            transformed["messages"][0]["reasoning_content"],
+            "I should call the tool."
+        );
     }
 }

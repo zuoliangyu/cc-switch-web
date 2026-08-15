@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：实施中（W0–W1 已完成，W2 待开始）  
+> 状态：实施中（W0–W2 已完成，W3 待开始）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -134,18 +134,18 @@
 
 ### W2：用量、代理与认证正确性
 
-- [ ] 缓存 Codex fork 父 rollout timeline，避免重复解析。
-- [ ] Codex interleaved token counter 使用 exact last-turn usage 和来源签名去重。
-- [ ] Codex session 批量写入并预加载 cursor/pricing。
-- [ ] Claude Desktop proxy/session usage 单向去重，历史明细查询不再双算。
-- [ ] Codex official 切回时清理仅含第三方 Key 的陈旧 `auth.json`。
-- [ ] 接管恢复时保留接管期间刷新的官方 ChatGPT 登录，只恢复 config。
-- [ ] Chat tool call 全部被丢弃时返回失败，不伪造 completed。
-- [ ] GitHub Copilot 使用现代 Claude Code 可接受的认证占位符并剥离 `[1M]` 标记。
-- [ ] Grok Build 接管固定本地 Responses 路由，读取稳定 conversation/session header。
-- [ ] Grok Build usage 补齐必要 input token 细项。
-- [ ] Kimi 不再注入 `thinking` / `reasoning_content` 占位；DeepSeek/MiMo 保持原规则。
-- [ ] Zhipu quota 接受 `CREDIT_LIMIT` 条目。
+- [x] 缓存 Codex fork 父 rollout timeline，避免重复解析。
+- [x] Codex interleaved token counter 使用 exact last-turn usage 和来源签名去重。
+- [x] Codex session 批量写入并预加载 cursor/pricing。
+- [x] Claude Desktop proxy/session usage 单向去重，历史明细查询不再双算。
+- [x] Codex official 切回时清理仅含第三方 Key 的陈旧 `auth.json`。
+- [x] 接管恢复时保留接管期间刷新的官方 ChatGPT 登录，只恢复 config。
+- [x] Chat tool call 全部被丢弃时返回失败，不伪造 completed。
+- [x] GitHub Copilot 使用现代 Claude Code 可接受的认证占位符并剥离 `[1M]` 标记。
+- [x] Grok Build 接管固定本地 Responses 路由，读取稳定 conversation/session header。
+- [x] Grok Build usage 补齐必要 input token 细项。
+- [x] Kimi 不再注入 `thinking` / `reasoning_content` 占位；DeepSeek/MiMo 保持原规则。
+- [x] Zhipu quota 接受 `CREDIT_LIMIT` 条目。
 
 主要上游提交：`56fb46c0`、`4bfb3fc3`、`c49cf96a`、`e3f80a98`、`13ea497a`、`9db9c56f`、`59a2bd10`、`baf07a27`、`d2b070c9`、`c8262476`、`6a7da87c`、`1f38c838`。
 
@@ -511,3 +511,5 @@ W0 基线修复
 - W0 验证：`cargo check --manifest-path backend/Cargo.toml` 通过；`codex_config::tests` 84/84 通过；catalog profile 测试 1/1 通过；`pnpm typecheck` 通过；AppSwitcher/useProxyStatus Vitest 2/2 通过。Windows 无符号链接权限时对应测试按平台条件跳过，目录词法边界及真实文件 canonicalize 测试仍执行。
 - 2026-08-15：完成 W1。补齐脚本、目录遍历、Codex catalog、代理响应与解压边界；Deeplink 显示遮蔽后的用量凭据；同步上游最终 SQL dump/import、备份发布/恢复实现；Windows 使用 `ReplaceFileW`，WSL UNC 不支持时安全回退；WebDAV 快照用 Skills 全局读写锁保持 DB 与 SSOT 同一时点，下载后的 live projection 保持在同一次全局同步操作中。
 - W1 验证：content encoding 15/15、usage script timeout 1/1、Grok session 9/9、Proxy body limit 1/1、Deeplink 1/1、备份模块 34/34（另 2 项性能诊断测试按设计 ignored）通过；Skills 锁、WebDAV 排队抑制、导入失败 Skills 回滚、Windows 原子替换各 1/1 通过；`pnpm typecheck` 通过。
+- 2026-08-15：完成 W2。Codex session usage 对 fork timeline、交错计数、批量事务与 cursor 原子推进完成最终语义适配；Chat 转换补齐 dropped tool call 失败行为；Grok Build 固定 Responses 接管并补全 usage；Claude Desktop proxy/session 单向去重；Codex official 切换与接管恢复不再覆盖有效 ChatGPT 登录。Kimi、Zhipu 规则同步完成；Copilot 现代占位符与 `[1M]` 清理经审计已在 Web 基线存在，未制造重复实现。
+- W2 验证：Codex session usage 44/44（另 1 项 ignored）、streaming/non-streaming dropped tool call 各 1/1、Grok input token details 1/1、Kimi/DeepSeek reasoning 各 1/1、Zhipu `CREDIT_LIMIT` 1/1、Grok conversation header 1/1、Grok takeover Responses 1/1、Claude Desktop/session 去重 1/1、Codex 接管恢复保留登录 1/1、陈旧第三方 auth 识别 1/1 通过；`git diff --check` 通过。

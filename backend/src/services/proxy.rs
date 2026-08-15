@@ -1172,8 +1172,9 @@ impl ProxyService {
             }
             AppType::Codex => {
                 if let Ok(Some(backup)) = self.db.get_live_backup("codex").await {
-                    let config: Value = serde_json::from_str(&backup.original_config)
+                    let mut config: Value = serde_json::from_str(&backup.original_config)
                         .map_err(|e| format!("解析 Codex 备份失败: {e}"))?;
+                    self.preserve_codex_login_on_restore(&mut config);
                     self.write_codex_live(&config)?;
                     log::info!("Codex Live 配置已恢复");
                 }
@@ -1244,11 +1245,14 @@ impl ProxyService {
             .await
             .map_err(|e| format!("获取 {app_type_str} Live 备份失败: {e}"))?;
         if let Some(backup) = backup {
-            let config: Value = serde_json::from_str(&backup.original_config)
+            let mut config: Value = serde_json::from_str(&backup.original_config)
                 .map_err(|e| format!("解析 {app_type_str} 备份失败: {e}"))?;
             if Self::live_has_proxy_placeholder_for_app(app_type, &config) {
                 log::warn!("{app_type_str} Live 备份包含代理占位符，跳过并从 SSOT 重建");
             } else {
+                if matches!(app_type, AppType::Codex) {
+                    self.preserve_codex_login_on_restore(&mut config);
+                }
                 self.write_live_config_for_app(app_type, &config)?;
                 log::info!("{app_type_str} Live 配置已从备份恢复");
                 return Ok(());
@@ -1753,6 +1757,42 @@ impl ProxyService {
         Ok(())
     }
 
+    fn preserve_codex_login_on_restore(&self, target: &mut Value) {
+        let Ok(live) = self.read_codex_live() else {
+            return;
+        };
+        let live_has_login = live.get("auth").is_some_and(|auth| {
+            auth.get("OPENAI_API_KEY").and_then(Value::as_str) != Some(PROXY_TOKEN_PLACEHOLDER)
+                && crate::codex_config::codex_auth_has_credential_login_material(auth)
+        });
+        if !live_has_login {
+            return;
+        }
+
+        let Some(target_obj) = target.as_object_mut() else {
+            return;
+        };
+        if let Some(config_text) = target_obj
+            .get("config")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        {
+            let provider_auth = target_obj.get("auth").cloned().unwrap_or_else(|| json!({}));
+            match crate::codex_config::prepare_codex_provider_live_config(
+                &provider_auth,
+                &config_text,
+            ) {
+                Ok(config) => {
+                    target_obj.insert("config".to_string(), json!(config));
+                }
+                Err(error) => {
+                    log::warn!("Codex restore could not preserve the backup API key: {error}");
+                }
+            }
+        }
+        target_obj.remove("auth");
+    }
+
     /// 代理模式下切换供应商（热切换，不写 Live）
     pub async fn switch_proxy_target(
         &self,
@@ -2162,6 +2202,45 @@ mod tests {
                 None => env::remove_var("USERPROFILE"),
             }
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn codex_restore_preserves_login_created_during_takeover() {
+        let _home = TempHome::new();
+        let db = Arc::new(Database::memory().expect("init db"));
+        let service = ProxyService::new(db.clone());
+
+        db.save_live_backup(
+            "codex",
+            &serde_json::to_string(&json!({
+                "auth": { "OPENAI_API_KEY": "sk-third-party" },
+                "config": "model_provider = \"any\"\n[model_providers.any]\nbase_url = \"https://third.example/v1\"\n"
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+        crate::codex_config::write_codex_live_atomic(
+            &json!({
+                "auth_mode": "chatgpt",
+                "OPENAI_API_KEY": null,
+                "tokens": { "refresh_token": "fresh-token" }
+            }),
+            Some("model_provider = \"any\"\n"),
+        )
+        .unwrap();
+
+        service
+            .restore_live_config_for_app_with_fallback(&AppType::Codex)
+            .await
+            .unwrap();
+
+        let live = service.read_codex_live().unwrap();
+        assert_eq!(live["auth"]["tokens"]["refresh_token"], "fresh-token");
+        assert!(live["config"]
+            .as_str()
+            .is_some_and(|config| config.contains("sk-third-party")));
     }
 
     #[test]

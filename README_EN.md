@@ -57,13 +57,13 @@ See [Pi Native Contract and Implementation Boundaries](docs/pi-native-contract-z
 
 3. Open the address printed in the terminal in your browser, and you're ready.
 
-4. Data location: in local Web service mode, data is stored under the default CC Switch local config root:
+4. Data location: in local Web service mode, Web data is stored in its own directory:
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   This includes `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+   This includes `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist, data is migrated read-only from `~/.cc-switch`; the source database is never modified by Web. Legacy `config.json` is not part of the active Web runtime data path.
 
 > To run via Docker or keep it hosted on a headless server, see "Docker" and "Linux systemd Example" under "Development" below.
 
@@ -190,13 +190,13 @@ Script entry layout:
 
    If the preferred port is already in use, excluded by the OS, or denied by local policy, the service automatically scans forward and prints the actual port it bound to.
 
-4. In local Web service mode, CC Switch Web stores its own data under the default CC Switch local config root:
+4. In local Web service mode, CC Switch Web stores its own data in a separate directory:
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   This includes files such as `settings.json`, `cc-switch.db`, backup data, and the unified Skills storage. Legacy `config.json` is not part of the active Web runtime data path.
+   This includes files such as `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist, data is migrated read-only from `~/.cc-switch`. Settings also provides a manual re-migration action that backs up Web data first. Web never modifies the CC Switch source database. Legacy `config.json` is not part of the active Web runtime data path.
 
 ### Access Key (Optional)
 

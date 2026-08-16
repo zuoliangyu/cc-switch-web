@@ -1,11 +1,27 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 
 const tMock = vi.fn((key: string) => key);
+const migrateFromCcSwitchMock = vi.fn();
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: tMock }),
+}));
+
+vi.mock("@/lib/api", () => ({
+  settingsApi: {
+    migrateFromCcSwitch: (...args: unknown[]) =>
+      migrateFromCcSwitchMock(...args),
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 describe("ImportExportSection Component", () => {
@@ -27,6 +43,7 @@ describe("ImportExportSection Component", () => {
     baseProps.onImport.mockReset();
     baseProps.onExport.mockReset();
     baseProps.onClear.mockReset();
+    migrateFromCcSwitchMock.mockReset();
   });
 
   it("should disable import button and show placeholder when no file selected", () => {
@@ -111,5 +128,46 @@ describe("ImportExportSection Component", () => {
 
     expect(screen.getByText("settings.importFailed")).toBeInTheDocument();
     expect(screen.getByText("Parse failed")).toBeInTheDocument();
+  });
+
+  it("requires confirmation before migrating desktop data in web mode", async () => {
+    const onMigrationSuccess = vi.fn();
+    migrateFromCcSwitchMock.mockResolvedValue({
+      migrated: true,
+      backupId: "db_backup_001",
+      sourceVersion: 16,
+      copiedFiles: ["settings.json"],
+    });
+    render(
+      <ImportExportSection
+        {...baseProps}
+        isWebMode
+        onMigrationSuccess={onMigrationSuccess}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings.ccSwitchMigration.action",
+      }),
+    );
+    expect(migrateFromCcSwitchMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("settings.ccSwitchMigration.confirmTitle"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings.ccSwitchMigration.confirmAction",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(migrateFromCcSwitchMock).toHaveBeenCalledTimes(1),
+    );
+    expect(onMigrationSuccess).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText("settings.ccSwitchMigration.backupCreated"),
+    ).toBeInTheDocument();
   });
 });

@@ -57,13 +57,13 @@ Pi 的配置所有权、同步规则、模型能力和界面约束见 [Pi 原生
 
 3. 在浏览器打开终端输出的地址即可使用。
 
-4. 数据存放位置：本地 Web 服务模式下，数据默认写入 CC Switch 的本地配置根目录：
+4. 数据存放位置：本地 Web 服务模式下，Web 数据默认写入独立目录：
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储。首次启动且该目录不存在时，会从 `~/.cc-switch` 只读迁移；源数据库不会被 Web 修改。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
 > 想用 Docker 跑、或在无桌面服务器上长期托管，见下方「开发」中的 Docker 运行与 Linux systemd 示例。
 
@@ -190,13 +190,13 @@ Pi 的配置所有权、同步规则、模型能力和界面约束见 [Pi 原生
 
    如端口被占用、被系统排除或无权限绑定，程序会自动尝试后续端口并输出最终监听地址。
 
-4. 在本地 Web 服务模式下，CC Switch Web 自身的数据默认写入 CC Switch 使用的本地配置根目录：
+4. 在本地 Web 服务模式下，CC Switch Web 自身的数据默认写入独立目录：
 
    ```text
-   ~/.cc-switch
+   ~/.cc-switch-web
    ```
 
-   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。首次启动且该目录不存在时，会从 `~/.cc-switch` 只读迁移；设置页也可手动重新迁移并先备份 Web 数据。CC Switch 源数据库不会被 Web 修改。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
 ### 访问密钥（可选）
 

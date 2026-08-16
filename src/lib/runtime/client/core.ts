@@ -139,6 +139,7 @@ import {
   switchWebProxyProvider,
   importWebMcpFromApps,
   importWebConfigUpload,
+  migrateWebFromCcSwitch,
   importWebDefaultProviderConfig,
   streamCheckAllWebProviders,
   streamCheckWebProvider,
@@ -289,6 +290,8 @@ export async function invoke<T>(
       return (await downloadWebConfigExport(args?.defaultName as string)) as T;
     case "import_config_upload":
       return (await importWebConfigUpload(args?.file as File)) as T;
+    case "migrate_from_cc_switch":
+      return (await migrateWebFromCcSwitch()) as T;
     case "get_rectifier_config":
       return (await getWebRectifierConfig()) as T;
     case "set_rectifier_config":

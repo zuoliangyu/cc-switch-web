@@ -156,6 +156,29 @@ impl Database {
         self.import_sql_string_inner(sql_raw, &[])
     }
 
+    pub(crate) fn replace_from_snapshot(&self, snapshot: &Connection) -> Result<String, AppError> {
+        Self::validate_imported_schema(snapshot)?;
+        Self::validate_sqlite_integrity(snapshot)?;
+
+        let backup_file_guard = lock_backup_file_operations()?;
+        let backup_path = {
+            let mut main_conn = lock_conn!(self.conn);
+            let backup_path =
+                Self::backup_database_file_from_conn(&backup_file_guard, &main_conn, &[])?;
+            let backup = Backup::new(snapshot, &mut main_conn)
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            Self::complete_backup(&backup, "替换主数据库")?;
+            backup_path
+        };
+
+        Ok(backup_path
+            .and_then(|path| {
+                path.file_stem()
+                    .map(|name| name.to_string_lossy().to_string())
+            })
+            .unwrap_or_default())
+    }
+
     /// Import SQL generated for sync, then restore local-only tables from the
     /// current live database before replacing it.
     pub(crate) fn import_sql_string_for_sync(&self, sql_raw: &str) -> Result<String, AppError> {
@@ -263,7 +286,10 @@ impl Database {
         Ok(snapshot)
     }
 
-    fn complete_backup(backup: &Backup<'_, '_>, context: &str) -> Result<(), AppError> {
+    pub(crate) fn complete_backup(
+        backup: &Backup<'_, '_>,
+        context: &str,
+    ) -> Result<(), AppError> {
         let result = backup
             .step(-1)
             .map_err(|e| AppError::Database(format!("{context}失败: {e}")))?;
@@ -645,7 +671,7 @@ impl Database {
         Ok(())
     }
 
-    fn validate_sqlite_integrity(conn: &Connection) -> Result<(), AppError> {
+    pub(crate) fn validate_sqlite_integrity(conn: &Connection) -> Result<(), AppError> {
         let mut stmt = conn
             .prepare("PRAGMA quick_check;")
             .map_err(|e| AppError::Database(format!("检查数据库完整性失败: {e}")))?;
@@ -675,7 +701,7 @@ impl Database {
     /// (v3.8.x). Checking before migrations keeps header-only/truncated files
     /// from being completed by `create_tables_on_conn`, while allowing a valid
     /// backup whose user-owned configuration tables happen to contain no rows.
-    fn validate_imported_schema(conn: &Connection) -> Result<(), AppError> {
+    pub(crate) fn validate_imported_schema(conn: &Connection) -> Result<(), AppError> {
         const REQUIRED_TABLES: &[&str] = &[
             "providers",
             "provider_endpoints",
@@ -1196,10 +1222,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().expect("create isolated test home");
             let previous_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
             std::env::set_var("CC_SWITCH_TEST_HOME", temp_dir.path());
-            // Prevent the Windows legacy-HOME fallback without mutating HOME:
-            // an existing default DB keeps get_app_config_dir() anchored under
-            // CC_SWITCH_TEST_HOME and makes import exercise its safety backup.
-            let config_dir = temp_dir.path().join(".cc-switch");
+            let config_dir = temp_dir.path().join(".cc-switch-web");
             std::fs::create_dir_all(&config_dir).expect("create isolated config directory");
             std::fs::File::create(config_dir.join("cc-switch.db"))
                 .expect("create isolated database sentinel");

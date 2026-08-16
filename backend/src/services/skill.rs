@@ -1,7 +1,7 @@
 //! Skills 服务层
 //!
 //! v3.10.0+ 统一管理架构：
-//! - SSOT（单一事实源）：`~/.cc-switch/skills/`
+//! - SSOT（单一事实源）：`~/.cc-switch-web/skills/`
 //! - 安装时下载到 SSOT，按需同步到各应用目录
 //! - 数据库存储安装记录和启用状态
 
@@ -58,7 +58,7 @@ pub enum SyncMethod {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillStorageLocation {
-    /// CC Switch 管理目录 (~/.cc-switch/skills/)
+    /// CC Switch Web 管理目录 (~/.cc-switch-web/skills/)
     #[default]
     CcSwitch,
     /// Agent Skills 统一目录 (~/.agents/skills/)
@@ -534,14 +534,14 @@ impl SkillService {
         }
     }
 
-    /// 获取 SSOT 目录（根据设置返回 ~/.cc-switch/skills/ 或 ~/.agents/skills/）
+    /// 获取 SSOT 目录（根据设置返回 ~/.cc-switch-web/skills/ 或 ~/.agents/skills/）
     pub fn get_ssot_dir() -> Result<PathBuf> {
         let dir = Self::ssot_dir_for_location(crate::settings::get_skill_storage_location());
         fs::create_dir_all(&dir)?;
         Ok(dir)
     }
 
-    /// 获取 Skill 卸载备份目录（~/.cc-switch/skill-backups/）
+    /// 获取 Skill 卸载备份目录（~/.cc-switch-web/skill-backups/）
     fn get_backup_dir() -> Result<PathBuf> {
         let dir = get_app_config_dir().join("skill-backups");
         fs::create_dir_all(&dir)?;
@@ -3205,6 +3205,7 @@ mod tests {
             ".claude",
             ".codex",
             ".cc-switch",
+            ".cc-switch-web",
             ".gemini",
             ".config",
             ".openclaw",
@@ -3294,7 +3295,7 @@ mod tests {
         let _home = TempHome::new();
         let home = crate::config::get_home_dir();
 
-        let ssot_dir = home.join(".cc-switch").join("skills");
+        let ssot_dir = home.join(".cc-switch-web").join("skills");
         let disabled_skill = ssot_dir.join("disabled-skill");
         let orphan_skill = ssot_dir.join("orphan-skill");
         write_skill(&disabled_skill, "Disabled");
@@ -3341,7 +3342,10 @@ mod tests {
     fn sync_to_grokbuild_uses_grok_skills_directory() {
         let _home = TempHome::new();
         let home = crate::config::get_home_dir();
-        let source = home.join(".cc-switch").join("skills").join("grok-skill");
+        let source = home
+            .join(".cc-switch-web")
+            .join("skills")
+            .join("grok-skill");
         write_skill(&source, "Grok Skill");
         let db = create_test_db();
         db.save_skill(&InstalledSkill {
@@ -3379,7 +3383,10 @@ mod tests {
         let _home = TempHome::new();
         let home = crate::config::get_home_dir();
 
-        let ssot_skill_dir = home.join(".cc-switch").join("skills").join("backup-skill");
+        let ssot_skill_dir = home
+            .join(".cc-switch-web")
+            .join("skills")
+            .join("backup-skill");
         write_skill(&ssot_skill_dir, "Backup Skill");
         fs::write(ssot_skill_dir.join("prompt.md"), "backup me").expect("write prompt.md");
 
@@ -3439,7 +3446,10 @@ mod tests {
         let _home = TempHome::new();
         let home = crate::config::get_home_dir();
 
-        let ssot_skill_dir = home.join(".cc-switch").join("skills").join("restore-skill");
+        let ssot_skill_dir = home
+            .join(".cc-switch-web")
+            .join("skills")
+            .join("restore-skill");
         write_skill(&ssot_skill_dir, "Restore Skill");
         fs::write(ssot_skill_dir.join("prompt.md"), "restore me").expect("write prompt.md");
 
@@ -3487,7 +3497,7 @@ mod tests {
         assert!(restored.apps.claude);
         assert!(!restored.apps.codex && !restored.apps.gemini && !restored.apps.opencode);
         assert!(home
-            .join(".cc-switch")
+            .join(".cc-switch-web")
             .join("skills")
             .join("restore-skill")
             .join("prompt.md")
@@ -3511,7 +3521,7 @@ mod tests {
         let home = crate::config::get_home_dir();
 
         let ssot_skill_dir = home
-            .join(".cc-switch")
+            .join(".cc-switch-web")
             .join("skills")
             .join("delete-backup-skill");
         write_skill(&ssot_skill_dir, "Delete Backup Skill");

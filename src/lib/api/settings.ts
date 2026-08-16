@@ -15,6 +15,14 @@ export interface ConfigDownloadResult {
   blob: Blob;
 }
 
+export interface CcSwitchMigrationResult {
+  migrated: boolean;
+  backupId: string;
+  sourceVersion: number;
+  copiedFiles: string[];
+  warning?: string;
+}
+
 export interface WebDavTestResult {
   success: boolean;
   message?: string;
@@ -89,6 +97,10 @@ export const settingsApi = {
 
   async importConfigFromUpload(file: File): Promise<ConfigTransferResult> {
     return await invoke("import_config_upload", { file });
+  },
+
+  async migrateFromCcSwitch(): Promise<CcSwitchMigrationResult> {
+    return await invoke("migrate_from_cc_switch");
   },
 
   // ─── WebDAV sync ──────────────────────────────────────────

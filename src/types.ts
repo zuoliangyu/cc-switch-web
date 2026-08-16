@@ -323,7 +323,7 @@ export interface RemoteSnapshotInfo {
 }
 
 // 应用设置类型（用于设置页与本地 Web API）
-// 存储在本地 ~/.cc-switch/settings.json，不随数据库同步
+// 存储在本地 ~/.cc-switch-web/settings.json，不随数据库同步
 export interface Settings {
   // ===== 设备级 UI 设置 =====
   // 是否启用主页面本地代理功能（默认关闭）

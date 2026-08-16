@@ -496,6 +496,19 @@
     "selectFileFailed": "Please choose a valid SQL backup file",
     "configCorrupted": "SQL file may be corrupted or invalid",
     "backupId": "Backup ID",
+    "ccSwitchMigration": {
+      "title": "Migrate from CC Switch",
+      "description": "Read ~/.cc-switch into the separate Web data directory without modifying desktop data.",
+      "action": "Migrate from CC Switch",
+      "migrating": "Migrating...",
+      "confirmTitle": "Overwrite current Web data?",
+      "confirmMessage": "This reads ~/.cc-switch in read-only mode and replaces the current Web database, settings, and Skills. Web data is backed up first; the original CC Switch data is never modified.",
+      "confirmAction": "Back Up and Migrate",
+      "success": "CC Switch data migrated",
+      "successDescription": "Migrated source database v{{version}}. Web safety backup: {{backupId}}",
+      "backupCreated": "Pre-migration safety backup: {{backupId}}",
+      "failed": "Failed to migrate CC Switch data"
+    },
     "backupManager": {
       "title": "Database Backups",
       "description": "Automatic database snapshots for restoring to a previous state",

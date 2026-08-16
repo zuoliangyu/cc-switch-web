@@ -1,4 +1,5 @@
 use super::env_checker::EnvConflict;
+use crate::config::get_app_config_dir;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -45,10 +46,7 @@ pub fn restore_from_backup(backup_path: String) -> Result<(), String> {
 }
 
 fn create_backup(conflicts: &[EnvConflict]) -> Result<BackupInfo, String> {
-    let backup_dir = dirs::home_dir()
-        .ok_or("无法获取用户主目录")?
-        .join(".cc-switch")
-        .join("backups");
+    let backup_dir = get_app_config_dir().join("backups");
     fs::create_dir_all(&backup_dir).map_err(|error| format!("创建备份目录失败: {error}"))?;
 
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();

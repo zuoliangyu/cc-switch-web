@@ -496,6 +496,19 @@
     "selectFileFailed": "有効な SQL バックアップファイルを選択してください",
     "configCorrupted": "SQL ファイルが壊れているか形式が無効な可能性があります",
     "backupId": "バックアップ ID",
+    "ccSwitchMigration": {
+      "title": "CC Switch から移行",
+      "description": "デスクトップ側のデータを変更せず、~/.cc-switch を独立した Web データディレクトリへ読み込みます。",
+      "action": "CC Switch から移行",
+      "migrating": "移行中...",
+      "confirmTitle": "現在の Web データを上書きしますか？",
+      "confirmMessage": "~/.cc-switch を読み取り専用で開き、現在の Web データベース、設定、Skills を置き換えます。先に Web データをバックアップし、元の CC Switch データは変更しません。",
+      "confirmAction": "バックアップして移行",
+      "success": "CC Switch データを移行しました",
+      "successDescription": "移行元データベース v{{version}}。Web 安全バックアップ：{{backupId}}",
+      "backupCreated": "移行前の安全バックアップ：{{backupId}}",
+      "failed": "CC Switch データの移行に失敗しました"
+    },
     "backupManager": {
       "title": "データベースバックアップ",
       "description": "以前の状態に復元するための自動データベーススナップショット",

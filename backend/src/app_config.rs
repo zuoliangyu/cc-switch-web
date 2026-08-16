@@ -532,8 +532,8 @@ impl MultiAppConfig {
         if is_v1 {
             return Err(AppError::localized(
                 "config.unsupported_v1",
-                "检测到旧版 v1 配置格式。当前版本已不再支持运行时自动迁移。\n\n解决方案：\n1. 先备份 ~/.cc-switch/config.json\n2. 手动将顶层结构调整为：\n   {\"version\": 2, \"claude\": {...}, \"codex\": {...}, \"mcp\": {...}}\n3. 或删除旧配置文件后，重新导入或重新配置\n\n",
-                "Detected legacy v1 config. Runtime auto-migration is no longer supported.\n\nSolutions:\n1. Back up ~/.cc-switch/config.json first\n2. Manually adjust the top-level structure to:\n   {\"version\": 2, \"claude\": {...}, \"codex\": {...}, \"mcp\": {...}}\n3. Or remove the old config file and re-import or recreate the configuration\n\n",
+                "检测到旧版 v1 配置格式。当前版本已不再支持运行时自动迁移。\n\n解决方案：\n1. 先备份 ~/.cc-switch-web/config.json\n2. 手动将顶层结构调整为：\n   {\"version\": 2, \"claude\": {...}, \"codex\": {...}, \"mcp\": {...}}\n3. 或删除旧配置文件后，重新导入或重新配置\n\n",
+                "Detected legacy v1 config. Runtime auto-migration is no longer supported.\n\nSolutions:\n1. Back up ~/.cc-switch-web/config.json first\n2. Manually adjust the top-level structure to:\n   {\"version\": 2, \"claude\": {...}, \"codex\": {...}, \"mcp\": {...}}\n3. Or remove the old config file and re-import or recreate the configuration\n\n",
             ));
         }
 
@@ -610,7 +610,7 @@ impl MultiAppConfig {
     #[cfg(test)]
     pub fn save(&self) -> Result<(), AppError> {
         let config_path = get_app_config_path();
-        // 先备份旧版（若存在）到 ~/.cc-switch/config.json.bak，再写入新内容
+        // 先备份旧版（若存在）到 ~/.cc-switch-web/config.json.bak，再写入新内容
         if config_path.exists() {
             let backup_path = get_app_config_dir().join("config.json.bak");
             if let Err(e) = copy_file(&config_path, &backup_path) {
@@ -1118,9 +1118,7 @@ mod tests {
     }
 
     fn cfg_path() -> std::path::PathBuf {
-        crate::config::get_home_dir()
-            .join(".cc-switch")
-            .join("config.json")
+        crate::config::get_app_config_dir().join("config.json")
     }
 
     #[test]
@@ -1164,9 +1162,7 @@ mod tests {
 
         let after = fs::read_to_string(&path).expect("read after");
         assert_eq!(before, after, "config.json should not be modified");
-        let bak = crate::config::get_home_dir()
-            .join(".cc-switch")
-            .join("config.json.bak");
+        let bak = crate::config::get_app_config_dir().join("config.json.bak");
         assert!(!bak.exists(), ".bak should not be created on load error");
     }
 
@@ -1189,9 +1185,7 @@ mod tests {
 
         let after = fs::read_to_string(&path).expect("read after");
         assert_eq!(before, after, "config.json should not be modified");
-        let bak = crate::config::get_home_dir()
-            .join(".cc-switch")
-            .join("config.json.bak");
+        let bak = crate::config::get_app_config_dir().join("config.json.bak");
         assert!(!bak.exists(), ".bak should not be created on v1-like error");
     }
 
@@ -1213,9 +1207,7 @@ mod tests {
 
         let after = fs::read_to_string(&path).expect("read after");
         assert_eq!(before, after, "config.json should remain unchanged");
-        let bak = crate::config::get_home_dir()
-            .join(".cc-switch")
-            .join("config.json.bak");
+        let bak = crate::config::get_app_config_dir().join("config.json.bak");
         assert!(!bak.exists(), ".bak should not be created on parse error");
     }
 

@@ -496,6 +496,19 @@
     "selectFileFailed": "请选择有效的 SQL 备份文件",
     "configCorrupted": "SQL 文件可能已损坏或格式不正确",
     "backupId": "备份ID",
+    "ccSwitchMigration": {
+      "title": "从 CC Switch 迁移",
+      "description": "读取 ~/.cc-switch 并迁移到独立的 Web 数据目录，桌面端数据不会被修改。",
+      "action": "从 CC Switch 迁移",
+      "migrating": "迁移中...",
+      "confirmTitle": "覆盖 Web 当前数据？",
+      "confirmMessage": "将以只读方式读取 ~/.cc-switch，并用其数据库、设置和 Skills 覆盖 Web 当前数据。操作前会自动备份 Web 数据；CC Switch 原数据不会被修改。",
+      "confirmAction": "备份并迁移",
+      "success": "CC Switch 数据迁移成功",
+      "successDescription": "已迁移源数据库 v{{version}}，Web 安全备份：{{backupId}}",
+      "backupCreated": "迁移前安全备份：{{backupId}}",
+      "failed": "CC Switch 数据迁移失败"
+    },
     "backupManager": {
       "title": "数据库备份",
       "description": "自动备份的数据库快照，可用于恢复到之前的状态",

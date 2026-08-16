@@ -33,6 +33,7 @@ import type { AppId } from "@/lib/api";
 import type { Prompt } from "@/lib/api";
 import type {
   BackupEntry,
+  CcSwitchMigrationResult,
   ConfigDownloadResult,
   ConfigTransferResult,
   LogConfig,
@@ -1482,6 +1483,13 @@ export async function importWebConfigUpload(
   const formData = new FormData();
   formData.append("file", file, file.name);
   return requestFormData<ConfigTransferResult>("/api/config/import", formData);
+}
+
+export async function migrateWebFromCcSwitch(): Promise<CcSwitchMigrationResult> {
+  return requestWithBody<CcSwitchMigrationResult>(
+    "/api/settings/migrate-from-cc-switch",
+    "POST",
+  );
 }
 
 export async function getWebRectifierConfig(): Promise<RectifierConfig> {

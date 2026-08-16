@@ -12,6 +12,7 @@
 
 ### 改进
 
+- Web 数据默认迁入独立的 `~/.cc-switch-web/`；首次启动可从 `~/.cc-switch/` 只读迁移，设置页也支持先备份 Web 数据后手动重新迁移，桌面端数据库不再与 Web 共用或被 Web 原地升级。
 - Provider 目录和表单同步上游最终状态，补齐 PPIO、JieKou AI、XycAi 与火山双 Plan，移除下架预设和合作星标，并统一模型搜索、IME 输入与窄屏布局。
 - MCP、Prompts、Skills、Sessions、Usage 与 Auth Center 的管理体验完成收口，支持搜索、批量启停、导航溢出、浏览器可见性和 Pi 数据筛选。
 - CI 由 Corepack 读取 `packageManager` 中的 pnpm 版本，并补全 Web workflow 路径过滤；纯文档改动不触发前后端重验证。

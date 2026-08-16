@@ -1,16 +1,20 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
   FolderOpen,
   Link2,
   Loader2,
+  RefreshCw,
   Save,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import type { ImportStatus } from "@/hooks/useImportExport";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { settingsApi } from "@/lib/api";
+import { toast } from "sonner";
 
 interface ImportExportSectionProps {
   isWebMode?: boolean;
@@ -24,6 +28,7 @@ interface ImportExportSectionProps {
   onImport: () => Promise<void>;
   onExport: () => Promise<void>;
   onClear: () => void;
+  onMigrationSuccess?: () => void | Promise<void>;
 }
 
 export function ImportExportSection({
@@ -38,9 +43,15 @@ export function ImportExportSection({
   onImport,
   onExport,
   onClear,
+  onMigrationSuccess,
 }: ImportExportSectionProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showMigrationConfirm, setShowMigrationConfirm] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationBackupId, setMigrationBackupId] = useState<string | null>(
+    null,
+  );
 
   const selectedFileName = useMemo(() => {
     if (!selectedFile) return "";
@@ -60,6 +71,35 @@ export function ImportExportSection({
     window.dispatchEvent(
       new CustomEvent("cc-switch-open-deeplink-import"),
     );
+  };
+
+  const handleMigrateFromCcSwitch = async () => {
+    setShowMigrationConfirm(false);
+    if (isMigrating) return;
+    setIsMigrating(true);
+    setMigrationBackupId(null);
+    try {
+      const result = await settingsApi.migrateFromCcSwitch();
+      setMigrationBackupId(result.backupId);
+      await onMigrationSuccess?.();
+      toast.success(t("settings.ccSwitchMigration.success"), {
+        description: t("settings.ccSwitchMigration.successDescription", {
+          backupId: result.backupId,
+          version: result.sourceVersion,
+        }),
+        closeButton: true,
+      });
+      if (result.warning) {
+        toast.warning(result.warning, { closeButton: true });
+      }
+    } catch (error) {
+      toast.error(t("settings.ccSwitchMigration.failed"), {
+        description: error instanceof Error ? error.message : String(error),
+        closeButton: true,
+      });
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   return (
@@ -155,12 +195,59 @@ export function ImportExportSection({
           {t("deeplink.openImporter")}
         </Button>
 
+        {isWebMode ? (
+          <div className="space-y-3 border-t border-border pt-4">
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold">
+                {t("settings.ccSwitchMigration.title")}
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.ccSwitchMigration.description")}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center"
+              disabled={isImporting || isMigrating}
+              onClick={() => setShowMigrationConfirm(true)}
+            >
+              {isMigrating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              {isMigrating
+                ? t("settings.ccSwitchMigration.migrating")
+                : t("settings.ccSwitchMigration.action")}
+            </Button>
+            {migrationBackupId ? (
+              <p className="text-xs text-muted-foreground" role="status">
+                {t("settings.ccSwitchMigration.backupCreated", {
+                  backupId: migrationBackupId,
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <ImportStatusMessage
           status={status}
           errorMessage={errorMessage}
           backupId={backupId}
         />
       </div>
+
+      <ConfirmDialog
+        isOpen={showMigrationConfirm}
+        title={t("settings.ccSwitchMigration.confirmTitle")}
+        message={t("settings.ccSwitchMigration.confirmMessage")}
+        confirmText={t("settings.ccSwitchMigration.confirmAction")}
+        variant="destructive"
+        zIndex="top"
+        onConfirm={() => void handleMigrateFromCcSwitch()}
+        onCancel={() => setShowMigrationConfirm(false)}
+      />
     </section>
   );
 }

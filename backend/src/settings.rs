@@ -183,7 +183,7 @@ pub struct LocalMigrations {
 
 /// 应用设置结构
 ///
-/// 存储设备级别设置，保存在本地 `~/.cc-switch/settings.json`，不随数据库同步。
+/// 存储设备级别设置，保存在本地 `~/.cc-switch-web/settings.json`，不随数据库同步。
 /// 这确保了云同步场景下多设备可以独立运作。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -365,11 +365,7 @@ impl Default for AppSettings {
 impl AppSettings {
     fn settings_path() -> Option<PathBuf> {
         // settings.json 保留用于旧版本迁移和无数据库场景
-        Some(
-            crate::config::get_home_dir()
-                .join(".cc-switch")
-                .join("settings.json"),
-        )
+        Some(crate::config::get_app_config_dir().join("settings.json"))
     }
 
     fn normalize_paths(&mut self) {
@@ -884,10 +880,29 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
 #[cfg(test)]
 mod tests {
     use super::AppSettings;
+    use serial_test::serial;
 
     #[test]
     fn profile_switcher_is_visible_for_existing_settings() {
         let settings: AppSettings = serde_json::from_str("{}").unwrap();
         assert!(settings.show_profile_switcher);
+    }
+
+    #[test]
+    #[serial]
+    fn settings_file_uses_web_data_directory() {
+        let home = tempfile::tempdir().unwrap();
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", home.path());
+
+        assert_eq!(
+            AppSettings::settings_path().unwrap(),
+            home.path().join(".cc-switch-web/settings.json")
+        );
+
+        match previous {
+            Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+            None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+        }
     }
 }

@@ -2247,6 +2247,20 @@ async fn import_config_upload(
     Ok(Json(payload))
 }
 
+async fn migrate_from_cc_switch(
+    State(state): State<WebApiState>,
+) -> Result<Json<Value>, ApiError> {
+    let result = state
+        .app_state
+        .db
+        .migrate_from_cc_switch()
+        .map_err(|error| ApiError::internal(format!("failed to migrate from CC Switch: {error}")))?;
+    let warning = crate::commands::post_import_sync_warning_for_state(state.app_state.as_ref());
+    let payload = serde_json::to_value(result)
+        .map_err(|error| ApiError::internal(format!("failed to encode migration result: {error}")))?;
+    Ok(Json(crate::commands::attach_warning(payload, warning)))
+}
+
 async fn webdav_test_connection(
     Json(payload): Json<WebdavTestRequest>,
 ) -> Result<Json<Value>, ApiError> {
@@ -3688,6 +3702,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/auth/verify", get(verify_web_access_key))
         .route("/api/config/export", get(export_config_download))
         .route("/api/config/import", post(import_config_upload))
+        .route(
+            "/api/settings/migrate-from-cc-switch",
+            post(migrate_from_cc_switch),
+        )
         .route("/api/settings", get(get_settings).put(save_settings))
         .route(
             "/api/settings/codex-unify-history-backup",

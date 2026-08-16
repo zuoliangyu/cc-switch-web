@@ -291,7 +291,7 @@ fn apply_file_to_database(
     Ok((upserted, deleted))
 }
 
-/// Load user-maintained overrides from `~/.cc-switch/model-pricing.json`.
+/// Load user-maintained overrides from `~/.cc-switch-web/model-pricing.json`.
 /// Built-in rows remain database-owned so application updates can repair them;
 /// the file contains only explicit overrides and deletion tombstones.
 pub fn sync_local_model_pricing(db: &Database) -> Result<usize, AppError> {

@@ -1,6 +1,6 @@
 # Web 端完整跟进上游计划（2026-08）
 
-> 状态：已完成（W0–W9）
+> 状态：已完成（W0–W10）
 > 上游范围：`cc-switch` `30409878..40cac1a6`  
 > 执行原则：完整吸收适用于 Web 运行时的最终语义，不机械 cherry-pick Tauri 实现
 
@@ -276,6 +276,18 @@ Pi 按上游最终契约一次落地，但复用现有 OpenCode/Hermes/Provider 
 
 其中 release commit 只吸收行为说明；`290b65c0` 的上游 Sponsors 按钮和 `3c592d93` 的 WiX 修改明确不进入 Web 产品代码。
 
+### W10：Web 数据目录隔离与 CC Switch 迁移
+
+- [x] Web 默认数据目录改为 `~/.cc-switch-web/`，`app_paths.json` 同步迁入该目录。
+- [x] `~/.cc-switch/` 永远只作为只读迁移来源；禁止把 Web 数据目录覆盖到该目录或其子目录。
+- [x] 首次启动且 `~/.cc-switch-web/` 不存在时，从 `~/.cc-switch/` 自动迁移；在同级临时目录完成数据库转换和文件复制，校验后再原子发布。
+- [x] SQLite 通过只读连接和 Backup API 获取一致快照，只在副本中转换为 Web 当前 Schema；不复制 WAL/SHM，也不修改源库 `user_version`。
+- [x] 仅复制 `settings.json`、`model-pricing.json` 和 `skills/`；不复制日志、锁、临时文件、旧备份、`app_paths.json` 或 Skills 备份。
+- [x] 设置页提供“从 CC Switch 迁移”入口；用户确认后覆盖 Web 数据库，先创建 Web 侧安全备份并返回备份 ID。
+- [x] 已存在 `~/.cc-switch-web/` 时不自动覆盖；自动迁移失败不发布半成品目录。
+
+最小验证：默认目录与 override 边界、v16/v17 源库迁移、源库字节/版本/修改时间不变、已有目标不自动迁移、失败不发布目标、手动迁移备份 ID、设置页确认与三语文案。
+
 ## 5. 实施顺序与依赖
 
 ```text
@@ -345,6 +357,7 @@ W0 基线修复
 | Pi 配置和登录所有权混淆 | 永不读写 `auth.json`，不写默认 Provider/Model，不接代理 |
 | 新 API 扩大远程攻击面 | 全部走现有 access-key middleware；文件路径 canonicalize 和大小限制 |
 | Schema 版本与上游不同 | 只迁移最终数据语义，使用 Web 自己的连续版本号 |
+| Web 与桌面端共用 SQLite 导致版本冲突或互相写入 | 固定使用独立 `.cc-switch-web`；桌面端目录仅以 SQLite 只读连接迁移，转换和升级全部发生在副本 |
 | 预设/文案更新污染 Web 项目定位 | 同步应用内功能数据；上游 Sponsors/README 项目文案不复制 |
 | UI 全应用入口溢出 | 先完成导航溢出策略，再加入 Pi；移动端和窄屏截图验收 |
 | 上游后续继续变化 | 本轮冻结到 `40cac1a6`；完成前不移动基线，新增变化另开审计 |
@@ -354,7 +367,7 @@ W0 基线修复
 ### 8.1 功能
 
 - 上游 88 个提交均在附录中有明确处置结果，无未分类提交。
-- W0–W9 清单全部完成或有用户确认的排除记录。
+- W0–W10 清单全部完成或有用户确认的排除记录。
 - Pi Provider、Prompts、Skills、Sessions、Usage 在 Web 中可用，且没有代理/登录托管入口。
 - Codex model catalog、native Responses、推理档位和用户目录所有权行为正确。
 - 所有 Provider 预设、定价和三语文案处于 `40cac1a6` 最终状态。
@@ -366,6 +379,7 @@ W0 基线修复
 - WebDAV 下载失败不会留下半恢复数据库或 Skills 状态。
 - usage script、目录递归、文件读取、代理响应和解压均有可执行上限测试。
 - Codex 官方登录、Pi `auth.json` 和用户自有 model catalog 不被覆盖。
+- CC Switch 源目录、源数据库版本和文件修改时间在自动/手动迁移前后保持不变。
 
 ### 8.3 UI 与可访问性
 
@@ -527,5 +541,8 @@ W0 基线修复
 - W8 验证：Pi usage 15 个上游定向测试全部通过，另增源文件删除/恢复和超限文件发现各 1/1；v14 新库/升级 1/1；同步跳过与本地保留各 1/1；Pi Dashboard 筛选 1/1；`pnpm typecheck`、W8 Rust 文件 `rustfmt --check`、`git diff --check` 通过。
 - 2026-08-16：完成 W9。两份 Web workflow 改由 Corepack 读取 `packageManager`，CI 路径覆盖前后端、测试、构建配置和部署输入，纯文档改动不触发重验证。保留 W1 的 Windows `ReplaceFileW`/WSL 安全回退及原子替换 Rust 平台测试，不引入依赖 Hosted Runner WSL2 状态、单次约 6 分钟且完整套件超过 50 分钟的脆弱 job。引用扫描后删除 5 个零调用前端文件、2 个废弃图标脚本及 4 个无直接调用依赖。Pi 四份上游资料整理为 Web 正式文档，CHANGELOG 与三语 README 同步完成。
 - W9 验证：Corepack 解析 pnpm `10.20.0`；`pnpm install --lockfile-only --frozen-lockfile`、`pnpm typecheck` 通过；Windows 原子替换契约测试 1/1 通过；workflow、`package.json`、脚本文档与 Pi 文档 Prettier 检查通过；CI 路径、Pi 文档边界、三语关键语义、旧文件/依赖静态断言及 `git diff --check` 通过。
+- 2026-08-16：启动 W10。根因确认是 Web 与桌面端共同使用 `~/.cc-switch/cc-switch.db`，而两端 Schema 版本号已分叉；采用独立目录、只读源快照和显式手动迁移根治，不再共享或原地升级桌面端数据库。
+- 2026-08-16：完成 W10。Web 的数据库、settings、备份、模型定价与默认 Skills SSOT 全部收口到 `~/.cc-switch-web/`；首次启动从桌面端目录只读快照迁移，设置页支持确认后手动覆盖并创建数据库与配套文件备份。源路径 override 会被拒绝，迁移失败不会发布自动迁移目标，并会尝试回滚手动迁移的 Web 数据。
+- W10 验证：自动/手动数据库迁移 4/4、app store 路径与源目录拒绝 1/1、settings 路径 1/1、设置页确认交互 6/6 通过；`pnpm typecheck`、新迁移模块 `rustfmt --check`、三语键/插值一致性、相关 JSON/Test Prettier、`git diff --check` 通过。验证全程使用临时 home，未创建真实 `~/.cc-switch-web`，未运行全量测试或 build。
 - 工作包提交：W0 `1defe63`、W1 `b4ca49c`、W2 `32a73cf`、W3 `f2e8f70`、W4 `56fa066`、W5 `9ba8df5`、W6 `cf2fa73`、W7 `05c170c`、W8 `884e533`；W9 由提交 `chore: 完成 W9 CI 文档与收口` 交付。
 - 剩余差异：计划内 88 个上游提交均已处置；Sponsors、WiX 与 WSL2 Hosted Runner job 按既定 Web 边界排除。全量 `pnpm check`、完整 Rust 测试、Docker build/smoke 和多平台 CI 仍按本计划约束留待用户单独确认。

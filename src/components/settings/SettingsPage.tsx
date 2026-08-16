@@ -512,6 +512,7 @@ export function SettingsPage({
                             onImport={importConfig}
                             onExport={exportConfig}
                             onClear={clearSelection}
+                            onMigrationSuccess={onImportSuccess}
                           />
                         </AccordionContent>
                       </AccordionItem>

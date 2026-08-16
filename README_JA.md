@@ -32,30 +32,33 @@ Pi の設定所有権、同期ルール、モデル能力、UI 制約は [Pi ネ
 
 ### クイックスタート
 
-1. フロントエンドを埋め込んだ release バイナリをビルドします。
+#### 方法 1：ビルド済み Release
 
-   ```bash
-   pnpm install --frozen-lockfile
-   pnpm build
-   ```
+1. [GitHub Releases](https://github.com/zuoliangyu/cc-switch-web/releases/latest) を開き、お使いのシステム向けの最新ビルド済みパッケージをダウンロードします。
 
-   （Rust `1.88+` が必要です。詳細なビルド / 開発オプションは下記「開発」セクションを参照してください。）
+   | システム | ダウンロードファイル |
+   | --- | --- |
+   | Windows x64 | `cc-switch-web-windows-x64.zip` |
+   | macOS（Intel / Apple Silicon） | `cc-switch-web-macos-universal.zip` |
+   | Linux x64 | `cc-switch-web-linux-x64.tar.gz` |
+   | Linux ARM64 | `cc-switch-web-linux-arm64.tar.gz` |
 
-2. バイナリを実行し、ターミナルに表示された最終アドレスを開きます。
-
-   ```bash
-   # Linux/macOS
-   ./backend/target/release/cc-switch-web --backend-port 8890
-   ```
+2. アーカイブを展開し、バイナリを含むディレクトリへ移動して、そのまま実行します。
 
    ```powershell
    # Windows
-   .\backend\target\release\cc-switch-web.exe -b 8890
+   .\cc-switch-web.exe
+   ```
+
+   ```bash
+   # Linux/macOS
+   chmod +x ./cc-switch-web
+   ./cc-switch-web
    ```
 
    リリース版ではフロントエンド静的配信と Web API が同じポートを共有し、デフォルトの優先ポートは `8890` です。ポートが使用中・権限拒否の場合は、自動的に後続ポートを試し、実際にバインドしたポートを出力します。
 
-3. ターミナルに表示されたアドレスをブラウザで開けば利用開始です。
+3. ターミナルに表示されたアドレスをブラウザで開けば利用開始です。Docker、systemd、またはソースからのビルドについては、下記「開発」を参照してください。
 
 4. データ保存先: ローカル Web サービスモードでは、Web データは独立したディレクトリに保存されます。
 
@@ -63,9 +66,20 @@ Pi の設定所有権、同期ルール、モデル能力、UI 制約は [Pi ネ
    ~/.cc-switch-web
    ```
 
-   ここには `settings.json`、`cc-switch.db`、バックアップ、統一 Skills ストレージなどが含まれます。初回起動時にこのディレクトリが存在しない場合、`~/.cc-switch` から読み取り専用で移行します。Web が移行元データベースを変更することはありません。旧 `config.json` は現在の Web ランタイムの主データ経路には含まれません。
+   ここには `settings.json`、`cc-switch.db`、バックアップ、統一 Skills ストレージなどが含まれます。初回起動時にこのディレクトリが存在せず、`~/.cc-switch/cc-switch.db` が見つかった場合は、読み取り専用で移行します。Web が移行元データベースを変更することはありません。CC Switch データベースが見つからない場合は移行をスキップし、新しい Web データを初期化します。旧 `config.json` は現在の Web ランタイムの主データ経路には含まれません。
 
-> Docker で実行する、またはデスクトップのないサーバーで常駐させる場合は、下記「開発」内の「Docker 実行」「Linux systemd サンプル」を参照してください。
+#### 方法 2：Docker
+
+```bash
+docker pull ghcr.io/zuoliangyu/cc-switch-web:latest
+docker run -d --name cc-switch-web \
+  -p 127.0.0.1:8890:8890 \
+  -v cc-switch-web-data:/data \
+  --restart unless-stopped \
+  ghcr.io/zuoliangyu/cc-switch-web:latest
+```
+
+[http://localhost:8890](http://localhost:8890) を開くと利用できます。Web データは `cc-switch-web-data` volume に永続化され、新しい volume では新規 Web データが初期化されます。現在の GHCR ランタイムイメージは `linux/amd64` のみ対応しているため、ARM64 では Release パッケージを使用してください。デフォルトでは、コンテナは volume 内のデータのみを管理します。CC Switch データの移行、ホスト側の CLI 設定管理、または LAN / 公開ネットワークへのデプロイについては、下記「Docker 実行」「アクセスキー」「Linux systemd サンプル」を参照してください。
 
 ## 現在のバージョン
 
@@ -76,7 +90,7 @@ Pi の設定所有権、同期ルール、モデル能力、UI 制約は [Pi ネ
 ## アップストリームとの関係
 
 - アップストリームプロジェクト: [cc-switch](https://github.com/farion1231/cc-switch)
-- 現在の Web リポジトリ: [zuoliangyu/zuoliangyu-cc-switch-web](https://github.com/zuoliangyu/zuoliangyu-cc-switch-web)
+- 現在の Web リポジトリ: [zuoliangyu/cc-switch-web](https://github.com/zuoliangyu/cc-switch-web)
 - 作者: 左岚（[Bilibili](https://space.bilibili.com/27619688)）
 - このリポジトリは CC Switch の Web ブランチ方向に焦点を当てています
 - 元の CC Switch プロジェクトやアップストリームのリリース情報を確認したい場合は、上流リポジトリを直接参照してください
@@ -151,7 +165,7 @@ Pi の設定所有権、同期ルール、モデル能力、UI 制約は [Pi ネ
    - Rust サービスのターミナルに Web API の method/path/status/所要時間が出ます
    - 必要に応じて `VITE_RUNTIME_DEBUG_REQUESTS=0|1` と `CC_SWITCH_WEB_DEBUG_API=0|1` で上書きできます
 
-### ローカル Release バイナリ
+### ソースから Release バイナリをビルド
 
 1. フロントエンドを埋め込んだ release バイナリをビルドします。
 
@@ -293,7 +307,7 @@ docker run -d --name cc-switch-web \
    docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
    ```
 
-   このサンプルは主に Linux サーバー向けで、`$HOME` 配下の `.claude`、`.codex`、`.gemini`、`.config/opencode`、`.config/openclaw` を前提にしています。
+   このサンプルは主に Linux サーバー向けで、`$HOME` 配下の `.claude`、`.codex`、`.gemini`、`.config/opencode`、`.config/openclaw` を前提にしています。CC Switch データの自動移行または手動移行を有効にするには、`${HOME}/.cc-switch:/data/.cc-switch:ro` のコメントを解除してください。移行元はコンテナ内でも読み取り専用です。
 
 ### Docker 内で Linux 配布パッケージを出力
 

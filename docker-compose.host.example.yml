@@ -4,6 +4,8 @@ services:
       # Copy this file to docker-compose.host.yml before editing.
       # This example is primarily for Linux hosts where $HOME points to the
       # account that owns the CLI config directories.
+      # Uncomment to allow read-only CC Switch data migration.
+      # - ${HOME}/.cc-switch:/data/.cc-switch:ro
       - ${HOME}/.claude:/data/.claude
       - ${HOME}/.codex:/data/.codex
       - ${HOME}/.gemini:/data/.gemini

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 文档
+
+- 快速运行改为优先推荐 GitHub Release 预编译包或 GHCR Docker 镜像，并列明 Windows x64、macOS universal、Linux x64 与 Linux ARM64 产物；源码构建移入开发章节，同时修正当前仓库链接。
+
 ## [2.0.0] - 2026-08-16
 
 本版本汇总 `v1.0.0` 以来的 15 笔提交，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。

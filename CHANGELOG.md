@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-16
+
+本版本汇总 `v1.0.0` 以来的 15 笔提交，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。
+
 ### 新增
 
 - Pi 成为完整应用目标，接入显式 Provider、原生 Prompts、Skills、Sessions 与 JSONL Usage；`/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管继续由 Pi 原生管理。

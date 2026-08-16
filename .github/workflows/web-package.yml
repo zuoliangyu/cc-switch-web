@@ -222,6 +222,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          pattern: cc-switch-web-*
 
       - name: Prepare release assets
         shell: bash

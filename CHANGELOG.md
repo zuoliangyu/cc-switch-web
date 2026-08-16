@@ -35,6 +35,7 @@
 - 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
 - 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。
 - Docker 构建在冻结安装依赖前同步复制 `pnpm-workspace.yaml`，避免 workspace overrides 与 lockfile 配置不一致导致 Linux 打包和 GHCR 发布失败。
+- Release 汇总仅下载 `cc-switch-web-*` 正式产物，排除 Docker Buildx 自动生成的 build record，避免无关 artifact 下载失败阻断发布。
 
 ### 文档
 

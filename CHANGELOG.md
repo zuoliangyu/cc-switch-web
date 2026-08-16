@@ -4,13 +4,9 @@
 
 ## [Unreleased]
 
-### 文档
-
-- 快速运行改为优先推荐 GitHub Release 预编译包或 GHCR Docker 镜像，并列明 Windows x64、macOS universal、Linux x64 与 Linux ARM64 产物；源码构建移入开发章节，同时修正当前仓库链接。
-
 ## [2.0.0] - 2026-08-16
 
-本版本汇总 `v1.0.0` 以来的 15 笔提交，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。
+本版本汇总 `v1.0.0` 以来的变更，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。
 
 ### 新增
 
@@ -38,6 +34,11 @@
 - Web API 默认改为同源 `/api`，Vite 开发环境同步代理到本地 Rust 服务；修复浏览器远程访问 Docker/Linux 服务时错误请求浏览器自身 `127.0.0.1:8890`，导致欢迎弹窗无法确认的问题。
 - 欢迎弹窗仅在设置保存成功后关闭，保存失败会显示可见错误，不再静默失败。
 - 移动端将应用切换和上下文工具收进可访问菜单，修复窄屏下 Skills、提示词、会话、MCP 与新增供应商按钮被裁切且无法操作的问题。
+- Docker 构建在冻结安装依赖前同步复制 `pnpm-workspace.yaml`，避免 workspace overrides 与 lockfile 配置不一致导致 Linux 打包和 GHCR 发布失败。
+
+### 文档
+
+- 快速运行改为优先推荐 GitHub Release 预编译包或 GHCR Docker 镜像，并列明 Windows x64、macOS universal、Linux x64 与 Linux ARM64 产物；源码构建移入开发章节，同时修正当前仓库链接。
 
 ### 发布
 

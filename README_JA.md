@@ -23,6 +23,7 @@ Web ブランチで既に利用できる機能:
 - Pi の Provider、Prompts、Skills、Sessions、Usage。Pi の `/login`、`auth.json`、デフォルト Provider/Model、プロキシ、フェイルオーバー、OAuth 管理は Pi 本体が所有
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
 - ChatGPT（Codex OAuth）の管理アカウントセンター、Claude プリセット、クォータ表示
+- Claude → Codex ルーティングの組み込み WebSearch と Codex ルートの Alpha Search パススルー
 - 環境変数競合の検出と整理入口
 - `?deeplink=...` または手動入力した `ccswitch://...` による Deep Link 取り込み
 - About ページから GitHub の最新リリースページを開く入口

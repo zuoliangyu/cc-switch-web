@@ -23,6 +23,7 @@ CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Cl
 - Pi 的 Provider、Prompts、Skills、Sessions 与 Usage；Pi `/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管明确由 Pi 原生管理
 - Claude、Codex、Gemini 的官方订阅额度展示
 - ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
+- Claude → Codex 路由支持内置 WebSearch，Codex 路由支持 Alpha Search 透传
 - 环境变量冲突检测与清理入口
 - 通过 `?deeplink=...` 或手动输入 `ccswitch://...` 导入 Deep Link
 - About 页面可直接打开 GitHub 最新发布页

@@ -355,6 +355,14 @@ impl ProxyServer {
                 "/grokbuild/v1/responses/compact",
                 post(handlers::handle_grokbuild_responses_compact),
             )
+            // Codex 独立 Alpha Search API；本地别名统一转发到上游 /alpha/search。
+            .route("/alpha/search", post(handlers::handle_alpha_search))
+            .route("/v1/alpha/search", post(handlers::handle_alpha_search))
+            .route("/v1/v1/alpha/search", post(handlers::handle_alpha_search))
+            .route(
+                "/codex/v1/alpha/search",
+                post(handlers::handle_alpha_search),
+            )
             // Gemini API (支持带前缀和不带前缀)
             .route("/v1beta/*path", post(handlers::handle_gemini))
             .route("/gemini/v1beta/*path", post(handlers::handle_gemini))

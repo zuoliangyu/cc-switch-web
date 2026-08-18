@@ -1,6 +1,6 @@
 # Web 端跟进上游 `40cac1a6` 后续迁移计划（2026-08-18）
 
-> 状态：批次 1、批次 2 已完成
+> 状态：批次 1、批次 2、批次 3 已完成
 > 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`  
 > 冻结基线：`40cac1a6`  
 > 当前审计点：`fd14f9c4`  
@@ -34,7 +34,7 @@
 | `4080a8e9` | 千帆 Token Plan 六应用预设              | 同步 Web 已支持应用                                 | 1    | 已迁移   |
 | `46f19a15` | DeepSeek cache-hit token                | 迁移解析与 Responses usage 转换                     | 1    | 已迁移   |
 | `d01eab97` | OpenCode Zen effort 方言                | 迁移逐模型钳制逻辑                                  | 1    | 已迁移   |
-| `bdeaac75` | Alpha Search 与 Hosted WebSearch        | 独立迁移完整请求、响应及 SSE 语义                   | 3    | 待迁移   |
+| `bdeaac75` | Alpha Search 与 Hosted WebSearch        | 独立迁移完整请求、响应及 SSE 语义                   | 3    | 已迁移   |
 | `de9af49a` | Windows CLI 检测                        | 迁移安全 PATH、注册表和独立安装目录检测             | 4    | 待迁移   |
 | `d4fefefc` | Windows Tauri FOUC                      | Tauri 窗口专属                                      | 排除 | 不适用   |
 | `b109dcd3` | Grok Build 表单文案                     | 迁移表单分流                                        | 4    | 待迁移   |
@@ -107,3 +107,5 @@
 - 2026-08-18：完成任意 Follow Login 别名识别及误判保护；固定 `codex-official` 继续兼容，明确第三方 URL、API Key、bearer token 或非 OpenAI model provider 不会被接管。
 - 2026-08-18：补齐 Routing per-app 串行锁、暂停状态热切换与托管账号动态恢复测试；批次 2 仅剩 `897ca892` 可配置用量查询。
 - 2026-08-18：完成 `897ca892` Web 适配。绑定账号默认展示 OAuth quota，可关闭查询、配置轮询间隔并使用绑定账号执行测试查询；批次 2 完成。
+- 2026-08-18：完成 `bdeaac75` Web 适配。补齐 Alpha Search 端点透传、full-URL 安全改写，以及 Hosted WebSearch 的请求、响应、SSE、citation、多轮回放和 `max_uses` 语义；批次 3 完成。
+- 2026-08-18：批次 3 通过 `cargo check`，以及 Responses 请求转换 115 项、Responses SSE 85 项、Codex-Anthropic 72 项、WebSearch 37 项和 Alpha Search 2 项定向测试。

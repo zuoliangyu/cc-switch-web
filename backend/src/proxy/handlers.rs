@@ -14,16 +14,20 @@ use super::{
     },
     handler_context::RequestContext,
     providers::{
-        get_adapter, get_claude_api_format, streaming::create_anthropic_sse_stream,
+        get_adapter, get_claude_api_format,
+        streaming::create_anthropic_sse_stream,
         streaming_codex_anthropic::{
             create_responses_sse_stream_from_anthropic_with_context,
             responses_sse_events_from_anthropic_message,
         },
         streaming_codex_chat::create_responses_sse_stream_from_chat,
         streaming_gemini::create_anthropic_sse_stream_from_gemini,
-        streaming_responses::create_anthropic_sse_stream_from_responses, transform,
-        transform_codex_anthropic, transform_codex_chat, transform_codex_responses_namespace,
-        transform_gemini, transform_responses,
+        streaming_responses::{
+            create_anthropic_sse_stream_from_responses,
+            create_anthropic_sse_stream_from_responses_with_web_search_options,
+        },
+        transform, transform_codex_anthropic, transform_codex_chat,
+        transform_codex_responses_namespace, transform_gemini, transform_responses,
     },
     response_processor::{
         create_logged_passthrough_stream, create_usage_collector, process_response,
@@ -228,7 +232,7 @@ async fn handle_claude_transform(
     response: super::hyper_client::ProxyResponse,
     ctx: &RequestContext,
     state: &ProxyState,
-    _original_body: &Value,
+    original_body: &Value,
     is_stream: bool,
     api_format: &str,
 ) -> Result<axum::response::Response, ProxyError> {
@@ -243,8 +247,12 @@ async fn handle_claude_transform(
             .and_then(|meta| meta.provider_type.as_deref())
             == Some("codex_oauth"),
     );
-    let tool_schema_hints = transform_gemini::extract_anthropic_tool_schema_hints(_original_body);
+    let tool_schema_hints = transform_gemini::extract_anthropic_tool_schema_hints(original_body);
     let tool_schema_hints = (!tool_schema_hints.is_empty()).then_some(tool_schema_hints);
+    let hosted_web_search_name =
+        transform_responses::anthropic_web_search_tool_name(original_body).map(ToString::to_string);
+    let hosted_web_search_max_uses =
+        transform_responses::anthropic_web_search_max_uses(original_body);
 
     if use_streaming {
         // 根据 api_format 选择流式转换器
@@ -252,7 +260,17 @@ async fn handle_claude_transform(
         let sse_stream: Box<
             dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send + Unpin,
         > = if api_format == "openai_responses" {
-            Box::new(Box::pin(create_anthropic_sse_stream_from_responses(stream)))
+            if hosted_web_search_name.is_none() && hosted_web_search_max_uses.is_none() {
+                Box::new(Box::pin(create_anthropic_sse_stream_from_responses(stream)))
+            } else {
+                Box::new(Box::pin(
+                    create_anthropic_sse_stream_from_responses_with_web_search_options(
+                        stream,
+                        hosted_web_search_name.clone(),
+                        hosted_web_search_max_uses,
+                    ),
+                ))
+            }
         } else if api_format == "gemini_native" {
             Box::new(Box::pin(create_anthropic_sse_stream_from_gemini(
                 stream,
@@ -348,7 +366,11 @@ async fn handle_claude_transform(
 
     // 根据 api_format 选择非流式转换器
     let anthropic_response = if api_format == "openai_responses" {
-        transform_responses::responses_to_anthropic(upstream_response)
+        transform_responses::responses_to_anthropic_with_web_search_options(
+            upstream_response,
+            hosted_web_search_name.as_deref(),
+            hosted_web_search_max_uses,
+        )
     } else if api_format == "gemini_native" {
         transform_gemini::gemini_to_anthropic_with_shadow_and_hints(
             upstream_response,
@@ -617,6 +639,56 @@ pub async fn handle_responses_compact(
     request: axum::extract::Request,
 ) -> Result<axum::response::Response, ProxyError> {
     handle_responses_compact_for_app(state, request, AppType::Codex, "Codex", "codex").await
+}
+
+/// Codex 独立 Alpha Search 协议透传。
+///
+/// 该请求不能转换为 Chat Completions 或 Anthropic Messages，因此只复用
+/// Provider 选择、模型映射、认证、故障转移和用量日志链路。
+pub async fn handle_alpha_search(
+    State(state): State<ProxyState>,
+    request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    let (parts, req_body) = request.into_parts();
+    let uri = parts.uri;
+    let headers = parts.headers;
+    let extensions = parts.extensions;
+    let body_bytes = req_body
+        .collect()
+        .await
+        .map_err(|e| ProxyError::Internal(format!("Failed to read request body: {e}")))?
+        .to_bytes();
+    let body: Value = serde_json::from_slice(&body_bytes)
+        .map_err(|e| ProxyError::InvalidRequest(format!("Failed to parse request body: {e}")))?;
+
+    let mut ctx =
+        RequestContext::new(&state, &body, &headers, AppType::Codex, "Codex", "codex").await?;
+    let endpoint = endpoint_with_query(&uri, "/alpha/search");
+
+    let forwarder = ctx.create_forwarder(&state);
+    let result = match forwarder
+        .forward_with_retry(
+            &AppType::Codex,
+            &endpoint,
+            body,
+            headers,
+            extensions,
+            ctx.get_providers(),
+        )
+        .await
+    {
+        Ok(result) => result,
+        Err(mut err) => {
+            if let Some(provider) = err.provider.take() {
+                ctx.provider = provider;
+            }
+            log_forward_error(&state, &ctx, false, &err.error);
+            return Err(err.error);
+        }
+    };
+
+    ctx.provider = result.provider;
+    process_response(result.response, &ctx, &state, &CODEX_PARSER_CONFIG).await
 }
 
 pub async fn handle_grokbuild_responses_compact(

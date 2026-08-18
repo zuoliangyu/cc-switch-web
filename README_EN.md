@@ -23,6 +23,7 @@ Capabilities already available on the Web branch:
 - Pi Provider, Prompts, Skills, Sessions, and Usage support; Pi keeps ownership of `/login`, `auth.json`, the default Provider/Model, proxying, failover, and managed OAuth
 - Official subscription quota display for Claude, Codex, and Gemini
 - Managed ChatGPT (Codex OAuth) account center, Claude preset, and quota display
+- Built-in WebSearch for Claude-to-Codex routing and Alpha Search passthrough for Codex routes
 - Environment variable conflict detection and cleanup entry points
 - Deep link import via `?deeplink=...` or manual `ccswitch://...` input
 - About page entry to open the latest GitHub release page

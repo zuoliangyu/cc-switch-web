@@ -103,6 +103,21 @@ export const handlers = [
 
   http.post(`${RUNTIME_ENDPOINT}/list_sessions`, () => success(listSessions())),
 
+  http.post(`${RUNTIME_ENDPOINT}/list_profiles`, () =>
+    success({
+      profiles: [],
+      currentIds: {
+        claude: null,
+        claudeDesktop: null,
+        codex: null,
+      },
+    }),
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/check_env_conflicts`, () => success([])),
+
+  http.post(`${RUNTIME_ENDPOINT}/get_installed_skills`, () => success([])),
+
   http.post(`${RUNTIME_ENDPOINT}/get_session_messages`, async ({ request }) => {
     const { providerId, sourcePath } = await withJson<{
       providerId: string;

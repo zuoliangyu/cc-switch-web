@@ -3236,13 +3236,13 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn symlink_dir(src: &Path, dest: &Path) {
-        std::os::unix::fs::symlink(src, dest).expect("create symlink");
+    fn symlink_dir(src: &Path, dest: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(src, dest)
     }
 
     #[cfg(windows)]
-    fn symlink_dir(src: &Path, dest: &Path) {
-        std::os::windows::fs::symlink_dir(src, dest).expect("create symlink");
+    fn symlink_dir(src: &Path, dest: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(src, dest)
     }
 
     #[test]
@@ -3303,8 +3303,22 @@ mod tests {
 
         let opencode_skills_dir = home.join(".config").join("opencode").join("skills");
         fs::create_dir_all(&opencode_skills_dir).expect("create opencode skills dir");
-        symlink_dir(&disabled_skill, &opencode_skills_dir.join("disabled-skill"));
-        symlink_dir(&orphan_skill, &opencode_skills_dir.join("orphan-skill"));
+        for (source, target) in [
+            (&disabled_skill, opencode_skills_dir.join("disabled-skill")),
+            (&orphan_skill, opencode_skills_dir.join("orphan-skill")),
+        ] {
+            if let Err(error) = symlink_dir(source, &target) {
+                #[cfg(windows)]
+                if error.raw_os_error() == Some(1314) {
+                    eprintln!(
+                        "skipping symlink cleanup test: Windows symlink privilege is unavailable"
+                    );
+                    return;
+                }
+
+                panic!("create symlink {}: {error}", target.display());
+            }
+        }
 
         let db = create_test_db();
         db.save_skill(&InstalledSkill {

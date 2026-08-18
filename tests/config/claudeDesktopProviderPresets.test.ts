@@ -3,7 +3,7 @@ import { claudeDesktopProviderPresets } from "@/config/claudeDesktopProviderPres
 
 describe("Claude Desktop provider presets", () => {
   it("includes the complete upstream catalog and managed OAuth presets", () => {
-    expect(claudeDesktopProviderPresets).toHaveLength(71);
+    expect(claudeDesktopProviderPresets).toHaveLength(74);
     expect(claudeDesktopProviderPresets[0]).toMatchObject({
       name: "Claude Desktop Official",
       category: "official",

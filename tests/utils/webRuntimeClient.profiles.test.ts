@@ -29,7 +29,7 @@ describe("web runtime profile requests", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:8890/api/profiles",
+      "/api/profiles",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ name: "工作", scope: "claude" }),
@@ -37,7 +37,7 @@ describe("web runtime profile requests", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "http://127.0.0.1:8890/api/profiles/p%2F1",
+      "/api/profiles/p%2F1",
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({ name: "工作 2" }),
@@ -45,7 +45,7 @@ describe("web runtime profile requests", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "http://127.0.0.1:8890/api/profiles/p%2F1/apply",
+      "/api/profiles/p%2F1/apply",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ scope: "codex" }),
@@ -53,7 +53,7 @@ describe("web runtime profile requests", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
-      "http://127.0.0.1:8890/api/profiles/current/claude-desktop",
+      "/api/profiles/current/claude-desktop",
       expect.objectContaining({ method: "DELETE" }),
     );
   });

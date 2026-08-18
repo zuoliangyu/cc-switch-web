@@ -654,11 +654,11 @@ fn migration_from_v3_8_schema_v1_to_current_schema_v3() {
         "skills migration snapshot should preserve legacy app mapping"
     );
 
-    // v3.9+ 新增：proxy_config 三行 seed 必须存在（否则 UI 会查不到默认值）
+    // 当前支持的四个代理应用 seed 必须存在（否则 UI 会查不到默认值）
     let proxy_rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM proxy_config", [], |r| r.get(0))
         .expect("count proxy_config rows");
-    assert_eq!(proxy_rows, 3);
+    assert_eq!(proxy_rows, 4);
 
     // model_pricing 应具备默认数据（迁移时会 seed）
     let pricing_rows: i64 = conn
@@ -808,9 +808,9 @@ fn schema_model_pricing_contains_current_models() {
     let expected = [
         ("claude-opus-5", "5", "25", "0.50", "6.25"),
         ("gpt-5.6-sol", "5", "30", "0.50", "6.25"),
-        ("gpt-5.6-terra", "2.50", "15", "0.25", "3.125"),
-        ("gpt-5.6-luna", "1", "6", "0.10", "1.25"),
-        ("grok-4.5", "2", "6", "0.50", "0"),
+        ("gpt-5.6-terra", "2", "12", "0.20", "2.50"),
+        ("gpt-5.6-luna", "0.20", "1.20", "0.02", "0.25"),
+        ("grok-4.5", "2", "6", "0.30", "0"),
         ("kimi-k3", "3.00", "15.00", "0.30", "0"),
     ];
 

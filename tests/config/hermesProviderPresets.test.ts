@@ -17,12 +17,12 @@ function readTranslation(tree: TranslationTree, path: string): unknown {
 }
 
 describe("Hermes Provider 预设目录", () => {
-  it("完整包含 63 个上游预设并保持唯一 Provider Key", () => {
+  it("完整包含 66 个上游预设并保持唯一 Provider Key", () => {
     const keys = hermesProviderPresets.map(
       (preset) => preset.settingsConfig.name,
     );
 
-    expect(hermesProviderPresets).toHaveLength(63);
+    expect(hermesProviderPresets).toHaveLength(66);
     expect(new Set(keys).size).toBe(keys.length);
   });
 

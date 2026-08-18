@@ -157,10 +157,9 @@ describe("App integration with MSW", () => {
     toastErrorMock.mockReset();
   });
 
-  // 全套并发跑时 MSW server 处理多个 test file 留下的 lifecycle 偶发抢占 fetch
-  // mock，导致这条端到端流单跑稳过、合跑偶发失败。给 retry: 2 做幂等保护，
-  // 同时 resetProviderState 在 beforeEach 已经把 msw state 还原到默认。
-  it("covers basic provider flows via real hooks", { retry: 2 }, async () => {
+  // 该用例会懒加载完整 App 并串行覆盖多轮交互，全套并发执行时可能超过
+  // Vitest 默认的 5 秒；使用单次集成测试超时，避免 retry 重复整条流程。
+  it("covers basic provider flows via real hooks", { timeout: 20_000 }, async () => {
     const { default: App } = await import("@/App");
     renderApp(App);
 

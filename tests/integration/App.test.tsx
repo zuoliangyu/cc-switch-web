@@ -139,6 +139,10 @@ vi.mock("@/components/mcp/McpPanel", () => ({
     ),
 }));
 
+// App 依赖较多，全量并发时模块转换可能超过单测超时；在收集阶段完成加载，
+// 让用例超时只衡量实际交互流程。
+const { default: App } = await import("@/App");
+
 const renderApp = (AppComponent: ComponentType) => {
   const client = new QueryClient();
   return render(
@@ -157,10 +161,8 @@ describe("App integration with MSW", () => {
     toastErrorMock.mockReset();
   });
 
-  // 该用例会懒加载完整 App 并串行覆盖多轮交互，全套并发执行时可能超过
-  // Vitest 默认的 5 秒；使用单次集成测试超时，避免 retry 重复整条流程。
-  it("covers basic provider flows via real hooks", { timeout: 20_000 }, async () => {
-    const { default: App } = await import("@/App");
+  // 模块加载已在收集阶段完成，默认超时只衡量实际交互流程。
+  it("covers basic provider flows via real hooks", async () => {
     renderApp(App);
 
     await waitFor(() =>

@@ -4,10 +4,39 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-18
+
+本版本完成 `40cac1a6..fd14f9c4` 共 24 个上游提交的 Web 适配，重点补齐 Provider 模型能力、Codex OAuth 生命周期、Hosted WebSearch 与 Windows CLI 安全检测，并修复第三方 Provider 修改配置后无法检索旧会话的问题。
+
+### 新增
+
+- 同步 Claude、Claude Desktop、Codex、OpenCode、OpenClaw 与 Hermes 的最新 Provider 预设，补齐千帆 Token Plan、Kimi、StepFun、SiliconFlow、ModelScope、OpenCode Zen 等模型目录与逐模型 reasoning 档位。
+- Codex OAuth 托管账号补齐 `id_token`、token 获取时间、重新认证状态、refresh token 采纳与持久化；Follow Login Provider 按配置内容识别任意别名，不再依赖固定 Provider ID。
+- 绑定 Codex OAuth 账号的 Provider 支持独立开启用量查询和配置自动轮询间隔；`0` 表示关闭自动轮询。
+- 完整迁移 Anthropic 与 Responses 之间的 Hosted WebSearch，包括 `server_tool_use`、搜索结果、citation/source、`max_uses`、流式事件和多轮回放；Alpha Search 端点支持安全透传。
+
+### 改进
+
+- Provider 切换、编辑与 Routing 启停按应用串行执行；托管 Codex 切换使用 auth/config/catalog/marker 四文件事务快照，Routing 恢复时动态注入最新认证。
+- Windows CLI 检测合并进程、用户注册表和机器注册表 PATH，补扫独立安装目录与常见包管理器目录，过滤 WindowsApps App Execution Alias，并兼容非 UTF-8 控制台输出。
+- CLI 定位与版本探测统一设置 10 秒超时；Windows 超时终止进程树，非 Windows 终止进程组，Web 请求线程不再被同步探测阻塞。Windows 检测仅处理原生 CLI，不新增 WSL 探测。
+- Provider 表单修复 IME 组合输入提交时序；Usage 趋势图使用完整日期作为 key，跨年数据不再冲突；Grok Build 使用独立模型提示。
+- DeepSeek `prompt_cache_hit_tokens`、Responses usage 与最新模型定价完成对齐。
+
 ### 修复
 
 - Codex 第三方 Provider 统一使用稳定的 `custom` 会话桶；启动时从活跃会话、归档会话和 state DB 自动发现旧 `model_provider` 桶，备份后迁移 JSONL、SQLite 索引与旧 Provider 模板，避免修改 `config.toml` 或切换 Provider 后检索不到历史会话。官方 `openai` 历史仍由“统一 Codex 会话历史”开关单独控制。
 - Codex 会话管理补充扫描 `archived_sessions`，归档会话可正常浏览和删除。
+- OAuth 登录完成后会取消旧 device flow，防止过期登录流程复活并覆盖新账号状态。
+- 修复预设目录、模型定价与 Web 相对 API 地址变化后测试断言未同步的问题；补齐 App 集成测试所需的 Profile、环境冲突与 Skill mock。
+- Windows 无符号链接权限时仅对系统错误码 1314 受控跳过对应测试；OpenClaw 临时 HOME 测试接入全局串行锁，避免并发覆盖环境变量。
+- App 集成测试在收集阶段加载完整模块，使默认 5 秒超时只衡量真实交互流程，不再因 Vite 并发转换耗时随机失败。
+
+### 验证
+
+- TypeScript 类型检查通过。
+- 前端 91 个测试文件共 512 项通过、2 项跳过；App 集成流在默认 5 秒超时下连续全量验证通过。
+- Rust 1663 项通过、3 项忽略、0 失败。
 
 ## [2.0.0] - 2026-08-16
 

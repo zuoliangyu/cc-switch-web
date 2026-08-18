@@ -1,6 +1,6 @@
 # Web 端跟进上游 `40cac1a6` 后续迁移计划（2026-08-18）
 
-> 状态：批次 1、批次 2、批次 3 已完成
+> 状态：批次 1、批次 2、批次 3 已完成；批次 4 交互项已完成，环境检测待迁移
 > 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`  
 > 冻结基线：`40cac1a6`  
 > 当前审计点：`fd14f9c4`  
@@ -37,13 +37,13 @@
 | `bdeaac75` | Alpha Search 与 Hosted WebSearch        | 独立迁移完整请求、响应及 SSE 语义                   | 3    | 已迁移   |
 | `de9af49a` | Windows CLI 检测                        | 迁移安全 PATH、注册表和独立安装目录检测             | 4    | 待迁移   |
 | `d4fefefc` | Windows Tauri FOUC                      | Tauri 窗口专属                                      | 排除 | 不适用   |
-| `b109dcd3` | Grok Build 表单文案                     | 迁移表单分流                                        | 4    | 待迁移   |
-| `3d126f45` | 跨年 Usage 趋势图 key                   | 迁移 RFC3339 xKey                                   | 4    | 待迁移   |
+| `b109dcd3` | Grok Build 表单文案                     | 迁移表单分流                                        | 4    | 已迁移   |
+| `3d126f45` | 跨年 Usage 趋势图 key                   | 迁移 RFC3339 xKey                                   | 4    | 已迁移   |
 | `f62c854a` | 清理认证后取消旧 device flow            | 纳入 OAuth 生命周期迁移                             | 2    | 已迁移   |
-| `a98829ba` | Provider 字段 IME 加固                  | 迁移组合输入和 blur 提交修复                        | 4    | 待迁移   |
+| `a98829ba` | Provider 字段 IME 加固                  | 迁移组合输入和 blur 提交修复                        | 4    | 已迁移   |
 | `897ca892` | Codex OAuth 用量查询可配置              | 适配 Web usage 配置与轮询                           | 2    | 已迁移   |
 | `0455a92c` | 多个 Follow Login Provider              | 按配置内容识别任意别名，不依赖固定 Provider ID      | 2    | 已迁移   |
-| `52745efe` | OpenCode Go Anthropic 回归测试          | 行为已存在，补等价回归测试                          | 4    | 待补测试 |
+| `52745efe` | OpenCode Go Anthropic 回归测试          | 行为已存在，补等价回归测试                          | 4    | 已补测试 |
 | `6e424fd3` | 恢复 Codex 1M 开关                      | Web 已存在                                          | 已有 | 已处置   |
 | `d1c550ba` | 删除 Goal mode 开关                     | Web 当前无该开关                                    | 已有 | 已处置   |
 | `fd14f9c4` | 环境/升级预检超时                       | 仅迁移通用命令探测 timeout；批量升级 UI 不适用      | 4    | 待迁移   |
@@ -109,3 +109,5 @@
 - 2026-08-18：完成 `897ca892` Web 适配。绑定账号默认展示 OAuth quota，可关闭查询、配置轮询间隔并使用绑定账号执行测试查询；批次 2 完成。
 - 2026-08-18：完成 `bdeaac75` Web 适配。补齐 Alpha Search 端点透传、full-URL 安全改写，以及 Hosted WebSearch 的请求、响应、SSE、citation、多轮回放和 `max_uses` 语义；批次 3 完成。
 - 2026-08-18：批次 3 通过 `cargo check`，以及 Responses 请求转换 115 项、Responses SSE 85 项、Codex-Anthropic 72 项、WebSearch 37 项和 Alpha Search 2 项定向测试。
+- 2026-08-18：完成批次 4 前端交互项。IME 输入在 composition 未正常结束时仍会于 blur 提交最终值；Usage 趋势图使用完整日期作为唯一 key 并在跨年时显示年份；Grok Build 使用独立模型提示；OpenCode Go Anthropic 预设补齐回归测试。
+- 2026-08-18：批次 4 前端交互项通过 TypeScript 类型检查，以及 IME、Provider 表单、Usage 趋势图、Grok Build、OpenCode Go 和 Provider 能力共 70 项定向测试。

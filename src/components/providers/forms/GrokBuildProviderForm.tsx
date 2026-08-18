@@ -428,6 +428,7 @@ export function GrokBuildProviderForm({
         {category !== "official" && (
           <>
             <CodexFormFields
+              appId="grokbuild"
               providerId={providerId}
               codexApiKey={apiKey}
               onApiKeyChange={(value) => {

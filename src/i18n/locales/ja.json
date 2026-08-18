@@ -764,7 +764,11 @@
     "contextWindow": "コンテキストウィンドウ",
     "contextWindowInvalid": "コンテキストウィンドウは正の整数で指定してください",
     "rawConfig": "config.toml",
-    "invalidToml": "config.toml の形式が不正です: {{error}}"
+    "invalidToml": "config.toml の形式が不正です: {{error}}",
+    "defaultModelPlaceholder": "例: grok-4.5",
+    "defaultModelHint": "Grok Build がデフォルトでリクエストするモデルです。プリセットの更新を待たずにいつでも変更できます。",
+    "advancedSectionHint": "上流フォーマット、思考機能、カスタム User-Agent の設定を含みます。Chat Completions プロトコルを使用するプロバイダーはルーティング引き継ぎの有効化が必要です。",
+    "reasoningEffortHint": "上流が low/high/max などの思考の深さの制御に対応している場合に有効化します。有効にすると思考モードも自動的にオンになり、リクエストの reasoning effort を上流の Chat パラメータに変換します。"
   },
   "sessionManager": {
     "title": "セッション管理",

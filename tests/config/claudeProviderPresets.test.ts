@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { providerPresets } from "@/config/claudeProviderPresets";
+import type { Provider } from "@/types";
+import { providerNeedsRouting } from "@/utils/providerCapabilities";
 
 describe("AWS Bedrock Provider Presets", () => {
   const bedrockAksk = providerPresets.find(
@@ -79,7 +81,7 @@ describe("AWS Bedrock Provider Presets", () => {
 
 describe("Claude Provider Presets", () => {
   it("should match the complete upstream catalog", () => {
-    expect(providerPresets).toHaveLength(74);
+    expect(providerPresets).toHaveLength(77);
     expect(providerPresets.map((preset) => preset.name)).toEqual(
       expect.arrayContaining([
         "Kimi",
@@ -115,5 +117,41 @@ describe("Claude Provider Presets", () => {
     );
 
     expect(deepSeek?.modelsUrl).toBe("https://api.deepseek.com/models");
+  });
+});
+
+describe("OpenCode Go Provider Preset", () => {
+  const openCodeGo = providerPresets.find(
+    (preset) => preset.name === "OpenCode Go",
+  )!;
+
+  it("使用 Anthropic 兼容端点和 x-api-key 认证", () => {
+    const env = (openCodeGo.settingsConfig as any).env;
+    expect(env).toMatchObject({
+      ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go",
+      ANTHROPIC_API_KEY: "",
+      ANTHROPIC_MODEL: "deepseek-v4-flash",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-v4-flash",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "deepseek-v4-flash",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "deepseek-v4-flash",
+    });
+    expect(env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
+    expect(openCodeGo.apiFormat).toBeUndefined();
+    expect(openCodeGo.apiKeyField).toBe("ANTHROPIC_API_KEY");
+  });
+
+  it("Claude Code 直连时不要求本地路由", () => {
+    const provider: Provider = {
+      id: "opencode-go",
+      name: openCodeGo.name,
+      category: openCodeGo.category,
+      settingsConfig: openCodeGo.settingsConfig as Record<string, any>,
+      meta: {
+        apiFormat: openCodeGo.apiFormat,
+        apiKeyField: openCodeGo.apiKeyField,
+      },
+    };
+
+    expect(providerNeedsRouting("claude", provider)).toBe(false);
   });
 });

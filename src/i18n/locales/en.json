@@ -764,7 +764,11 @@
     "contextWindow": "Context window",
     "contextWindowInvalid": "Context window must be a positive integer",
     "rawConfig": "config.toml",
-    "invalidToml": "Invalid config.toml: {{error}}"
+    "invalidToml": "Invalid config.toml: {{error}}",
+    "defaultModelPlaceholder": "e.g. grok-4.5",
+    "defaultModelHint": "The model Grok Build requests by default; change it anytime without waiting for a preset update.",
+    "advancedSectionHint": "Includes upstream format, reasoning overrides and custom User-Agent. Providers using the Chat Completions protocol require routing takeover to be enabled.",
+    "reasoningEffortHint": "Enable when the upstream supports thinking-depth control such as low/high/max. Enabling this also turns on thinking mode and converts the request's reasoning effort into the upstream Chat parameter."
   },
   "sessionManager": {
     "title": "Session Manager",

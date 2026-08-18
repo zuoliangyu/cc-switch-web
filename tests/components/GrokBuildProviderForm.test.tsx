@@ -292,4 +292,37 @@ context_window = 500000
     expect(payload.presetCategory).toBe("official");
     expect(payload.meta.customUserAgent).toBeUndefined();
   });
+
+  it("使用 Grok Build 文案而不是 Codex 专属提示", () => {
+    const config = `[models]
+default = "grok-4.5"
+
+[model."grok-4.5"]
+model = "grok-4.5"
+base_url = "https://relay.example.com/v1"
+name = "Chat Relay"
+api_key = "secret-key"
+api_backend = "chat_completions"
+context_window = 500000
+`;
+    const { container } = render(
+      <GrokBuildProviderForm
+        submitLabel="Save"
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        initialData={{
+          name: "Chat Relay",
+          category: "custom",
+          settingsConfig: { config },
+          meta: { apiFormat: "openai_chat" },
+        }}
+      />,
+    );
+
+    expect(
+      container.querySelector<HTMLInputElement>("#codexModelName")?.placeholder,
+    ).toBe("grokBuild.defaultModelPlaceholder");
+    expect(screen.getByText("grokBuild.defaultModelHint")).toBeInTheDocument();
+    expect(screen.queryByText("codexConfig.defaultModelHint")).toBeNull();
+  });
 });

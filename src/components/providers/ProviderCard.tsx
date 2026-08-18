@@ -22,6 +22,7 @@ import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import {
   providerNeedsRouting,
+  resolveCodexOfficialIdentity,
   supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 import { useProviderHealth } from "@/lib/query/failover";
@@ -187,7 +188,10 @@ export function ProviderCard({
     return true;
   }, [provider.notes, displayUrl, fallbackUrlText]);
 
-  const usageEnabled = provider.meta?.usage_script?.enabled ?? false;
+  const isBoundCodexOfficial =
+    resolveCodexOfficialIdentity(appId, provider) === "managed_account";
+  const usageEnabled =
+    provider.meta?.usage_script?.enabled ?? isBoundCodexOfficial;
   const isOfficial = isOfficialProvider(provider, appId);
   const isCopilot =
     provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
@@ -195,7 +199,8 @@ export function ProviderCard({
   const isHermesReadOnly =
     appId === "hermes" && isHermesReadOnlyProvider(provider.settingsConfig);
   const isCodexOauth =
-    provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH;
+    provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH ||
+    isBoundCodexOfficial;
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
   const needsRouting = providerNeedsRouting(appId, provider);
@@ -218,7 +223,7 @@ export function ProviderCard({
     : 0;
 
   const { data: usage } = useUsageQuery(provider.id, appId, {
-    enabled: usageEnabled,
+    enabled: usageEnabled && !isBoundCodexOfficial,
     autoQueryInterval,
   });
 
@@ -432,11 +437,18 @@ export function ProviderCard({
                   isCurrent={isCurrent}
                 />
               ) : isCodexOauth ? (
-                <CodexOauthQuotaFooter
-                  meta={provider.meta}
-                  inline={true}
-                  isCurrent={isCurrent}
-                />
+                !isBoundCodexOfficial || usageEnabled ? (
+                  <CodexOauthQuotaFooter
+                    meta={provider.meta}
+                    inline={true}
+                    isCurrent={isCurrent}
+                    autoQueryInterval={
+                      isBoundCodexOfficial
+                        ? (provider.meta?.usage_script?.autoQueryInterval ?? 5)
+                        : undefined
+                    }
+                  />
+                ) : null
               ) : isXaiOauth ? (
                 <XaiOauthQuotaFooter
                   meta={provider.meta}
@@ -517,7 +529,10 @@ export function ProviderCard({
                   : undefined
               }
               onConfigureUsage={
-                isOfficial || isCopilot || isCodexOauth || isXaiOauth
+                (isOfficial && !isBoundCodexOfficial) ||
+                isCopilot ||
+                (isCodexOauth && !isBoundCodexOfficial) ||
+                isXaiOauth
                   ? undefined
                   : () => onConfigureUsage(provider)
               }

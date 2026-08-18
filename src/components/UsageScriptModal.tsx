@@ -9,6 +9,7 @@ import { copilotGetUsage, copilotGetUsageForAccount } from "@/lib/api/copilot";
 import { useSettingsQuery } from "@/lib/query";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import { resolveCodexOfficialIdentity } from "@/utils/providerCapabilities";
 import JsonEditor from "./JsonEditor";
 import * as prettier from "prettier/standalone";
 import * as parserBabel from "prettier/parser-babel";
@@ -101,6 +102,9 @@ const generatePresetTemplates = (
 
   // 官方余额查询模板不需要脚本，使用专用 Rust 查询
   [TEMPLATE_TYPES.BALANCE]: "",
+
+  // 托管 Codex 账号使用 OAuth 凭据查询官方订阅额度
+  [TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION]: "",
 });
 
 // 模板名称国际化键映射
@@ -111,6 +115,8 @@ const TEMPLATE_NAME_KEYS: Record<string, string> = {
   [TEMPLATE_TYPES.GITHUB_COPILOT]: "usageScript.templateCopilot",
   [TEMPLATE_TYPES.TOKEN_PLAN]: "usageScript.templateTokenPlan",
   [TEMPLATE_TYPES.BALANCE]: "usageScript.templateBalance",
+  [TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION]:
+    "usageScript.templateOfficialSubscription",
 };
 
 const TOKEN_PLAN_PROVIDERS = [
@@ -225,9 +231,21 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   };
 
   const providerCredentials = getProviderCredentials();
+  const isBoundCodexOfficial =
+    resolveCodexOfficialIdentity(appId, provider) === "managed_account";
 
   const [script, setScript] = useState<UsageScript>(() => {
     const savedScript = provider.meta?.usage_script;
+    if (isBoundCodexOfficial) {
+      return {
+        enabled: savedScript?.enabled ?? true,
+        language: "javascript",
+        code: "",
+        timeout: savedScript?.timeout ?? 10,
+        autoQueryInterval: savedScript?.autoQueryInterval ?? 5,
+        templateType: TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION,
+      };
+    }
     if (savedScript) {
       if (
         savedScript.templateType === TEMPLATE_TYPES.TOKEN_PLAN &&
@@ -329,6 +347,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT) {
         return TEMPLATE_TYPES.GITHUB_COPILOT;
       }
+      if (isBoundCodexOfficial) {
+        return TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
+      }
       // 优先使用保存的 templateType
       if (existingScript?.templateType) {
         return existingScript.templateType as string;
@@ -381,7 +402,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
     if (
       selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
       selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
-      selectedTemplate !== TEMPLATE_TYPES.BALANCE
+      selectedTemplate !== TEMPLATE_TYPES.BALANCE &&
+      selectedTemplate !== TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION
     ) {
       if (script.enabled && !script.code.trim()) {
         toast.error(t("usageScript.scriptEmpty"));
@@ -402,6 +424,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         | "github_copilot"
         | "token_plan"
         | "balance"
+        | "official_subscription"
         | undefined,
     };
     onSave(scriptWithTemplate);
@@ -411,6 +434,34 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const handleTest = async () => {
     setTesting(true);
     try {
+      if (selectedTemplate === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION) {
+        const accountId = resolveManagedAccountId(
+          provider.meta,
+          PROVIDER_TYPES.CODEX_OAUTH,
+        );
+        const { subscriptionApi } = await import("@/lib/api/subscription");
+        const quota = await subscriptionApi.getCodexOauthQuota(accountId);
+        if (quota.success && quota.tiers.length > 0) {
+          const summary = quota.tiers
+            .map((tier) => `${tier.name}: ${Math.round(tier.utilization)}%`)
+            .join(", ");
+          toast.success(`${t("usageScript.testSuccess")}${summary}`, {
+            duration: 3000,
+            closeButton: true,
+          });
+          queryClient.setQueryData(
+            ["codex_oauth", "quota", accountId ?? "default"],
+            quota,
+          );
+        } else {
+          toast.error(
+            `${t("usageScript.testFailed")}: ${quota.error || t("endpointTest.noResult")}`,
+            { duration: 5000 },
+          );
+        }
+        return;
+      }
+
       if (selectedTemplate === TEMPLATE_TYPES.BALANCE) {
         const baseUrl = providerCredentials.baseUrl ?? "";
         const apiKey = providerCredentials.apiKey ?? "";
@@ -633,6 +684,15 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           accessToken: undefined,
           userId: undefined,
         });
+      } else if (presetName === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION) {
+        setScript({
+          ...script,
+          code: "",
+          apiKey: undefined,
+          baseUrl: undefined,
+          accessToken: undefined,
+          userId: undefined,
+        });
       }
       setSelectedTemplate(presetName);
     }
@@ -718,7 +778,13 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
                   if (isCopilotProvider) {
                     return name === TEMPLATE_TYPES.GITHUB_COPILOT;
                   }
-                  return name !== TEMPLATE_TYPES.GITHUB_COPILOT;
+                  if (isBoundCodexOfficial) {
+                    return name === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
+                  }
+                  return (
+                    name !== TEMPLATE_TYPES.GITHUB_COPILOT &&
+                    name !== TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION
+                  );
                 })
                 .map((name) => {
                   const isSelected = selectedTemplate === name;
@@ -815,6 +881,14 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="text-sm text-muted-foreground">
                   {t("usageScript.copilotAutoAuth")}
+                </p>
+              </div>
+            )}
+
+            {selectedTemplate === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION && (
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="text-sm text-muted-foreground">
+                  {t("usageScript.officialSubscriptionHint")}
                 </p>
               </div>
             )}
@@ -1040,30 +1114,32 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
             {/* 通用配置（始终显示） */}
             <div className="grid gap-4 md:grid-cols-2 pt-4 border-t border-white/10">
               {/* 超时时间 */}
-              <div className="space-y-2">
-                <Label htmlFor="usage-timeout">
-                  {t("usageScript.timeoutSeconds")}
-                </Label>
-                <Input
-                  id="usage-timeout"
-                  type="number"
-                  min={0}
-                  value={script.timeout ?? 10}
-                  onChange={(e) =>
-                    setScript({
-                      ...script,
-                      timeout: validateTimeout(e.target.value),
-                    })
-                  }
-                  onBlur={(e) =>
-                    setScript({
-                      ...script,
-                      timeout: validateTimeout(e.target.value),
-                    })
-                  }
-                  className="border-white/10"
-                />
-              </div>
+              {selectedTemplate !== TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION && (
+                <div className="space-y-2">
+                  <Label htmlFor="usage-timeout">
+                    {t("usageScript.timeoutSeconds")}
+                  </Label>
+                  <Input
+                    id="usage-timeout"
+                    type="number"
+                    min={0}
+                    value={script.timeout ?? 10}
+                    onChange={(e) =>
+                      setScript({
+                        ...script,
+                        timeout: validateTimeout(e.target.value),
+                      })
+                    }
+                    onBlur={(e) =>
+                      setScript({
+                        ...script,
+                        timeout: validateTimeout(e.target.value),
+                      })
+                    }
+                    className="border-white/10"
+                  />
+                </div>
+              )}
 
               {/* 自动查询间隔 */}
               <div className="space-y-2">
@@ -1103,7 +1179,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           {/* 提取器代码 - Copilot 模板不需要 */}
           {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
             selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
-            selectedTemplate !== TEMPLATE_TYPES.BALANCE && (
+            selectedTemplate !== TEMPLATE_TYPES.BALANCE &&
+            selectedTemplate !== TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION && (
             <div className="space-y-4 glass rounded-xl border border-white/10 p-6">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">
@@ -1127,7 +1204,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           {/* 帮助信息 - Copilot 模板不需要 */}
           {selectedTemplate !== TEMPLATE_TYPES.GITHUB_COPILOT &&
             selectedTemplate !== TEMPLATE_TYPES.TOKEN_PLAN &&
-            selectedTemplate !== TEMPLATE_TYPES.BALANCE && (
+            selectedTemplate !== TEMPLATE_TYPES.BALANCE &&
+            selectedTemplate !== TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION && (
             <div className="glass rounded-xl border border-white/10 p-6 text-sm text-foreground/90">
               <h4 className="font-medium mb-2">
                 {t("usageScript.scriptHelp")}

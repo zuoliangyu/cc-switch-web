@@ -7,18 +7,24 @@ interface CodexOauthQuotaFooterProps {
   meta?: ProviderMeta;
   inline?: boolean;
   isCurrent?: boolean;
+  autoQueryInterval?: number;
 }
 
 const CodexOauthQuotaFooter: React.FC<CodexOauthQuotaFooterProps> = ({
   meta,
   inline = false,
   isCurrent = false,
+  autoQueryInterval = 5,
 }) => {
   const {
     data: quota,
     isFetching: loading,
     refetch,
-  } = useCodexOauthQuota(meta, { enabled: true, autoQuery: isCurrent });
+  } = useCodexOauthQuota(meta, {
+    enabled: true,
+    autoQuery: isCurrent && autoQueryInterval > 0,
+    autoQueryIntervalMinutes: autoQueryInterval,
+  });
 
   return (
     <SubscriptionQuotaView

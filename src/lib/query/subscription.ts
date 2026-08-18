@@ -25,12 +25,15 @@ export function useSubscriptionQuota(
   });
 }
 
+export interface UseCodexOauthQuotaOptions {
+  enabled?: boolean;
+  autoQuery?: boolean;
+  autoQueryIntervalMinutes?: number;
+}
+
 export function useCodexOauthQuota(
   meta: ProviderMeta | undefined,
-  options: {
-    enabled?: boolean;
-    autoQuery?: boolean;
-  } = {},
+  options: UseCodexOauthQuotaOptions = {},
 ) {
   const accountId = resolveManagedAccountId(meta, PROVIDER_TYPES.CODEX_OAUTH);
   return useCodexOauthQuotaByAccountId(accountId, options);
@@ -38,21 +41,27 @@ export function useCodexOauthQuota(
 
 export function useCodexOauthQuotaByAccountId(
   accountId: string | null,
-  options: {
-    enabled?: boolean;
-    autoQuery?: boolean;
-  } = {},
+  options: UseCodexOauthQuotaOptions = {},
 ) {
-  const { enabled = true, autoQuery = false } = options;
+  const {
+    enabled = true,
+    autoQuery = false,
+    autoQueryIntervalMinutes = 5,
+  } = options;
+  const configuredInterval =
+    autoQueryIntervalMinutes > 0
+      ? Math.max(autoQueryIntervalMinutes, 1) * 60 * 1000
+      : false;
+  const refetchInterval = autoQuery ? configuredInterval : false;
 
   return useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
     enabled,
-    refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
-    refetchIntervalInBackground: autoQuery,
-    refetchOnWindowFocus: autoQuery,
-    staleTime: REFETCH_INTERVAL,
+    refetchInterval,
+    refetchIntervalInBackground: Boolean(refetchInterval),
+    refetchOnWindowFocus: Boolean(refetchInterval),
+    staleTime: configuredInterval || REFETCH_INTERVAL,
     retry: 1,
   });
 }

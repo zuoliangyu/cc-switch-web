@@ -1,6 +1,6 @@
 # Web 端跟进上游 `40cac1a6` 后续迁移计划（2026-08-18）
 
-> 状态：批次 1 已完成，批次 2 核心完成（剩余可配置用量查询）
+> 状态：批次 1、批次 2 已完成
 > 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`  
 > 冻结基线：`40cac1a6`  
 > 当前审计点：`fd14f9c4`  
@@ -41,7 +41,7 @@
 | `3d126f45` | 跨年 Usage 趋势图 key                   | 迁移 RFC3339 xKey                                   | 4    | 待迁移   |
 | `f62c854a` | 清理认证后取消旧 device flow            | 纳入 OAuth 生命周期迁移                             | 2    | 已迁移   |
 | `a98829ba` | Provider 字段 IME 加固                  | 迁移组合输入和 blur 提交修复                        | 4    | 待迁移   |
-| `897ca892` | Codex OAuth 用量查询可配置              | 适配 Web usage 配置与轮询                           | 2    | 待迁移   |
+| `897ca892` | Codex OAuth 用量查询可配置              | 适配 Web usage 配置与轮询                           | 2    | 已迁移   |
 | `0455a92c` | 多个 Follow Login Provider              | 按配置内容识别任意别名，不依赖固定 Provider ID      | 2    | 已迁移   |
 | `52745efe` | OpenCode Go Anthropic 回归测试          | 行为已存在，补等价回归测试                          | 4    | 待补测试 |
 | `6e424fd3` | 恢复 Codex 1M 开关                      | Web 已存在                                          | 已有 | 已处置   |
@@ -69,10 +69,11 @@
 - 补齐 `id_token`、token 获取时间、`reauth_required`、请求 timeout 和持久化锁。
 - 生成可由裸 Codex CLI 自刷新的原生 `auth.json`，并防止清理前发起的旧登录流程复活。
 - 多个 Follow Login Provider 按配置内容识别；`e-flowcode`、自定义别名等都不依赖固定 ID。
+- 绑定托管账号的 Follow Login Provider 默认展示官方额度，可独立关闭查询或配置自动轮询间隔；`0` 表示关闭自动轮询。
 - Provider 切换、编辑、Routing 启停按应用串行；托管切换使用 auth/config/catalog/marker 四文件快照回滚。
 - Routing 备份不固化托管 token，停止 Routing 时从认证管理器动态注入最新凭据。
 
-验收标准：代理托管账号和裸 Codex CLI 都能持续刷新；切换、编辑、清理、Routing 恢复和失败回滚不会覆盖其他账号或 Provider 的认证。
+验收标准：代理托管账号和裸 Codex CLI 都能持续刷新；切换、编辑、清理、Routing 恢复和失败回滚不会覆盖其他账号或 Provider 的认证；任意 Follow Login 别名均可按绑定账号查询额度并配置轮询。
 
 ### 3.3 批次 3：Hosted WebSearch
 
@@ -105,3 +106,4 @@
 - 2026-08-18：完成 Codex OAuth 核心生命周期迁移：旧账号重登提示、`id_token`/token 世代持久化、CLI refresh token 采纳、CAS 同步与清理、四文件事务回滚。
 - 2026-08-18：完成任意 Follow Login 别名识别及误判保护；固定 `codex-official` 继续兼容，明确第三方 URL、API Key、bearer token 或非 OpenAI model provider 不会被接管。
 - 2026-08-18：补齐 Routing per-app 串行锁、暂停状态热切换与托管账号动态恢复测试；批次 2 仅剩 `897ca892` 可配置用量查询。
+- 2026-08-18：完成 `897ca892` Web 适配。绑定账号默认展示 OAuth quota，可关闭查询、配置轮询间隔并使用绑定账号执行测试查询；批次 2 完成。

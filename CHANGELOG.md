@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 修复
+
+- Codex 第三方 Provider 统一使用稳定的 `custom` 会话桶；启动时从活跃会话、归档会话和 state DB 自动发现旧 `model_provider` 桶，备份后迁移 JSONL、SQLite 索引与旧 Provider 模板，避免修改 `config.toml` 或切换 Provider 后检索不到历史会话。官方 `openai` 历史仍由“统一 Codex 会话历史”开关单独控制。
+- Codex 会话管理补充扫描 `archived_sessions`，归档会话可正常浏览和删除。
+
 ## [2.0.0] - 2026-08-16
 
 本版本汇总 `v1.0.0` 以来的变更，完成 Web 版上游能力追平、数据安全加固与浏览器体验收口。Web 数据现与桌面端完全隔离，并可从 `~/.cc-switch/` 只读迁移到 `~/.cc-switch-web/`。

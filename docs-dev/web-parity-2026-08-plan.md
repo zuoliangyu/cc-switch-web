@@ -544,5 +544,7 @@ W0 基线修复
 - 2026-08-16：启动 W10。根因确认是 Web 与桌面端共同使用 `~/.cc-switch/cc-switch.db`，而两端 Schema 版本号已分叉；采用独立目录、只读源快照和显式手动迁移根治，不再共享或原地升级桌面端数据库。
 - 2026-08-16：完成 W10。Web 的数据库、settings、备份、模型定价与默认 Skills SSOT 全部收口到 `~/.cc-switch-web/`；首次启动从桌面端目录只读快照迁移，设置页支持确认后手动覆盖并创建数据库与配套文件备份。源路径 override 会被拒绝，迁移失败不会发布自动迁移目标，并会尝试回滚手动迁移的 Web 数据。
 - W10 验证：自动/手动数据库迁移 4/4、app store 路径与源目录拒绝 1/1、settings 路径 1/1、设置页确认交互 6/6 通过；`pnpm typecheck`、新迁移模块 `rustfmt --check`、三语键/插值一致性、相关 JSON/Test Prettier、`git diff --check` 通过。验证全程使用临时 home，未创建真实 `~/.cc-switch-web`，未运行全量测试或 build。
+- 2026-08-18：补齐上游 `b44f83f7`、`b15d9dfa`、`fc0433f2` 的 Codex 第三方历史归桶语义。Web 后端稳定桶由旧 `ccswitch` 收口为前端预设已使用的 `custom`；启动迁移不依赖静态 Provider 名单，而是从 `sessions`、`archived_sessions` 与 Codex state DB 实际发现全部非 `openai`/`custom` 历史桶，备份后统一改写 JSONL、SQLite 索引和仍在库内的旧 Provider 模板。官方 `openai` 桶继续由用户开关和可恢复账本独立管理。
+- 2026-08-18：Codex 会话管理补扫 `archived_sessions`，删除路径校验同步接受活跃与归档根目录。定向验证：历史归桶迁移 6/6、Codex 会话扫描 5/5 通过；未运行全量测试或 build。
 - 工作包提交：W0 `1defe63`、W1 `b4ca49c`、W2 `32a73cf`、W3 `f2e8f70`、W4 `56fa066`、W5 `9ba8df5`、W6 `cf2fa73`、W7 `05c170c`、W8 `884e533`；W9 由提交 `chore: 完成 W9 CI 文档与收口` 交付。
 - 剩余差异：计划内 88 个上游提交均已处置；Sponsors、WiX 与 WSL2 Hosted Runner job 按既定 Web 边界排除。全量 `pnpm check`、完整 Rust 测试、Docker build/smoke 和多平台 CI 仍按本计划约束留待用户单独确认。

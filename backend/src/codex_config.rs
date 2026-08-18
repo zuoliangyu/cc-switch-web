@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
 /// Web 端沿用稳定 provider id，避免切换供应商后 Codex resume 历史漂移。
-pub const CC_SWITCH_CODEX_MODEL_PROVIDER_ID: &str = "ccswitch";
+pub const CC_SWITCH_CODEX_MODEL_PROVIDER_ID: &str = "custom";
 /// Temporary model-provider id used while the built-in `codex-official`
 /// provider is routed through CC Switch.  A dedicated id is an ownership
 /// marker: unlike a generic localhost `base_url`, it can be detected and
@@ -317,12 +317,6 @@ pub(crate) fn is_custom_codex_model_provider_id(id: &str) -> bool {
             .any(|reserved| reserved.eq_ignore_ascii_case(id))
 }
 
-fn stable_codex_model_provider_id_from_config(config_text: &str) -> Option<String> {
-    let doc = config_text.parse::<DocumentMut>().ok()?;
-    let provider_id = active_codex_model_provider_id(&doc)?;
-    is_custom_codex_model_provider_id(&provider_id).then_some(provider_id)
-}
-
 fn codex_model_provider_id_with_table_from_config(
     config_text: &str,
 ) -> Result<Option<String>, AppError> {
@@ -374,10 +368,7 @@ fn rewrite_codex_profile_model_provider_refs(
     }
 }
 
-fn normalize_codex_live_config_model_provider_with_anchors<'a>(
-    config_text: &str,
-    anchor_config_texts: impl IntoIterator<Item = &'a str>,
-) -> Result<String, AppError> {
+fn normalize_codex_live_config_model_provider(config_text: &str) -> Result<String, AppError> {
     if config_text.trim().is_empty() {
         return Ok(config_text.to_string());
     }
@@ -397,14 +388,7 @@ fn normalize_codex_live_config_model_provider_with_anchors<'a>(
         return Ok(config_text.to_string());
     }
 
-    let stable_provider_id = anchor_config_texts
-        .into_iter()
-        .find_map(stable_codex_model_provider_id_from_config)
-        .or_else(|| {
-            is_custom_codex_model_provider_id(&source_provider_id)
-                .then(|| source_provider_id.clone())
-        })
-        .unwrap_or_else(|| CC_SWITCH_CODEX_MODEL_PROVIDER_ID.to_string());
+    let stable_provider_id = CC_SWITCH_CODEX_MODEL_PROVIDER_ID.to_string();
     if stable_provider_id == source_provider_id {
         return Ok(config_text.to_string());
     }
@@ -423,9 +407,22 @@ fn normalize_codex_live_config_model_provider_with_anchors<'a>(
     Ok(doc.to_string())
 }
 
+pub fn normalize_codex_live_model_provider_bucket() -> Result<bool, AppError> {
+    if !get_codex_config_path().exists() {
+        return Ok(false);
+    }
+    let config_text = read_codex_config_text()?;
+    let normalized = normalize_codex_live_config_model_provider(&config_text)?;
+    if normalized == config_text {
+        return Ok(false);
+    }
+    write_codex_live_config_atomic(Some(&normalized))?;
+    Ok(true)
+}
+
 pub fn normalize_codex_settings_config_model_provider(
     settings: &mut Value,
-    anchor_config_text: Option<&str>,
+    _anchor_config_text: Option<&str>,
 ) -> Result<(), AppError> {
     let Some(config_text) = settings
         .get("config")
@@ -434,12 +431,7 @@ pub fn normalize_codex_settings_config_model_provider(
     else {
         return Ok(());
     };
-    let current_config_text = read_codex_config_text().ok();
-    let anchors = anchor_config_text
-        .into_iter()
-        .chain(current_config_text.as_deref());
-    let normalized =
-        normalize_codex_live_config_model_provider_with_anchors(&config_text, anchors)?;
+    let normalized = normalize_codex_live_config_model_provider(&config_text)?;
     if let Some(obj) = settings.as_object_mut() {
         obj.insert("config".to_string(), Value::String(normalized));
     }
@@ -2883,7 +2875,7 @@ model_providers = { rightcode = { name = "RightCode", experimental_bearer_token 
     fn unified_session_bucket_skips_conflicting_stable_table() {
         // 残留的非注入形态稳定 ID 表：设置 model_provider 会把官方流量
         // 路由到表里的第三方端点，必须整体拒绝注入。
-        let stale = r#"[model_providers.ccswitch]
+        let stale = r#"[model_providers.custom]
 name = "Relay"
 base_url = "https://relay.example/v1"
 "#;
@@ -3274,7 +3266,7 @@ wire_api = "responses"
     }
 
     #[test]
-    fn normalization_reuses_existing_stable_provider_id() {
+    fn normalization_always_uses_custom_provider_id() {
         let incoming = r#"model_provider = "vendor_beta"
 
 [model_providers.vendor_beta]
@@ -3283,19 +3275,12 @@ base_url = "https://beta.example/v1"
 [profiles.work]
 model_provider = "vendor_beta"
 "#;
-        let anchor = r#"model_provider = "session_anchor"
-
-[model_providers.session_anchor]
-base_url = "https://alpha.example/v1"
-"#;
-
-        let normalized =
-            normalize_codex_live_config_model_provider_with_anchors(incoming, [anchor]).unwrap();
+        let normalized = normalize_codex_live_config_model_provider(incoming).unwrap();
         let parsed: toml::Value = toml::from_str(&normalized).unwrap();
-        assert_eq!(parsed["model_provider"].as_str(), Some("session_anchor"));
+        assert_eq!(parsed["model_provider"].as_str(), Some("custom"));
         assert_eq!(
             parsed["profiles"]["work"]["model_provider"].as_str(),
-            Some("session_anchor")
+            Some("custom")
         );
         assert!(parsed["model_providers"].get("vendor_beta").is_none());
     }

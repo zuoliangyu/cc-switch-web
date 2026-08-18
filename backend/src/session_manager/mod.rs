@@ -193,7 +193,13 @@ fn delete_session_with_roots(
 
 fn provider_roots(provider_id: &str) -> Result<Vec<PathBuf>, String> {
     let roots = match provider_id {
-        "codex" => vec![crate::codex_config::get_codex_config_dir().join("sessions")],
+        "codex" => {
+            let config_dir = crate::codex_config::get_codex_config_dir();
+            vec![
+                config_dir.join("sessions"),
+                config_dir.join("archived_sessions"),
+            ]
+        }
         "claude" => vec![crate::config::get_claude_config_dir().join("projects")],
         "opencode" => vec![opencode::get_opencode_data_dir()],
         "openclaw" => vec![crate::openclaw_config::get_openclaw_dir().join("agents")],

@@ -3675,7 +3675,33 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup Gemini common-config credential scrub failed: {err}");
     }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
-    tokio::task::spawn_blocking(|| {
+    let db_for_codex_history_migration = app_state.db.clone();
+    tokio::task::spawn_blocking(move || {
+        match crate::codex_history_migration::maybe_migrate_codex_third_party_history_provider_bucket() {
+            Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
+                "Codex 第三方历史归桶迁移完成: sources={}, files={}, rows={}",
+                outcome.source_provider_ids.join(","),
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex 第三方历史归桶迁移失败: {error}"),
+        }
+        match crate::codex_history_migration::maybe_migrate_codex_provider_template_bucket(
+            &db_for_codex_history_migration,
+        ) {
+            Ok(outcome)
+                if outcome.skipped_reason.is_none()
+                    && !outcome.migrated_provider_ids.is_empty() =>
+            {
+                log::info!(
+                    "Codex Provider 模板归桶迁移完成: providers={}",
+                    outcome.migrated_provider_ids.join(",")
+                )
+            }
+            Ok(_) => {}
+            Err(error) => log::warn!("Codex Provider 模板归桶迁移失败: {error}"),
+        }
         match crate::codex_history_migration::maybe_migrate_codex_official_history() {
             Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
                 "Codex 官方历史迁移完成: files={}, rows={}",

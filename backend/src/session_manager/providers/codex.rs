@@ -21,9 +21,15 @@ static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub fn scan_sessions() -> Vec<SessionMeta> {
-    let root = get_codex_config_dir().join("sessions");
+    let config_dir = get_codex_config_dir();
+    let roots = [
+        config_dir.join("sessions"),
+        config_dir.join("archived_sessions"),
+    ];
     let mut files = Vec::new();
-    collect_jsonl_files(&root, &mut files);
+    for root in roots {
+        collect_jsonl_files(&root, &mut files);
+    }
 
     let mut sessions = Vec::new();
     for path in files {
@@ -253,6 +259,39 @@ fn collect_jsonl_files(root: &Path, files: &mut Vec<PathBuf>) {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn scan_roots_include_active_and_archived_sessions() {
+        let temp = tempdir().expect("tempdir");
+        let active = temp.path().join("sessions");
+        let archived = temp.path().join("archived_sessions");
+        std::fs::create_dir_all(&active).expect("active dir");
+        std::fs::create_dir_all(&archived).expect("archived dir");
+        for (path, id) in [
+            (active.join("active.jsonl"), "active-id"),
+            (archived.join("archived.jsonl"), "archived-id"),
+        ] {
+            std::fs::write(
+                path,
+                format!(
+                    "{{\"timestamp\":\"2026-08-18T00:00:00Z\",\"type\":\"session_meta\",\"payload\":{{\"id\":\"{id}\",\"cwd\":\"/tmp/project\"}}}}\n"
+                ),
+            )
+            .expect("write session");
+        }
+
+        let mut files = Vec::new();
+        collect_jsonl_files(&active, &mut files);
+        collect_jsonl_files(&archived, &mut files);
+        let ids = files
+            .iter()
+            .filter_map(|path| parse_session(path))
+            .map(|session| session.session_id)
+            .collect::<Vec<_>>();
+
+        assert!(ids.contains(&"active-id".to_string()));
+        assert!(ids.contains(&"archived-id".to_string()));
+    }
 
     #[test]
     fn delete_session_removes_jsonl_file() {

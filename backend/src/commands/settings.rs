@@ -151,11 +151,12 @@ mod tests {
             local_migrations: Some(LocalMigrations {
                 codex_official_history_unify_v1: Some(CodexOfficialHistoryUnifyMigration {
                     completed_at: "2026-07-30T00:00:00Z".to_string(),
-                    target_provider_id: "ccswitch".to_string(),
+                    target_provider_id: "custom".to_string(),
                     migrated_jsonl_files: 2,
                     migrated_state_rows: 3,
                     codex_config_dir: Some("C:/Users/test/.codex".to_string()),
                 }),
+                ..LocalMigrations::default()
             }),
             ..AppSettings::default()
         };

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
@@ -6,6 +6,7 @@ import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 const mocks = vi.hoisted(() => ({
   useManagedAuth: vi.fn(),
   renderAccountQuota: vi.fn(),
+  addAccount: vi.fn(),
 }));
 
 vi.mock("@/components/providers/forms/hooks/useManagedAuth", () => ({
@@ -39,7 +40,7 @@ describe("CodexOAuthSection", () => {
       isAddingAccount: false,
       isRemovingAccount: false,
       isSettingDefaultAccount: false,
-      addAccount: vi.fn(),
+      addAccount: mocks.addAccount,
       removeAccount: vi.fn(),
       setDefaultAccount: vi.fn(),
       cancelAuth: vi.fn(),
@@ -56,5 +57,25 @@ describe("CodexOAuthSection", () => {
     render(<AuthCenterPanel />);
     expect(mocks.renderAccountQuota).toHaveBeenCalledWith("account-1");
     expect(screen.getByTestId("account-quota")).toHaveTextContent("account-1");
+  });
+
+  it("旧账号提示重新登录且不能继续选择", () => {
+    mocks.useManagedAuth.mockReturnValue({
+      ...mocks.useManagedAuth(),
+      accounts: [
+        {
+          id: "legacy-account",
+          login: "legacy@example.com",
+          reauth_required: true,
+        },
+      ],
+      defaultAccountId: null,
+    });
+
+    render(<CodexOAuthSection selectedAccountId="legacy-account" />);
+
+    expect(screen.getAllByText("需要重新登录").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /重新登录/ }));
+    expect(mocks.addAccount).toHaveBeenCalledTimes(1);
   });
 });

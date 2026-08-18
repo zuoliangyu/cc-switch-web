@@ -20,6 +20,8 @@ import {
   X,
   Sparkles,
   User,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { useManagedAuth } from "./hooks/useManagedAuth";
 import { copyText } from "@/lib/clipboard";
@@ -120,10 +122,20 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
                 </span>
               </SelectItem>
               {accounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
+                <SelectItem
+                  key={account.id}
+                  value={account.id}
+                  disabled={account.reauth_required}
+                >
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span>{account.login}</span>
+                    {account.reauth_required && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                        <AlertTriangle className="h-3 w-3" />
+                        {t("codexOauth.reauthBadge", "需要重新登录")}
+                      </span>
+                    )}
                   </div>
                 </SelectItem>
               ))}
@@ -157,8 +169,30 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
                         {t("codexOauth.selected", "已选中")}
                       </Badge>
                     )}
+                    {account.reauth_required && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-400 text-xs text-amber-700"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        {t("codexOauth.reauthBadge", "需要重新登录")}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {account.reauth_required && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={addAccount}
+                        disabled={isAddingAccount}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        {t("codexOauth.reauthLogin", "重新登录")}
+                      </Button>
+                    )}
                     {defaultAccountId !== account.id && (
                       <Button
                         type="button"

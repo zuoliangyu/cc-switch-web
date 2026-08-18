@@ -12,6 +12,8 @@ export interface ManagedAuthAccount {
   avatar_url: string | null;
   authenticated_at: number;
   is_default: boolean;
+  github_domain?: string;
+  reauth_required?: boolean;
   requires_reauth: boolean;
 }
 

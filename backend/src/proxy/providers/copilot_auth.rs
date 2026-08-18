@@ -234,6 +234,16 @@ pub struct GitHubAccount {
     pub avatar_url: Option<String>,
     /// 认证时间戳
     pub authenticated_at: i64,
+    /// GitHub 域名。Codex 账号复用该公开结构时固定为 github.com。
+    #[serde(default = "default_github_domain")]
+    pub github_domain: String,
+    /// 托管账号是否需要重新登录以补全缺失凭据。
+    #[serde(default)]
+    pub reauth_required: bool,
+}
+
+fn default_github_domain() -> String {
+    "github.com".to_string()
 }
 
 impl From<&GitHubAccountData> for GitHubAccount {
@@ -243,6 +253,8 @@ impl From<&GitHubAccountData> for GitHubAccount {
             login: data.user.login.clone(),
             avatar_url: data.user.avatar_url.clone(),
             authenticated_at: data.authenticated_at,
+            github_domain: default_github_domain(),
+            reauth_required: false,
         }
     }
 }
@@ -405,6 +417,8 @@ impl CopilotAuthManager {
             login: user.login.clone(),
             avatar_url: user.avatar_url.clone(),
             authenticated_at: now,
+            github_domain: default_github_domain(),
+            reauth_required: false,
         };
 
         {
@@ -1200,6 +1214,8 @@ mod tests {
                 login: "testuser".to_string(),
                 avatar_url: Some("https://example.com/avatar.png".to_string()),
                 authenticated_at: 1234567890,
+                github_domain: default_github_domain(),
+                reauth_required: false,
             }],
             default_account_id: Some("12345".to_string()),
             migration_error: None,

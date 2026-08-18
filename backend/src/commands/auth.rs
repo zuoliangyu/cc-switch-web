@@ -19,6 +19,8 @@ pub struct ManagedAuthAccount {
     pub authenticated_at: i64,
     pub is_default: bool,
     pub github_domain: String,
+    /// Codex 旧账号缺少写入原生 auth.json 所需的 id_token。
+    pub reauth_required: bool,
     pub requires_reauth: bool,
 }
 
@@ -62,7 +64,8 @@ fn map_account(
         login: account.login,
         avatar_url: account.avatar_url,
         authenticated_at: account.authenticated_at,
-        github_domain: "github.com".to_string(),
+        github_domain: account.github_domain,
+        reauth_required: account.reauth_required,
         requires_reauth: false,
     }
 }
@@ -79,6 +82,7 @@ fn map_xai_account(
         avatar_url: account.avatar_url,
         authenticated_at: account.authenticated_at,
         github_domain: account.github_domain,
+        reauth_required: false,
         requires_reauth: account.requires_reauth,
     }
 }

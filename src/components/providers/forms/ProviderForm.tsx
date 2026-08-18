@@ -76,6 +76,7 @@ import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { BasicFormFields } from "./BasicFormFields";
 import { ClaudeFormFields } from "./ClaudeFormFields";
 import { CodexFormFields } from "./CodexFormFields";
+import { CodexOAuthSection } from "./CodexOAuthSection";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { OmoFormFields } from "./OmoFormFields";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
@@ -537,8 +538,10 @@ function ProviderFormFull({
   const { isAuthenticated: isCopilotAuthenticated } =
     useManagedAuth("github_copilot");
 
-  const { isAuthenticated: isCodexOauthAuthenticated } =
-    useManagedAuth("codex_oauth");
+  const {
+    isAuthenticated: isCodexOauthAuthenticated,
+    accounts: codexOauthAccounts,
+  } = useManagedAuth("codex_oauth");
 
   const {
     isAuthenticated: isXaiOauthAuthenticated,
@@ -1126,6 +1129,11 @@ function ProviderFormFull({
     const isCodexOauthProvider =
       presetProviderType === "codex_oauth" ||
       initialData?.meta?.providerType === "codex_oauth";
+    const isCodexOfficialFollowLogin =
+      appId === "codex" && category === "official";
+    const usesCodexManagedAccount =
+      isCodexOauthProvider ||
+      (isCodexOfficialFollowLogin && selectedCodexAccountId !== null);
     const isXaiOauthProvider =
       presetProviderType === "xai_oauth" ||
       initialData?.meta?.providerType === "xai_oauth";
@@ -1142,6 +1150,21 @@ function ProviderFormFull({
       toast.error(
         t("codexOauth.loginRequired", {
           defaultValue: "请先登录 ChatGPT 账号",
+        }),
+      );
+      return;
+    }
+    if (
+      usesCodexManagedAccount &&
+      selectedCodexAccountId !== null &&
+      !codexOauthAccounts.some(
+        (account) =>
+          account.id === selectedCodexAccountId && !account.reauth_required,
+      )
+    ) {
+      toast.error(
+        t("managedAuth.selectedAccountNeedsReauth", {
+          defaultValue: "已绑定账号不存在或需要重新登录",
         }),
       );
       return;
@@ -1431,7 +1454,7 @@ function ProviderFormFull({
             authProvider: "github_copilot",
             accountId: selectedGitHubAccountId ?? undefined,
           }
-        : isCodexOauthProvider
+        : usesCodexManagedAccount
           ? {
               source: "managed_account",
               authProvider: "codex_oauth",
@@ -2097,55 +2120,63 @@ function ProviderFormFull({
           )}
 
           {appId === "codex" && (
-            <CodexFormFields
-              providerId={providerId}
-              isXaiOauthPreset={
-                presetProviderType === "xai_oauth" ||
-                initialData?.meta?.providerType === "xai_oauth"
-              }
-              isXaiOauthAuthenticated={isXaiOauthAuthenticated}
-              selectedXaiAccountId={selectedXaiAccountId}
-              onXaiAccountSelect={setSelectedXaiAccountId}
-              codexApiKey={codexApiKey}
-              onApiKeyChange={handleCodexApiKeyChange}
-              category={category}
-              shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
-              websiteUrl={codexWebsiteUrl}
-              isPartner={isCodexPartner}
-              partnerPromotionKey={codexPartnerPromotionKey}
-              shouldShowSpeedTest={shouldShowSpeedTest}
-              codexBaseUrl={codexBaseUrl}
-              onBaseUrlChange={handleCodexBaseUrlChange}
-              isFullUrl={localIsFullUrl}
-              onFullUrlChange={setLocalIsFullUrl}
-              isEndpointModalOpen={isCodexEndpointModalOpen}
-              onEndpointModalToggle={setIsCodexEndpointModalOpen}
-              onCustomEndpointsChange={
-                isEditMode ? undefined : setDraftCustomEndpoints
-              }
-              autoSelect={endpointAutoSelect}
-              onAutoSelectChange={setEndpointAutoSelect}
-              takeoverEnabled={codexTakeoverEnabled}
-              onTakeoverEnabledChange={setCodexTakeoverEnabled}
-              apiFormat={localCodexApiFormat}
-              onApiFormatChange={handleCodexApiFormatChange}
-              shouldShowModelField={category !== "official"}
-              modelName={codexModelName}
-              onModelNameChange={handleCodexModelNameChange}
-              codexChatReasoning={codexChatReasoning}
-              onCodexChatReasoningChange={setCodexChatReasoning}
-              promptCacheRouting={promptCacheRouting}
-              onPromptCacheRoutingChange={setPromptCacheRouting}
-              catalogModels={codexCatalogModels}
-              onCatalogModelsChange={setCodexCatalogModels}
-              speedTestEndpoints={speedTestEndpoints}
-              customUserAgent={customUserAgent}
-              onCustomUserAgentChange={setCustomUserAgent}
-              localProxyHeadersOverride={localProxyHeadersOverride}
-              onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
-              localProxyBodyOverride={localProxyBodyOverride}
-              onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
-            />
+            <>
+              {category === "official" && (
+                <CodexOAuthSection
+                  selectedAccountId={selectedCodexAccountId}
+                  onAccountSelect={setSelectedCodexAccountId}
+                />
+              )}
+              <CodexFormFields
+                providerId={providerId}
+                isXaiOauthPreset={
+                  presetProviderType === "xai_oauth" ||
+                  initialData?.meta?.providerType === "xai_oauth"
+                }
+                isXaiOauthAuthenticated={isXaiOauthAuthenticated}
+                selectedXaiAccountId={selectedXaiAccountId}
+                onXaiAccountSelect={setSelectedXaiAccountId}
+                codexApiKey={codexApiKey}
+                onApiKeyChange={handleCodexApiKeyChange}
+                category={category}
+                shouldShowApiKeyLink={shouldShowCodexApiKeyLink}
+                websiteUrl={codexWebsiteUrl}
+                isPartner={isCodexPartner}
+                partnerPromotionKey={codexPartnerPromotionKey}
+                shouldShowSpeedTest={shouldShowSpeedTest}
+                codexBaseUrl={codexBaseUrl}
+                onBaseUrlChange={handleCodexBaseUrlChange}
+                isFullUrl={localIsFullUrl}
+                onFullUrlChange={setLocalIsFullUrl}
+                isEndpointModalOpen={isCodexEndpointModalOpen}
+                onEndpointModalToggle={setIsCodexEndpointModalOpen}
+                onCustomEndpointsChange={
+                  isEditMode ? undefined : setDraftCustomEndpoints
+                }
+                autoSelect={endpointAutoSelect}
+                onAutoSelectChange={setEndpointAutoSelect}
+                takeoverEnabled={codexTakeoverEnabled}
+                onTakeoverEnabledChange={setCodexTakeoverEnabled}
+                apiFormat={localCodexApiFormat}
+                onApiFormatChange={handleCodexApiFormatChange}
+                shouldShowModelField={category !== "official"}
+                modelName={codexModelName}
+                onModelNameChange={handleCodexModelNameChange}
+                codexChatReasoning={codexChatReasoning}
+                onCodexChatReasoningChange={setCodexChatReasoning}
+                promptCacheRouting={promptCacheRouting}
+                onPromptCacheRoutingChange={setPromptCacheRouting}
+                catalogModels={codexCatalogModels}
+                onCatalogModelsChange={setCodexCatalogModels}
+                speedTestEndpoints={speedTestEndpoints}
+                customUserAgent={customUserAgent}
+                onCustomUserAgentChange={setCustomUserAgent}
+                localProxyHeadersOverride={localProxyHeadersOverride}
+                onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
+                localProxyBodyOverride={localProxyBodyOverride}
+                onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
+              />
+            </>
           )}
 
           {appId === "gemini" && (

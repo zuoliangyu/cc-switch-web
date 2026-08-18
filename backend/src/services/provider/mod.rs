@@ -296,6 +296,115 @@ base_url = "http://localhost:8080"
     }
 
     #[test]
+    #[serial]
+    fn stopped_routing_with_backup_still_uses_hot_switch() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
+        );
+        let state = AppState::new(db.clone());
+        let provider_a = Provider::with_id(
+            "a".to_string(),
+            "A".to_string(),
+            json!({ "env": { "ANTHROPIC_AUTH_TOKEN": "token-a" } }),
+            None,
+        );
+        let provider_b = Provider::with_id(
+            "b".to_string(),
+            "B".to_string(),
+            json!({ "env": { "ANTHROPIC_AUTH_TOKEN": "token-b" } }),
+            None,
+        );
+        db.save_provider("claude", &provider_a).unwrap();
+        db.save_provider("claude", &provider_b).unwrap();
+        db.set_current_provider("claude", "a").unwrap();
+        crate::settings::set_current_provider(&AppType::Claude, Some("a")).unwrap();
+        futures::executor::block_on(db.save_live_backup(
+            "claude",
+            &serde_json::to_string(&provider_a.settings_config).unwrap(),
+        ))
+        .unwrap();
+        assert!(!futures::executor::block_on(
+            state.proxy_service.is_running()
+        ));
+
+        ProviderService::switch(&state, AppType::Claude, "b").unwrap();
+
+        assert_eq!(
+            crate::settings::get_current_provider(&AppType::Claude).as_deref(),
+            Some("b")
+        );
+        let backup = futures::executor::block_on(db.get_live_backup("claude"))
+            .unwrap()
+            .unwrap();
+        let restored: Value = serde_json::from_str(&backup.original_config).unwrap();
+        assert_eq!(restored["env"]["ANTHROPIC_AUTH_TOKEN"], "token-b");
+    }
+
+    #[test]
+    #[serial]
+    fn managed_codex_add_and_current_update_write_dynamic_auth() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(
+            crate::database::Database::memory().expect("create in-memory database"),
+        );
+        let state = AppState::new(db.clone());
+        futures::executor::block_on(async {
+            state
+                .codex_oauth_state
+                .read()
+                .await
+                .seed_account_for_test("account-one", "access-one", "refresh-one", "id-one")
+                .await;
+        });
+
+        let mut provider = Provider::with_id(
+            "team-follow-login".to_string(),
+            "Team Follow Login".to_string(),
+            json!({ "auth": {}, "config": "model = \"gpt-5\"\n" }),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            auth_binding: Some(crate::provider::AuthBinding {
+                source: crate::provider::AuthBindingSource::ManagedAccount,
+                auth_provider: Some("codex_oauth".to_string()),
+                account_id: Some("account-one".to_string()),
+            }),
+            ..Default::default()
+        });
+
+        ProviderService::add(&state, AppType::Codex, provider.clone(), true).unwrap();
+        let first_live: Value =
+            crate::config::read_json_file(&crate::codex_config::get_codex_auth_path()).unwrap();
+        assert_eq!(first_live["tokens"]["access_token"], "access-one");
+        assert_eq!(first_live["tokens"]["refresh_token"], "refresh-one");
+
+        futures::executor::block_on(async {
+            state
+                .codex_oauth_state
+                .read()
+                .await
+                .seed_account_for_test("account-one", "access-two", "refresh-two", "id-two")
+                .await;
+        });
+        provider.name = "Updated Follow Login".to_string();
+        ProviderService::update(&state, AppType::Codex, Some("team-follow-login"), provider)
+            .unwrap();
+
+        let updated_live: Value =
+            crate::config::read_json_file(&crate::codex_config::get_codex_auth_path()).unwrap();
+        assert_eq!(updated_live["tokens"]["access_token"], "access-two");
+        assert_eq!(updated_live["tokens"]["refresh_token"], "refresh-two");
+        let stored = db
+            .get_provider_by_id("team-follow-login", "codex")
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.settings_config["auth"], json!({}));
+    }
+
+    #[test]
     fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
         for key in [
             "GOOGLE_API_KEY",
@@ -378,7 +487,9 @@ base_url = "http://localhost:8080"
             .get_provider_by_id("victim", "gemini")
             .expect("read provider")
             .expect("provider exists");
-        assert!(cleaned.settings_config["env"].get("GOOGLE_API_KEY").is_none());
+        assert!(cleaned.settings_config["env"]
+            .get("GOOGLE_API_KEY")
+            .is_none());
         let audit = db
             .get_setting("gemini_common_config_scrub_audit_v1")
             .expect("audit")
@@ -427,7 +538,9 @@ impl ProviderService {
         ];
 
         SENSITIVE_EXACT.contains(&upper.as_str())
-            || SENSITIVE_SUFFIXES.iter().any(|suffix| upper.ends_with(suffix))
+            || SENSITIVE_SUFFIXES
+                .iter()
+                .any(|suffix| upper.ends_with(suffix))
             || SENSITIVE_CONTAINS
                 .iter()
                 .any(|fragment| upper.contains(fragment))
@@ -476,6 +589,103 @@ impl ProviderService {
             == Some(crate::hermes_config::PROVIDER_SOURCE_DICT)
     }
 
+    fn managed_codex_oauth_account_id(provider: &Provider) -> Option<String> {
+        if !crate::proxy::providers::is_codex_official_provider(provider) {
+            return None;
+        }
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.managed_account_id_for("codex_oauth"))
+            .map(|account_id| account_id.trim().to_string())
+            .filter(|account_id| !account_id.is_empty())
+    }
+
+    fn preflight_managed_codex_provider(
+        state: &AppState,
+        app_type: &AppType,
+        provider: &Provider,
+    ) -> Result<Option<Provider>, AppError> {
+        if !matches!(app_type, AppType::Codex) {
+            return Ok(None);
+        }
+        let Some(account_id) = Self::managed_codex_oauth_account_id(provider) else {
+            return Ok(None);
+        };
+        let bundle = futures::executor::block_on(async {
+            let manager = state.codex_oauth_state.read().await;
+            manager
+                .get_valid_token_bundle_for_account(&account_id)
+                .await
+        })
+        .map_err(|error| AppError::Message(format!("Codex OAuth 账号不可用: {error}")))?;
+        if bundle.id_token.is_none() {
+            return Err(AppError::Message(format!(
+                "Codex OAuth 账号 {account_id} 缺少 id_token，请在认证中心重新登录"
+            )));
+        }
+        let mut prepared = provider.clone();
+        let settings = prepared
+            .settings_config
+            .as_object_mut()
+            .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
+        settings.insert(
+            "auth".to_string(),
+            crate::codex_config::codex_managed_oauth_auth_value(
+                &account_id,
+                &bundle.access_token,
+                bundle.id_token.as_deref(),
+                &bundle.refresh_token,
+                &bundle.last_refresh,
+            ),
+        );
+        Ok(Some(prepared))
+    }
+
+    fn prepare_outgoing_managed_codex_live_auth(
+        state: &AppState,
+        account_id: Option<&str>,
+    ) -> Result<Option<String>, AppError> {
+        let Some(account_id) = account_id else {
+            return Ok(None);
+        };
+        futures::executor::block_on(async {
+            let manager = state.codex_oauth_state.read().await;
+            manager
+                .prepare_live_auth_for_account_switch_away(account_id)
+                .await
+        })
+        .map_err(|error| AppError::Message(error.to_string()))
+    }
+
+    fn managed_codex_transaction_error(
+        operation: &str,
+        error: AppError,
+        snapshot: &crate::codex_config::CodexLiveStateSnapshot,
+        restore_local_current: Option<(&AppType, Option<&str>)>,
+    ) -> AppError {
+        let mut rollback_failures = Vec::new();
+        if let Some((app_type, previous_local_current)) = restore_local_current {
+            if let Err(rollback_error) =
+                crate::settings::set_current_provider(app_type, previous_local_current)
+            {
+                rollback_failures.push(format!("恢复本地 current 失败: {rollback_error}"));
+            }
+        }
+        if let Err(rollback_error) = snapshot.restore_preserving_newer_same_account_auth() {
+            rollback_failures.push(rollback_error.to_string());
+        }
+
+        if rollback_failures.is_empty() {
+            error
+        } else {
+            AppError::Message(format!(
+                "{operation}失败: {error}; 回滚同时失败: {}",
+                rollback_failures.join("; ")
+            ))
+        }
+    }
+
     /// List all providers for an app type
     pub fn list(
         state: &AppState,
@@ -513,6 +723,16 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::add(state, provider, add_to_live);
         }
+        let _switch_guard = if matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+        ) {
+            Some(futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            ))
+        } else {
+            None
+        };
         let mut provider = provider;
         // Normalize Claude model keys
         Self::normalize_provider_if_claude(&app_type, &mut provider);
@@ -520,6 +740,52 @@ impl ProviderService {
         normalize_provider_common_config_for_storage(state.db.as_ref(), &app_type, &mut provider)?;
         if app_type.is_additive_mode() {
             Self::set_provider_live_config_managed(&mut provider, add_to_live);
+        }
+
+        let current = state.db.get_current_provider(app_type.as_str())?;
+        if matches!(app_type, AppType::Codex)
+            && current.is_none()
+            && Self::managed_codex_oauth_account_id(&provider).is_some()
+        {
+            let prepared = Self::preflight_managed_codex_provider(state, &app_type, &provider)?
+                .expect("managed Codex preflight must return a provider");
+            let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
+            let live_result = (|| {
+                write_live_with_common_config(state.db.as_ref(), &app_type, &prepared)?;
+                if let Some(auth) = prepared.settings_config.get("auth") {
+                    crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                }
+                Ok::<(), AppError>(())
+            })();
+            if let Err(error) = live_result {
+                return Err(Self::managed_codex_transaction_error(
+                    "写入首个托管 Codex Provider Live",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
+            if let Err(error) = state.db.save_provider(app_type.as_str(), &provider) {
+                return Err(Self::managed_codex_transaction_error(
+                    "保存首个托管 Codex Provider",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
+            if let Err(error) = state
+                .db
+                .set_current_provider(app_type.as_str(), &provider.id)
+            {
+                let _ = state.db.delete_provider(app_type.as_str(), &provider.id);
+                return Err(Self::managed_codex_transaction_error(
+                    "设置首个托管 Codex Provider",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
+            return Ok(true);
         }
 
         // Save to database
@@ -543,7 +809,6 @@ impl ProviderService {
         }
 
         // For other apps: Check if sync is needed (if this is current provider, or no current provider)
-        let current = state.db.get_current_provider(app_type.as_str())?;
         if current.is_none() {
             // No current provider, set as current and sync
             state
@@ -565,6 +830,16 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::update(state, original_id, provider);
         }
+        let _switch_guard = if matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+        ) {
+            Some(futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            ))
+        } else {
+            None
+        };
         let mut provider = provider;
         let original_id = original_id.unwrap_or(provider.id.as_str()).to_string();
         let provider_id_changed = original_id != provider.id;
@@ -586,6 +861,79 @@ impl ProviderService {
         Self::normalize_provider_if_claude(&app_type, &mut provider);
         Self::validate_provider_settings(&app_type, &provider)?;
         normalize_provider_common_config_for_storage(state.db.as_ref(), &app_type, &mut provider)?;
+
+        let effective_current =
+            crate::settings::get_effective_current_provider(&state.db, &app_type)?;
+        let updates_current_provider = effective_current.as_deref() == Some(original_id.as_str());
+        let existing_managed_codex_account_id = existing_provider
+            .as_ref()
+            .and_then(Self::managed_codex_oauth_account_id);
+        let target_managed_codex_account_id = Self::managed_codex_oauth_account_id(&provider);
+        if matches!(app_type, AppType::Codex)
+            && !provider_id_changed
+            && updates_current_provider
+            && (existing_managed_codex_account_id.is_some()
+                || target_managed_codex_account_id.is_some())
+        {
+            let outgoing_managed_account_id = existing_managed_codex_account_id
+                .as_ref()
+                .filter(|account_id| target_managed_codex_account_id.as_ref() != Some(*account_id))
+                .cloned();
+            let outgoing_live_refresh_token = Self::prepare_outgoing_managed_codex_live_auth(
+                state,
+                outgoing_managed_account_id.as_deref(),
+            )?;
+            let prepared_provider =
+                Self::preflight_managed_codex_provider(state, &app_type, &provider)?;
+            let provider_for_live = prepared_provider.as_ref().unwrap_or(&provider);
+            let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
+            let live_result = (|| {
+                if let (Some(account_id), Some(expected_refresh)) = (
+                    outgoing_managed_account_id.as_deref(),
+                    outgoing_live_refresh_token.as_deref(),
+                ) {
+                    crate::codex_config::ensure_codex_live_auth_unchanged_for_managed_account(
+                        account_id,
+                        expected_refresh,
+                    )?;
+                }
+                write_live_with_common_config(state.db.as_ref(), &app_type, provider_for_live)?;
+                if target_managed_codex_account_id.is_some() {
+                    if let Some(auth) = provider_for_live.settings_config.get("auth") {
+                        crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                    }
+                }
+                if let Some(account_id) = outgoing_managed_account_id.as_deref() {
+                    crate::codex_config::clear_codex_live_auth_for_managed_account_if_unchanged(
+                        account_id,
+                        outgoing_live_refresh_token.as_deref(),
+                    )?;
+                }
+                Ok::<(), AppError>(())
+            })();
+            if let Err(error) = live_result {
+                return Err(Self::managed_codex_transaction_error(
+                    "更新托管 Codex Provider Live",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
+            if let Err(error) = state.db.save_provider(app_type.as_str(), &provider) {
+                return Err(Self::managed_codex_transaction_error(
+                    "保存托管 Codex Provider",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
+            if let Err(error) = McpService::sync_enabled_for_app(state, &app_type) {
+                log::warn!(
+                    "保存托管 Codex Provider 后重投影 MCP 失败（将在下次同步时自愈）: {error}"
+                );
+            }
+            return Ok(true);
+        }
 
         if provider_id_changed {
             if !app_type.is_additive_mode() {
@@ -663,10 +1011,7 @@ impl ProviderService {
                         .db
                         .is_omo_provider_current(app_type.as_str(), &provider.id, "omo")?;
                 if is_omo_current {
-                    OmoService::write_config_to_file(
-                        state,
-                        &crate::services::omo::STANDARD,
-                    )?;
+                    OmoService::write_config_to_file(state, &crate::services::omo::STANDARD)?;
                 }
                 return Ok(true);
             }
@@ -680,18 +1025,18 @@ impl ProviderService {
                     "omo-slim",
                 )?;
                 if is_current {
-                    OmoService::write_config_to_file(
-                        state,
-                        &crate::services::omo::SLIM,
-                    )?;
+                    OmoService::write_config_to_file(state, &crate::services::omo::SLIM)?;
                 }
                 return Ok(true);
             }
             let live_config_managed = Self::check_live_config_exists(
                 &app_type,
                 &provider.id,
-                Self::provider_live_config_managed(&provider)
-                    .or_else(|| existing_provider.as_ref().and_then(Self::provider_live_config_managed)),
+                Self::provider_live_config_managed(&provider).or_else(|| {
+                    existing_provider
+                        .as_ref()
+                        .and_then(Self::provider_live_config_managed)
+                }),
             )?;
             Self::set_provider_live_config_managed(&mut provider, live_config_managed);
             state.db.save_provider(app_type.as_str(), &provider)?;
@@ -706,12 +1051,10 @@ impl ProviderService {
         state.db.save_provider(app_type.as_str(), &provider)?;
 
         // For other apps: Check if this is current provider (use effective current, not just DB)
-        let effective_current =
-            crate::settings::get_effective_current_provider(&state.db, &app_type)?;
         let is_current = effective_current.as_deref() == Some(provider.id.as_str());
 
         if is_current {
-            // 如果代理接管模式处于激活状态，并且代理服务正在运行：
+            // 备份或 live 占位符存在时 Routing 仍持有 live，即使代理进程暂时停止。
             // - 不写 Live 配置（否则会破坏接管）
             // - 仅更新 Live 备份（保证关闭代理时能恢复到最新配置）
             let is_app_taken_over =
@@ -719,14 +1062,18 @@ impl ProviderService {
                     .ok()
                     .flatten()
                     .is_some();
-            let is_proxy_running = futures::executor::block_on(state.proxy_service.is_running());
-            let should_skip_live_write = is_app_taken_over && is_proxy_running;
+            let live_taken_over = state
+                .proxy_service
+                .detect_takeover_in_live_config_for_app(&app_type);
+            let should_skip_live_write = is_app_taken_over || live_taken_over;
 
             if should_skip_live_write {
                 futures::executor::block_on(
-                    state
-                        .proxy_service
-                        .update_live_backup_from_provider(app_type.as_str(), &provider),
+                    crate::services::proxy::ProxyService::update_live_backup_from_provider_for_db(
+                        state.db.as_ref(),
+                        app_type.as_str(),
+                        &provider,
+                    ),
                 )
                 .map_err(|e| AppError::Message(format!("更新 Live 备份失败: {e}")))?;
             } else {
@@ -765,9 +1112,7 @@ impl ProviderService {
 
                     state.db.delete_provider(app_type.as_str(), id)?;
                     if was_current {
-                        OmoService::delete_config_file(
-                            &crate::services::omo::STANDARD,
-                        )?;
+                        OmoService::delete_config_file(&crate::services::omo::STANDARD)?;
                     }
                     return Ok(());
                 }
@@ -780,9 +1125,7 @@ impl ProviderService {
 
                     state.db.delete_provider(app_type.as_str(), id)?;
                     if was_current {
-                        OmoService::delete_config_file(
-                            &crate::services::omo::SLIM,
-                        )?;
+                        OmoService::delete_config_file(&crate::services::omo::SLIM)?;
                     }
                     return Ok(());
                 }
@@ -844,14 +1187,9 @@ impl ProviderService {
                         .get_current_omo_provider("opencode", "omo")?
                         .is_some();
                     if still_has_current {
-                        OmoService::write_config_to_file(
-                            state,
-                            &crate::services::omo::STANDARD,
-                        )?;
+                        OmoService::write_config_to_file(state, &crate::services::omo::STANDARD)?;
                     } else {
-                        OmoService::delete_config_file(
-                            &crate::services::omo::STANDARD,
-                        )?;
+                        OmoService::delete_config_file(&crate::services::omo::STANDARD)?;
                     }
                 } else if provider_category.as_deref() == Some("omo-slim") {
                     state
@@ -862,14 +1200,9 @@ impl ProviderService {
                         .get_current_omo_provider("opencode", "omo-slim")?
                         .is_some();
                     if still_has_current {
-                        OmoService::write_config_to_file(
-                            state,
-                            &crate::services::omo::SLIM,
-                        )?;
+                        OmoService::write_config_to_file(state, &crate::services::omo::SLIM)?;
                     } else {
-                        OmoService::delete_config_file(
-                            &crate::services::omo::SLIM,
-                        )?;
+                        OmoService::delete_config_file(&crate::services::omo::SLIM)?;
                     }
                 } else {
                     remove_opencode_provider_from_live(id)?;
@@ -930,21 +1263,27 @@ impl ProviderService {
             return Self::switch_normal(state, app_type, id, &providers);
         }
 
-        // Check if proxy takeover mode is active AND proxy server is actually running
-        // Both conditions must be true to use hot-switch mode
-        // Use blocking wait since this is a sync function
+        let _switch_guard = if matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+        ) {
+            Some(futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            ))
+        } else {
+            None
+        };
+
+        // 备份或 live 占位符存在即表示 Routing 持有 live；代理进程暂时停止也不能普通覆写。
         let is_app_taken_over =
             futures::executor::block_on(state.db.get_live_backup(app_type.as_str()))
                 .ok()
                 .flatten()
                 .is_some();
-        let is_proxy_running = futures::executor::block_on(state.proxy_service.is_running());
         let live_taken_over = state
             .proxy_service
             .detect_takeover_in_live_config_for_app(&app_type);
-
-        // Hot-switch only when BOTH: this app is taken over AND proxy server is actually running
-        let should_hot_switch = (is_app_taken_over || live_taken_over) && is_proxy_running;
+        let should_hot_switch = is_app_taken_over || live_taken_over;
 
         if should_hot_switch
             && _provider.category.as_deref() == Some("official")
@@ -978,9 +1317,11 @@ impl ProviderService {
 
             // 更新 Live 备份（确保代理关闭时恢复正确的供应商配置）
             futures::executor::block_on(
-                state
-                    .proxy_service
-                    .update_live_backup_from_provider(app_type.as_str(), provider),
+                crate::services::proxy::ProxyService::update_live_backup_from_provider_for_db(
+                    state.db.as_ref(),
+                    app_type.as_str(),
+                    provider,
+                ),
             )
             .map_err(|e| AppError::Message(format!("更新 Live 备份失败: {e}")))?;
 
@@ -1019,10 +1360,7 @@ impl ProviderService {
             state
                 .db
                 .set_omo_provider_current(app_type.as_str(), id, "omo")?;
-            OmoService::write_config_to_file(
-                state,
-                &crate::services::omo::STANDARD,
-            )?;
+            OmoService::write_config_to_file(state, &crate::services::omo::STANDARD)?;
             // OMO ↔ OMO Slim mutually exclusive: remove Slim config
             let _ = OmoService::delete_config_file(&crate::services::omo::SLIM);
             return Ok(SwitchResult::default());
@@ -1035,8 +1373,7 @@ impl ProviderService {
                 .set_omo_provider_current(app_type.as_str(), id, "omo-slim")?;
             OmoService::write_config_to_file(state, &crate::services::omo::SLIM)?;
             // OMO ↔ OMO Slim mutually exclusive: remove Standard config
-            let _ =
-                OmoService::delete_config_file(&crate::services::omo::STANDARD);
+            let _ = OmoService::delete_config_file(&crate::services::omo::STANDARD);
             return Ok(SwitchResult::default());
         }
 
@@ -1045,16 +1382,20 @@ impl ProviderService {
         // Backfill: Backfill current live config to current provider
         // Use effective current provider (validated existence) to ensure backfill targets valid provider
         let current_id = crate::settings::get_effective_current_provider(&state.db, &app_type)?;
+        let current_managed_codex_account_id = current_id
+            .as_deref()
+            .and_then(|current_id| providers.get(current_id))
+            .and_then(Self::managed_codex_oauth_account_id);
 
         let mut backfill_completed = false;
-        if let Some(current_id) = current_id {
+        if let Some(current_id) = current_id.as_deref() {
             if current_id != id {
                 // Additive mode apps - all providers coexist in the same file,
                 // no backfill needed (backfill is for exclusive mode apps like Claude/Codex/Gemini)
                 if !app_type.is_additive_mode() {
                     // Only backfill when switching to a different provider
                     if let Ok(live_config) = read_live_settings(app_type.clone()) {
-                        if let Some(mut current_provider) = providers.get(&current_id).cloned() {
+                        if let Some(mut current_provider) = providers.get(current_id).cloned() {
                             Self::sync_common_config_snippet_from_live(
                                 state,
                                 &app_type,
@@ -1069,6 +1410,21 @@ impl ProviderService {
                                     &current_provider,
                                     live_config,
                                 );
+                            if let Some(account_id) = current_managed_codex_account_id.as_deref() {
+                                let live_auth = current_provider.settings_config.get("auth");
+                                if live_auth.is_some_and(|auth| {
+                                    crate::codex_config::codex_live_auth_is_managed_chatgpt_login(
+                                        auth, account_id,
+                                    )
+                                }) {
+                                    let stored_auth = providers
+                                        .get(current_id)
+                                        .and_then(|provider| provider.settings_config.get("auth"))
+                                        .cloned()
+                                        .unwrap_or_else(|| serde_json::json!({}));
+                                    current_provider.settings_config["auth"] = stored_auth;
+                                }
+                            }
                             if let Err(e) =
                                 state.db.save_provider(app_type.as_str(), &current_provider)
                             {
@@ -1085,27 +1441,97 @@ impl ProviderService {
             }
         }
 
-        // Additive mode apps skip setting is_current (no such concept)
-        if !app_type.is_additive_mode() {
-            // Update local settings (device-level, takes priority)
-            crate::settings::set_current_provider(&app_type, Some(id))?;
+        let target_managed_codex_account_id = Self::managed_codex_oauth_account_id(provider);
+        let outgoing_managed_codex_account_id = current_managed_codex_account_id
+            .as_ref()
+            .filter(|account_id| target_managed_codex_account_id.as_ref() != Some(*account_id))
+            .cloned();
+        let outgoing_live_refresh_token = Self::prepare_outgoing_managed_codex_live_auth(
+            state,
+            outgoing_managed_codex_account_id.as_deref(),
+        )?;
+        let prepared_provider = Self::preflight_managed_codex_provider(state, &app_type, provider)?;
+        let provider_for_live = prepared_provider.as_ref().unwrap_or(provider);
+        let managed_codex_transition = matches!(app_type, AppType::Codex)
+            && (current_managed_codex_account_id.is_some()
+                || target_managed_codex_account_id.is_some());
 
-            // Update database is_current (as default for new devices)
-            state.db.set_current_provider(app_type.as_str(), id)?;
-        }
+        if managed_codex_transition {
+            let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
+            let live_result = (|| {
+                if let (Some(account_id), Some(expected_refresh)) = (
+                    outgoing_managed_codex_account_id.as_deref(),
+                    outgoing_live_refresh_token.as_deref(),
+                ) {
+                    crate::codex_config::ensure_codex_live_auth_unchanged_for_managed_account(
+                        account_id,
+                        expected_refresh,
+                    )?;
+                }
+                write_live_with_common_config(state.db.as_ref(), &app_type, provider_for_live)?;
+                if target_managed_codex_account_id.is_some() {
+                    if let Some(auth) = provider_for_live.settings_config.get("auth") {
+                        crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                    }
+                }
+                if let Some(account_id) = outgoing_managed_codex_account_id.as_deref() {
+                    crate::codex_config::clear_codex_live_auth_for_managed_account_if_unchanged(
+                        account_id,
+                        outgoing_live_refresh_token.as_deref(),
+                    )?;
+                }
+                Ok::<(), AppError>(())
+            })();
+            if let Err(error) = live_result {
+                return Err(Self::managed_codex_transaction_error(
+                    "写入 Codex Live",
+                    error,
+                    &snapshot,
+                    None,
+                ));
+            }
 
-        // providers: map entries are owned by Hermes and must not be rewritten as custom providers.
-        if !matches!(app_type, AppType::Hermes) || !Self::is_hermes_read_only_provider(provider) {
-            write_live_with_common_config(state.db.as_ref(), &app_type, provider)?;
+            let previous_local_current = crate::settings::get_current_provider(&app_type);
+            if let Err(error) = crate::settings::set_current_provider(&app_type, Some(id)) {
+                return Err(Self::managed_codex_transaction_error(
+                    "更新本地 current",
+                    error,
+                    &snapshot,
+                    Some((&app_type, previous_local_current.as_deref())),
+                ));
+            }
+            if let Err(error) = state.db.set_current_provider(app_type.as_str(), id) {
+                return Err(Self::managed_codex_transaction_error(
+                    "更新数据库 current",
+                    error,
+                    &snapshot,
+                    Some((&app_type, previous_local_current.as_deref())),
+                ));
+            }
+        } else {
+            // Additive mode apps skip setting is_current (no such concept)
+            if !app_type.is_additive_mode() {
+                crate::settings::set_current_provider(&app_type, Some(id))?;
+                state.db.set_current_provider(app_type.as_str(), id)?;
+            }
+
+            // providers: map entries are owned by Hermes and must not be rewritten as custom providers.
+            if !matches!(app_type, AppType::Hermes) || !Self::is_hermes_read_only_provider(provider)
+            {
+                write_live_with_common_config(state.db.as_ref(), &app_type, provider_for_live)?;
+            }
         }
         if matches!(app_type, AppType::Codex)
             && backfill_completed
-            && provider.category.as_deref() == Some("official")
+            && crate::proxy::providers::is_codex_official_provider(provider)
+            && target_managed_codex_account_id.is_none()
         {
             let db_auth = provider.settings_config.get("auth");
-            if let Err(error) = crate::codex_config::clear_stale_codex_live_auth_after_official_switch(
-                db_auth.unwrap_or(&serde_json::Value::Null),
-            ) {
+            if let Err(error) =
+                crate::codex_config::clear_stale_codex_live_auth_after_official_switch(
+                    db_auth.unwrap_or(&serde_json::Value::Null),
+                )
+            {
                 log::warn!("Failed to clean stale Codex auth.json: {error}");
             }
         }
@@ -1161,6 +1587,16 @@ impl ProviderService {
         if app_type.is_additive_mode() {
             return sync_current_provider_for_app_to_live(state, &app_type);
         }
+        let _switch_guard = if matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+        ) {
+            Some(futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            ))
+        } else {
+            None
+        };
 
         let current_id =
             match crate::settings::get_effective_current_provider(&state.db, &app_type)? {
@@ -1173,11 +1609,6 @@ impl ProviderService {
             return Ok(());
         };
 
-        let takeover_enabled =
-            futures::executor::block_on(state.db.get_proxy_config_for_app(app_type.as_str()))
-                .map(|config| config.enabled)
-                .unwrap_or(false);
-
         let has_live_backup =
             futures::executor::block_on(state.db.get_live_backup(app_type.as_str()))
                 .ok()
@@ -1188,11 +1619,13 @@ impl ProviderService {
             .proxy_service
             .detect_takeover_in_live_config_for_app(&app_type);
 
-        if takeover_enabled && (has_live_backup || live_taken_over) {
+        if has_live_backup || live_taken_over {
             futures::executor::block_on(
-                state
-                    .proxy_service
-                    .update_live_backup_from_provider(app_type.as_str(), provider),
+                crate::services::proxy::ProxyService::update_live_backup_from_provider_for_db(
+                    state.db.as_ref(),
+                    app_type.as_str(),
+                    provider,
+                ),
             )
             .map_err(|e| AppError::Message(format!("更新 Live 备份失败: {e}")))?;
             return Ok(());
@@ -1296,10 +1729,7 @@ impl ProviderService {
             Ok(true) => return,
             Ok(false) => {}
             Err(error) => {
-                log::warn!(
-                    "读取 {} 通用配置清空标记失败: {error}",
-                    app_type.as_str()
-                );
+                log::warn!("读取 {} 通用配置清空标记失败: {error}", app_type.as_str());
                 return;
             }
         }
@@ -1318,7 +1748,12 @@ impl ProviderService {
                 return;
             }
         };
-        if state.db.get_config_snippet(app_type.as_str()).ok().flatten().as_deref()
+        if state
+            .db
+            .get_config_snippet(app_type.as_str())
+            .ok()
+            .flatten()
+            .as_deref()
             == Some(new_snippet.as_str())
         {
             return;
@@ -1646,16 +2081,14 @@ impl ProviderService {
         if let Some(backup) = state.db.get_live_backup(app.as_str()).await? {
             let original: Value = serde_json::from_str(&backup.original_config)
                 .map_err(|e| AppError::Message(format!("解析 Gemini 代理接管备份失败: {e}")))?;
-            let cleaned =
-                live::remove_common_config_from_settings(&app, &original, &leaked_text)?;
+            let cleaned = live::remove_common_config_from_settings(&app, &original, &leaked_text)?;
             if cleaned != original {
                 state
                     .db
                     .save_live_backup(
                         app.as_str(),
-                        &serde_json::to_string(&cleaned).map_err(|e| {
-                            AppError::Message(format!("Serialization failed: {e}"))
-                        })?,
+                        &serde_json::to_string(&cleaned)
+                            .map_err(|e| AppError::Message(format!("Serialization failed: {e}")))?,
                     )
                     .await?;
             }

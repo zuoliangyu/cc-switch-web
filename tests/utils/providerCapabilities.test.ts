@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Provider } from "@/types";
 import {
   providerNeedsRouting,
+  resolveCodexOfficialIdentity,
   supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 
@@ -16,7 +17,7 @@ const codexConfig = (wireApi: string) =>
   `model_provider = "custom"\n\n[model_providers.custom]\nwire_api = "${wireApi}"\n`;
 
 describe("providerNeedsRouting", () => {
-  it("只有固定 Codex 官方条目支持原生登录接管", () => {
+  it("固定条目和任意 Follow Login 别名都支持原生登录接管", () => {
     expect(
       supportsOfficialProxyTakeover(
         "codex",
@@ -26,7 +27,46 @@ describe("providerNeedsRouting", () => {
     expect(
       supportsOfficialProxyTakeover(
         "codex",
-        provider({ id: "custom-official", category: "official" }),
+        provider({
+          id: "custom-official",
+          category: "official",
+          settingsConfig: { auth: {}, config: "" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      resolveCodexOfficialIdentity(
+        "codex",
+        provider({
+          id: "team-account",
+          category: "custom",
+          settingsConfig: { auth: {}, config: "" },
+          meta: {
+            authBinding: {
+              source: "managed_account",
+              authProvider: "codex_oauth",
+              accountId: "account-one",
+            },
+          },
+        }),
+      ),
+    ).toBe("managed_account");
+  });
+
+  it.each([
+    { auth: {}, base_url: "https://relay.example/v1" },
+    { auth: { OPENAI_API_KEY: "sk-third-party" }, config: "" },
+    { auth: {}, config: 'experimental_bearer_token = "relay-token"' },
+    { auth: {}, config: 'model_provider = "custom"' },
+  ])("明确的第三方配置不会被识别成 Follow Login", (settingsConfig) => {
+    expect(
+      supportsOfficialProxyTakeover(
+        "codex",
+        provider({
+          id: "custom-official",
+          category: "official",
+          settingsConfig,
+        }),
       ),
     ).toBe(false);
   });

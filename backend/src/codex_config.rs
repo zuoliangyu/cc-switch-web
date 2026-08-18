@@ -8,6 +8,7 @@ use crate::config::{
 use crate::error::AppError;
 use crate::model_capabilities::{image_input_capability_from_modalities, ImageInputCapability};
 use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
 use std::process::{Command, Stdio};
@@ -22,6 +23,13 @@ pub const CC_SWITCH_CODEX_MODEL_PROVIDER_ID: &str = "custom";
 pub const CC_SWITCH_CODEX_OFFICIAL_PROXY_PROVIDER_ID: &str = "cc-switch-official";
 pub const CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME: &str = "cc-switch-model-catalog.json";
 const CODEX_PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
+const CODEX_MANAGED_OAUTH_LIVE_AUTH_MARKER_FILENAME: &str = "codex_managed_oauth_live_auth.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CodexManagedOAuthLiveAuthMarker {
+    version: u32,
+    account_id: String,
+}
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -183,6 +191,439 @@ pub fn get_default_codex_config_dir() -> PathBuf {
 /// 获取 Codex auth.json 路径
 pub fn get_codex_auth_path() -> PathBuf {
     get_codex_config_dir().join("auth.json")
+}
+
+fn get_codex_managed_oauth_live_auth_marker_path() -> PathBuf {
+    crate::config::get_app_config_dir().join(CODEX_MANAGED_OAUTH_LIVE_AUTH_MARKER_FILENAME)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CodexLiveFileState {
+    path: PathBuf,
+    contents: Option<Vec<u8>>,
+    #[cfg(unix)]
+    mode: Option<u32>,
+}
+
+impl CodexLiveFileState {
+    fn capture(path: PathBuf) -> Result<Self, AppError> {
+        if !path.exists() {
+            return Ok(Self {
+                path,
+                contents: None,
+                #[cfg(unix)]
+                mode: None,
+            });
+        }
+        let contents = fs::read(&path).map_err(|error| AppError::io(&path, error))?;
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt;
+            Some(
+                fs::metadata(&path)
+                    .map_err(|error| AppError::io(&path, error))?
+                    .permissions()
+                    .mode(),
+            )
+        };
+        Ok(Self {
+            path,
+            contents: Some(contents),
+            #[cfg(unix)]
+            mode,
+        })
+    }
+
+    fn restore(&self) -> Result<(), AppError> {
+        match self.contents.as_deref() {
+            Some(contents) => {
+                atomic_write(&self.path, contents)?;
+                #[cfg(unix)]
+                if let Some(mode) = self.mode {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&self.path, fs::Permissions::from_mode(mode))
+                        .map_err(|error| AppError::io(&self.path, error))?;
+                }
+                Ok(())
+            }
+            None => delete_file(&self.path),
+        }
+    }
+}
+
+/// 托管 Codex 切换的四文件回滚点：auth、config、模型目录和 ownership marker。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CodexLiveStateSnapshot {
+    auth: CodexLiveFileState,
+    config: CodexLiveFileState,
+    catalog: CodexLiveFileState,
+    managed_marker: CodexLiveFileState,
+}
+
+impl CodexLiveStateSnapshot {
+    pub(crate) fn capture() -> Result<Self, AppError> {
+        Ok(Self {
+            auth: CodexLiveFileState::capture(get_codex_auth_path())?,
+            config: CodexLiveFileState::capture(get_codex_config_path())?,
+            catalog: CodexLiveFileState::capture(get_codex_model_catalog_path())?,
+            managed_marker: CodexLiveFileState::capture(
+                get_codex_managed_oauth_live_auth_marker_path(),
+            )?,
+        })
+    }
+
+    /// 精确恢复 config/catalog；同账号 auth 若已被 CLI 刷新到更晚世代则保留。
+    pub(crate) fn restore_preserving_newer_same_account_auth(&self) -> Result<(), AppError> {
+        let mut failures = Vec::new();
+        let current_auth = match CodexLiveFileState::capture(get_codex_auth_path()) {
+            Ok(state) => Some(state),
+            Err(error) => {
+                failures.push(format!("检查当前 auth: {error}"));
+                None
+            }
+        };
+        let snapshot_generation = Self::chatgpt_auth_generation(&self.auth);
+        let current_generation = current_auth
+            .as_ref()
+            .and_then(Self::chatgpt_auth_generation);
+        let preserve_current_auth = match (snapshot_generation, current_generation) {
+            (Some((snapshot_account, snapshot_time)), Some((current_account, current_time)))
+                if snapshot_account == current_account =>
+            {
+                match (snapshot_time, current_time) {
+                    (Some(snapshot_time), Some(current_time)) => current_time > snapshot_time,
+                    (None, Some(_)) => true,
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+
+        for (label, state) in [("catalog", &self.catalog), ("config", &self.config)] {
+            if let Err(error) = state.restore() {
+                failures.push(format!("{label}: {error}"));
+            }
+        }
+        if !preserve_current_auth {
+            for (label, state) in [
+                ("auth", &self.auth),
+                ("managed marker", &self.managed_marker),
+            ] {
+                if let Err(error) = state.restore() {
+                    failures.push(format!("{label}: {error}"));
+                }
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::Message(format!(
+                "恢复 Codex Live 状态失败: {}",
+                failures.join("; ")
+            )))
+        }
+    }
+
+    fn chatgpt_auth_generation(state: &CodexLiveFileState) -> Option<(String, Option<i64>)> {
+        let auth: Value = serde_json::from_slice(state.contents.as_deref()?).ok()?;
+        if auth.get("auth_mode").and_then(Value::as_str) != Some("chatgpt") {
+            return None;
+        }
+        let account_id = auth
+            .pointer("/tokens/account_id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|account_id| !account_id.is_empty())?
+            .to_string();
+        let last_refresh_ms = auth
+            .get("last_refresh")
+            .and_then(Value::as_str)
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+            .map(|value| value.timestamp_millis());
+        Some((account_id, last_refresh_ms))
+    }
+}
+
+fn extract_codex_managed_oauth_account_id(auth: &Value) -> Option<String> {
+    let auth_obj = auth.as_object()?;
+    if auth_obj.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "auth_mode" | "OPENAI_API_KEY" | "tokens" | "last_refresh"
+        )
+    }) {
+        return None;
+    }
+    if auth.get("auth_mode").and_then(Value::as_str) != Some("chatgpt") {
+        return None;
+    }
+    let api_key_is_clearable = auth.get("OPENAI_API_KEY").is_none_or(|value| {
+        value.is_null() || value.as_str() == Some(CODEX_PROXY_AUTH_PLACEHOLDER)
+    });
+    if !api_key_is_clearable {
+        return None;
+    }
+    let tokens = auth.get("tokens").and_then(Value::as_object)?;
+    if tokens.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "access_token" | "account_id" | "id_token" | "refresh_token"
+        )
+    }) {
+        return None;
+    }
+    let account_id = tokens
+        .get("account_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())?;
+    tokens
+        .get("access_token")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())?;
+    Some(account_id.to_string())
+}
+
+pub fn codex_managed_oauth_auth_value(
+    account_id: &str,
+    access_token: &str,
+    id_token: Option<&str>,
+    refresh_token: &str,
+    last_refresh: &str,
+) -> Value {
+    let mut tokens = serde_json::Map::new();
+    if let Some(id_token) = id_token {
+        tokens.insert("id_token".to_string(), Value::String(id_token.to_string()));
+    }
+    tokens.insert(
+        "access_token".to_string(),
+        Value::String(access_token.to_string()),
+    );
+    tokens.insert(
+        "refresh_token".to_string(),
+        Value::String(refresh_token.to_string()),
+    );
+    tokens.insert(
+        "account_id".to_string(),
+        Value::String(account_id.to_string()),
+    );
+    json!({
+        "auth_mode": "chatgpt",
+        "OPENAI_API_KEY": null,
+        "tokens": Value::Object(tokens),
+        "last_refresh": last_refresh,
+    })
+}
+
+pub fn record_codex_managed_oauth_live_auth(auth: &Value) -> Result<(), AppError> {
+    let Some(account_id) = extract_codex_managed_oauth_account_id(auth) else {
+        return Ok(());
+    };
+    write_json_file(
+        &get_codex_managed_oauth_live_auth_marker_path(),
+        &CodexManagedOAuthLiveAuthMarker {
+            version: 2,
+            account_id,
+        },
+    )
+}
+
+pub fn codex_auth_matches_recorded_managed_oauth(
+    auth: &Value,
+    account_id: &str,
+) -> Result<bool, AppError> {
+    let account_id = account_id.trim();
+    if account_id.is_empty()
+        || extract_codex_managed_oauth_account_id(auth).as_deref() != Some(account_id)
+    {
+        return Ok(false);
+    }
+    let marker_path = get_codex_managed_oauth_live_auth_marker_path();
+    let marker: CodexManagedOAuthLiveAuthMarker = match read_json_file(&marker_path) {
+        Ok(marker) => marker,
+        Err(error) => {
+            log::warn!(
+                "Failed to read Codex managed OAuth marker at {}: {error}",
+                marker_path.display()
+            );
+            return Ok(false);
+        }
+    };
+    Ok(matches!(marker.version, 1 | 2) && marker.account_id == account_id)
+}
+
+fn clear_codex_managed_oauth_live_auth_marker_for_account(
+    account_id: &str,
+) -> Result<(), AppError> {
+    let marker_path = get_codex_managed_oauth_live_auth_marker_path();
+    if !marker_path.exists() {
+        return Ok(());
+    }
+    let marker: CodexManagedOAuthLiveAuthMarker = match read_json_file(&marker_path) {
+        Ok(marker) => marker,
+        Err(error) => {
+            log::warn!(
+                "Failed to read Codex managed OAuth marker at {} while cleaning {}: {error}",
+                marker_path.display(),
+                account_id
+            );
+            return delete_file(&marker_path);
+        }
+    };
+    if marker.account_id == account_id.trim() {
+        delete_file(&marker_path)?;
+    }
+    Ok(())
+}
+
+pub fn codex_live_auth_is_managed_chatgpt_login(auth: &Value, account_id: &str) -> bool {
+    let account_id = account_id.trim();
+    if account_id.is_empty() {
+        return false;
+    }
+    let Some(object) = auth.as_object() else {
+        return false;
+    };
+    if object.get("auth_mode").and_then(Value::as_str) != Some("chatgpt") {
+        return false;
+    }
+    if !object
+        .get("OPENAI_API_KEY")
+        .is_none_or(|value| value.is_null() || value.as_str() == Some(CODEX_PROXY_AUTH_PLACEHOLDER))
+    {
+        return false;
+    }
+    object
+        .get("tokens")
+        .and_then(Value::as_object)
+        .and_then(|tokens| tokens.get("account_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(account_id)
+}
+
+pub fn read_codex_live_auth_refresh_for_account(
+    account_id: &str,
+) -> Option<(String, Option<String>, Option<i64>)> {
+    let account_id = account_id.trim();
+    if account_id.is_empty() {
+        return None;
+    }
+    let auth: Value = read_json_file(&get_codex_auth_path()).ok()?;
+    if !codex_live_auth_is_managed_chatgpt_login(&auth, account_id) {
+        return None;
+    }
+    let tokens = auth.get("tokens")?.as_object()?;
+    let refresh_token = tokens.get("refresh_token")?.as_str()?.trim().to_string();
+    if refresh_token.is_empty() {
+        return None;
+    }
+    let id_token = tokens
+        .get("id_token")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let last_refresh_ms = auth
+        .get("last_refresh")
+        .and_then(Value::as_str)
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.timestamp_millis());
+    Some((refresh_token, id_token, last_refresh_ms))
+}
+
+pub fn ensure_codex_live_auth_unchanged_for_managed_account(
+    account_id: &str,
+    expected_refresh_token: &str,
+) -> Result<(), AppError> {
+    let auth_path = get_codex_auth_path();
+    if !auth_path.exists() {
+        return Err(AppError::Message(format!(
+            "Codex CLI 账号 {account_id} 的 live auth 已被移除，请重试"
+        )));
+    }
+    let auth: Value = read_json_file(&auth_path)?;
+    let refresh = auth
+        .pointer("/tokens/refresh_token")
+        .and_then(Value::as_str)
+        .map(str::trim);
+    if !codex_live_auth_is_managed_chatgpt_login(&auth, account_id)
+        || refresh != Some(expected_refresh_token.trim())
+    {
+        return Err(AppError::Message(format!(
+            "Codex CLI 账号 {account_id} 的 live 凭据已刷新；请重试"
+        )));
+    }
+    Ok(())
+}
+
+pub fn clear_codex_live_auth_for_managed_account(account_id: &str) -> Result<(), AppError> {
+    clear_codex_live_auth_for_managed_account_if_unchanged(account_id, None)
+}
+
+pub fn clear_codex_live_auth_for_managed_account_if_unchanged(
+    account_id: &str,
+    expected_refresh_token: Option<&str>,
+) -> Result<(), AppError> {
+    let auth_path = get_codex_auth_path();
+    let mut removed_matching_auth = false;
+    if auth_path.exists() {
+        let auth: Value = read_json_file(&auth_path)?;
+        if codex_live_auth_is_managed_chatgpt_login(&auth, account_id) {
+            if let Some(expected) = expected_refresh_token {
+                let current = auth
+                    .pointer("/tokens/refresh_token")
+                    .and_then(Value::as_str)
+                    .map(str::trim);
+                if current != Some(expected.trim()) {
+                    return Err(AppError::Message(format!(
+                        "Codex CLI 账号 {account_id} 的 live 凭据已刷新；拒绝删除新凭据"
+                    )));
+                }
+            }
+            delete_file(&auth_path)?;
+            removed_matching_auth = true;
+        }
+    }
+    if removed_matching_auth {
+        delete_file(&get_codex_managed_oauth_live_auth_marker_path())?;
+    } else {
+        clear_codex_managed_oauth_live_auth_marker_for_account(account_id)?;
+    }
+    Ok(())
+}
+
+pub fn sync_codex_managed_oauth_live_auth_after_refresh(
+    account_id: &str,
+    expected_refresh_token: &str,
+    refreshed_auth: &Value,
+) -> Result<bool, AppError> {
+    let account_id = account_id.trim();
+    let expected_refresh_token = expected_refresh_token.trim();
+    if account_id.is_empty() || expected_refresh_token.is_empty() {
+        return Ok(false);
+    }
+    let auth_path = get_codex_auth_path();
+    if !auth_path.exists() {
+        return Ok(false);
+    }
+    let current_auth: Value = read_json_file(&auth_path)?;
+    if !codex_live_auth_is_managed_chatgpt_login(&current_auth, account_id)
+        || current_auth
+            .pointer("/tokens/refresh_token")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            != Some(expected_refresh_token)
+    {
+        return Ok(false);
+    }
+    let was_recorded = get_codex_managed_oauth_live_auth_marker_path().exists()
+        && codex_auth_matches_recorded_managed_oauth(&current_auth, account_id)?;
+    write_json_file(&auth_path, refreshed_auth)?;
+    if was_recorded {
+        record_codex_managed_oauth_live_auth(refreshed_auth)?;
+    }
+    Ok(true)
 }
 
 /// 获取 Codex config.toml 路径
@@ -2716,6 +3157,26 @@ pub fn remove_codex_toml_base_url_if(toml_str: &str, predicate: impl Fn(&str) ->
 mod tests {
     use super::*;
     use serde_json::json;
+    use serial_test::serial;
+
+    struct TestHomeGuard(Option<std::ffi::OsString>);
+
+    impl TestHomeGuard {
+        fn set(path: &Path) -> Self {
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(previous)
+        }
+    }
+
+    impl Drop for TestHomeGuard {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
 
     #[test]
     fn catalog_tool_profile_from_api_format() {
@@ -2735,6 +3196,176 @@ mod tests {
             CodexCatalogToolProfile::from_api_format(None),
             CodexCatalogToolProfile::ProxyChat
         );
+    }
+
+    #[test]
+    fn managed_oauth_auth_shape_rejects_user_owned_credentials() {
+        let managed = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-one",
+            Some("id-one"),
+            "refresh-one",
+            "2026-08-18T00:00:00Z",
+        );
+        assert_eq!(
+            extract_codex_managed_oauth_account_id(&managed).as_deref(),
+            Some("account-one")
+        );
+
+        let mut api_key = managed.clone();
+        api_key["OPENAI_API_KEY"] = json!("sk-user-owned");
+        assert!(extract_codex_managed_oauth_account_id(&api_key).is_none());
+
+        let mut extra_field = managed;
+        extra_field["user_owned"] = json!(true);
+        assert!(extract_codex_managed_oauth_account_id(&extra_field).is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn managed_oauth_marker_and_cas_protect_newer_live_auth() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _home = TestHomeGuard::set(temp.path());
+        fs::create_dir_all(get_codex_config_dir()).expect("create codex dir");
+        fs::create_dir_all(crate::config::get_app_config_dir()).expect("create app dir");
+
+        let initial = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-one",
+            Some("id-one"),
+            "refresh-one",
+            "2026-08-18T00:00:00Z",
+        );
+        write_json_file(&get_codex_auth_path(), &initial).expect("write initial auth");
+        record_codex_managed_oauth_live_auth(&initial).expect("record marker");
+        assert!(codex_auth_matches_recorded_managed_oauth(&initial, "account-one").unwrap());
+        assert!(!codex_auth_matches_recorded_managed_oauth(&initial, "account-two").unwrap());
+
+        let refreshed = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-two",
+            Some("id-two"),
+            "refresh-two",
+            "2026-08-18T00:01:00Z",
+        );
+        assert!(sync_codex_managed_oauth_live_auth_after_refresh(
+            "account-one",
+            "refresh-one",
+            &refreshed,
+        )
+        .unwrap());
+        let live: Value = read_json_file(&get_codex_auth_path()).unwrap();
+        assert_eq!(
+            live.pointer("/tokens/refresh_token")
+                .and_then(Value::as_str),
+            Some("refresh-two")
+        );
+        assert!(codex_auth_matches_recorded_managed_oauth(&live, "account-one").unwrap());
+
+        let cli_rotated = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-cli",
+            Some("id-cli"),
+            "refresh-cli",
+            "2026-08-18T00:02:00Z",
+        );
+        write_json_file(&get_codex_auth_path(), &cli_rotated).expect("write CLI rotation");
+        assert!(!sync_codex_managed_oauth_live_auth_after_refresh(
+            "account-one",
+            "refresh-two",
+            &refreshed,
+        )
+        .unwrap());
+        assert!(clear_codex_live_auth_for_managed_account_if_unchanged(
+            "account-one",
+            Some("refresh-two"),
+        )
+        .is_err());
+        let preserved: Value = read_json_file(&get_codex_auth_path()).unwrap();
+        assert_eq!(
+            preserved
+                .pointer("/tokens/refresh_token")
+                .and_then(Value::as_str),
+            Some("refresh-cli")
+        );
+
+        clear_codex_live_auth_for_managed_account_if_unchanged("account-one", Some("refresh-cli"))
+            .unwrap();
+        assert!(!get_codex_auth_path().exists());
+        assert!(!get_codex_managed_oauth_live_auth_marker_path().exists());
+    }
+
+    #[test]
+    #[serial]
+    fn codex_live_snapshot_preserves_only_newer_same_account_auth() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _home = TestHomeGuard::set(temp.path());
+        fs::create_dir_all(get_codex_config_dir()).expect("create codex dir");
+        fs::create_dir_all(crate::config::get_app_config_dir()).expect("create app dir");
+
+        let initial = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-one",
+            Some("id-one"),
+            "refresh-one",
+            "2026-08-18T00:00:00Z",
+        );
+        write_json_file(&get_codex_auth_path(), &initial).unwrap();
+        write_text_file(&get_codex_config_path(), "model = \"initial\"\n").unwrap();
+        write_text_file(&get_codex_model_catalog_path(), "initial-catalog").unwrap();
+        record_codex_managed_oauth_live_auth(&initial).unwrap();
+        let snapshot = CodexLiveStateSnapshot::capture().unwrap();
+
+        let newer_same_account = codex_managed_oauth_auth_value(
+            "account-one",
+            "access-two",
+            Some("id-two"),
+            "refresh-two",
+            "2026-08-18T00:01:00Z",
+        );
+        write_json_file(&get_codex_auth_path(), &newer_same_account).unwrap();
+        write_text_file(&get_codex_config_path(), "model = \"changed\"\n").unwrap();
+        write_text_file(&get_codex_model_catalog_path(), "changed-catalog").unwrap();
+        record_codex_managed_oauth_live_auth(&newer_same_account).unwrap();
+        snapshot
+            .restore_preserving_newer_same_account_auth()
+            .unwrap();
+
+        let preserved: Value = read_json_file(&get_codex_auth_path()).unwrap();
+        assert_eq!(
+            preserved
+                .pointer("/tokens/refresh_token")
+                .and_then(Value::as_str),
+            Some("refresh-two")
+        );
+        assert_eq!(read_codex_config_text().unwrap(), "model = \"initial\"\n");
+        assert_eq!(
+            fs::read_to_string(get_codex_model_catalog_path()).unwrap(),
+            "initial-catalog"
+        );
+
+        let cross_account_snapshot = CodexLiveStateSnapshot::capture().unwrap();
+        let other_account = codex_managed_oauth_auth_value(
+            "account-two",
+            "access-other",
+            Some("id-other"),
+            "refresh-other",
+            "2026-08-18T00:02:00Z",
+        );
+        write_json_file(&get_codex_auth_path(), &other_account).unwrap();
+        record_codex_managed_oauth_live_auth(&other_account).unwrap();
+        cross_account_snapshot
+            .restore_preserving_newer_same_account_auth()
+            .unwrap();
+
+        let rolled_back: Value = read_json_file(&get_codex_auth_path()).unwrap();
+        assert_eq!(
+            rolled_back
+                .pointer("/tokens/account_id")
+                .and_then(Value::as_str),
+            Some("account-one")
+        );
+        assert!(codex_auth_matches_recorded_managed_oauth(&rolled_back, "account-one").unwrap());
     }
 
     #[test]

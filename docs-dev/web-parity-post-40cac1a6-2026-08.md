@@ -1,6 +1,6 @@
 # Web 端跟进上游 `40cac1a6` 后续迁移计划（2026-08-18）
 
-> 状态：批次 1 已完成，批次 2 迁移中  
+> 状态：批次 1 已完成，批次 2 核心完成（剩余可配置用量查询）
 > 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`  
 > 冻结基线：`40cac1a6`  
 > 当前审计点：`fd14f9c4`  
@@ -23,7 +23,7 @@
 
 | 上游提交   | 内容                                    | Web 处置                                            | 批次 | 状态     |
 | ---------- | --------------------------------------- | --------------------------------------------------- | ---- | -------- |
-| `a2e22f33` | 托管 OAuth 账号选择与原生认证生命周期   | 适配迁移，复用 Web 多账号 UI，重构 Codex 认证持久化 | 2    | 待迁移   |
+| `a2e22f33` | 托管 OAuth 账号选择与原生认证生命周期   | 适配迁移，复用 Web 多账号 UI，重构 Codex 认证持久化 | 2    | 已迁移   |
 | `e163a671` | 预填官方 Codex reasoning 档位           | 直接迁移预设语义                                    | 1    | 已迁移   |
 | `c6247d13` | 补齐其余 Codex reasoning 档位           | 直接迁移预设语义                                    | 1    | 已迁移   |
 | `1435223b` | 修正 SiliconFlow、ModelScope 不可用模型 | 同步六类应用预设                                    | 1    | 已迁移   |
@@ -42,7 +42,7 @@
 | `f62c854a` | 清理认证后取消旧 device flow            | 纳入 OAuth 生命周期迁移                             | 2    | 已迁移   |
 | `a98829ba` | Provider 字段 IME 加固                  | 迁移组合输入和 blur 提交修复                        | 4    | 待迁移   |
 | `897ca892` | Codex OAuth 用量查询可配置              | 适配 Web usage 配置与轮询                           | 2    | 待迁移   |
-| `0455a92c` | 多个 Follow Login Provider              | 与托管 OAuth 生命周期一起迁移                       | 2    | 待迁移   |
+| `0455a92c` | 多个 Follow Login Provider              | 按配置内容识别任意别名，不依赖固定 Provider ID      | 2    | 已迁移   |
 | `52745efe` | OpenCode Go Anthropic 回归测试          | 行为已存在，补等价回归测试                          | 4    | 待补测试 |
 | `6e424fd3` | 恢复 Codex 1M 开关                      | Web 已存在                                          | 已有 | 已处置   |
 | `d1c550ba` | 删除 Goal mode 开关                     | Web 当前无该开关                                    | 已有 | 已处置   |
@@ -68,9 +68,11 @@
 - 保留 Web 现有多账号数据与 `authBinding` 交互。
 - 补齐 `id_token`、token 获取时间、`reauth_required`、请求 timeout 和持久化锁。
 - 生成可由裸 Codex CLI 自刷新的原生 `auth.json`，并防止清理前发起的旧登录流程复活。
-- 多个 Follow Login Provider 按 Provider ID 隔离 live auth 快照。
+- 多个 Follow Login Provider 按配置内容识别；`e-flowcode`、自定义别名等都不依赖固定 ID。
+- Provider 切换、编辑、Routing 启停按应用串行；托管切换使用 auth/config/catalog/marker 四文件快照回滚。
+- Routing 备份不固化托管 token，停止 Routing 时从认证管理器动态注入最新凭据。
 
-验收标准：代理托管账号和裸 Codex CLI 都能持续刷新；切换、清理、失败回滚不会覆盖其他账号或 Provider 的认证。
+验收标准：代理托管账号和裸 Codex CLI 都能持续刷新；切换、编辑、清理、Routing 恢复和失败回滚不会覆盖其他账号或 Provider 的认证。
 
 ### 3.3 批次 3：Hosted WebSearch
 
@@ -100,3 +102,6 @@
 - 2026-08-18：完成缺口审计并建立本迁移台账。
 - 2026-08-18：完成批次 1。Provider 预设测试 50 项、Rust 定向测试 7 项和 TypeScript 类型检查通过；未运行全量测试或 build。
 - 2026-08-18：开始批次 2，完成旧 device flow 登录世代保护；对应 Rust 定向测试 1 项通过。
+- 2026-08-18：完成 Codex OAuth 核心生命周期迁移：旧账号重登提示、`id_token`/token 世代持久化、CLI refresh token 采纳、CAS 同步与清理、四文件事务回滚。
+- 2026-08-18：完成任意 Follow Login 别名识别及误判保护；固定 `codex-official` 继续兼容，明确第三方 URL、API Key、bearer token 或非 OpenAI model provider 不会被接管。
+- 2026-08-18：补齐 Routing per-app 串行锁、暂停状态热切换与托管账号动态恢复测试；批次 2 仅剩 `897ca892` 可配置用量查询。

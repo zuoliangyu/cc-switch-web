@@ -14,6 +14,9 @@ fn openai_cache_read_tokens(usage: &Value) -> u32 {
         .get("cache_read_input_tokens")
         .or_else(|| usage.pointer("/input_tokens_details/cached_tokens"))
         .or_else(|| usage.pointer("/prompt_tokens_details/cached_tokens"))
+        // DeepSeek Chat 文档字段作为末位兜底。prompt_tokens 已包含命中与
+        // 未命中 token，因此命中数可直接记为 cache_read。
+        .or_else(|| usage.get("prompt_cache_hit_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0) as u32
 }
@@ -1176,6 +1179,70 @@ mod tests {
         assert_eq!(usage.output_tokens, 500);
         assert_eq!(usage.cache_read_tokens, 200);
         assert_eq!(usage.model, Some("gpt-4o".to_string()));
+    }
+
+    #[test]
+    fn test_openai_response_deepseek_cache_hit_fields() {
+        let response = json!({
+            "model": "deepseek-v4-flash",
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 100,
+                "prompt_cache_hit_tokens": 600,
+                "prompt_cache_miss_tokens": 400,
+                "total_tokens": 1100
+            }
+        });
+
+        let usage = TokenUsage::from_openai_response(&response).unwrap();
+        assert_eq!(usage.input_tokens, 1000);
+        assert_eq!(usage.output_tokens, 100);
+        assert_eq!(usage.cache_read_tokens, 600);
+        assert_eq!(usage.cache_creation_tokens, 0);
+    }
+
+    #[test]
+    fn openai_cache_read_prefers_standard_field_over_deepseek_specific() {
+        let response = json!({
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 10,
+                "prompt_tokens_details": { "cached_tokens": 0 },
+                "prompt_cache_hit_tokens": 600
+            }
+        });
+
+        let usage = TokenUsage::from_openai_response(&response).unwrap();
+        assert_eq!(usage.cache_read_tokens, 0);
+    }
+
+    #[test]
+    fn test_openai_stream_deepseek_cache_hit_fields() {
+        let events = vec![
+            json!({
+                "id": "chatcmpl-ds",
+                "model": "deepseek-v4-flash",
+                "choices": [{"delta": {"content": "Hi"}}]
+            }),
+            json!({
+                "id": "chatcmpl-ds",
+                "model": "deepseek-v4-flash",
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": 800,
+                    "completion_tokens": 50,
+                    "prompt_cache_hit_tokens": 512,
+                    "prompt_cache_miss_tokens": 288,
+                    "total_tokens": 850
+                }
+            }),
+        ];
+
+        let usage = TokenUsage::from_openai_stream_events(&events).unwrap();
+        assert_eq!(usage.input_tokens, 800);
+        assert_eq!(usage.output_tokens, 50);
+        assert_eq!(usage.cache_read_tokens, 512);
+        assert_eq!(usage.message_id.as_deref(), Some("chatcmpl-ds"));
     }
 
     #[test]

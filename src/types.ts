@@ -152,7 +152,8 @@ export type CodexChatEffortValueMode =
   | "passthrough"
   | "low_high"
   | "deepseek"
-  | "openrouter";
+  | "openrouter"
+  | "zen";
 
 export type CodexChatReasoningOutputFormat =
   | "auto"
@@ -266,6 +267,8 @@ export interface CodexCatalogModel {
   supportsParallelToolCalls?: boolean;
   inputModalities?: string[];
   baseInstructions?: string;
+  reasoningLevels?: string[];
+  defaultReasoningLevel?: string;
 }
 
 // Claude 认证字段类型

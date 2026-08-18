@@ -120,6 +120,10 @@ function createCatalogRow(seed?: Partial<CodexCatalogModel>): CodexCatalogRow {
     ...(seed?.baseInstructions
       ? { baseInstructions: seed.baseInstructions }
       : {}),
+    ...(seed?.reasoningLevels ? { reasoningLevels: seed.reasoningLevels } : {}),
+    ...(seed?.defaultReasoningLevel
+      ? { defaultReasoningLevel: seed.defaultReasoningLevel }
+      : {}),
   };
 }
 
@@ -138,7 +142,10 @@ function catalogRowsMatchModels(
         (model.supportsParallelToolCalls ?? null) &&
       (row.baseInstructions ?? "") === (model.baseInstructions ?? "") &&
       JSON.stringify(row.inputModalities ?? []) ===
-        JSON.stringify(model.inputModalities ?? [])
+        JSON.stringify(model.inputModalities ?? []) &&
+      JSON.stringify(row.reasoningLevels ?? []) ===
+        JSON.stringify(model.reasoningLevels ?? []) &&
+      (row.defaultReasoningLevel ?? "") === (model.defaultReasoningLevel ?? "")
     );
   });
 }

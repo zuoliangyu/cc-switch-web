@@ -301,6 +301,9 @@ pub struct CodexChatReasoningConfig {
     pub effort_value_mode: Option<String>,
     #[serde(rename = "outputFormat", skip_serializing_if = "Option::is_none")]
     pub output_format: Option<String>,
+    /// 运行时逐模型合法 effort 档位，仅由代理解析填充，不持久化到 Provider meta。
+    #[serde(skip)]
+    pub effort_levels: Option<Vec<String>>,
 }
 
 /// 协议转换后应用到本地代理上游请求的覆盖项。

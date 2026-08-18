@@ -456,6 +456,7 @@ dependencies = [
  "indexmap",
  "json-five",
  "json5",
+ "libc",
  "log",
  "mime_guess",
  "once_cell",

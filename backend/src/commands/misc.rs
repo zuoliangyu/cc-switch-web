@@ -1,23 +1,21 @@
 #![allow(non_snake_case)]
 
 use crate::app_config::AppType;
-#[cfg(not(target_os = "windows"))]
 use crate::config::get_home_dir;
 use crate::services::provider::ProviderService;
 use crate::store::AppState;
-#[cfg(any(test, not(target_os = "windows")))]
 use once_cell::sync::Lazy;
-#[cfg(any(test, not(target_os = "windows")))]
 use regex::Regex;
 use semver::Version;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CLI_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[derive(serde::Serialize)]
 pub struct ToolVersion {
@@ -55,7 +53,6 @@ struct GithubLatestReleaseResponse {
 
 const WEB_GITHUB_REPO: &str = "zuoliangyu/cc-switch-web";
 
-#[cfg(not(target_os = "windows"))]
 const VALID_TOOLS: [&str; 4] = ["claude", "codex", "gemini", "opencode"];
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -88,44 +85,40 @@ pub async fn get_tool_versions(
     tools: Option<Vec<String>>,
     wsl_shell_by_tool: Option<HashMap<String, WslShellPreferenceInput>>,
 ) -> Result<Vec<ToolVersion>, String> {
-    // Windows: completely disable tool version detection to prevent
-    // accidentally launching apps (e.g. Claude Code) via protocol handlers.
-    #[cfg(target_os = "windows")]
-    {
-        let _ = (tools, wsl_shell_by_tool);
-        return Ok(Vec::new());
-    }
+    let requested: Vec<&str> = if let Some(tools) = tools.as_ref() {
+        let set: std::collections::HashSet<&str> = tools.iter().map(|s| s.as_str()).collect();
+        VALID_TOOLS
+            .iter()
+            .copied()
+            .filter(|t| set.contains(t))
+            .collect()
+    } else {
+        VALID_TOOLS.to_vec()
+    };
+    let mut results = Vec::new();
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let requested: Vec<&str> = if let Some(tools) = tools.as_ref() {
-            let set: std::collections::HashSet<&str> = tools.iter().map(|s| s.as_str()).collect();
-            VALID_TOOLS
-                .iter()
-                .copied()
-                .filter(|t| set.contains(t))
-                .collect()
-        } else {
-            VALID_TOOLS.to_vec()
-        };
-        let mut results = Vec::new();
+    for tool in requested {
+        #[cfg(target_os = "windows")]
+        results.push(get_single_tool_version_impl(tool, None, None).await);
 
-        for tool in requested {
-            let pref = wsl_shell_by_tool.as_ref().and_then(|m| m.get(tool));
-            let tool_wsl_shell = pref.and_then(|p| p.wsl_shell.as_deref());
-            let tool_wsl_shell_flag = pref.and_then(|p| p.wsl_shell_flag.as_deref());
-
+        #[cfg(not(target_os = "windows"))]
+        {
+            let pref = wsl_shell_by_tool.as_ref().and_then(|map| map.get(tool));
+            let tool_wsl_shell = pref.and_then(|value| value.wsl_shell.as_deref());
+            let tool_wsl_shell_flag = pref.and_then(|value| value.wsl_shell_flag.as_deref());
             results.push(
                 get_single_tool_version_impl(tool, tool_wsl_shell, tool_wsl_shell_flag).await,
             );
         }
-
-        Ok(results)
     }
+
+    #[cfg(target_os = "windows")]
+    let _ = wsl_shell_by_tool;
+
+    Ok(results)
 }
 
 /// 获取单个工具的版本信息（内部实现）
-#[cfg(not(target_os = "windows"))]
 async fn get_single_tool_version_impl(
     tool: &str,
     wsl_shell: Option<&str>,
@@ -137,20 +130,36 @@ async fn get_single_tool_version_impl(
     );
 
     // 判断该工具的运行环境 & WSL distro（如有）
+    #[cfg(target_os = "windows")]
+    let (env_type, wsl_distro) = ("windows".to_string(), None);
+    #[cfg(not(target_os = "windows"))]
     let (env_type, wsl_distro) = tool_env_type_and_wsl_distro(tool);
 
     // 使用全局 HTTP 客户端（已包含代理配置）
     let client = crate::proxy::http_client::get();
 
     // 1. 获取本地版本
-    let (local_version, local_error) = if let Some(distro) = wsl_distro.as_deref() {
-        try_get_version_wsl(tool, distro, wsl_shell, wsl_shell_flag)
-    } else {
-        let direct_result = try_get_version(tool);
-        if direct_result.0.is_some() {
-            direct_result
-        } else {
-            scan_cli_version(tool)
+    let (local_version, local_error) = {
+        #[cfg(target_os = "windows")]
+        {
+            let _ = (wsl_shell, wsl_shell_flag);
+            let tool = tool.to_string();
+            tokio::task::spawn_blocking(move || probe_windows_cli_version(&tool))
+                .await
+                .unwrap_or_else(|error| (None, Some(format!("CLI probe task failed: {error}"))))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(distro) = wsl_distro.as_deref() {
+                try_get_version_wsl(tool, distro, wsl_shell, wsl_shell_flag)
+            } else {
+                let direct_result = try_get_version(tool);
+                if direct_result.0.is_some() {
+                    direct_result
+                } else {
+                    scan_cli_version(tool)
+                }
+            }
         }
     };
 
@@ -174,7 +183,6 @@ async fn get_single_tool_version_impl(
 }
 
 /// Helper function to fetch latest version from npm registry
-#[cfg(not(target_os = "windows"))]
 async fn fetch_npm_latest_version(client: &reqwest::Client, package: &str) -> Option<String> {
     let url = format!("https://registry.npmjs.org/{package}");
     match client.get(&url).send().await {
@@ -193,7 +201,6 @@ async fn fetch_npm_latest_version(client: &reqwest::Client, package: &str) -> Op
 }
 
 /// Helper function to fetch latest version from GitHub releases
-#[cfg(not(target_os = "windows"))]
 async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Option<String> {
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
     match client
@@ -286,17 +293,85 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
 }
 
 /// 预编译的版本号正则表达式
-#[cfg(any(test, not(target_os = "windows")))]
 static VERSION_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d+\.\d+\.\d+(-[\w.]+)?").expect("Invalid version regex"));
 
 /// 从版本输出中提取纯版本号
-#[cfg(any(test, not(target_os = "windows")))]
 fn extract_version(raw: &str) -> String {
     VERSION_RE
         .find(raw)
         .map(|m| m.as_str().to_string())
         .unwrap_or_else(|| raw.to_string())
+}
+
+fn decode_command_output(bytes: &[u8]) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        decode_windows_command_output(bytes)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn decode_windows_command_output(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_string();
+    }
+
+    use windows_sys::Win32::Globalization::{GetACP, GetOEMCP, MultiByteToWideChar};
+
+    fn decode_codepage(bytes: &[u8], codepage: u32) -> Option<String> {
+        if codepage == 0 {
+            return None;
+        }
+        let input_len = i32::try_from(bytes.len()).ok()?;
+        // SAFETY: input and output buffers remain valid for both Win32 calls,
+        // and their lengths are checked before constructing the UTF-16 slice.
+        unsafe {
+            let wide_len = MultiByteToWideChar(
+                codepage,
+                0,
+                bytes.as_ptr(),
+                input_len,
+                std::ptr::null_mut(),
+                0,
+            );
+            if wide_len <= 0 {
+                return None;
+            }
+            let mut wide = vec![0u16; wide_len as usize];
+            let written = MultiByteToWideChar(
+                codepage,
+                0,
+                bytes.as_ptr(),
+                input_len,
+                wide.as_mut_ptr(),
+                wide_len,
+            );
+            if written <= 0 {
+                return None;
+            }
+            Some(String::from_utf16_lossy(&wide[..written as usize]))
+        }
+    }
+
+    let oem_codepage = unsafe { GetOEMCP() };
+    if let Some(decoded) = decode_codepage(bytes, oem_codepage) {
+        return decoded;
+    }
+    let ansi_codepage = unsafe { GetACP() };
+    if ansi_codepage != oem_codepage {
+        if let Some(decoded) = decode_codepage(bytes, ansi_codepage) {
+            return decoded;
+        }
+    }
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Windows 环境变量白名单：仅这些 `%NAME%` 占位符会被前端读取展开。
@@ -333,30 +408,27 @@ pub fn get_windows_env_paths_internal() -> HashMap<String, String> {
 /// 尝试直接执行命令获取版本
 #[cfg(not(target_os = "windows"))]
 fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
-    use std::process::Command;
+    use std::process::{Command, Stdio};
 
-    #[cfg(target_os = "windows")]
-    let output = {
-        Command::new("cmd")
-            .args(["/C", &format!("{tool} --version")])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-    };
-
-    #[cfg(not(target_os = "windows"))]
-    let output = {
-        // 优先使用 $SHELL 指定的登录 shell，使其加载用户的 PATH/alias，
-        // 否则像 fish/zsh 用户的 `which claude` 类检测会因 PATH 缺失而误判。
-        let shell = std::env::var("SHELL")
-            .ok()
-            .filter(|s| is_valid_shell(s))
-            .unwrap_or_else(|| "sh".to_string());
-        let flag = default_flag_for_shell(&shell);
-        Command::new(shell)
-            .arg(flag)
-            .arg(format!("{tool} --version"))
-            .output()
-    };
+    // 优先使用 $SHELL 指定的登录 shell，使其加载用户的 PATH/alias，
+    // 否则像 fish/zsh 用户的检测会因 GUI 进程 PATH 缺失而误判。
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| is_valid_shell(s))
+        .unwrap_or_else(|| "sh".to_string());
+    let flag = default_flag_for_shell(&shell);
+    let mut command = Command::new(shell);
+    command
+        .arg(flag)
+        .arg(format!("{tool} --version"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    isolate_child_process_group(&mut command);
+    let output = command
+        .spawn()
+        .map_err(|error| error.to_string())
+        .and_then(|child| wait_child_output(child, Some(CLI_PROBE_TIMEOUT)));
 
     match output {
         Ok(out) => {
@@ -381,7 +453,7 @@ fn try_get_version(tool: &str) -> (Option<String>, Option<String>) {
                 )
             }
         }
-        Err(e) => (None, Some(e.to_string())),
+        Err(e) => (None, Some(e)),
     }
 }
 
@@ -437,7 +509,6 @@ fn try_get_version_wsl(
     )
 }
 
-#[cfg(any(test, not(target_os = "windows")))]
 fn push_unique_path(paths: &mut Vec<std::path::PathBuf>, path: std::path::PathBuf) {
     if path.as_os_str().is_empty() {
         return;
@@ -448,14 +519,12 @@ fn push_unique_path(paths: &mut Vec<std::path::PathBuf>, path: std::path::PathBu
     }
 }
 
-#[cfg(any(test, not(target_os = "windows")))]
 fn push_env_single_dir(paths: &mut Vec<std::path::PathBuf>, value: Option<std::ffi::OsString>) {
     if let Some(raw) = value {
         push_unique_path(paths, std::path::PathBuf::from(raw));
     }
 }
 
-#[cfg(any(test, not(target_os = "windows")))]
 fn extend_from_path_list(
     paths: &mut Vec<std::path::PathBuf>,
     value: Option<std::ffi::OsString>,
@@ -476,7 +545,6 @@ fn extend_from_path_list(
 ///   $OPENCODE_INSTALL_DIR > $XDG_BIN_DIR > $HOME/bin > $HOME/.opencode/bin
 /// 额外扫描 Bun 默认全局安装路径（~/.bun/bin）
 /// 和 Go 安装路径（~/go/bin、$GOPATH/*/bin）。
-#[cfg(any(test, not(target_os = "windows")))]
 fn opencode_extra_search_paths(
     home: &Path,
     opencode_install_dir: Option<std::ffi::OsString>,
@@ -500,7 +568,6 @@ fn opencode_extra_search_paths(
     paths
 }
 
-#[cfg(any(test, not(target_os = "windows")))]
 fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -517,15 +584,158 @@ fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf>
     }
 }
 
-/// 扫描常见路径查找 CLI
+#[cfg(target_os = "windows")]
+fn effective_path_string() -> String {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    use winreg::RegKey;
+
+    let process = std::env::var("PATH").unwrap_or_default();
+    let user = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Environment")
+        .and_then(|key| key.get_value::<String, &str>("Path"))
+        .map(|raw| expand_env_chars(&raw))
+        .unwrap_or_default();
+    let machine = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")
+        .and_then(|key| key.get_value::<String, &str>("Path"))
+        .map(|raw| expand_env_chars(&raw))
+        .unwrap_or_default();
+    merge_path_segments_win(&[&process, &user, &machine])
+}
+
+#[cfg(target_os = "windows")]
+fn effective_path_os() -> Option<std::ffi::OsString> {
+    Some(std::ffi::OsString::from(effective_path_string()))
+}
+
 #[cfg(not(target_os = "windows"))]
-fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
-    use std::process::Command;
+fn effective_path_os() -> Option<std::ffi::OsString> {
+    std::env::var_os("PATH")
+}
 
+#[cfg(target_os = "windows")]
+fn expand_env_chars(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(open) = rest.find('%') {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 1..];
+        match after.find('%') {
+            None => {
+                out.push('%');
+                out.push_str(after);
+                rest = "";
+                break;
+            }
+            Some(close) => {
+                let name = &after[..close];
+                let is_ident = !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|character| character.is_ascii_alphanumeric() || character == '_');
+                if is_ident {
+                    match std::env::var(name) {
+                        Ok(value) => out.push_str(&value),
+                        Err(_) => {
+                            out.push('%');
+                            out.push_str(name);
+                            out.push('%');
+                        }
+                    }
+                } else {
+                    out.push('%');
+                    out.push_str(name);
+                    out.push('%');
+                }
+                rest = &after[close + 1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+#[cfg(target_os = "windows")]
+fn merge_path_segments_win(parts: &[&str]) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut merged = Vec::new();
+    for part in parts {
+        for segment in part.split(';') {
+            let segment = segment.trim();
+            if !segment.is_empty() && seen.insert(segment.to_ascii_lowercase()) {
+                merged.push(segment);
+            }
+        }
+    }
+    merged.join(";")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn prepend_search_dir_to_path(dir: &Path, current_path: &std::ffi::OsStr) -> std::ffi::OsString {
+    let mut path = dir.as_os_str().to_os_string();
+    if !current_path.is_empty() {
+        path.push(":");
+        path.push(current_path);
+    }
+    path
+}
+
+fn extend_from_cli_path_env(
+    paths: &mut Vec<std::path::PathBuf>,
+    value: Option<std::ffi::OsString>,
+) {
+    if let Some(raw) = value {
+        for path in std::env::split_paths(&raw) {
+            #[cfg(target_os = "windows")]
+            if is_windows_app_execution_alias_dir(&path) {
+                continue;
+            }
+            push_unique_path(paths, path);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn extend_windows_cli_manager_search_paths(paths: &mut Vec<std::path::PathBuf>, home: &Path) {
+    if let Some(nvm_home) = std::env::var_os("NVM_HOME") {
+        push_unique_path(paths, std::path::PathBuf::from(nvm_home));
+    }
+    if let Some(appdata) = dirs::data_dir() {
+        push_unique_path(paths, appdata.join("nvm"));
+    }
+    if !home.as_os_str().is_empty() {
+        push_unique_path(paths, home.join("scoop").join("shims"));
+    }
+    if let Some(local_data) = dirs::data_local_dir() {
+        push_unique_path(paths, local_data.join("pnpm"));
+        push_unique_path(paths, local_data.join("Volta").join("bin"));
+        push_unique_path(paths, local_data.join("Yarn").join("bin"));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_standalone_search_paths(
+    tool: &str,
+    local_data: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let Some(local_data) = local_data else {
+        return Vec::new();
+    };
+    match tool {
+        "codex" => vec![local_data
+            .join("Programs")
+            .join("OpenAI")
+            .join("Codex")
+            .join("bin")],
+        "claude" => vec![local_data.join("Programs").join("claude")],
+        _ => Vec::new(),
+    }
+}
+
+fn build_tool_search_paths(tool: &str) -> Vec<std::path::PathBuf> {
     let home = get_home_dir();
+    let mut search_paths = Vec::new();
 
-    // 常见的安装路径（原生安装优先）
-    let mut search_paths: Vec<std::path::PathBuf> = Vec::new();
     if !home.as_os_str().is_empty() {
         push_unique_path(&mut search_paths, home.join(".local/bin"));
         push_unique_path(&mut search_paths, home.join(".npm-global/bin"));
@@ -556,6 +766,9 @@ fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
 
     #[cfg(target_os = "windows")]
     {
+        for path in windows_standalone_search_paths(tool, dirs::data_local_dir()) {
+            push_unique_path(&mut search_paths, path);
+        }
         if let Some(appdata) = dirs::data_dir() {
             push_unique_path(&mut search_paths, appdata.join("npm"));
         }
@@ -563,90 +776,408 @@ fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
             &mut search_paths,
             std::path::PathBuf::from("C:\\Program Files\\nodejs"),
         );
+        extend_windows_cli_manager_search_paths(&mut search_paths, &home);
     }
 
     let fnm_base = home.join(".local/state/fnm_multishells");
-    if fnm_base.exists() {
-        if let Ok(entries) = std::fs::read_dir(&fnm_base) {
-            for entry in entries.flatten() {
-                let bin_path = entry.path().join("bin");
-                if bin_path.exists() {
-                    push_unique_path(&mut search_paths, bin_path);
-                }
+    if let Ok(entries) = std::fs::read_dir(&fnm_base) {
+        for entry in entries.flatten() {
+            let bin_path = entry.path().join("bin");
+            if bin_path.exists() {
+                push_unique_path(&mut search_paths, bin_path);
             }
         }
     }
 
     let nvm_base = home.join(".nvm/versions/node");
-    if nvm_base.exists() {
-        if let Ok(entries) = std::fs::read_dir(&nvm_base) {
-            for entry in entries.flatten() {
-                let bin_path = entry.path().join("bin");
-                if bin_path.exists() {
-                    push_unique_path(&mut search_paths, bin_path);
-                }
+    if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+        for entry in entries.flatten() {
+            let bin_path = entry.path().join("bin");
+            if bin_path.exists() {
+                push_unique_path(&mut search_paths, bin_path);
             }
         }
     }
 
     if tool == "opencode" {
-        let extra_paths = opencode_extra_search_paths(
+        for path in opencode_extra_search_paths(
             &home,
             std::env::var_os("OPENCODE_INSTALL_DIR"),
             std::env::var_os("XDG_BIN_DIR"),
             std::env::var_os("GOPATH"),
-        );
-
-        for path in extra_paths {
+        ) {
             push_unique_path(&mut search_paths, path);
         }
     }
 
-    let current_path = std::env::var("PATH").unwrap_or_default();
+    extend_from_cli_path_env(&mut search_paths, effective_path_os());
+    search_paths
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_app_execution_alias_dir(path: &Path) -> bool {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase()
+        .trim_end_matches('\\')
+        .ends_with("\\microsoft\\windowsapps")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_shell_compatible_path(path: &Path) -> std::path::PathBuf {
+    let raw = path.to_string_lossy();
+    if let Some(unc) = raw.strip_prefix(r"\\?\UNC\") {
+        std::path::PathBuf::from(format!(r"\\{unc}"))
+    } else if let Some(local) = raw.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(local)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_runnable_sibling_for_extensionless_tool(path: &Path) -> Option<std::path::PathBuf> {
+    if path.extension().is_some() {
+        return None;
+    }
+    ["cmd", "exe"]
+        .iter()
+        .map(|extension| path.with_extension(extension))
+        .find(|candidate| candidate.is_file())
+}
+
+#[cfg(target_os = "windows")]
+fn windows_system_executable(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(
+        std::env::var_os("SystemRoot").unwrap_or_else(|| std::ffi::OsString::from(r"C:\Windows")),
+    )
+    .join("System32")
+    .join(name)
+}
+
+#[cfg(target_os = "windows")]
+fn build_windows_tool_version_command(tool_path: &Path, new_path: &str) -> std::process::Command {
+    use std::process::Command;
+
+    if tool_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+        })
+    {
+        let shell_path = windows_shell_compatible_path(tool_path);
+        let escaped = shell_path.to_string_lossy().replace('%', "%%%%");
+        let mut command = Command::new(windows_system_executable("cmd.exe"));
+        command
+            .args(["/D", "/S", "/C"])
+            .raw_arg(format!("call \"{escaped}\" --version"))
+            .env("PATH", new_path)
+            .creation_flags(CREATE_NO_WINDOW);
+        return command;
+    }
+
+    let mut command = Command::new(tool_path);
+    command
+        .arg("--version")
+        .env("PATH", new_path)
+        .creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(target_os = "windows")]
+fn windows_path_lookup_command(
+    tool: &str,
+    effective_path: &std::ffi::OsStr,
+) -> std::process::Command {
+    use std::process::Command;
+
+    let mut command = Command::new(windows_system_executable("where.exe"));
+    command
+        .arg(format!("$PATH:{tool}"))
+        .env("PATH", effective_path)
+        .creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_windows_path_default(tool: &str) -> Result<Option<std::path::PathBuf>, String> {
+    use std::process::Stdio;
+
+    let current_path = effective_path_os().unwrap_or_default();
+    let mut command = windows_path_lookup_command(tool, &current_path);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = command
+        .spawn()
+        .map_err(|error| format!("Failed to locate {tool}: {error}"))
+        .and_then(|child| wait_child_output(child, Some(CLI_PROBE_TIMEOUT)))?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let raw = decode_command_output(&output.stdout);
+    let Some(first) = raw.lines().map(str::trim).find(|line| {
+        !line.is_empty()
+            && !is_windows_app_execution_alias_dir(
+                Path::new(line).parent().unwrap_or_else(|| Path::new("")),
+            )
+    }) else {
+        return Ok(None);
+    };
+    let path = Path::new(first);
+    let preferred =
+        windows_runnable_sibling_for_extensionless_tool(path).unwrap_or_else(|| path.to_path_buf());
+    Ok(std::fs::canonicalize(preferred).ok())
+}
+
+fn output_to_version_result(output: std::process::Output) -> (Option<String>, Option<String>) {
+    let stdout = decode_command_output(&output.stdout).trim().to_string();
+    let stderr = decode_command_output(&output.stderr).trim().to_string();
+    if output.status.success() {
+        let raw = if stdout.is_empty() { &stderr } else { &stdout };
+        if raw.is_empty() {
+            (None, Some("not installed or not executable".to_string()))
+        } else {
+            (Some(extract_version(raw)), None)
+        }
+    } else {
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        (
+            None,
+            Some(if detail.is_empty() {
+                "not installed or not executable".to_string()
+            } else {
+                detail
+            }),
+        )
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn run_windows_version_probe(
+    tool_path: &Path,
+    new_path: &str,
+) -> Result<std::process::Output, String> {
+    use std::process::Stdio;
+
+    let mut command = build_windows_tool_version_command(tool_path, new_path);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    command
+        .spawn()
+        .map_err(|error| error.to_string())
+        .and_then(|child| wait_child_output(child, Some(CLI_PROBE_TIMEOUT)))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn run_non_windows_version_probe(
+    tool_path: &Path,
+    new_path: &std::ffi::OsStr,
+) -> Result<std::process::Output, String> {
+    use std::process::{Command, Stdio};
+
+    let mut command = Command::new(tool_path);
+    command
+        .arg("--version")
+        .env("PATH", new_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    isolate_child_process_group(&mut command);
+    command
+        .spawn()
+        .map_err(|error| error.to_string())
+        .and_then(|child| wait_child_output(child, Some(CLI_PROBE_TIMEOUT)))
+}
+
+#[cfg(target_os = "windows")]
+fn probe_windows_cli_version(tool: &str) -> (Option<String>, Option<String>) {
+    match resolve_windows_path_default(tool) {
+        Ok(Some(path)) => {
+            let current_path = effective_path_string();
+            match run_windows_version_probe(&path, &current_path) {
+                Ok(output) => {
+                    let result = output_to_version_result(output);
+                    if result.0.is_some()
+                        || result.1.as_deref() != Some("not installed or not executable")
+                    {
+                        return result;
+                    }
+                }
+                Err(error) => return (None, Some(error)),
+            }
+        }
+        Ok(None) => {}
+        Err(error) => log::debug!("Windows PATH lookup for {tool} failed: {error}"),
+    }
+    scan_cli_version(tool)
+}
+
+/// 扫描常见路径查找 CLI，所有候选探测均有明确超时。
+fn scan_cli_version(tool: &str) -> (Option<String>, Option<String>) {
+    let search_paths = build_tool_search_paths(tool);
+    #[cfg(target_os = "windows")]
+    let current_path = effective_path_string();
+    #[cfg(not(target_os = "windows"))]
+    let current_path = effective_path_os().unwrap_or_default();
+    let mut diagnostic = None;
 
     for path in &search_paths {
         #[cfg(target_os = "windows")]
         let new_path = format!("{};{}", path.display(), current_path);
-
         #[cfg(not(target_os = "windows"))]
-        let new_path = format!("{}:{}", path.display(), current_path);
+        let new_path = prepend_search_dir_to_path(path, &current_path);
 
         for tool_path in tool_executable_candidates(tool, path) {
-            if !tool_path.exists() {
+            if !tool_path.is_file() {
                 continue;
             }
-
             #[cfg(target_os = "windows")]
-            let output = {
-                Command::new("cmd")
-                    .args(["/C", &format!("\"{}\" --version", tool_path.display())])
-                    .env("PATH", &new_path)
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .output()
-            };
-
+            let output = run_windows_version_probe(&tool_path, &new_path);
             #[cfg(not(target_os = "windows"))]
-            let output = {
-                Command::new(&tool_path)
-                    .arg("--version")
-                    .env("PATH", &new_path)
-                    .output()
-            };
+            let output = run_non_windows_version_probe(&tool_path, &new_path);
 
-            if let Ok(out) = output {
-                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                if out.status.success() {
-                    let raw = if stdout.is_empty() { &stderr } else { &stdout };
-                    if !raw.is_empty() {
-                        return (Some(extract_version(raw)), None);
+            match output {
+                Ok(output) => {
+                    let result = output_to_version_result(output);
+                    if result.0.is_some() {
+                        return result;
+                    }
+                    if diagnostic.is_none() {
+                        diagnostic = result.1;
                     }
                 }
+                Err(error) if diagnostic.is_none() => diagnostic = Some(error),
+                Err(_) => {}
             }
         }
     }
 
-    (None, Some("not installed or not executable".to_string()))
+    (
+        None,
+        Some(diagnostic.unwrap_or_else(|| "not installed or not executable".to_string())),
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn terminate_child_tree(child: &mut std::process::Child) -> bool {
+    use std::process::{Command, Stdio};
+
+    let status = Command::new(windows_system_executable("taskkill.exe"))
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    matches!(status, Ok(status) if status.success()) || child.kill().is_ok()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn terminate_child_tree(child: &mut std::process::Child) -> bool {
+    let process_group = -(child.id() as libc::pid_t);
+    // SAFETY: probe commands enter a dedicated session before spawn.
+    (unsafe { libc::kill(process_group, libc::SIGKILL) == 0 }) || child.kill().is_ok()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn isolate_child_process_group(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+
+    // SAFETY: setsid is async-signal-safe and the freshly forked child is not
+    // a process-group leader, so creating a detached probe session is valid.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+fn wait_child_output(
+    mut child: std::process::Child,
+    timeout: Option<std::time::Duration>,
+) -> Result<std::process::Output, String> {
+    use std::io::Read;
+
+    let started_at = std::time::Instant::now();
+    let stdout_handle = child.stdout.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut buffer = Vec::new();
+            let _ = pipe.read_to_end(&mut buffer);
+            buffer
+        })
+    });
+    let stderr_handle = child.stderr.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut buffer = Vec::new();
+            let _ = pipe.read_to_end(&mut buffer);
+            buffer
+        })
+    });
+
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if timeout.is_some_and(|limit| started_at.elapsed() >= limit) {
+                    if terminate_child_tree(&mut child) {
+                        let _ = child.wait();
+                    }
+                    drop(stdout_handle);
+                    drop(stderr_handle);
+                    return Err(format!(
+                        "Command timed out after {}s",
+                        timeout.unwrap_or_default().as_secs()
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(error) => {
+                if terminate_child_tree(&mut child) {
+                    let _ = child.wait();
+                }
+                return Err(format!("Failed to wait for command: {error}"));
+            }
+        }
+    };
+
+    if let Some(limit) = timeout {
+        while stdout_handle
+            .as_ref()
+            .is_some_and(|handle| !handle.is_finished())
+            || stderr_handle
+                .as_ref()
+                .is_some_and(|handle| !handle.is_finished())
+        {
+            if started_at.elapsed() >= limit {
+                let _ = terminate_child_tree(&mut child);
+                drop(stdout_handle);
+                drop(stderr_handle);
+                return Err(format!("Command timed out after {}s", limit.as_secs()));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    let stdout = stdout_handle
+        .map(|handle| handle.join().unwrap_or_default())
+        .unwrap_or_default();
+    let stderr = stderr_handle
+        .map(|handle| handle.join().unwrap_or_default())
+        .unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 pub(crate) fn open_provider_terminal_internal(
@@ -679,8 +1210,12 @@ pub(crate) fn launch_terminal_command_internal(
     let launch_command = sanitize_terminal_command(command)?;
     let launch_cwd = resolve_launch_cwd(cwd)?;
 
-    launch_terminal_command(&launch_command, launch_cwd.as_deref(), custom_config.as_deref())
-        .map_err(|e| format!("启动终端失败: {e}"))?;
+    launch_terminal_command(
+        &launch_command,
+        launch_cwd.as_deref(),
+        custom_config.as_deref(),
+    )
+    .map_err(|e| format!("启动终端失败: {e}"))?;
 
     Ok(true)
 }
@@ -890,8 +1425,10 @@ fn launch_macos_command_terminal(command: &str, cwd: Option<&Path>) -> Result<()
     let terminal = preferred.as_deref().unwrap_or("terminal");
 
     let temp_dir = std::env::temp_dir();
-    let script_file =
-        temp_dir.join(format!("cc_switch_session_launcher_{}.sh", std::process::id()));
+    let script_file = temp_dir.join(format!(
+        "cc_switch_session_launcher_{}.sh",
+        std::process::id()
+    ));
     write_shell_launcher_script(&script_file, command, cwd)?;
 
     let result = match terminal {
@@ -933,8 +1470,10 @@ fn launch_linux_command_terminal(command: &str, cwd: Option<&Path>) -> Result<()
     ];
 
     let temp_dir = std::env::temp_dir();
-    let script_file =
-        temp_dir.join(format!("cc_switch_session_launcher_{}.sh", std::process::id()));
+    let script_file = temp_dir.join(format!(
+        "cc_switch_session_launcher_{}.sh",
+        std::process::id()
+    ));
     write_shell_launcher_script(&script_file, command, cwd)?;
 
     let terminals_to_try: Vec<(&str, Vec<&str>)> = if let Some(ref pref) = preferred {
@@ -993,8 +1532,10 @@ fn launch_windows_command_terminal(command: &str, cwd: Option<&Path>) -> Result<
     let terminal = preferred.as_deref().unwrap_or("cmd");
 
     let temp_dir = std::env::temp_dir();
-    let bat_file =
-        temp_dir.join(format!("cc_switch_session_launcher_{}.bat", std::process::id()));
+    let bat_file = temp_dir.join(format!(
+        "cc_switch_session_launcher_{}.bat",
+        std::process::id()
+    ));
     let cwd_command = build_windows_cwd_command(cwd);
     let content = format!(
         "@echo off\r\n{cwd_command}{command}\r\ndel \"%~f0\" >nul 2>&1\r\n",
@@ -1536,6 +2077,89 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn merge_windows_path_keeps_priority_and_deduplicates_case_insensitively() {
+        let merged = merge_path_segments_win(&[
+            r"C:\Runtime;D:\Tools",
+            r"c:\runtime;E:\User Bin",
+            r"D:\TOOLS;C:\Windows\System32",
+        ]);
+
+        assert_eq!(
+            merged,
+            r"C:\Runtime;D:\Tools;E:\User Bin;C:\Windows\System32"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_alias_directory_is_filtered_without_matching_similar_names() {
+        assert!(is_windows_app_execution_alias_dir(Path::new(
+            r"C:\Users\tester\AppData\Local\Microsoft\WindowsApps"
+        )));
+        assert!(is_windows_app_execution_alias_dir(Path::new(
+            r"C:/Users/tester/AppData/Local/Microsoft/WindowsApps/"
+        )));
+        assert!(!is_windows_app_execution_alias_dir(Path::new(
+            r"C:\tools\WindowsApps"
+        )));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_standalone_paths_cover_codex_and_claude_installers() {
+        let local_data = PathBuf::from(r"C:\Users\tester\AppData\Local");
+
+        assert_eq!(
+            windows_standalone_search_paths("codex", Some(local_data.clone())),
+            vec![local_data
+                .join("Programs")
+                .join("OpenAI")
+                .join("Codex")
+                .join("bin")]
+        );
+        assert_eq!(
+            windows_standalone_search_paths("claude", Some(local_data.clone())),
+            vec![local_data.join("Programs").join("claude")]
+        );
+        assert!(windows_standalone_search_paths("gemini", Some(local_data)).is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_shell_path_removes_verbatim_prefixes() {
+        assert_eq!(
+            windows_shell_compatible_path(Path::new(r"\\?\C:\Tools\codex.cmd")),
+            PathBuf::from(r"C:\Tools\codex.cmd")
+        );
+        assert_eq!(
+            windows_shell_compatible_path(Path::new(r"\\?\UNC\server\share\claude.cmd")),
+            PathBuf::from(r"\\server\share\claude.cmd")
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_probe_timeout_terminates_hung_process() {
+        use std::process::{Command, Stdio};
+
+        let mut command = Command::new(windows_system_executable("ping.exe"));
+        command
+            .args(["-n", "6", "127.0.0.1"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let child = command.spawn().expect("ping probe should start");
+        let started = std::time::Instant::now();
+        let error = wait_child_output(child, Some(std::time::Duration::from_secs(1)))
+            .expect_err("hung probe should time out");
+
+        assert!(error.contains("timed out after 1s"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(4));
+    }
+
     #[test]
     fn resolve_launch_cwd_accepts_existing_directory() {
         let resolved =
@@ -1569,10 +2193,8 @@ mod tests {
 
     #[test]
     fn sanitize_terminal_command_rejects_newlines() {
-        let error =
-            sanitize_terminal_command("claude --resume abc\npwd".to_string()).expect_err(
-                "newlines should fail",
-            );
+        let error = sanitize_terminal_command("claude --resume abc\npwd".to_string())
+            .expect_err("newlines should fail");
 
         assert!(error.contains("非法换行符"));
     }

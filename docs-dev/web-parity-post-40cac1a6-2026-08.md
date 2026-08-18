@@ -1,6 +1,6 @@
 # Web 端跟进上游 `40cac1a6` 后续迁移计划（2026-08-18）
 
-> 状态：批次 1、批次 2、批次 3 已完成；批次 4 交互项已完成，环境检测待迁移
+> 状态：批次 1 至批次 4 已完成
 > 上游仓库：`E:\zuolan_lib\AI_Hub\cc-switch`  
 > 冻结基线：`40cac1a6`  
 > 当前审计点：`fd14f9c4`  
@@ -35,7 +35,7 @@
 | `46f19a15` | DeepSeek cache-hit token                | 迁移解析与 Responses usage 转换                     | 1    | 已迁移   |
 | `d01eab97` | OpenCode Zen effort 方言                | 迁移逐模型钳制逻辑                                  | 1    | 已迁移   |
 | `bdeaac75` | Alpha Search 与 Hosted WebSearch        | 独立迁移完整请求、响应及 SSE 语义                   | 3    | 已迁移   |
-| `de9af49a` | Windows CLI 检测                        | 迁移安全 PATH、注册表和独立安装目录检测             | 4    | 待迁移   |
+| `de9af49a` | Windows CLI 检测                        | 迁移安全 PATH、注册表和独立安装目录检测             | 4    | 已迁移   |
 | `d4fefefc` | Windows Tauri FOUC                      | Tauri 窗口专属                                      | 排除 | 不适用   |
 | `b109dcd3` | Grok Build 表单文案                     | 迁移表单分流                                        | 4    | 已迁移   |
 | `3d126f45` | 跨年 Usage 趋势图 key                   | 迁移 RFC3339 xKey                                   | 4    | 已迁移   |
@@ -46,7 +46,7 @@
 | `52745efe` | OpenCode Go Anthropic 回归测试          | 行为已存在，补等价回归测试                          | 4    | 已补测试 |
 | `6e424fd3` | 恢复 Codex 1M 开关                      | Web 已存在                                          | 已有 | 已处置   |
 | `d1c550ba` | 删除 Goal mode 开关                     | Web 当前无该开关                                    | 已有 | 已处置   |
-| `fd14f9c4` | 环境/升级预检超时                       | 仅迁移通用命令探测 timeout；批量升级 UI 不适用      | 4    | 待迁移   |
+| `fd14f9c4` | 环境/升级预检超时                       | 迁移通用命令探测 timeout；批量升级 UI 不适用        | 4    | 已迁移   |
 
 ## 3. 分批影响范围
 
@@ -88,7 +88,11 @@
 - IME 输入不丢最终组合文本。
 - Usage 跨年同日的数据点和 tooltip 不冲突。
 - Grok Build 不显示 Codex 专属模型映射文案。
-- CLI 检测具备明确超时，Windows 检测不启动命令 shim 或协议 handler。
+- Windows 仅检测原生 CLI，不读取 WSL 偏好；按进程、用户注册表、机器注册表的优先级合并 PATH，并补扫 Codex、Claude 独立安装目录及常见包管理器目录。
+- PATH 默认项由系统 `where.exe` 在合并后的 PATH 中解析，过滤 `Microsoft\WindowsApps` App Execution Alias 后才按真实绝对路径执行 `--version`，不会按裸命令启动协议 handler。
+- Windows 命令输出兼容 UTF-8、OEM 和 ANSI code page，含中文用户名的安装路径可被正确解析。
+- CLI 定位和版本探测具备 10 秒超时；Windows 超时后使用 `taskkill /T /F` 终止进程树，非 Windows 探测使用独立会话并终止整个进程组。
+- Web 后端在 blocking 线程中执行 Windows 子进程探测，避免设置页刷新阻塞 Tokio 请求线程。
 
 ## 4. 风险与回滚边界
 
@@ -96,6 +100,7 @@
 - reasoning 档位必须以逐模型目录为准；未知档位不应盲目下发给严格校验网关。
 - DeepSeek cache-hit 字段只作标准字段之后的末位 fallback，避免覆盖中转明确给出的标准统计。
 - Windows CLI 检测只执行只读路径解析和受限版本探测，不引入桌面升级动作。
+- Windows 检测仅接受固定工具白名单，并只执行解析出的文件或已知候选文件；保留旧 API 中的 WSL 字段仅为兼容，不在 Windows 检测链路中消费。
 
 ## 5. 执行记录
 
@@ -111,3 +116,7 @@
 - 2026-08-18：批次 3 通过 `cargo check`，以及 Responses 请求转换 115 项、Responses SSE 85 项、Codex-Anthropic 72 项、WebSearch 37 项和 Alpha Search 2 项定向测试。
 - 2026-08-18：完成批次 4 前端交互项。IME 输入在 composition 未正常结束时仍会于 blur 提交最终值；Usage 趋势图使用完整日期作为唯一 key 并在跨年时显示年份；Grok Build 使用独立模型提示；OpenCode Go Anthropic 预设补齐回归测试。
 - 2026-08-18：批次 4 前端交互项通过 TypeScript 类型检查，以及 IME、Provider 表单、Usage 趋势图、Grok Build、OpenCode Go 和 Provider 能力共 70 项定向测试。
+- 2026-08-18：完成 `de9af49a` Web 适配。恢复 Windows 原生 CLI 检测，合并 HKCU/HKLM PATH，补齐 Codex、Claude 独立安装目录和常见包管理器目录；PATH 默认项优先且过滤 WindowsApps alias，`.cmd` canonical path 与非 UTF-8 控制台输出均可安全处理。未新增 Windows WSL 探测。
+- 2026-08-18：完成 `fd14f9c4` Web 适配。定位和版本探测统一限制为 10 秒，超时终止进程树或进程组；Windows 探测通过 blocking 线程执行。桌面端批量升级 UI 与升级预检不适用于 Web，未迁移。
+- 2026-08-18：批次 4 后端通过 `cargo check` 和 `commands::misc::tests` 25 项定向测试；未运行全量测试或 build。
+- 2026-08-18：重新逐项核对 `40cac1a6..fd14f9c4` 的 24 个上游提交，迁移台账 hash 覆盖 24/24，无未列提交；本地缓存的最新上游引用仍为 `fd14f9c4`。

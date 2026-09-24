@@ -248,11 +248,17 @@ struct SkillBackupMetadata {
 }
 
 const SKILL_BACKUP_RETAIN_COUNT: usize = 20;
-const MAX_ARCHIVE_ENTRIES: usize = 10_000;
+/// 条目数只是解压前的快速失败：真正兜底磁盘与 inode 消耗的是字节预算——每个
+/// 文件、目录都至少按一个磁盘块计费。下载的是整个仓库归档而非单个技能目录，
+/// 真实技能仓库（如 13k+ 条目）会被 10_000 误拒；30_000 留出余量（上游 33c80626）。
+const MAX_ARCHIVE_ENTRIES: usize = 30_000;
 const MAX_ARCHIVE_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ARCHIVE_DOWNLOAD_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_SYMLINK_TARGET_BYTES: u64 = 4 * 1024;
 const DIRECTORY_BUDGET_COST: u64 = 4096;
+/// 空文件与不足一块的小文件照样占 inode 和一个磁盘块；只按内容字节计费时，
+/// 全是空文件的归档能让预算读数一直停在 0，条目上限就成了唯一防线。
+const FILE_ENTRY_BUDGET_COST: u64 = DIRECTORY_BUDGET_COST;
 
 /// 技能元数据 (从 SKILL.md 解析)
 #[derive(Debug, Clone, Deserialize)]
@@ -522,7 +528,65 @@ impl SkillService {
         if let Some(found) = Self::find_skill_dir_by_name(root, &install_name) {
             return Some(found);
         }
+        // skills.sh 的 skillId 可能与目录名不同；仅接受唯一 metadata 匹配，
+        // 避免同名 skill 因文件系统遍历顺序不同而随机安装（上游 8272707d）。
+        if let Ok(skill_dirs) = Self::scan_skills_in_dir(root) {
+            let mut metadata_matches = skill_dirs.into_iter().filter(|path| {
+                Self::parse_skill_metadata_static(&path.join("SKILL.md"))
+                    .ok()
+                    .and_then(|metadata| metadata.name)
+                    .is_some_and(|name| name.trim().eq_ignore_ascii_case(install_name.as_str()))
+            });
+            if let Some(found) = metadata_matches.next() {
+                if metadata_matches.next().is_some() {
+                    log::warn!(
+                        "Multiple skill directories declare metadata name '{install_name}'; refusing ambiguous install"
+                    );
+                    return None;
+                }
+                return Some(found);
+            }
+        }
         root.join("SKILL.md").is_file().then(|| root.to_path_buf())
+    }
+
+    /// 在仓库扫描结果中定位已安装的技能：已保存的源路径优先，其次目录名，
+    /// metadata name 仅作唯一兜底。
+    fn find_remote_skill_for_install<'a>(
+        remote_skills: &'a [DiscoverableSkill],
+        install_name: &str,
+        stored_readme_url: Option<&str>,
+    ) -> Option<&'a DiscoverableSkill> {
+        let stored_doc_path = stored_readme_url.and_then(Self::extract_doc_path_from_url);
+        stored_doc_path
+            .as_deref()
+            .and_then(|doc_path| {
+                remote_skills.iter().find(|skill| {
+                    skill
+                        .readme_url
+                        .as_deref()
+                        .and_then(Self::extract_doc_path_from_url)
+                        .as_deref()
+                        == Some(doc_path)
+                })
+            })
+            .or_else(|| {
+                remote_skills.iter().find(|skill| {
+                    skill
+                        .directory
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&skill.directory)
+                        .eq_ignore_ascii_case(install_name)
+                })
+            })
+            .or_else(|| {
+                let mut matches = remote_skills
+                    .iter()
+                    .filter(|skill| skill.name.trim().eq_ignore_ascii_case(install_name));
+                let found = matches.next()?;
+                matches.next().is_none().then_some(found)
+            })
     }
 
     // ========== 路径管理 ==========
@@ -1026,14 +1090,11 @@ impl SkillService {
             let _state_guard = skill_state_read_guard();
 
             for skill in group_skills {
-                let remote_match = remote_skills.iter().find(|remote_skill| {
-                    let remote_install_name = remote_skill
-                        .directory
-                        .rsplit('/')
-                        .next()
-                        .unwrap_or(&remote_skill.directory);
-                    remote_install_name.eq_ignore_ascii_case(&skill.directory)
-                });
+                let remote_match = Self::find_remote_skill_for_install(
+                    &remote_skills,
+                    &skill.directory,
+                    skill.readme_url.as_deref(),
+                );
 
                 let remote_skill_dir = match remote_match {
                     Some(remote_skill) => temp_dir.join(&remote_skill.directory),
@@ -1124,17 +1185,12 @@ impl SkillService {
         let mut remote_skills = Vec::new();
         let _ = self.scan_dir_recursive(temp_dir, temp_dir, &repo, &mut remote_skills);
 
-        let remote_match = remote_skills
-            .iter()
-            .find(|remote_skill| {
-                let remote_install_name = remote_skill
-                    .directory
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&remote_skill.directory);
-                remote_install_name.eq_ignore_ascii_case(&skill.directory)
-            })
-            .ok_or_else(|| {
+        let remote_match = Self::find_remote_skill_for_install(
+            &remote_skills,
+            &skill.directory,
+            skill.readme_url.as_deref(),
+        )
+        .ok_or_else(|| {
                 anyhow!(format_skill_error(
                     "SKILL_DIR_NOT_FOUND",
                     &[("path", &skill.directory)],
@@ -1150,6 +1206,14 @@ impl SkillService {
                 Some("checkRepoUrl"),
             )));
         }
+
+        let canonical_temp = temp_dir
+            .canonicalize()
+            .unwrap_or_else(|_| temp_dir.to_path_buf());
+        let resolved_doc_path = source
+            .canonicalize()
+            .ok()
+            .and_then(|source| Self::doc_path_for_source(&canonical_temp, &source));
 
         // Network I/O is complete. Revalidate the installation generation before mutation.
         let _state_guard = skill_state_write_guard();
@@ -1179,11 +1243,11 @@ impl SkillService {
         let skill_md = dest.join("SKILL.md");
         let (new_name, new_description) = Self::read_skill_name_desc(&skill_md, &skill.directory);
 
-        let doc_path = skill
-            .readme_url
-            .as_deref()
-            .and_then(Self::extract_doc_path_from_url)
-            .unwrap_or_else(|| format!("{}/SKILL.md", skill.directory.trim_end_matches('/')));
+        let doc_path = Self::choose_doc_path(
+            resolved_doc_path,
+            skill.readme_url.as_deref(),
+            &skill.directory,
+        );
         let readme_url = Some(Self::build_skill_doc_url(
             &owner,
             &name,
@@ -2350,8 +2414,7 @@ impl SkillService {
                 if let Some(parent) = outpath.parent() {
                     Self::create_dir_all_within_budget(parent, &mut total_bytes)?;
                 }
-                let mut outfile = fs::File::create(&outpath)?;
-                Self::copy_entry_within_budget(&mut file, &mut outfile, &mut total_bytes)?;
+                Self::write_file_within_budget(&mut file, &outpath, &mut total_bytes)?;
             }
         }
 
@@ -2375,10 +2438,25 @@ impl SkillService {
         Ok(())
     }
 
+    /// 把单个文件条目写到 `dest` 并计入归档预算，不足一个磁盘块的按一块补齐。
+    fn write_file_within_budget<R: std::io::Read>(
+        reader: &mut R,
+        dest: &Path,
+        total_bytes: &mut u64,
+    ) -> Result<()> {
+        let mut writer = fs::File::create(dest)?;
+        let before = *total_bytes;
+        Self::copy_entry_within_budget(reader, &mut writer, total_bytes)?;
+        let written = total_bytes.saturating_sub(before);
+        if written < FILE_ENTRY_BUDGET_COST {
+            Self::charge_archive_budget(total_bytes, FILE_ENTRY_BUDGET_COST - written)?;
+        }
+        Ok(())
+    }
+
     fn copy_file_within_budget(src: &Path, dest: &Path, total_bytes: &mut u64) -> Result<()> {
         let mut reader = fs::File::open(src)?;
-        let mut writer = fs::File::create(dest)?;
-        Self::copy_entry_within_budget(&mut reader, &mut writer, total_bytes)
+        Self::write_file_within_budget(&mut reader, dest, total_bytes)
     }
 
     /// 递归复制目录
@@ -2877,8 +2955,7 @@ impl SkillService {
                 if let Some(parent) = outpath.parent() {
                     Self::create_dir_all_within_budget(parent, &mut total_bytes)?;
                 }
-                let mut outfile = fs::File::create(&outpath)?;
-                Self::copy_entry_within_budget(&mut file, &mut outfile, &mut total_bytes)?;
+                Self::write_file_within_budget(&mut file, &outpath, &mut total_bytes)?;
             }
         }
 
@@ -3142,6 +3219,202 @@ mod tests {
     use std::env;
     use std::sync::Arc;
     use tempfile::TempDir;
+
+    #[test]
+    fn resolve_skill_source_dir_falls_back_to_unique_metadata_name() {
+        // tencent/WeChatReading: skills.sh returns `weread-skills`, while the
+        // repository stores it at skills/SKILL.md with `name: weread-skills`.
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join("skills");
+        write_skill(&skill_dir, "weread-skills");
+
+        let resolved = SkillService::resolve_skill_source_dir(temp.path(), "weread-skills")
+            .expect("skillId should resolve through the SKILL.md metadata name");
+
+        assert_eq!(resolved, skill_dir);
+    }
+
+    #[test]
+    fn resolve_skill_source_dir_rejects_duplicate_metadata_names() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_skill(&temp.path().join("skills-a"), "duplicate-skill");
+        write_skill(&temp.path().join("skills-b"), "duplicate-skill");
+
+        let resolved = SkillService::resolve_skill_source_dir(temp.path(), "duplicate-skill");
+
+        assert!(
+            resolved.is_none(),
+            "ambiguous metadata names must not select an arbitrary skill directory"
+        );
+    }
+
+    #[test]
+    fn update_lookup_uses_unique_metadata_name_without_overriding_directory_match() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_skill(&temp.path().join("skills"), "weread-skills");
+        let repo = SkillRepo {
+            owner: "owner".to_string(),
+            name: "repo".to_string(),
+            branch: "main".to_string(),
+            enabled: true,
+        };
+        let scan = || {
+            let mut skills = Vec::new();
+            SkillService::new()
+                .scan_dir_recursive(temp.path(), temp.path(), &repo, &mut skills)
+                .expect("scan skills");
+            skills
+        };
+
+        let skills = scan();
+        assert_eq!(
+            SkillService::find_remote_skill_for_install(&skills, "weread-skills", None)
+                .map(|skill| skill.directory.as_str()),
+            Some("skills")
+        );
+
+        write_skill(&temp.path().join("other"), "weread-skills");
+        assert!(
+            SkillService::find_remote_skill_for_install(&scan(), "weread-skills", None).is_none(),
+            "duplicate metadata names must remain ambiguous during updates"
+        );
+
+        write_skill(&temp.path().join("weread-skills"), "Other Skill");
+        assert_eq!(
+            SkillService::find_remote_skill_for_install(&scan(), "weread-skills", None)
+                .map(|skill| skill.directory.as_str()),
+            Some("weread-skills"),
+            "an exact directory match must keep its original priority"
+        );
+
+        let root_only = tempfile::tempdir().expect("root tempdir");
+        write_skill(root_only.path(), "Root Skill");
+        let mut root_skills = Vec::new();
+        SkillService::new()
+            .scan_dir_recursive(root_only.path(), root_only.path(), &repo, &mut root_skills)
+            .expect("scan root skill");
+        assert!(
+            SkillService::find_remote_skill_for_install(&root_skills, "removed-child", None)
+                .is_none(),
+            "a removed child skill must not fall back to an unrelated root skill"
+        );
+    }
+
+    #[test]
+    fn update_lookup_prefers_persisted_source_path_after_metadata_rename() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        write_skill(&temp.path().join("skills"), "renamed-skill");
+        write_skill(&temp.path().join("weread-skills"), "weread-skills");
+        let repo = SkillRepo {
+            owner: "owner".to_string(),
+            name: "repo".to_string(),
+            branch: "main".to_string(),
+            enabled: true,
+        };
+        let mut skills = Vec::new();
+        SkillService::new()
+            .scan_dir_recursive(temp.path(), temp.path(), &repo, &mut skills)
+            .expect("scan skills");
+
+        let stored_url = "https://github.com/owner/repo/blob/main/skills/SKILL.md";
+        assert_eq!(
+            SkillService::find_remote_skill_for_install(
+                &skills,
+                "weread-skills",
+                Some(stored_url),
+            )
+            .map(|skill| skill.directory.as_str()),
+            Some("skills"),
+            "persisted source path should survive metadata changes and competing matches"
+        );
+    }
+
+    #[test]
+    fn extract_repo_archive_accepts_real_world_sized_skill_repos() {
+        // #7475：hugohe3/ppt-master 整仓归档 13_248 条目，旧上限 10_000 把它当成
+        // 压缩炸弹拒掉。下载的是整个仓库而非单个技能目录，上限必须容得下这种规模。
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+
+        const ENTRIES: usize = 13_248;
+        let mut buf = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default();
+            zip.start_file("ppt-master-main/skills/ppt-master/SKILL.md", opts)
+                .unwrap();
+            zip.write_all(b"---\nname: ppt-master\n---\n").unwrap();
+            for i in 1..ENTRIES {
+                zip.start_file(
+                    format!("ppt-master-main/skills/ppt-master/templates/t{i}.md"),
+                    opts,
+                )
+                .unwrap();
+                zip.write_all(b"x").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive = zip::ZipArchive::new(std::io::Cursor::new(buf)).expect("archive parses");
+        SkillService::extract_repo_archive(archive, temp.path())
+            .expect("a 13k-entry skill repo must extract");
+        assert!(temp.path().join("skills/ppt-master/SKILL.md").is_file());
+        assert!(temp
+            .path()
+            .join(format!("skills/ppt-master/templates/t{}.md", ENTRIES - 1))
+            .is_file());
+    }
+
+    #[test]
+    fn file_entries_are_charged_at_least_one_block() {
+        // 空文件与小文件照样占 inode 和磁盘块。只按内容字节计费时，全是空文件的
+        // 归档预算读数一直是 0，条目上限提高后就没有东西兜底了。
+        let temp = tempfile::tempdir().expect("tempdir");
+
+        let mut total_bytes = 0u64;
+        let mut empty = std::io::Cursor::new(Vec::<u8>::new());
+        SkillService::write_file_within_budget(
+            &mut empty,
+            &temp.path().join("empty"),
+            &mut total_bytes,
+        )
+        .expect("within budget");
+        assert_eq!(total_bytes, FILE_ENTRY_BUDGET_COST);
+
+        let mut small = std::io::Cursor::new(vec![7u8; 64]);
+        SkillService::write_file_within_budget(
+            &mut small,
+            &temp.path().join("small"),
+            &mut total_bytes,
+        )
+        .expect("within budget");
+        assert_eq!(total_bytes, 2 * FILE_ENTRY_BUDGET_COST);
+
+        // 超过一块的文件按实际字节计，不重复加最小值
+        let mut large = std::io::Cursor::new(vec![7u8; FILE_ENTRY_BUDGET_COST as usize + 1]);
+        SkillService::write_file_within_budget(
+            &mut large,
+            &temp.path().join("large"),
+            &mut total_bytes,
+        )
+        .expect("within budget");
+        assert_eq!(total_bytes, 3 * FILE_ENTRY_BUDGET_COST + 1);
+
+        // 预算只差一个字节就满，再写一个 1 字节文件也必须被拦下
+        let mut total_bytes = MAX_ARCHIVE_TOTAL_BYTES - FILE_ENTRY_BUDGET_COST + 1;
+        let mut tiny = std::io::Cursor::new(vec![7u8; 1]);
+        let err = SkillService::write_file_within_budget(
+            &mut tiny,
+            &temp.path().join("tiny"),
+            &mut total_bytes,
+        )
+        .expect_err("a file that would exceed the block budget must be rejected");
+        assert!(
+            err.to_string().contains("ARCHIVE_TOO_LARGE"),
+            "unexpected error: {err}"
+        );
+    }
 
     #[test]
     fn skill_state_lock_allows_snapshots_but_excludes_writers() {

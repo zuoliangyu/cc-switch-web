@@ -182,22 +182,34 @@ async fn get_single_tool_version_impl(
     }
 }
 
+/// 最新版本探测的单次请求超时：取不到就返回 None 由前端显示「未知」，而不是沿用全局
+/// 客户端的长超时让卡片一直「加载中」（上游 556bb2ca）。
+const LATEST_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// npm 包 dist-tags 专用端点的 URL。响应体就是 dist-tags 对象本身；`/{package}` 返回
+/// 含全部历史版本的 packument，高频发版的包可达几十 MB。scoped 包名的 `/` 转义为 `%2f`。
+fn npm_dist_tags_url(package: &str) -> String {
+    format!(
+        "https://registry.npmjs.org/-/package/{}/dist-tags",
+        package.replace('/', "%2f")
+    )
+}
+
 /// Helper function to fetch latest version from npm registry
 async fn fetch_npm_latest_version(client: &reqwest::Client, package: &str) -> Option<String> {
-    let url = format!("https://registry.npmjs.org/{package}");
-    match client.get(&url).send().await {
-        Ok(resp) => {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                json.get("dist-tags")
-                    .and_then(|tags| tags.get("latest"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            } else {
-                None
-            }
-        }
-        Err(_) => None,
-    }
+    let resp = client
+        .get(npm_dist_tags_url(package))
+        .timeout(LATEST_PROBE_TIMEOUT)
+        .send()
+        .await
+        .ok()?;
+    let tags = resp
+        .json::<serde_json::Map<String, serde_json::Value>>()
+        .await
+        .ok()?;
+    tags.get("latest")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 /// Helper function to fetch latest version from GitHub releases
@@ -207,6 +219,7 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
         .get(&url)
         .header("User-Agent", "cc-switch")
         .header("Accept", "application/vnd.github+json")
+        .timeout(LATEST_PROBE_TIMEOUT)
         .send()
         .await
     {
@@ -1948,6 +1961,18 @@ fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), S
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_npm_dist_tags_url() {
+        assert_eq!(
+            npm_dist_tags_url("openclaw"),
+            "https://registry.npmjs.org/-/package/openclaw/dist-tags"
+        );
+        assert_eq!(
+            npm_dist_tags_url("@openai/codex"),
+            "https://registry.npmjs.org/-/package/@openai%2fcodex/dist-tags"
+        );
+    }
 
     #[test]
     fn test_extract_version() {

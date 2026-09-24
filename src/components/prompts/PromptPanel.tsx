@@ -46,6 +46,14 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
       if (open) reload();
     }, [open, reload]);
 
+    // 外部编辑器修改 live 提示词文件后，窗口重新获得焦点时刷新（上游 a659440b）。
+    useEffect(() => {
+      if (!open) return;
+      const handleFocus = () => void reload();
+      window.addEventListener("focus", handleFocus);
+      return () => window.removeEventListener("focus", handleFocus);
+    }, [open, reload]);
+
     useEffect(() => {
       const handlePromptImported = (event: Event) => {
         const detail = (event as CustomEvent<{ app?: AppId }>).detail;

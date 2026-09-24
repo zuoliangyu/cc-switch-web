@@ -13,7 +13,11 @@ use crate::services::skill::SkillService;
 use super::{io_context_localized, localized, MAX_SYNC_ARTIFACT_BYTES, REMOTE_SKILLS_ZIP};
 
 /// Maximum number of entries allowed in a zip archive.
-const MAX_EXTRACT_ENTRIES: usize = 10_000;
+///
+/// skills.zip 打包的是用户已安装的全部技能，单个大型技能（如 ppt-master，13k+ 文件）
+/// 就能超过原来的 10_000；与 `services/skill.rs` 的 `MAX_ARCHIVE_ENTRIES` 保持一致，
+/// 否则技能装得上、同步却恢复不了。字节上限 `MAX_SYNC_ARTIFACT_BYTES` 仍然兜底。
+const MAX_EXTRACT_ENTRIES: usize = 30_000;
 
 pub(super) struct SkillsBackup {
     _tmp: TempDir,

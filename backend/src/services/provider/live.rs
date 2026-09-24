@@ -663,6 +663,27 @@ fn restore_live_settings_for_provider_backfill(
         );
     }
 
+    // live auth.json 是没有 Provider 身份的共享槽位，Codex 0.149+ 第三方路由从不读取它：
+    // 默认模式切换会删除该文件，provider 表自带凭据来源时也不注入 bearer。因此无凭据
+    // 的 live auth 等同于字段缺失而非用户清空了 key——数据库是唯一副本，切走时的回填
+    // 不能抹掉它。live 携带凭据时仍以 live 为准；官方 Provider 以 live 登录为权威来源
+    // （上游 5a80e300）。
+    if provider.category.as_deref() != Some("official")
+        && !crate::proxy::providers::is_codex_official_provider(provider)
+    {
+        let stored_auth = provider.settings_config.get("auth");
+        let live_auth_has_material = settings
+            .get("auth")
+            .is_some_and(crate::codex_config::codex_auth_has_login_material);
+        if !live_auth_has_material
+            && stored_auth.is_some_and(crate::codex_config::codex_auth_has_login_material)
+        {
+            if let (Some(obj), Some(stored_auth)) = (settings.as_object_mut(), stored_auth) {
+                obj.insert("auth".to_string(), stored_auth.clone());
+            }
+        }
+    }
+
     settings
 }
 
@@ -1474,6 +1495,134 @@ pub fn remove_hermes_provider_from_live(provider_id: &str) -> Result<(), AppErro
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn category_less_fixed_follow_login_backfill_preserves_logout() {
+        let provider = Provider::with_id(
+            crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string(),
+            "OpenAI Official".to_string(),
+            json!({
+                "auth": {
+                    "auth_mode": "chatgpt",
+                    "tokens": { "refresh_token": "old-refresh-token" }
+                },
+                "config": "model = \"old-model\"\n"
+            }),
+            None,
+        );
+        assert!(crate::proxy::providers::is_codex_official_provider(
+            &provider
+        ));
+
+        for live_auth in [json!({}), json!({ "auth_mode": "chatgpt" })] {
+            let live_settings = json!({
+                "auth": live_auth,
+                "config": "model = \"live-model\"\n"
+            });
+            let backfilled = restore_live_settings_for_provider_backfill(
+                &AppType::Codex,
+                &provider,
+                live_settings.clone(),
+            );
+
+            assert_eq!(
+                backfilled, live_settings,
+                "a legacy official card must not restore the stored login after logout"
+            );
+        }
+    }
+
+    #[test]
+    fn category_less_fixed_third_party_backfill_keeps_stored_api_key() {
+        let provider = Provider::with_id(
+            crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string(),
+            "Custom API".to_string(),
+            json!({
+                "auth": { "OPENAI_API_KEY": "sk-db-only" },
+                "config": "model_provider = \"custom\"\n"
+            }),
+            None,
+        );
+        assert!(!crate::proxy::providers::is_codex_official_provider(
+            &provider
+        ));
+        let backfilled = restore_live_settings_for_provider_backfill(
+            &AppType::Codex,
+            &provider,
+            json!({ "auth": {}, "config": "model_provider = \"custom\"\n" }),
+        );
+
+        assert_eq!(backfilled, provider.settings_config);
+    }
+
+    #[test]
+    fn codex_switch_backfill_keeps_stored_auth_when_live_has_no_credential() {
+        // Repro of #7433: the provider table declares its own Authorization
+        // header, so the switch injects no bearer token into config.toml, and
+        // default mode deletes the shared auth.json. Live is `{ auth: {}, … }`
+        // while the stored key is the only remaining copy — the switch-away
+        // backfill must keep it, while still capturing the Live config.toml.
+        let mut provider = Provider::with_id(
+            "header-auth".to_string(),
+            "Header Auth".to_string(),
+            json!({
+                "auth": { "OPENAI_API_KEY": "sk-db-only" },
+                "config": "model_provider = \"custom\"\nmodel = \"old-model\"\n"
+            }),
+            None,
+        );
+        provider.category = Some("custom".to_string());
+
+        let live_settings = json!({
+            "auth": {},
+            "config": "model_provider = \"custom\"\nmodel = \"live-model\"\n"
+        });
+
+        let result =
+            restore_live_settings_for_provider_backfill(&AppType::Codex, &provider, live_settings);
+
+        assert_eq!(
+            result.get("auth"),
+            Some(&json!({ "OPENAI_API_KEY": "sk-db-only" })),
+            "a credential-less Live auth.json must not erase the stored provider key"
+        );
+        assert_eq!(
+            result.get("config"),
+            Some(&json!(
+                "model_provider = \"custom\"\nmodel = \"live-model\"\n"
+            )),
+            "Live still owns the config.toml snapshot"
+        );
+    }
+
+    #[test]
+    fn codex_switch_backfill_keeps_live_auth_when_it_carries_material() {
+        // Positive control: a Live auth.json that does carry material stays
+        // authoritative (the manual `~/.codex/auth.json` edit path).
+        let mut provider = Provider::with_id(
+            "custom".to_string(),
+            "Custom".to_string(),
+            json!({
+                "auth": { "OPENAI_API_KEY": "sk-db-stale" },
+                "config": "model_provider = \"custom\"\n"
+            }),
+            None,
+        );
+        provider.category = Some("custom".to_string());
+
+        let live_settings = json!({
+            "auth": { "OPENAI_API_KEY": "sk-live" },
+            "config": "model_provider = \"custom\"\n"
+        });
+
+        let result =
+            restore_live_settings_for_provider_backfill(&AppType::Codex, &provider, live_settings);
+
+        assert_eq!(
+            result.get("auth"),
+            Some(&json!({ "OPENAI_API_KEY": "sk-live" }))
+        );
+    }
 
     fn proxy_oauth_codex_snapshot_neutralizes_official_auth_fallback() {
         let poisoned_config = "model_provider = \"custom\"\n\n[model_providers.custom]\nname = \"xai\"\nbase_url = \"https://api.x.ai/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = true\n";

@@ -574,7 +574,14 @@ impl StreamCheckService {
                 .header("accept", "text/event-stream")
                 .header("accept-encoding", "identity")
                 .header("user-agent", user_agent.clone())
-                .header("originator", "codex_cli_rs")
+                .header(
+                    "originator",
+                    crate::proxy::providers::codex_oauth_auth::CODEX_OAUTH_ORIGINATOR,
+                )
+                .header(
+                    "version",
+                    crate::proxy::providers::codex_oauth_auth::CODEX_OAUTH_CLIENT_VERSION,
+                )
                 .timeout(timeout)
                 .json(&body)
                 .send()

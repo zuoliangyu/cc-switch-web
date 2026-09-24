@@ -605,7 +605,13 @@ impl ProviderAdapter for ClaudeAdapter {
                     ),
                     (
                         HeaderName::from_static("originator"),
-                        HeaderValue::from_static("cc-switch"),
+                        HeaderValue::from_static(super::codex_oauth_auth::CODEX_OAUTH_ORIGINATOR),
+                    ),
+                    (
+                        HeaderName::from_static("version"),
+                        HeaderValue::from_static(
+                            super::codex_oauth_auth::CODEX_OAUTH_CLIENT_VERSION,
+                        ),
                     ),
                 ]
             }
@@ -692,6 +698,30 @@ mod tests {
     use super::*;
     use crate::provider::ProviderMeta;
     use serde_json::json;
+
+    #[test]
+    fn codex_oauth_generation_uses_gpt6_compatible_identity() {
+        let headers: http::HeaderMap = ClaudeAdapter::new()
+            .get_auth_headers(&AuthInfo::new(
+                "test-token".into(),
+                AuthStrategy::CodexOAuth,
+            ))
+            .into_iter()
+            .collect();
+        assert_eq!(headers["authorization"], "Bearer test-token");
+        assert_eq!(headers["originator"], "codex_cli_rs");
+        let version: Vec<u32> = headers["version"]
+            .to_str()
+            .unwrap()
+            .split('.')
+            .map(|part| part.parse().unwrap())
+            .collect();
+        // 官方 rust-v0.153.4 目录：gpt-6-astra 需要 0.153.0。
+        assert!(
+            version.as_slice() >= [0, 153, 0].as_slice(),
+            "gpt-6-astra requires Codex >= 0.153.0; sent {version:?}"
+        );
+    }
 
     fn create_provider(config: serde_json::Value) -> Provider {
         Provider {

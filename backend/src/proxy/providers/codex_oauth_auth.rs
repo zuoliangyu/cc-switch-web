@@ -41,6 +41,13 @@ const TOKEN_REFRESH_BUFFER_MS: i64 = 60_000;
 const OAUTH_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const DEVICE_CODE_DEFAULT_EXPIRES_IN: u64 = 900;
 const POLLING_SAFETY_MARGIN_SECS: u64 = 3;
+
+// ChatGPT Codex 后端按 originator+version 组合做模型 cohort 路由：非官方身份会把部分
+// 模型解析到未部署引擎（HTTP 404），version 低于模型目录的 minimal_client_version 会被
+// 拒绝（gpt-6-astra 需 >= 0.153.0）。两个头必须成对发送，新模型抬门槛时同步 bump
+// （上游 db346128）。
+pub(crate) const CODEX_OAUTH_ORIGINATOR: &str = "codex_cli_rs";
+pub(crate) const CODEX_OAUTH_CLIENT_VERSION: &str = "0.153.4";
 const CODEX_USER_AGENT: &str = "cc-switch-codex-oauth";
 
 #[derive(Debug, thiserror::Error)]

@@ -1,6 +1,6 @@
 # Web 端跟进上游 `fd14f9c4` 后续迁移计划（2026-09-24）
 
-> 状态：批次 1–6 已完成；待定项处理见第 6 节
+> 状态：已完成（165/165 提交已处置，见第 5 节收尾记录）
 > 上游仓库：`E:/zuolan_lib/AI_Hub/cc-switch`
 > 冻结基线：`fd14f9c4`（上一轮审计点，见 `web-parity-post-40cac1a6-2026-08.md`）
 > 当前审计点：`f8788719`（上游 v3.20.4 之后的 `main`）
@@ -71,7 +71,7 @@
 | `b45b2bd1` | feat(presets): add Tencent Token Plan presets across six apps (#7011)                                             | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
 | `21fda0ea` | test(codex): align grok-4.5 reasoning tier expectations with 4-tier presets                                       | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
 | `273c9cc2` | fix(codex): mark glm-5.3 as text-only (#6851)                                                                     | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填                                                                                                          | 1    | 已迁移   |
-| `6d25f34e` | feat(presets): add QwenCloud presets across seven apps (#6214)                                                    | 同步非 Pi 预设；Pi 部分转批次 6                                                                                                                                           | 1    | 部分迁移 |
+| `6d25f34e` | feat(presets): add QwenCloud presets across seven apps (#6214)                                                    | 同步非 Pi 预设；Pi 部分随批次 6 完成（`piProviderPresets` / `piModelCatalog` / `piThinkingProfiles` 与上游 f8788719 逐字一致） | 1    | 已迁移 |
 | `92a9b4a9` | fix(usage): compact trend token axis labels (#7016)                                                               | Usage 前端展示                                                                                                                                                            | 4    | 已迁移   |
 | `e4b03a38` | fix(usage): stop deferring resumed Codex rollouts on filename/meta ID mismatch (#6905)                            | Codex/Pi/Claude 会话统计修复                                                                                                                                              | 4    | 已迁移   |
 | `cbbf7279` | feat(presets): add AICodeWith presets across eight apps                                                           | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
@@ -113,7 +113,7 @@
 | `f21e0944` | chore(provider): remove Atlas Cloud sponsor status, keep presets                                                  | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
 | `2d54e261` | fix(provider): update MiniMax defaults to M3 and remove expired offers (#7255)                                    | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
 | `99f9dd2c` | fix(codex): honor proxy URL when model_provider is omitted (#7263)                                                | Codex config-only 认证写入与保留表迁移                                                                                                                                    | 3    | 已迁移   |
-| `2f3c0262` | feat(presets): rebrand DashScope as 千问AI平台 and refresh Qwen models (#7183)                                    | 同步非 Pi 预设；Pi 部分转批次 6                                                                                                                                           | 1    | 部分迁移 |
+| `2f3c0262` | feat(presets): rebrand DashScope as 千问AI平台 and refresh Qwen models (#7183)                                    | 同步非 Pi 预设；Pi 部分随批次 6 完成（Pi 目录文件与上游逐字一致） | 1    | 已迁移 |
 | `e0c2fd2b` | fix(provider): preserve child metadata during universal sync (#7212)                                              | Provider live 投影、同步与代理设置保留                                                                                                                                    | 3    | 已迁移   |
 | `11317c62` | fix(proxy): preserve per-app settings on shutdown and port allocation (#7210)                                     | Provider live 投影、同步与代理设置保留                                                                                                                                    | 3    | 已迁移   |
 | `e0982799` | fix(codex): proxy image edits and Images API follow-ups (#7177)                                                   | 合并迁移为统一 standalone 端点；补 Images 路由别名、流式 usage 解析与服务端 E2E 测试；`start()` 回报实际绑定端口                                                          | 2    | 已迁移   |
@@ -146,13 +146,13 @@
 | `33c80626` | fix(skills): raise archive entry limit so large skill repos install (#7489)                                       | Skills 安装修复                                                                                                                                                           | 5    | 已迁移   |
 | `a659440b` | fix(prompts): refresh active prompts after external file edits (#7194)                                            | Prompts 修复                                                                                                                                                              | 5    | 已迁移   |
 | `f2d0b2a6` | Rebalance sponsor CTAs around Kimi Code plan with dual-region links (#7522)                                       | 上游 README/用户手册                                                                                                                                                      | 排除 | 不适用   |
-| `1408f382` | Add Kimi Global preset variants (kimi.ai platform + api endpoints) (#7526)                                        | 同步非 Pi 预设；Pi 部分转批次 6                                                                                                                                           | 1    | 部分迁移 |
+| `1408f382` | Add Kimi Global preset variants (kimi.ai platform + api endpoints) (#7526)                                        | 同步非 Pi 预设；Pi 部分随批次 6 完成（Pi 目录文件与上游逐字一致） | 1    | 已迁移 |
 | `fdbe3a85` | feat(opencode): 支持从获取的模型列表中搜索并批量添加所选模型 (#7515)                                              | 新增 FetchedModelPicker，OpenCode 表单支持搜索并批量添加获取到的模型；移植上游测试 | 5    | 已迁移 |
 | `8272707d` | fix(skills): 支持 skillId 与目录名不一致的技能安装和更新 (#6381)                                                  | Skills 安装修复                                                                                                                                                           | 5    | 已迁移   |
 | `2c735bd9` | fix(ui): stop expanding stale cached usage tiers on ineligible provider cards                                     | Usage 前端展示                                                                                                                                                            | 4    | 已迁移   |
-| `7f39d885` | test(claude-desktop): run Linux path tests on unix hosts and cover Linux in provider sync tests                   | Linux 测试 cfg 已迁移；Web 无 Claude Desktop Provider 测试 harness，provider/mod.rs 部分不适用                                                                            | 5    | 部分迁移 |
+| `7f39d885` | test(claude-desktop): run Linux path tests on unix hosts and cover Linux in provider sync tests                   | Linux 测试 cfg 已迁移；provider/mod.rs 中依赖上游 Claude Desktop Provider 测试 harness 的用例在 Web 无对应结构，不适用 | 5    | 已迁移 |
 | `48e572cc` | feat(codex): refresh CN presets from the Responses API audit                                                      | 同步预设及原生 Responses host 判定、web_search 拒绝名单                                                                                                                   | 1    | 已迁移   |
-| `e06ff90f` | fix(presets): move MiniMax CN and BaiLing to their current official endpoints                                     | 预设与模型能力已同步；coding_plan 端点转批次 4                                                                                                                            | 1    | 部分迁移 |
+| `e06ff90f` | fix(presets): move MiniMax CN and BaiLing to their current official endpoints                                     | 预设与模型能力已同步；MiniMax CN（api.minimax.cn / api.minimaxi.com）与 BaiLing 用量端点随批次 4 落地，前后端 host 判定与上游测试一致 | 1    | 已迁移 |
 | `d8e98be2` | fix(pricing): restore DeepSeek V4 Pro price and seed Qwen3.8 and Hy4 models                                       | 同步定价 seed/repair 与上游回归测试                                                                                                                                       | 1    | 已迁移   |
 | `060099d7` | docs(user-manual): point Chat-only Codex examples at plan endpoints                                               | 上游 README/用户手册                                                                                                                                                      | 排除 | 不适用   |
 | `09498c30` | fix(ui): render monochrome preset icons in the foreground color                                                   | 单色预设图标使用前景色                                                                                                                                                    | 1    | 已迁移   |
@@ -186,7 +186,7 @@
 | `85894582` | feat(pricing): seed Claude Opus 5.5 (#7600)                                                                       | 同步定价 seed/repair 与上游回归测试                                                                                                                                       | 1    | 已迁移   |
 | `85caa69e` | feat(pricing): 添加新 Anthropic 和 OpenAI 定价 (#7610)                                                            | 定价已同步；usage_stats 回填测试依赖上游 helper，未迁移                                                                                                                   | 1    | 已迁移   |
 | `f2537fdf` | fix(models): tolerate non-Zhipu-shaped `models` field in model list responses (#7595)                             | 模型列表获取与批量添加                                                                                                                                                    | 5    | 已迁移   |
-| `da193d4f` | fix: 更新预设供应商模型与标准定价，清理已下线模型条目 (#7621)                                                     | 同步非 Pi 预设；Pi 部分转批次 6                                                                                                                                           | 1    | 部分迁移 |
+| `da193d4f` | fix: 更新预设供应商模型与标准定价，清理已下线模型条目 (#7621)                                                     | 同步非 Pi 预设；Pi 部分随批次 6 完成（Pi 目录文件与上游逐字一致） | 1    | 已迁移 |
 | `f8788719` | feat(icons): add Sub2API icon (#6632)                                                                             | 新增 SVG 与本地图片图标                                                                                                                                                   | 1    | 已迁移   |
 
 ## 3. 分批影响范围
@@ -259,10 +259,8 @@
 - 2026-09-24：补齐区间外 Claude 角色模型映射（4b57f7e1 及后续 e4c34b34、8ba92b54、c8d91298、4f8a79c2、b3e5e32c、3538b392、f93b935d、50270d5e），以落地 5c053626。`model_mapper` 与上游一致（去除 reasoning 模型、新增 Fable 档与 Subagent 透传、上游请求剥离 `[1M]`）；接管期按目标供应商重写 Claude Live 的角色别名与显示名；表单改为 Sonnet/Opus/Fable/Haiku/Subagent 角色行。未移植：Web 无“从 Claude 导入 Claude Desktop 供应商”命令，`suggested_claude_desktop_routes` 的显示名透传无落点；Codex/xAI 模型获取、FAST mode 等属其它功能。
 - 2026-09-24：发现 `rustfmt --check` 从 stdin 读取时恒返回 0，此前“HEAD 时已格式化”判定不可靠；改为按文件对比会话起点 `79a6c118` 与当前的 rustfmt hunk 数，修正本轮引入的 7 处未格式化代码，既有格式问题不动。
 
+- 2026-09-24：收尾验证：`cargo test` 1920 项通过、5 项忽略；`npx tsc --noEmit` 通过；`npx vitest run --exclude '.claude/**'` 106 个测试文件 706 项通过、2 项跳过；`pnpm build`（vite + release 二进制）成功。台账 165/165 提交均已处置：140 项已迁移、25 项不适用。
+
 ## 6. 剩余待办
 
-1. ~~批次 3c 前端~~：已完成（见第 5 节 2026-09-24 批次 3c 前端记录）。
-2. ~~批次 3c 后端~~：已完成（见第 5 节 2026-09-24 批次 3c 后端记录）。
-3. ~~批次 5~~：已完成（MiniMax Code、编辑器细节、OpenCode 批量添加）。
-4. ~~待定项~~：用户确认全部按建议处理（2026-09-24）。bd15ea11、37d04760、f8821c03 已迁移，701c079b 不适用；另补齐区间外 4b57f7e1（角色模型映射）以落地 5c053626。
-5. 收尾：全量 `cargo test`、`npx tsc --noEmit`、`npx vitest run --exclude '.claude/**'`、`pnpm build`；清理 `.claude/worktrees` 下三个已合并 worktree。
+无。本轮 `fd14f9c4..f8788719` 迁移已收口；下一轮以 `f8788719` 为冻结基线。

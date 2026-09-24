@@ -27,7 +27,8 @@ use super::{
             create_anthropic_sse_stream_from_responses_with_web_search_options,
         },
         transform, transform_codex_anthropic, transform_codex_chat,
-        transform_codex_responses_namespace, transform_gemini, transform_responses,
+        transform_codex_responses_namespace, transform_codex_responses_xai_sanitize,
+        transform_gemini, transform_responses,
     },
     response_processor::{
         create_logged_passthrough_stream, create_usage_collector, process_response,
@@ -574,8 +575,7 @@ async fn handle_responses_for_app(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let codex_tool_context =
-        transform_codex_chat::build_codex_tool_context_from_request(&body);
+    let codex_tool_context = transform_codex_chat::build_codex_tool_context_from_request(&body);
     let namespace_restore_map = transform_codex_responses_namespace::namespace_restore_map(&body);
 
     let forwarder = ctx.create_forwarder(&state);
@@ -618,10 +618,10 @@ async fn handle_responses_for_app(
         )
         .await;
     }
-    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider)
-        && !namespace_restore_map.is_empty()
-    {
-        return handle_codex_responses_namespace_restore(
+    // 原生 Responses 直连严格网关（xAI）：还原展开的 function-call 名称，并改写
+    // 整数值浮点工具参数；后者在请求没有 namespace 工具时同样需要执行。
+    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider) {
+        return handle_codex_xai_native_responses_rewrite(
             response,
             &ctx,
             &state,
@@ -649,6 +649,33 @@ pub async fn handle_alpha_search(
     State(state): State<ProxyState>,
     request: axum::extract::Request,
 ) -> Result<axum::response::Response, ProxyError> {
+    handle_codex_standalone_passthrough(state, request, "/alpha/search").await
+}
+
+/// Handle Codex's legacy Images API endpoint for built-in ImageGen.
+pub async fn handle_images_generations(
+    State(state): State<ProxyState>,
+    request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    handle_codex_standalone_passthrough(state, request, "/images/generations").await
+}
+
+/// Codex 内置 ImageGen 的 Images API 编辑端点。
+///
+/// ImageGen 引用已有图片（显式文件路径或最近生成的 N 张）时改走 `/images/edits`，
+/// 请求体同样是带 data-URL 图片的普通 JSON，因此复用独立透传链路，仅上游路径不同。
+pub async fn handle_images_edits(
+    State(state): State<ProxyState>,
+    request: axum::extract::Request,
+) -> Result<axum::response::Response, ProxyError> {
+    handle_codex_standalone_passthrough(state, request, "/images/edits").await
+}
+
+async fn handle_codex_standalone_passthrough(
+    state: ProxyState,
+    request: axum::extract::Request,
+    canonical_endpoint: &'static str,
+) -> Result<axum::response::Response, ProxyError> {
     let (parts, req_body) = request.into_parts();
     let uri = parts.uri;
     let headers = parts.headers;
@@ -663,7 +690,7 @@ pub async fn handle_alpha_search(
 
     let mut ctx =
         RequestContext::new(&state, &body, &headers, AppType::Codex, "Codex", "codex").await?;
-    let endpoint = endpoint_with_query(&uri, "/alpha/search");
+    let endpoint = endpoint_with_query(&uri, canonical_endpoint);
 
     let forwarder = ctx.create_forwarder(&state);
     let result = match forwarder
@@ -732,8 +759,7 @@ async fn handle_responses_compact_for_app(
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let codex_tool_context =
-        transform_codex_chat::build_codex_tool_context_from_request(&body);
+    let codex_tool_context = transform_codex_chat::build_codex_tool_context_from_request(&body);
     let namespace_restore_map = transform_codex_responses_namespace::namespace_restore_map(&body);
 
     let forwarder = ctx.create_forwarder(&state);
@@ -774,10 +800,10 @@ async fn handle_responses_compact_for_app(
         )
         .await;
     }
-    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider)
-        && !namespace_restore_map.is_empty()
-    {
-        return handle_codex_responses_namespace_restore(
+    // 原生 Responses 直连严格网关（xAI）：还原展开的 function-call 名称，并改写
+    // 整数值浮点工具参数；后者在请求没有 namespace 工具时同样需要执行。
+    if super::providers::provider_needs_responses_namespace_flatten(&ctx.provider) {
+        return handle_codex_xai_native_responses_rewrite(
             response,
             &ctx,
             &state,
@@ -789,7 +815,9 @@ async fn handle_responses_compact_for_app(
     process_response(response, &ctx, &state, &CODEX_PARSER_CONFIG).await
 }
 
-async fn handle_codex_responses_namespace_restore(
+/// xAI 原生 Responses 直连的响应处理：还原展开的 `function_call` 名称并改写整数值
+/// 浮点工具参数；错误响应原样透传，用量统计与 `process_response` 一致。
+async fn handle_codex_xai_native_responses_rewrite(
     response: super::hyper_client::ProxyResponse,
     ctx: &RequestContext,
     state: &ProxyState,
@@ -809,7 +837,7 @@ async fn handle_codex_responses_namespace_restore(
             builder = builder.header(key, value);
         }
 
-        let stream = transform_codex_responses_namespace::create_namespace_restore_sse_stream(
+        let stream = transform_codex_responses_xai_sanitize::create_xai_native_responses_sse_stream(
             response.bytes_stream(),
             restore_map,
         );
@@ -838,6 +866,9 @@ async fn handle_codex_responses_namespace_restore(
             transform_codex_responses_namespace::restore_response_namespaces(
                 &mut value,
                 &restore_map,
+            );
+            transform_codex_responses_xai_sanitize::normalize_xai_function_call_integer_arguments(
+                &mut value,
             );
             Bytes::from(serde_json::to_vec(&value).map_err(|e| {
                 ProxyError::TransformError(format!("Failed to serialize namespace response: {e}"))
@@ -923,8 +954,8 @@ async fn handle_codex_chat_to_responses_transform(
         log::error!("[Codex] 解析 Chat 上游响应失败: {e}, body: {body_str}");
         ProxyError::TransformError(format!("Failed to parse upstream chat response: {e}"))
     })?;
-    let responses_response =
-        transform_codex_chat::chat_completion_to_response(chat_response).map_err(|e| {
+    let responses_response = transform_codex_chat::chat_completion_to_response(chat_response)
+        .map_err(|e| {
             log::error!("[Codex] Chat → Responses 响应转换失败: {e}");
             e
         })?;
@@ -995,9 +1026,13 @@ async fn handle_codex_anthropic_to_responses_transform(
     let body_text = String::from_utf8_lossy(&body_bytes);
     let anthropic_response: Value = match serde_json::from_slice(&body_bytes) {
         Ok(value) => value,
-        Err(_) if body_text.lines().any(|line| {
-            line.trim_start().starts_with("event:") || line.trim_start().starts_with("data:")
-        }) => transform_codex_anthropic::anthropic_sse_to_message_value(&body_text)?,
+        Err(_)
+            if body_text.lines().any(|line| {
+                line.trim_start().starts_with("event:") || line.trim_start().starts_with("data:")
+            }) =>
+        {
+            transform_codex_anthropic::anthropic_sse_to_message_value(&body_text)?
+        }
         Err(error) => {
             log::error!(
                 "[Codex] 解析 Anthropic 上游响应失败: {error}, body_bytes={}",
@@ -1010,12 +1045,9 @@ async fn handle_codex_anthropic_to_responses_transform(
     };
 
     if is_stream {
-        let events = responses_sse_events_from_anthropic_message(
-            &anthropic_response,
-            codex_tool_context,
-        );
-        let sse_stream =
-            futures::stream::iter(events.into_iter().map(Ok::<Bytes, std::io::Error>));
+        let events =
+            responses_sse_events_from_anthropic_message(&anthropic_response, codex_tool_context);
+        let sse_stream = futures::stream::iter(events.into_iter().map(Ok::<Bytes, std::io::Error>));
         let logged_stream = create_logged_passthrough_stream(
             sse_stream,
             ctx.tag,

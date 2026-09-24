@@ -290,9 +290,33 @@ pub fn should_convert_codex_responses_to_anthropic(provider: &Provider, endpoint
     ) && codex_provider_uses_anthropic(provider)
 }
 
-/// 原生 Responses 上游是否需要展开 Codex 私有 namespace 工具。
+/// 原生 Responses 上游是否需要展开 Codex 私有 namespace 工具并执行 xAI schema 清洗。
+///
+/// 覆盖托管 xAI OAuth，以及 live 上游为 `api.x.ai` 且 `wire_api = "responses"` 的
+/// API Key Grok Provider（上游 cc-switch#6815）。
 pub fn provider_needs_responses_namespace_flatten(provider: &Provider) -> bool {
-    provider.is_xai_oauth()
+    provider.is_xai_oauth() || provider_is_xai_native_responses(provider)
+}
+
+/// Codex Provider 是否以原生 Responses 直连 xAI（`api.x.ai`），包含非 `xai_oauth` 的
+/// API Key Grok Provider。
+fn provider_is_xai_native_responses(provider: &Provider) -> bool {
+    let config_text = provider
+        .settings_config
+        .get("config")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let Some(wire_api) = extract_codex_wire_api_from_toml(config_text) else {
+        return false;
+    };
+    if !wire_api.eq_ignore_ascii_case("responses") {
+        return false;
+    }
+
+    extract_codex_base_url_from_toml(config_text)
+        .map(|url| url.to_ascii_lowercase())
+        .is_some_and(|url| url.contains("api.x.ai"))
 }
 
 /// Vendors whose OFFICIAL Codex integration is a native `/responses` gateway that
@@ -990,7 +1014,6 @@ impl ProviderAdapter for CodexAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::codex_config::CodexCatalogToolProfile;
     use regex::Regex;
     use serde_json::json;
     use std::sync::LazyLock;
@@ -1079,7 +1102,7 @@ mod tests {
     }
 
     #[test]
-    fn namespace_flatten_gate_only_fires_for_xai_oauth() {
+    fn namespace_flatten_gate_fires_for_xai_oauth_and_api_xai_responses() {
         let mut xai = create_provider(json!({ "auth": {}, "config": "" }));
         xai.meta = Some(crate::provider::ProviderMeta {
             provider_type: Some("xai_oauth".to_string()),
@@ -1087,11 +1110,31 @@ mod tests {
         });
         assert!(provider_needs_responses_namespace_flatten(&xai));
 
-        let plain = create_provider(json!({
+        // 无 xai_oauth meta 的 API Key Grok Provider 同样直连 api.x.ai Responses。
+        let grok_key = create_provider(json!({
             "auth": { "OPENAI_API_KEY": "sk-x" },
-            "config": "base_url = \"https://api.x.ai/v1\"\nwire_api = \"responses\""
+            "config": r#"
+model_provider = "custom"
+model = "grok-4.6"
+
+[model_providers.custom]
+name = "xai"
+base_url = "https://api.x.ai/v1"
+wire_api = "responses"
+"#
         }));
-        assert!(!provider_needs_responses_namespace_flatten(&plain));
+        assert!(provider_needs_responses_namespace_flatten(&grok_key));
+
+        // 非 xAI 的 Responses Provider 不展开。
+        let other = create_provider(json!({
+            "auth": { "OPENAI_API_KEY": "sk-x" },
+            "config": r#"
+[model_providers.custom]
+base_url = "https://api.deepseek.com"
+wire_api = "responses"
+"#
+        }));
+        assert!(!provider_needs_responses_namespace_flatten(&other));
     }
 
     #[test]

@@ -29,6 +29,10 @@
 - Skills 大仓库归档上限与 skillId 元数据解析；Prompts 在外部修改后聚焦刷新；智谱 Responses 模型列表；npm dist-tags 版本探测；Claude Desktop 支持 Linux 3P 配置。
 - OpenCode 配置目录位于 WSL 时，优先在 WSL 侧 home 探测 OMO 统一配置。
 - GUI 控件补充无障碍名称；切换应用时供应商列表回到顶部。
+- 前端按视图与弹窗懒加载，并按依赖族拆分 vendor chunk（CodeMirror、图表、Radix、预设、语言包等独立成块），Prettier 仅在格式化用量脚本时加载；所有 JS chunk 均小于 500 kB。
+- 新增 `pnpm verify:docker`：把源码复制进容器，以与 CI 相同的 Rust 1.88 / Node 20 在严格模式（警告即错误）下执行 `pnpm check`、`vite build`、vitest、`cargo check`（Linux 原生 + Windows 交叉）、`cargo test`，并导出 Linux x64/arm64 发布包、执行镜像健康检查。
+- 根目录新增 `menu.ps1` / `menu.sh` 命令菜单；`pnpm dev -- w`、`pnpm build -- w` 兼容 pnpm 10 透传的 `--`。
+- 后端在 `-D warnings` 下零警告：删除无用代码，仅测试使用的代码按项门控，与上游对等保留的代码逐项注明原因；`crate-type` 移除 Tauri 遗留的 `staticlib` / `cdylib`。
 
 ### 修复
 
@@ -36,13 +40,12 @@
 - 删除托管账号后重新登录，旧 Provider 绑定不再导致切换、接管或启动恢复永久失败，而是提示重新选择账号；账号存储损坏时仍中止，不改动 live 配置。
 - 隐藏署名时同时关闭 session URL 归属。
 - 从配置中移除 MiniMax Code Provider 后刷新列表；刷新页面后选中的 MiniMax Code 不再被重置回 Claude。
+- MiniMax Code 会话恢复命令在 Linux / macOS 上引用了 Web 不存在的模块导致编译失败，改为本地实现的 POSIX 单引号转义。
+- 补回两个移植时丢失 `#[test]` 标注、从未执行的 Provider 测试；修正 Grok Build 符号链接测试的断言（此前在 Windows 上因权限提前返回，从未真正断言）。
 
 ### 验证
 
-- TypeScript 类型检查通过。
-- 前端 106 个测试文件共 706 项通过、2 项跳过。
-- Rust 1920 项通过、5 项忽略、0 失败。
-- `pnpm build`（前端打包 + release 二进制）成功。
+- `pnpm verify:docker` 严格模式全部通过，全程零警告：TypeScript 类型检查；前端 106 个测试文件共 706 项通过、2 项跳过；Rust Linux 与 Windows 交叉 `cargo check --all-targets` 通过；Rust 1910 项通过、5 项忽略、0 失败（Linux）；linux-x64 / linux-arm64 release 包构建成功；镜像 `/api/health` 冒烟通过。
 
 ## [2.1.0] - 2026-08-18
 

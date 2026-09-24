@@ -336,7 +336,40 @@ export function AboutSection() {
             </div>
           </div>
 
+          {/* 上游 f8821c03：引导用户为 Web 仓库点 Star */}
+          <p className="min-w-0 flex-1 text-xs leading-relaxed sm:text-right">
+            <a
+              href={WEB_REPOSITORY_URL}
+              onClick={(event) => {
+                event.preventDefault();
+                handleOpenRepository();
+              }}
+              className="font-medium text-primary hover:underline"
+            >
+              {t("settings.starPrompt")}
+            </a>
+            <span aria-hidden="true" className="ml-1.5">
+              👉
+            </span>
+          </p>
+
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenRepository}
+              className="h-8 gap-1.5 border-primary/30 bg-primary/10 text-xs text-primary hover:bg-primary/20 hover:text-primary"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("settings.projectRepo")}
+              <span
+                aria-hidden="true"
+                className="inline-block animate-[spin_4s_linear_infinite] motion-reduce:animate-none"
+              >
+                ⭐
+              </span>
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -349,16 +382,6 @@ export function AboutSection() {
                 className={isChecking ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"}
               />
               {isChecking ? t("settings.checking") : t("settings.checkLatestRelease")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleOpenRepository}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t("settings.projectRepo")}
             </Button>
             <Button
               type="button"

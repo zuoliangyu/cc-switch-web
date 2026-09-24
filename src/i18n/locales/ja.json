@@ -332,6 +332,7 @@
           "alacritty": "Alacritty",
           "kitty": "Kitty",
           "ghostty": "Ghostty",
+          "otty": "Otty",
           "wezterm": "WezTerm",
           "kaku": "Kaku"
         },
@@ -692,6 +693,7 @@
     "authorBilibili": "左岚の Bilibili",
     "viewReleaseNotes": "このバージョンのリリースノートを見る",
     "viewCurrentReleaseNotes": "現在のバージョンのリリースノートを見る",
+    "starPrompt": "CC Switch Web がお役に立てたなら、GitHub でスターをお願いします。私たちにとって大きな励みになります",
     "oneClickInstall": "ワンクリックインストール",
     "oneClickInstallHint": "Claude Code / Codex / Gemini CLI / OpenCode をインストール",
     "localEnvCheck": "ローカル環境チェック",

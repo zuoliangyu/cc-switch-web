@@ -50,6 +50,63 @@ fn normalize_path_lexically(path: &Path) -> PathBuf {
     normalized
 }
 
+/// Derive the WSL-side home directory from a WSL UNC path inside a user's
+/// home: `\\wsl$\<distro>\home\<user>\...` -> `\\wsl$\<distro>\home\<user>`,
+/// and `\\wsl.localhost\<distro>\root\...` -> `\\wsl.localhost\<distro>\root`.
+/// Returns None for non-WSL paths and for WSL paths outside a home directory
+/// (e.g. `\\wsl$\<distro>\etc`), where no home can be derived safely.
+/// 仅用于 OMO 统一配置的位置探测（上游 37d04760）。
+#[cfg(windows)]
+pub(crate) fn derive_wsl_home_dir(dir: &Path) -> Option<PathBuf> {
+    use std::path::Prefix;
+
+    let normalized = normalize_path_lexically(dir);
+    let mut components = normalized.components();
+    let prefix = match components.next()? {
+        Component::Prefix(prefix) => prefix,
+        _ => return None,
+    };
+
+    let server = match prefix.kind() {
+        Prefix::UNC(server, _) | Prefix::VerbatimUNC(server, _) => server.to_string_lossy(),
+        _ => return None,
+    };
+
+    if !server.eq_ignore_ascii_case("wsl$") && !server.eq_ignore_ascii_case("wsl.localhost") {
+        return None;
+    }
+
+    let mut parts = Vec::new();
+    for component in components {
+        match component {
+            Component::RootDir | Component::CurDir => {}
+            Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
+            Component::ParentDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    let home_len = match parts.as_slice() {
+        [home, user, ..] if home == "home" && !user.is_empty() => 2,
+        [root, ..] if root == "root" => 1,
+        _ => return None,
+    };
+
+    // Rebuild prefix + root + the first `home_len` components.
+    let mut home_dir = PathBuf::new();
+    let mut normal_seen = 0usize;
+    for component in normalized.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => home_dir.push(component.as_os_str()),
+            Component::Normal(_) if normal_seen < home_len => {
+                home_dir.push(component.as_os_str());
+                normal_seen += 1;
+            }
+            _ => break,
+        }
+    }
+    Some(home_dir)
+}
+
 fn comparable_path_key(path: &Path) -> String {
     let mut key = normalize_path_lexically(path).to_string_lossy().to_string();
     #[cfg(windows)]
@@ -376,6 +433,38 @@ fn atomic_write_with_unix_mode(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn derive_wsl_home_dir_from_opencode_config_dir() {
+        let dir = PathBuf::from(r"\\wsl.localhost\Ubuntu-24.04\home\user\.config\opencode");
+        let home = derive_wsl_home_dir(&dir).expect("WSL home should be derived");
+        assert_eq!(
+            home,
+            PathBuf::from(r"\\wsl.localhost\Ubuntu-24.04\home\user")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn derive_wsl_home_dir_supports_wsl_dollar_and_root() {
+        let dir = PathBuf::from(r"\\wsl$\Ubuntu\root\.config\opencode");
+        let home = derive_wsl_home_dir(&dir).expect("WSL root home should be derived");
+        assert_eq!(home, PathBuf::from(r"\\wsl$\Ubuntu\root"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn derive_wsl_home_dir_rejects_non_home_and_non_wsl_paths() {
+        assert_eq!(
+            derive_wsl_home_dir(&PathBuf::from(r"\\wsl$\Ubuntu\etc\opencode")),
+            None
+        );
+        assert_eq!(
+            derive_wsl_home_dir(&PathBuf::from(r"C:\Users\user\.config\opencode")),
+            None
+        );
+    }
 
     #[test]
     fn atomic_write_replaces_existing_file_without_temp_residue() {

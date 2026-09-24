@@ -1449,6 +1449,7 @@ fn launch_macos_command_terminal(command: &str, cwd: Option<&Path>) -> Result<()
         "alacritty" => launch_macos_open_app("Alacritty", &script_file, true),
         "kitty" => launch_macos_open_app("kitty", &script_file, false),
         "ghostty" => launch_macos_open_app("Ghostty", &script_file, true),
+        "otty" => launch_macos_otty(&script_file),
         "wezterm" => launch_macos_open_app("WezTerm", &script_file, true),
         "kaku" => launch_macos_open_app("Kaku", &script_file, true),
         _ => launch_macos_terminal_app(&script_file),
@@ -1617,6 +1618,7 @@ exec bash --norc --noprofile
         "alacritty" => launch_macos_open_app("Alacritty", &script_file, true),
         "kitty" => launch_macos_open_app("kitty", &script_file, false),
         "ghostty" => launch_macos_open_app("Ghostty", &script_file, true),
+        "otty" => launch_macos_otty(&script_file),
         "wezterm" => launch_macos_open_app("WezTerm", &script_file, true),
         "kaku" => launch_macos_open_app("Kaku", &script_file, true),
         _ => launch_macos_terminal_app(&script_file),
@@ -1847,6 +1849,96 @@ end tell"#,
     Ok(())
 }
 
+/// macOS: Otty。优先在现有窗口新建 Tab，失败再新建窗口（上游 bd15ea11）。
+#[cfg(target_os = "macos")]
+fn launch_macos_otty(script_file: &Path) -> Result<(), String> {
+    use std::process::Command;
+
+    let otty_cli = find_macos_otty_cli().ok_or_else(|| {
+        "未找到 Otty CLI。请将 Otty 安装到 /Applications 或 ~/Applications。".to_string()
+    })?;
+
+    let command = build_macos_dash_c_command(script_file);
+    let tab_result = Command::new(&otty_cli)
+        .args(["tab", "new", "--window", "0", "--command", &command])
+        .output()
+        .map_err(|e| format!("启动 Otty CLI 失败: {e}"))?;
+
+    if tab_result.status.success() {
+        return Ok(());
+    }
+
+    log::debug!(
+        "Otty 新建 Tab 失败，改为新建窗口: {}",
+        decode_command_output(&tab_result.stderr)
+    );
+
+    let window_result = Command::new(&otty_cli)
+        .args(["open", "--command", &command])
+        .output()
+        .map_err(|e| format!("启动 Otty CLI 失败: {e}"))?;
+
+    if window_result.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Otty 新建窗口失败 (exit code: {:?}): {}",
+            window_result.status.code(),
+            decode_command_output(&window_result.stderr)
+        ))
+    }
+}
+
+/// Web 端启动脚本统一由 bash 执行（与其它 macOS 终端一致）。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn build_macos_dash_c_command(script_file: &Path) -> String {
+    format!(
+        "exec bash {}",
+        shell_single_quote(&script_file.to_string_lossy())
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn find_macos_otty_cli() -> Option<std::path::PathBuf> {
+    macos_otty_cli_candidates()
+        .into_iter()
+        .find(|path| path.is_file() && is_executable_file(path))
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn macos_otty_cli_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = vec![std::path::PathBuf::from(
+        "/Applications/Otty.app/Contents/MacOS/otty-cli",
+    )];
+
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(
+            std::path::PathBuf::from(home).join("Applications/Otty.app/Contents/MacOS/otty-cli"),
+        );
+    }
+
+    candidates.push(std::path::PathBuf::from("/usr/local/bin/otty"));
+    candidates.push(std::path::PathBuf::from("/opt/homebrew/bin/otty"));
+
+    if let Some(path) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path) {
+            candidates.push(directory.join("otty"));
+            candidates.push(directory.join("otty-cli"));
+        }
+    }
+
+    candidates
+}
+
+#[cfg(target_os = "macos")]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    path.metadata()
+        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
 #[cfg(target_os = "macos")]
 fn launch_macos_open_app(
     app_name: &str,
@@ -1961,6 +2053,30 @@ fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), S
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    // 上游 bd15ea11：Otty 启动命令与 CLI 查找路径。
+    #[test]
+    fn otty_launcher_command_executes_the_temporary_script() {
+        assert_eq!(
+            build_macos_dash_c_command(Path::new("/tmp/cc_switch_launcher.sh")),
+            "exec bash '/tmp/cc_switch_launcher.sh'"
+        );
+        assert_eq!(
+            build_macos_dash_c_command(Path::new("/tmp/it's.sh")),
+            "exec bash '/tmp/it'\"'\"'s.sh'"
+        );
+    }
+
+    #[test]
+    fn otty_cli_candidates_include_bundle_and_installed_cli_locations() {
+        let candidates = macos_otty_cli_candidates();
+
+        assert!(candidates.contains(&PathBuf::from(
+            "/Applications/Otty.app/Contents/MacOS/otty-cli"
+        )));
+        assert!(candidates.contains(&PathBuf::from("/usr/local/bin/otty")));
+        assert!(candidates.contains(&PathBuf::from("/opt/homebrew/bin/otty")));
+    }
 
     #[test]
     fn test_npm_dist_tags_url() {

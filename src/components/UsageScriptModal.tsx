@@ -5,15 +5,13 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Provider, UsageScript, UsageData } from "@/types";
 import { usageApi, settingsApi, type AppId } from "@/lib/api";
+import { subscriptionApi } from "@/lib/api/subscription";
 import { copilotGetUsage, copilotGetUsageForAccount } from "@/lib/api/copilot";
 import { useSettingsQuery } from "@/lib/query";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import { resolveCodexOfficialIdentity } from "@/utils/providerCapabilities";
 import JsonEditor from "./JsonEditor";
-import * as prettier from "prettier/standalone";
-import * as parserBabel from "prettier/parser-babel";
-import * as pluginEstree from "prettier/plugins/estree";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -434,7 +432,6 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           provider.meta,
           PROVIDER_TYPES.CODEX_OAUTH,
         );
-        const { subscriptionApi } = await import("@/lib/api/subscription");
         const quota = await subscriptionApi.getCodexOauthQuota(accountId);
         if (quota.success && quota.tiers.length > 0) {
           const summary = quota.tiers
@@ -460,7 +457,6 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (selectedTemplate === TEMPLATE_TYPES.BALANCE) {
         const baseUrl = providerCredentials.baseUrl ?? "";
         const apiKey = providerCredentials.apiKey ?? "";
-        const { subscriptionApi } = await import("@/lib/api/subscription");
         const result = await subscriptionApi.getBalance(baseUrl, apiKey);
         if (result.success && result.data && result.data.length > 0) {
           const summary = result.data
@@ -486,7 +482,6 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (selectedTemplate === TEMPLATE_TYPES.TOKEN_PLAN) {
         const baseUrl = providerCredentials.baseUrl ?? "";
         const apiKey = providerCredentials.apiKey ?? "";
-        const { subscriptionApi } = await import("@/lib/api/subscription");
         const quota = await subscriptionApi.getCodingPlanQuota(baseUrl, apiKey);
         if (quota.success && quota.tiers.length > 0) {
           const summary = quota.tiers
@@ -594,6 +589,12 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
 
   const handleFormat = async () => {
     try {
+      // Prettier 体积较大且只用于格式化脚本，按需加载，不进入首屏包
+      const [prettier, parserBabel, pluginEstree] = await Promise.all([
+        import("prettier/standalone"),
+        import("prettier/parser-babel"),
+        import("prettier/plugins/estree"),
+      ]);
       const formatted = await prettier.format(script.code, {
         parser: "babel",
         plugins: [parserBabel as any, pluginEstree as any],

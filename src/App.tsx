@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -42,36 +50,20 @@ import { isWindows, isLinux } from "@/lib/platform";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
-import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
-import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { SettingsPage } from "@/components/settings/SettingsPage";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
-import { DeepLinkImportDialog } from "@/components/deeplink/DeepLinkImportDialog";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { ProxyToggle } from "@/components/proxy/ProxyToggle";
 import { RoutingActivationBrand } from "@/components/proxy/RoutingActivationBrand";
 import { FailoverToggle } from "@/components/proxy/FailoverToggle";
-import UsageScriptModal from "@/components/UsageScriptModal";
-import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
-import PromptPanel from "@/components/prompts/PromptPanel";
-import { SkillsPage } from "@/components/skills/SkillsPage";
-import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
-import { UniversalProviderPanel } from "@/components/universal";
 import { McpIcon } from "@/components/BrandIcons";
 import { Button } from "@/components/ui/button";
-import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import {
   useDisableCurrentOmo,
   useDisableCurrentOmoSlim,
 } from "@/lib/query/omo";
-import WorkspaceFilesPanel from "@/components/workspace/WorkspaceFilesPanel";
-import EnvPanel from "@/components/openclaw/EnvPanel";
-import ToolsPanel from "@/components/openclaw/ToolsPanel";
-import AgentsDefaultsPanel from "@/components/openclaw/AgentsDefaultsPanel";
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
-import HermesMemoryPanel from "@/components/hermes/HermesMemoryPanel";
 import { UpdateBadge } from "@/components/UpdateBadge";
 import {
   DropdownMenu,
@@ -80,6 +72,60 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// 首屏只展示供应商列表；其余视图与弹窗按需加载，避免首屏包过大。
+const AddProviderDialog = lazy(() =>
+  import("@/components/providers/AddProviderDialog").then((m) => ({
+    default: m.AddProviderDialog,
+  })),
+);
+const EditProviderDialog = lazy(() =>
+  import("@/components/providers/EditProviderDialog").then((m) => ({
+    default: m.EditProviderDialog,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("@/components/settings/SettingsPage").then((m) => ({
+    default: m.SettingsPage,
+  })),
+);
+const DeepLinkImportDialog = lazy(() =>
+  import("@/components/deeplink/DeepLinkImportDialog").then((m) => ({
+    default: m.DeepLinkImportDialog,
+  })),
+);
+const UsageScriptModal = lazy(() => import("@/components/UsageScriptModal"));
+const UnifiedMcpPanel = lazy(() => import("@/components/mcp/UnifiedMcpPanel"));
+const PromptPanel = lazy(() => import("@/components/prompts/PromptPanel"));
+const SkillsPage = lazy(() =>
+  import("@/components/skills/SkillsPage").then((m) => ({
+    default: m.SkillsPage,
+  })),
+);
+const UnifiedSkillsPanel = lazy(
+  () => import("@/components/skills/UnifiedSkillsPanel"),
+);
+const UniversalProviderPanel = lazy(() =>
+  import("@/components/universal").then((m) => ({
+    default: m.UniversalProviderPanel,
+  })),
+);
+const SessionManagerPage = lazy(() =>
+  import("@/components/sessions/SessionManagerPage").then((m) => ({
+    default: m.SessionManagerPage,
+  })),
+);
+const WorkspaceFilesPanel = lazy(
+  () => import("@/components/workspace/WorkspaceFilesPanel"),
+);
+const EnvPanel = lazy(() => import("@/components/openclaw/EnvPanel"));
+const ToolsPanel = lazy(() => import("@/components/openclaw/ToolsPanel"));
+const AgentsDefaultsPanel = lazy(
+  () => import("@/components/openclaw/AgentsDefaultsPanel"),
+);
+const HermesMemoryPanel = lazy(
+  () => import("@/components/hermes/HermesMemoryPanel"),
+);
 
 type View =
   | "providers"
@@ -839,7 +885,7 @@ function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          {content}
+          <Suspense fallback={<div className="flex-1" />}>{content}</Suspense>
         </motion.div>
       </AnimatePresence>
     );
@@ -1425,39 +1471,45 @@ function App() {
         {renderContent()}
       </main>
 
-      <AddProviderDialog
-        open={isAddOpen}
-        onOpenChange={setIsAddOpen}
-        appId={activeApp}
-        onSubmit={addProvider}
-      />
-
-      <EditProviderDialog
-        open={Boolean(editingProvider)}
-        provider={effectiveEditingProvider}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingProvider(null);
-          }
-        }}
-        onSubmit={handleEditProvider}
-        appId={activeApp}
-        isProxyTakeover={isProxyRunning && isCurrentAppTakeoverActive}
-      />
-
-      {effectiveUsageProvider && (
-        <UsageScriptModal
-          key={effectiveUsageProvider.id}
-          provider={effectiveUsageProvider}
+      <Suspense fallback={null}>
+        <AddProviderDialog
+          open={isAddOpen}
+          onOpenChange={setIsAddOpen}
           appId={activeApp}
-          isOpen={Boolean(usageProvider)}
-          onClose={() => setUsageProvider(null)}
-          onSave={(script) => {
-            if (usageProvider) {
-              void saveUsageScript(usageProvider, script);
+          onSubmit={addProvider}
+        />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <EditProviderDialog
+          open={Boolean(editingProvider)}
+          provider={effectiveEditingProvider}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingProvider(null);
             }
           }}
+          onSubmit={handleEditProvider}
+          appId={activeApp}
+          isProxyTakeover={isProxyRunning && isCurrentAppTakeoverActive}
         />
+      </Suspense>
+
+      {effectiveUsageProvider && (
+        <Suspense fallback={null}>
+          <UsageScriptModal
+            key={effectiveUsageProvider.id}
+            provider={effectiveUsageProvider}
+            appId={activeApp}
+            isOpen={Boolean(usageProvider)}
+            onClose={() => setUsageProvider(null)}
+            onSave={(script) => {
+              if (usageProvider) {
+                void saveUsageScript(usageProvider, script);
+              }
+            }}
+          />
+        </Suspense>
       )}
 
       <ConfirmDialog
@@ -1503,7 +1555,9 @@ function App() {
         onCancel={() => setLaunchDashboardOpen(false)}
       />
       <FirstRunNoticeDialog />
-      <DeepLinkImportDialog />
+      <Suspense fallback={null}>
+        <DeepLinkImportDialog />
+      </Suspense>
     </div>
   );
 }

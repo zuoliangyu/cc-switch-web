@@ -80,10 +80,24 @@ vi.mock("@/components/ui/textarea", () => ({
 }));
 
 vi.mock("@/components/JsonEditor", () => ({
-  default: ({ value, onChange, placeholder, ...rest }: any) => (
+  // 编辑器专有属性（darkMode、showValidation 等）不能透传给原生 textarea，
+  // 否则 React 会报未知 DOM 属性警告。
+  default: ({
+    value,
+    onChange,
+    placeholder,
+    darkMode: _darkMode,
+    showValidation: _showValidation,
+    rows: _rows,
+    language: _language,
+    height: _height,
+    ariaLabel,
+    ...rest
+  }: any) => (
     <textarea
       value={value}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(event) => onChange?.(event.target.value)}
       {...rest}
     />

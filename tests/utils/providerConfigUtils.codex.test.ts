@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   extractCodexBaseUrl,
+  extractCodexExperimentalBearerToken,
   extractCodexModelName,
+  hasExplicitNonOpenAiCodexModelProvider,
   setCodexBaseUrl,
   setCodexModelName,
 } from "@/utils/providerConfigUtils";
@@ -182,5 +184,28 @@ describe("Codex TOML utils", () => {
       replaced.split("\n").filter((line) => line.startsWith("model = ")),
     ).toHaveLength(1);
     expect(extractCodexModelName(replaced)).toBe("gpt-5.6");
+  });
+});
+
+describe("Codex reserved provider ids", () => {
+  it("treats amazon-bedrock-runtime as reserved, matching the backend list", () => {
+    // Codex 0.149 保留该 id；后端不会往其表内写 bearer token，前端也不从中读取。
+    const input = `model_provider = "amazon-bedrock-runtime"
+experimental_bearer_token = "top-level-key"
+
+[model_providers.amazon-bedrock-runtime]
+experimental_bearer_token = "stale-table-key"
+`;
+
+    expect(extractCodexExperimentalBearerToken(input)).toBe("top-level-key");
+  });
+
+  it("matches the built-in openai id case-sensitively", () => {
+    expect(
+      hasExplicitNonOpenAiCodexModelProvider('model_provider = "openai"'),
+    ).toBe(false);
+    expect(
+      hasExplicitNonOpenAiCodexModelProvider('model_provider = "OpenAI"'),
+    ).toBe(true);
   });
 });

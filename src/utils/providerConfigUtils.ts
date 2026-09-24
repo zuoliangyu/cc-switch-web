@@ -566,9 +566,9 @@ export const hasExplicitNonOpenAiCodexModelProvider = (
   if (typeof configText !== "string") return false;
   if (isCodexUnifiedSessionProjection(configText)) return false;
   const providerName = getCodexModelProviderName(configText);
-  return Boolean(
-    providerName && providerName.trim().toLowerCase() !== "openai",
-  );
+  // 与后端一致按大小写精确匹配：Codex 内置 provider 查找区分大小写，
+  // `OpenAI` 会路由到自定义表，属于第三方上游而非官方 provider。
+  return Boolean(providerName && providerName.trim() !== "openai");
 };
 
 const getCodexProviderSectionName = (
@@ -892,6 +892,21 @@ export const extractCodexBaseUrl = (
   }
 };
 
+// 与后端 backend/src/codex_config.rs 的 CODEX_RESERVED_MODEL_PROVIDER_IDS 保持同步。
+const CODEX_RESERVED_MODEL_PROVIDER_IDS = new Set([
+  "amazon-bedrock",
+  "amazon-bedrock-runtime",
+  "openai",
+  "ollama",
+  "lmstudio",
+]);
+
+// 与上游 Codex 及后端判定一致按大小写精确匹配："OpenAI" 等是合法自定义 id。
+const isCustomCodexModelProviderId = (providerName: string): boolean => {
+  const id = providerName.trim();
+  return Boolean(id) && !CODEX_RESERVED_MODEL_PROVIDER_IDS.has(id);
+};
+
 export const extractCodexExperimentalBearerToken = (
   configText: string | undefined | null,
 ): string | undefined => {
@@ -905,9 +920,11 @@ export const extractCodexExperimentalBearerToken = (
       typeof parsed.model_provider === "string"
         ? parsed.model_provider.trim()
         : undefined;
-    const providerToken = providerName
-      ? parsed.model_providers?.[providerName]?.experimental_bearer_token
-      : undefined;
+    // 保留 id 的表不承载 bearer token，只读顶层字段。
+    const providerToken =
+      providerName && isCustomCodexModelProviderId(providerName)
+        ? parsed.model_providers?.[providerName]?.experimental_bearer_token
+        : undefined;
     const value =
       typeof providerToken === "string"
         ? providerToken

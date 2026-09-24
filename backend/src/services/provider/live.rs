@@ -682,6 +682,32 @@ pub(crate) fn normalize_provider_common_config_for_storage(
 }
 
 /// Write live configuration snapshot for a provider
+/// Codex live 写入所用分类：第三方切换只写 config.toml；官方卡片与按内容识别的
+/// Follow Login（含绑定托管账号）拥有 auth.json，统一按 `official` 写入。
+fn codex_live_category(provider: &Provider) -> Option<&str> {
+    if crate::proxy::providers::is_codex_official_provider(provider) {
+        Some("official")
+    } else {
+        provider.category.as_deref()
+    }
+}
+
+/// 在提交 current 之前校验目标 Provider 的 Codex live 投影，不写入任何文件：
+/// 按 live 写入相同的方式构建生效配置，再执行写入层计划（legacy 归一化、安全闸门、
+/// token 注入、TOML 解析）。current 已切换后才被写入层拒绝，会让下一次切换把旧
+/// live 配置回填进新 Provider 的数据库记录（上游 97a7425f）。
+pub(crate) fn preflight_codex_live_write(db: &Database, provider: &Provider) -> Result<(), AppError> {
+    let settings = build_effective_settings_with_common_config(db, &AppType::Codex, provider)?;
+    let obj = settings
+        .as_object()
+        .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
+    let auth = obj
+        .get("auth")
+        .ok_or_else(|| AppError::Config("Codex 供应商配置缺少 'auth' 字段".to_string()))?;
+    let config_str = obj.get("config").and_then(Value::as_str);
+    crate::codex_config::preflight_codex_live_write(codex_live_category(provider), auth, config_str)
+}
+
 pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Result<(), AppError> {
     match app_type {
         AppType::Claude | AppType::ClaudeDesktop => {
@@ -705,7 +731,7 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             let profile = crate::proxy::providers::resolve_codex_catalog_tool_profile(provider);
             crate::codex_config::write_codex_provider_live_with_catalog(
                 &settings,
-                provider.category.as_deref(),
+                codex_live_category(provider),
                 auth,
                 config_str,
                 profile,

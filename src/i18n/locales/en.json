@@ -233,7 +233,8 @@
     "openclawDefaultModelSet": "Set as default model",
     "openclawDefaultModelSetFailed": "Failed to set default model",
     "openclawNoModels": "No models configured",
-    "backfillWarning": "Switched successfully, but failed to save changes back to the previous provider"
+    "backfillWarning": "Switched successfully, but failed to save changes back to the previous provider",
+    "codexAuthCleanupFailed": "Switched successfully, but auth.json could not be removed — the official login credentials are still on disk; delete auth.json from the Codex config directory to remove them"
   },
   "confirm": {
     "deleteProvider": "Delete Provider",

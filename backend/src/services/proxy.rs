@@ -2251,6 +2251,53 @@ impl ProxyService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codex_takeover_without_provider_selects_a_local_authenticated_route() {
+        // 上游 99f9dd2c：未选择 model_provider 时接管不能把代理地址写成 Codex 不读的
+        // 顶层 base_url，而应落到带 PROXY_MANAGED bearer 的自定义 provider 表。
+        let provider = Provider::with_id(
+            "third".to_string(),
+            "Third".to_string(),
+            json!({ "auth": {}, "config": "" }),
+            None,
+        );
+        for input in [
+            "",
+            "model = \"gpt-5\"
+base_url = \"https://old.example/v1\"
+",
+            "model_providers = { cc-switch = { name = \"Existing\", base_url = \"https://keep.example/v1\" } }
+",
+        ] {
+            let url = "http://127.0.0.1:15721/v1";
+            let mut settings = json!({ "auth": {}, "config": input });
+            ProxyService::apply_codex_takeover_fields(&mut settings, url, &provider).unwrap();
+            let live = settings["config"].as_str().unwrap().to_string();
+            let doc: toml::Value = toml::from_str(&live).unwrap();
+            let id = doc["model_provider"].as_str().expect("explicit provider");
+            assert_ne!(id, "openai");
+            let table = &doc["model_providers"][id];
+            assert_eq!(table["base_url"].as_str(), Some(url));
+            assert_eq!(table["wire_api"].as_str(), Some("responses"));
+            assert_eq!(
+                table["experimental_bearer_token"].as_str(),
+                Some(PROXY_TOKEN_PLACEHOLDER)
+            );
+            if input.contains("Existing") {
+                assert_eq!(
+                    doc["model_providers"]["cc-switch"]["base_url"].as_str(),
+                    Some("https://keep.example/v1")
+                );
+            }
+            let mut repeated = json!({ "auth": {}, "config": live });
+            ProxyService::apply_codex_takeover_fields(&mut repeated, url, &provider).unwrap();
+            assert_eq!(
+                toml::from_str::<toml::Value>(repeated["config"].as_str().unwrap()).unwrap(),
+                doc
+            );
+        }
+    }
     use crate::provider::{AuthBinding, AuthBindingSource, ProviderMeta};
     use serial_test::serial;
     use std::env;
@@ -2563,22 +2610,22 @@ requires_openai_auth = true
     }
 
     #[test]
-    fn update_toml_base_url_falls_back_to_top_level_base_url() {
+    fn update_toml_base_url_uses_implicit_openai_override() {
         let input = r#"
 model = "gpt-5.1-codex"
 "#;
 
         let new_url = "http://127.0.0.1:5000/v1";
         let output = crate::codex_config::update_codex_toml_field(input, "base_url", new_url)
-            .expect("update base_url");
+            .expect("update implicit openai base_url");
 
         let parsed: toml::Value =
             toml::from_str(&output).expect("updated config should be valid TOML");
 
         let base_url = parsed
-            .get("base_url")
+            .get("openai_base_url")
             .and_then(|v| v.as_str())
-            .expect("base_url should exist");
+            .expect("openai_base_url should exist");
 
         assert_eq!(base_url, new_url);
     }

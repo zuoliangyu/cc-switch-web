@@ -51,7 +51,9 @@ fn has_explicit_codex_third_party_upstream(provider: &Provider) -> bool {
                     .filter(|provider_id| !provider_id.is_empty())
                     .map(str::to_string)
             })
-            .is_some_and(|provider_id| !provider_id.eq_ignore_ascii_case("openai"))
+            // 与上游一致按大小写精确匹配：内置 provider 查找区分大小写，`OpenAI`
+            // 会路由到自定义表，属于第三方上游而非官方 provider。
+            .is_some_and(|provider_id| provider_id != "openai")
 }
 
 /// 判断该 Codex 条目是否沿用 ChatGPT 登录。

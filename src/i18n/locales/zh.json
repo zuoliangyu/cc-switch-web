@@ -233,7 +233,8 @@
     "openclawDefaultModelSet": "已设为默认模型",
     "openclawDefaultModelSetFailed": "设置默认模型失败",
     "openclawNoModels": "该供应商没有配置模型",
-    "backfillWarning": "切换成功，但旧供应商配置回填失败，您手动修改的配置可能未保存"
+    "backfillWarning": "切换成功，但旧供应商配置回填失败，您手动修改的配置可能未保存",
+    "codexAuthCleanupFailed": "切换成功，但未能删除 auth.json，官方登录凭据仍留在磁盘上；如需彻底移除请手动删除 Codex 配置目录中的 auth.json"
   },
   "confirm": {
     "deleteProvider": "删除供应商",

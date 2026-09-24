@@ -256,15 +256,32 @@ export function useProviderActions(
         const result = await switchProviderMutation.mutateAsync(provider.id);
         await syncClaudePlugin(provider);
 
-        // Show backfill warning if present
+        // 按警告代码分别提示：auth 清理失败若显示为通用“回填失败”会误导用户。
         if (result?.warnings?.length) {
-          toast.warning(
-            t("notifications.backfillWarning", {
-              defaultValue:
-                "切换成功，但旧供应商配置回填失败，您手动修改的配置可能未保存",
-            }),
-            { duration: 5000 },
+          const authCleanupFailed = result.warnings.some((warning) =>
+            warning.startsWith("codex_auth_cleanup_failed"),
           );
+          const hasOtherWarnings = result.warnings.some(
+            (warning) => !warning.startsWith("codex_auth_cleanup_failed"),
+          );
+          if (authCleanupFailed) {
+            toast.warning(
+              t("notifications.codexAuthCleanupFailed", {
+                defaultValue:
+                  "切换成功，但未能删除 auth.json，官方登录凭据仍留在磁盘上；如需彻底移除请手动删除 Codex 配置目录中的 auth.json",
+              }),
+              { duration: 6000 },
+            );
+          }
+          if (hasOtherWarnings) {
+            toast.warning(
+              t("notifications.backfillWarning", {
+                defaultValue:
+                  "切换成功，但旧供应商配置回填失败，您手动修改的配置可能未保存",
+              }),
+              { duration: 5000 },
+            );
+          }
         }
 
         // 根据供应商类型显示不同的成功提示

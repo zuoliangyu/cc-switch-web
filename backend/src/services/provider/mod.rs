@@ -1509,6 +1509,11 @@ impl ProviderService {
                 ));
             }
         } else {
+            // Codex：提交 current 之前先校验 live 投影——写入层安全闸门可能拒绝本次切换，
+            // 若 current 已切换再被拒绝，下一次切换会把旧 live 配置回填进新 Provider。
+            if matches!(app_type, AppType::Codex) {
+                live::preflight_codex_live_write(state.db.as_ref(), provider_for_live)?;
+            }
             // Additive mode apps skip setting is_current (no such concept)
             if !app_type.is_additive_mode() {
                 crate::settings::set_current_provider(&app_type, Some(id))?;
@@ -1534,6 +1539,20 @@ impl ProviderService {
             {
                 log::warn!("Failed to clean stale Codex auth.json: {error}");
             }
+        }
+        // 与上面官方切换对应的第三方分支：关闭登录保留时 config-only 写入应删除
+        // auth.json。删除失败（只读目录、ACL、文件锁）不应让切换失败——config 与
+        // current 已提交——但要以切换警告提示用户官方登录仍留在磁盘上。
+        if matches!(app_type, AppType::Codex)
+            && provider.category.as_deref() != Some("official")
+            && !crate::proxy::providers::is_codex_official_provider(provider)
+            && !crate::settings::preserve_codex_official_auth_on_switch()
+            && crate::codex_config::get_codex_auth_path().exists()
+        {
+            log::warn!("Codex auth.json still present after a preservation-off third-party switch");
+            result
+                .warnings
+                .push("codex_auth_cleanup_failed".to_string());
         }
         if matches!(app_type, AppType::Hermes) {
             crate::hermes_config::apply_switch_defaults(&provider.id, &provider.settings_config)?;

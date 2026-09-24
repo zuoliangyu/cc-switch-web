@@ -704,8 +704,10 @@ mod tests {
             return;
         }
 
+        // 从父目录遍历：真实目录下的文件被收集，符号链接目录不跟随。
+        // （直接把链接作为根传入时 read_dir 会跟随链接，测不到跳过逻辑。）
         let mut files = Vec::new();
-        collect_files_named(&link, "updates.jsonl", &mut files, 0);
-        assert!(files.is_empty());
+        collect_files_named(temp.path(), "updates.jsonl", &mut files, 0);
+        assert_eq!(files, vec![real.join("updates.jsonl")]);
     }
 }

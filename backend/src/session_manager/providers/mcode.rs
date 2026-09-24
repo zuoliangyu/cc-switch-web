@@ -31,11 +31,17 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     }
 }
 
+/// POSIX 单引号转义（Web 无上游 session_manager::terminal 模块，语义同上游 shell_escape）。
+#[cfg(not(windows))]
+fn shell_escape(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
 fn scan(conn: &Connection, data_dir: &Path) -> rusqlite::Result<Vec<SessionMeta>> {
     #[cfg(not(windows))]
     let command = format!(
         "env MINIMAX_DATA_DIR={} mcode",
-        crate::session_manager::terminal::shell_escape(&data_dir.to_string_lossy())
+        shell_escape(&data_dir.to_string_lossy())
     );
     #[cfg(windows)]
     let command = format!(

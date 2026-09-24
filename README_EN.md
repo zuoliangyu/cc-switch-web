@@ -104,6 +104,7 @@ This repository treats `0.1.0` as its initial Web release baseline; previous inh
 
 | Scenario | Command |
 | --- | --- |
+| Interactive menu (wraps the commands below) | `.\menu.ps1` / `./menu.sh` |
 | Local development (`w`) | `pnpm dev` |
 | Docker foreground development (`d`) | `pnpm dev -- d` |
 | Local release build (`w`) | `pnpm build` |
@@ -111,12 +112,15 @@ This repository treats `0.1.0` as its initial Web release baseline; previous inh
 | Project check | `.\scripts\check.ps1` |
 | Local CI check | `.\scripts\ci-check.ps1` |
 | Export artifacts on Windows | `.\scripts\package-artifacts.ps1` |
+| Docker full verification (checks/tests + Linux packages + image smoke) | `pnpm verify:docker` |
 
 Script entry layout:
 
 - `scripts/*.mjs` contains the cross-platform main logic used directly by `pnpm` and CI
 - `scripts/*.ps1` provides thin Windows-local wrappers for PowerShell usage
 - `scripts/lib/process.mjs` and `scripts/lib/entry.ps1` hold the shared Node / PowerShell execution helpers to avoid duplicated scripting logic
+- The root `menu.ps1` / `menu.sh` present the common commands as a numbered menu; pass a number to run one directly, e.g. `./menu.sh 8`
+- `pnpm verify:docker` copies the sources into a container (no host bind mount) and, with the same Rust 1.88 / Node 20 as CI, runs in strict mode (warnings are errors) `pnpm check`, `vite build`, vitest, `cargo check` (native Linux + Windows cross-check), and `cargo test`, then Linux x64/arm64 packaging and an image `/api/health` smoke check; run only `verify`, `package`, or `smoke` if needed
 
 ### Local Development
 

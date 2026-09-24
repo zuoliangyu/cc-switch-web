@@ -26,6 +26,10 @@ RUN pnpm exec vite build
 
 FROM messense/rust-musl-cross:aarch64-musl AS service-builder
 
+# 本地严格验证传入 "-D warnings"（scripts/docker-verify.mjs）；默认为空，不影响发布构建
+ARG RUSTFLAGS=""
+ENV RUSTFLAGS=${RUSTFLAGS}
+
 WORKDIR /app
 
 COPY . .

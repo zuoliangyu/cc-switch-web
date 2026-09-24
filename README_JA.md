@@ -104,6 +104,7 @@ docker run -d --name cc-switch-web \
 
 | 用途 | コマンド |
 | --- | --- |
+| 対話メニュー（以下の主要コマンドをまとめたもの） | `.\menu.ps1` / `./menu.sh` |
 | ローカル開発（`w`） | `pnpm dev` |
 | Docker フォアグラウンド開発（`d`） | `pnpm dev -- d` |
 | ローカル release ビルド（`w`） | `pnpm build` |
@@ -111,12 +112,15 @@ docker run -d --name cc-switch-web \
 | プロジェクトチェック | `.\scripts\check.ps1` |
 | ローカル CI チェック | `.\scripts\ci-check.ps1` |
 | Windows 上で成果物を出力 | `.\scripts\package-artifacts.ps1` |
+| Docker 全量検証（チェック/テスト + Linux パッケージ + イメージスモーク） | `pnpm verify:docker` |
 
 スクリプト入口の方針:
 
 - `scripts/*.mjs` は `pnpm` と CI から直接使うクロスプラットフォームの主ロジック
 - `scripts/*.ps1` は PowerShell 向けの Windows ローカル入口ラッパー
 - `scripts/lib/process.mjs` と `scripts/lib/entry.ps1` は Node / PowerShell 側の共通実行処理をまとめ、重複実装を避けるための共有レイヤー
+- ルートの `menu.ps1` / `menu.sh` は主要コマンドを番号付きメニューで提供し、番号を渡して直接実行することもできます（例：`./menu.sh 8`）
+- `pnpm verify:docker` はソースをコンテナにコピーし（ホストディレクトリはマウントしない）、CI と同じ Rust 1.88 / Node 20 で、厳格モード（警告はエラー扱い）により `pnpm check`、`vite build`、vitest、`cargo check`（Linux ネイティブ + Windows クロスチェック）、`cargo test` を順に実行し、続いて Linux x64/arm64 パッケージングとイメージの `/api/health` スモークチェックを行います。`verify`、`package`、`smoke` のみの実行も可能です
 
 ### ローカル開発
 

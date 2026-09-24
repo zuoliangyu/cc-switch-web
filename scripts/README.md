@@ -77,6 +77,21 @@
     - `l`：仅 Linux
     - `d`：仅 Docker
 
+### Docker 验证
+
+- `docker-verify.mjs`（`pnpm verify:docker`）
+  - 把源码作为构建上下文复制进容器（不挂载宿主目录），用与 CI 相同的 Rust 1.88 / Node 20 复现 Linux 流程
+  - `verify`：严格模式（警告即错误，Rust 使用 `RUSTFLAGS="-D warnings"`）：`pnpm check`、`vite build`（出现 `(!)`/warning 即失败）、vitest、`cargo check --all-targets`（Linux 原生 + `x86_64-pc-windows-gnu` 交叉检查）、`cargo test`；镜像定义见 `docker/verify.Dockerfile`，cargo / pnpm 使用 BuildKit 缓存卷
+  - `package`：用 `Dockerfile` / `Dockerfile.arm64` 导出 linux-x64 / linux-arm64 发布包到 `release/docker-artifacts`
+  - `smoke`：构建最终镜像并检查 `/api/health`
+  - 默认 `all` 依次执行以上全部步骤
+
+### 根目录菜单
+
+- `menu.ps1`（Windows PowerShell）/ `menu.sh`（macOS、Linux、Git Bash）
+  - 以编号菜单汇总开发、检查、测试、构建、Docker 验证与打包等常用命令
+  - 也可直接传编号执行，例如 `.\menu.ps1 8`、`./menu.sh 8`
+
 ### 图标处理脚本
 
 - `generate-icon-index.js`

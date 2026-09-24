@@ -338,7 +338,10 @@ async function runDockerDevelopment(options) {
 }
 
 async function main() {
-  const options = parseCliArgs(process.argv.slice(2));
+  // pnpm 10 会把 `pnpm dev -- w` 中的 `--` 原样传入，这里跳过。
+  const options = parseCliArgs(
+    process.argv.slice(2).filter((arg) => arg !== "--"),
+  );
 
   switch (options.mode) {
     case "w":

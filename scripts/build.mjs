@@ -1,7 +1,10 @@
 import process from "node:process";
 import { cargoCmd, runOrExit } from "./lib/process.mjs";
 
-const mode = (process.argv[2] || "w").toLowerCase();
+// pnpm 10 会把 `pnpm build -- w` 中的 `--` 原样传入，这里跳过。
+const mode = (
+  process.argv.slice(2).find((arg) => arg !== "--") || "w"
+).toLowerCase();
 
 function printUsage() {
   console.log("Usage: pnpm build -- <w|d>");

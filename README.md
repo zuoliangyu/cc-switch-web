@@ -104,6 +104,7 @@ docker run -d --name cc-switch-web \
 
 | 场景 | 命令 |
 | --- | --- |
+| 交互菜单（汇总下列常用命令） | `.\menu.ps1` / `./menu.sh` |
 | 本地开发（`w`） | `pnpm dev` |
 | Docker 前台开发（`d`） | `pnpm dev -- d` |
 | 本地 release 构建（`w`） | `pnpm build` |
@@ -111,12 +112,15 @@ docker run -d --name cc-switch-web \
 | 项目检查 | `.\scripts\check.ps1` |
 | 本地 CI 检查 | `.\scripts\ci-check.ps1` |
 | Windows 本地导出产物 | `.\scripts\package-artifacts.ps1` |
+| Docker 全量验证（检查/测试 + Linux 打包 + 镜像冒烟） | `pnpm verify:docker` |
 
 脚本入口约定：
 
 - `scripts/*.mjs` 负责跨平台主逻辑，供 `pnpm` 与 CI 直接调用
 - `scripts/*.ps1` 负责 Windows 本地入口包装，便于 PowerShell 使用
 - `scripts/lib/process.mjs` 与 `scripts/lib/entry.ps1` 分别承载 Node / PowerShell 的共享执行逻辑，避免重复维护
+- 根目录 `menu.ps1` / `menu.sh` 以编号菜单汇总常用命令，也可直接传编号执行，例如 `./menu.sh 8`
+- `pnpm verify:docker` 把源码复制进容器（不挂载宿主目录），用与 CI 相同的 Rust 1.88 / Node 20 以严格模式（警告即错误）依次执行 `pnpm check`、`vite build`、vitest、`cargo check`（Linux 原生 + Windows 交叉检查）、`cargo test`，再做 Linux x64/arm64 打包与镜像 `/api/health` 冒烟；可只跑 `verify`、`package` 或 `smoke`
 
 ### 本地开发
 

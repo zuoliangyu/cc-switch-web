@@ -17,6 +17,9 @@ FROM rust:1.88-alpine3.20 AS service-builder
 # Empty when an old builder is used -> default to amd64 (x86_64).
 ARG TARGETARCH
 ARG TARGETVARIANT
+# 本地严格验证传入 "-D warnings"（scripts/docker-verify.mjs）；默认为空，不影响发布构建
+ARG RUSTFLAGS=""
+ENV RUSTFLAGS=${RUSTFLAGS}
 
 WORKDIR /app
 

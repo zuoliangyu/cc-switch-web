@@ -1177,9 +1177,11 @@ impl ProxyService {
                         .apply_managed_codex_auth_to_restore(&mut config)
                         .await?;
                     self.write_codex_live(&config)?;
-                    if managed_auth {
+                    if let Some(account_id) = managed_auth.as_deref() {
                         if let Some(auth) = config.get("auth") {
-                            crate::codex_config::record_codex_managed_oauth_live_auth(auth)
+                            crate::codex_config::record_codex_managed_oauth_live_auth(
+                                auth, account_id,
+                            )
                                 .map_err(|error| format!("记录 Codex 托管登录失败: {error}"))?;
                         }
                     }
@@ -1273,12 +1275,12 @@ impl ProxyService {
                     self.apply_managed_codex_auth_to_restore(&mut config)
                         .await?
                 } else {
-                    false
+                    None
                 };
                 self.write_live_config_for_app(app_type, &config)?;
-                if managed_codex_auth {
+                if let Some(account_id) = managed_codex_auth.as_deref() {
                     if let Some(auth) = config.get("auth") {
-                        crate::codex_config::record_codex_managed_oauth_live_auth(auth)
+                        crate::codex_config::record_codex_managed_oauth_live_auth(auth, account_id)
                             .map_err(|error| format!("记录 Codex 托管登录失败: {error}"))?;
                     }
                 }
@@ -1398,13 +1400,13 @@ impl ProxyService {
             self.apply_managed_codex_auth_to_restore(&mut prepared.settings_config)
                 .await?
         } else {
-            false
+            None
         };
         write_live_with_common_config(self.db.as_ref(), app_type, &prepared)
             .map_err(|e| format!("写入 {app_type:?} Live 配置失败: {e}"))?;
-        if managed_codex_auth {
+        if let Some(account_id) = managed_codex_auth.as_deref() {
             if let Some(auth) = prepared.settings_config.get("auth") {
-                crate::codex_config::record_codex_managed_oauth_live_auth(auth)
+                crate::codex_config::record_codex_managed_oauth_live_auth(auth, account_id)
                     .map_err(|error| format!("记录 Codex 托管登录失败: {error}"))?;
             }
         }
@@ -1836,22 +1838,22 @@ impl ProxyService {
     async fn apply_managed_codex_auth_to_restore(
         &self,
         target: &mut Value,
-    ) -> Result<bool, String> {
+    ) -> Result<Option<String>, String> {
         let Some(current_id) =
             crate::settings::get_effective_current_provider(self.db.as_ref(), &AppType::Codex)
                 .map_err(|error| format!("读取当前 Codex provider 失败: {error}"))?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         let Some(provider) = self
             .db
             .get_provider_by_id(&current_id, AppType::Codex.as_str())
             .map_err(|error| format!("读取当前 Codex provider 失败: {error}"))?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         if !crate::proxy::providers::is_codex_official_provider(&provider) {
-            return Ok(false);
+            return Ok(None);
         }
         let Some(account_id) = provider
             .meta
@@ -1860,7 +1862,7 @@ impl ProxyService {
             .map(|account_id| account_id.trim().to_string())
             .filter(|account_id| !account_id.is_empty())
         else {
-            return Ok(false);
+            return Ok(None);
         };
         let manager = self.codex_oauth_state.read().await;
         let bundle = manager
@@ -1873,13 +1875,13 @@ impl ProxyService {
             ));
         }
         target["auth"] = crate::codex_config::codex_managed_oauth_auth_value(
-            &account_id,
+            &bundle.chatgpt_account_id,
             &bundle.access_token,
             bundle.id_token.as_deref(),
             &bundle.refresh_token,
             &bundle.last_refresh,
         );
-        Ok(true)
+        Ok(Some(account_id))
     }
 
     /// 代理模式下切换供应商（热切换，不写 Live）

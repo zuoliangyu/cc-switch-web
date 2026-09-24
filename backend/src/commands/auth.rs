@@ -103,6 +103,7 @@ fn map_device_code_response(
 
 pub(crate) async fn auth_start_login_internal(
     auth_provider: &str,
+    target_account_id: Option<&str>,
     copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     codex_state: &Arc<RwLock<crate::proxy::providers::codex_oauth_auth::CodexOAuthManager>>,
     xai_state: &Arc<RwLock<crate::proxy::providers::xai_oauth_auth::XaiOAuthManager>>,
@@ -110,6 +111,9 @@ pub(crate) async fn auth_start_login_internal(
     let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
+            if target_account_id.is_some() {
+                return Err("Targeted re-authentication is only supported for Codex OAuth".into());
+            }
             let auth_manager = copilot_state.read().await;
             let response = auth_manager
                 .start_device_flow()
@@ -120,12 +124,15 @@ pub(crate) async fn auth_start_login_internal(
         AUTH_PROVIDER_CODEX_OAUTH => {
             let auth_manager = codex_state.read().await;
             let response = auth_manager
-                .start_device_flow()
+                .start_device_flow(target_account_id)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(map_device_code_response(auth_provider, response))
         }
         AUTH_PROVIDER_XAI_OAUTH => {
+            if target_account_id.is_some() {
+                return Err("Targeted re-authentication is only supported for Codex OAuth".into());
+            }
             let auth_manager = xai_state.read().await;
             let response = auth_manager
                 .start_device_flow()
@@ -140,6 +147,7 @@ pub(crate) async fn auth_start_login_internal(
 pub(crate) async fn auth_poll_for_account_internal(
     auth_provider: &str,
     device_code: &str,
+    proxy_service: &crate::services::proxy::ProxyService,
     copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     codex_state: &Arc<RwLock<crate::proxy::providers::codex_oauth_auth::CodexOAuthManager>>,
     xai_state: &Arc<RwLock<crate::proxy::providers::xai_oauth_auth::XaiOAuthManager>>,
@@ -161,7 +169,15 @@ pub(crate) async fn auth_poll_for_account_internal(
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
             let auth_manager = codex_state.write().await;
-            match auth_manager.poll_for_token(device_code).await {
+            // 提交新账号前持有 Codex 切换锁，避免与 Provider 切换 / 接管并发写 live（上游 c2ec78dd）。
+            match auth_manager
+                .poll_for_token(device_code, || async {
+                    proxy_service
+                        .lock_switch_for_app(crate::app_config::AppType::Codex.as_str())
+                        .await
+                })
+                .await
+            {
                 Ok(account) => {
                     let default_account_id = auth_manager.get_status().await.default_account_id;
                     Ok(account.map(|account| {
@@ -186,6 +202,23 @@ pub(crate) async fn auth_poll_for_account_internal(
         }
         _ => unreachable!(),
     }
+}
+
+/// 取消进行中的 Codex OAuth device flow（仅 Codex 支持）。
+pub(crate) async fn auth_cancel_login_internal(
+    auth_provider: &str,
+    device_code: &str,
+    codex_state: &Arc<RwLock<crate::proxy::providers::codex_oauth_auth::CodexOAuthManager>>,
+) -> Result<bool, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    if auth_provider != AUTH_PROVIDER_CODEX_OAUTH {
+        return Err("Login cancellation is only supported for Codex OAuth".to_string());
+    }
+    Ok(codex_state
+        .read()
+        .await
+        .cancel_device_flow(device_code)
+        .await)
 }
 
 pub(crate) async fn auth_list_accounts_internal(

@@ -989,7 +989,7 @@ impl ProviderService {
         settings.insert(
             "auth".to_string(),
             crate::codex_config::codex_managed_oauth_auth_value(
-                &account_id,
+                &bundle.chatgpt_account_id,
                 &bundle.access_token,
                 bundle.id_token.as_deref(),
                 &bundle.refresh_token,
@@ -1002,7 +1002,7 @@ impl ProviderService {
     fn prepare_outgoing_managed_codex_live_auth(
         state: &AppState,
         account_id: Option<&str>,
-    ) -> Result<Option<String>, AppError> {
+    ) -> Result<Option<crate::proxy::providers::codex_oauth_auth::CodexLiveAuthSwitchGuard>, AppError> {
         let Some(account_id) = account_id else {
             return Ok(None);
         };
@@ -1012,6 +1012,7 @@ impl ProviderService {
                 .prepare_live_auth_for_account_switch_away(account_id)
                 .await
         })
+        .map(Some)
         .map_err(|error| AppError::Message(error.to_string()))
     }
 
@@ -1109,8 +1110,11 @@ impl ProviderService {
             let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
             let live_result = (|| {
                 write_live_with_common_config(state.db.as_ref(), &app_type, &prepared)?;
-                if let Some(auth) = prepared.settings_config.get("auth") {
-                    crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                if let (Some(auth), Some(account_id)) = (
+                    prepared.settings_config.get("auth"),
+                    Self::managed_codex_oauth_account_id(&prepared),
+                ) {
+                    crate::codex_config::record_codex_managed_oauth_live_auth(auth, &account_id)?;
                 }
                 Ok::<(), AppError>(())
             })();
@@ -1236,7 +1240,7 @@ impl ProviderService {
                 .as_ref()
                 .filter(|account_id| target_managed_codex_account_id.as_ref() != Some(*account_id))
                 .cloned();
-            let outgoing_live_refresh_token = Self::prepare_outgoing_managed_codex_live_auth(
+            let outgoing_live_auth_guard = Self::prepare_outgoing_managed_codex_live_auth(
                 state,
                 outgoing_managed_account_id.as_deref(),
             )?;
@@ -1245,26 +1249,25 @@ impl ProviderService {
             let provider_for_live = prepared_provider.as_ref().unwrap_or(&provider);
             let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
             let live_result = (|| {
-                if let (Some(account_id), Some(expected_refresh)) = (
+                if let (Some(account_id), Some(guard)) = (
                     outgoing_managed_account_id.as_deref(),
-                    outgoing_live_refresh_token.as_deref(),
+                    outgoing_live_auth_guard.as_ref(),
                 ) {
-                    crate::codex_config::ensure_codex_live_auth_unchanged_for_managed_account(
-                        account_id,
-                        expected_refresh,
-                    )?;
+                    guard.ensure_unchanged(account_id)?;
                 }
                 write_live_with_common_config(state.db.as_ref(), &app_type, provider_for_live)?;
-                if target_managed_codex_account_id.is_some() {
+                if let Some(account_id) = target_managed_codex_account_id.as_deref() {
                     if let Some(auth) = provider_for_live.settings_config.get("auth") {
-                        crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                        crate::codex_config::record_codex_managed_oauth_live_auth(
+                            auth, account_id,
+                        )?;
                     }
                 }
-                if let Some(account_id) = outgoing_managed_account_id.as_deref() {
-                    crate::codex_config::clear_codex_live_auth_for_managed_account_if_unchanged(
-                        account_id,
-                        outgoing_live_refresh_token.as_deref(),
-                    )?;
+                if let (Some(account_id), Some(guard)) = (
+                    outgoing_managed_account_id.as_deref(),
+                    outgoing_live_auth_guard.as_ref(),
+                ) {
+                    guard.clear_outgoing(account_id)?;
                 }
                 Ok::<(), AppError>(())
             })();
@@ -1783,7 +1786,7 @@ impl ProviderService {
             .as_ref()
             .filter(|account_id| target_managed_codex_account_id.as_ref() != Some(*account_id))
             .cloned();
-        let outgoing_live_refresh_token = Self::prepare_outgoing_managed_codex_live_auth(
+        let outgoing_live_auth_guard = Self::prepare_outgoing_managed_codex_live_auth(
             state,
             outgoing_managed_codex_account_id.as_deref(),
         )?;
@@ -1796,26 +1799,25 @@ impl ProviderService {
         if managed_codex_transition {
             let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()?;
             let live_result = (|| {
-                if let (Some(account_id), Some(expected_refresh)) = (
+                if let (Some(account_id), Some(guard)) = (
                     outgoing_managed_codex_account_id.as_deref(),
-                    outgoing_live_refresh_token.as_deref(),
+                    outgoing_live_auth_guard.as_ref(),
                 ) {
-                    crate::codex_config::ensure_codex_live_auth_unchanged_for_managed_account(
-                        account_id,
-                        expected_refresh,
-                    )?;
+                    guard.ensure_unchanged(account_id)?;
                 }
                 write_live_with_common_config(state.db.as_ref(), &app_type, provider_for_live)?;
-                if target_managed_codex_account_id.is_some() {
+                if let Some(account_id) = target_managed_codex_account_id.as_deref() {
                     if let Some(auth) = provider_for_live.settings_config.get("auth") {
-                        crate::codex_config::record_codex_managed_oauth_live_auth(auth)?;
+                        crate::codex_config::record_codex_managed_oauth_live_auth(
+                            auth, account_id,
+                        )?;
                     }
                 }
-                if let Some(account_id) = outgoing_managed_codex_account_id.as_deref() {
-                    crate::codex_config::clear_codex_live_auth_for_managed_account_if_unchanged(
-                        account_id,
-                        outgoing_live_refresh_token.as_deref(),
-                    )?;
+                if let (Some(account_id), Some(guard)) = (
+                    outgoing_managed_codex_account_id.as_deref(),
+                    outgoing_live_auth_guard.as_ref(),
+                ) {
+                    guard.clear_outgoing(account_id)?;
                 }
                 Ok::<(), AppError>(())
             })();

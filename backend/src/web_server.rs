@@ -495,6 +495,8 @@ struct LatestReleaseQuery {
 #[serde(rename_all = "camelCase")]
 struct AuthStartLoginRequest {
     auth_provider: String,
+    #[serde(default)]
+    target_account_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2560,6 +2562,7 @@ async fn auth_start_login(
 ) -> Result<Json<crate::commands::ManagedAuthDeviceCodeResponse>, ApiError> {
     let response = crate::commands::auth_start_login_internal(
         &payload.auth_provider,
+        payload.target_account_id.as_deref(),
         &state.copilot_auth_state,
         &state.codex_oauth_state,
         &state.xai_oauth_state,
@@ -2576,6 +2579,7 @@ async fn auth_poll_for_account(
     let account = crate::commands::auth_poll_for_account_internal(
         &payload.auth_provider,
         &payload.device_code,
+        &state.app_state.proxy_service,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
         &state.xai_oauth_state,
@@ -2583,6 +2587,20 @@ async fn auth_poll_for_account(
     .await
     .map_err(|e| ApiError::internal(format!("failed to poll auth account: {e}")))?;
     Ok(Json(account))
+}
+
+async fn auth_cancel_login(
+    State(state): State<WebApiState>,
+    Json(payload): Json<AuthPollForAccountRequest>,
+) -> Result<Json<bool>, ApiError> {
+    let cancelled = crate::commands::auth_cancel_login_internal(
+        &payload.auth_provider,
+        &payload.device_code,
+        &state.codex_oauth_state,
+    )
+    .await
+    .map_err(ApiError::bad_request)?;
+    Ok(Json(cancelled))
 }
 
 async fn auth_list_accounts(
@@ -3825,6 +3843,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/omo-slim/disable", post(disable_current_omo_slim))
         .route("/api/auth/start-login", post(auth_start_login))
         .route("/api/auth/poll-for-account", post(auth_poll_for_account))
+        .route("/api/auth/cancel-login", post(auth_cancel_login))
         .route("/api/auth/:auth_provider/accounts", get(auth_list_accounts))
         .route("/api/auth/:auth_provider/status", get(auth_get_status))
         .route("/api/auth/remove-account", post(auth_remove_account))

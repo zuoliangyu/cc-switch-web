@@ -1,5 +1,4 @@
 import {
-  act,
   fireEvent,
   render,
   screen,

@@ -189,6 +189,7 @@ pub(crate) fn response_function_call_item_with_namespace(
     item
 }
 
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入
 pub(crate) fn response_item_call_id(item: &Value) -> Option<String> {
     item.get("call_id")
         .or_else(|| item.get("id"))
@@ -198,6 +199,7 @@ pub(crate) fn response_item_call_id(item: &Value) -> Option<String> {
         .map(ToString::to_string)
 }
 
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入
 pub(crate) fn is_empty_value(value: &Value) -> bool {
     match value {
         Value::Null => true,

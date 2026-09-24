@@ -106,6 +106,7 @@ impl CostCalculator {
     }
 
     /// 尝试计算成本，如果模型未知则返回 None
+    #[cfg(test)]
     pub fn try_calculate(
         usage: &TokenUsage,
         pricing: Option<&ModelPricing>,

@@ -2074,6 +2074,7 @@ pub(crate) fn response_status_from_finish_reason(finish_reason: Option<&str>) ->
 ///
 /// 输出统一为 `{"error": {"message", "type", "code", "param"}}`，与 OpenAI Responses
 /// API 错误响应一致；Codex 客户端的错误处理只识别这个形状。
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub fn chat_error_to_response_error(body: Option<&Value>) -> Value {
     let Some(value) = body else {
         return json!({

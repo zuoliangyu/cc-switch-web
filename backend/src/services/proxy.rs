@@ -1790,6 +1790,7 @@ impl ProxyService {
     ///
     /// 与直接读取 Live 文件的旧备份流程不同，此方法从供应商的 settings_config 生成备份，
     /// 而不是从 Live 文件读取（因为 Live 文件已被代理接管）。
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub async fn update_live_backup_from_provider(
         &self,
         app_type: &str,

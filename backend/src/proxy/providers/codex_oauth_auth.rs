@@ -79,6 +79,7 @@ pub enum CodexOAuthError {
     AuthorizationPending,
 
     #[error("用户拒绝授权")]
+    #[allow(dead_code)] // 与上游对等保留，Web 暂未接入
     AccessDenied,
 
     #[error("Device Code 已过期")]
@@ -1046,6 +1047,7 @@ impl CodexOAuthManager {
     /// id_token 用于让托管写入的 Codex auth.json 与原生浏览器登录保持
     /// 一致的 tokens 字段形状（仅托管绑定路径使用）。旧账号若无 id_token
     /// 会返回 `None`，前端据此提示重新登录。
+    #[allow(dead_code)] // 与上游对等保留，Web 暂未接入
     pub async fn get_valid_token_and_id_token_for_account(
         &self,
         account_id: &str,
@@ -1146,6 +1148,7 @@ impl CodexOAuthManager {
     /// refresh_token 采纳进本地存储，避免用陈腐 token 覆盖 CLI 的有效登录。
     ///
     /// 仅当账号确由本 manager 托管、且值确有变化时才更新并落盘；返回是否更新。
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub async fn adopt_account_refresh_token(
         &self,
         account_id: &str,
@@ -1357,6 +1360,7 @@ impl CodexOAuthManager {
     }
 
     /// 获取默认账号的有效 token
+    #[allow(dead_code)] // 与上游对等保留，Web 暂未接入
     pub async fn get_valid_token(&self) -> Result<String, CodexOAuthError> {
         match self.resolve_default_account_id().await {
             Some(id) => self.get_valid_token_for_account(&id).await,
@@ -1387,6 +1391,7 @@ impl CodexOAuthManager {
 
     // ==================== 多账号管理 ====================
 
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub async fn list_accounts(&self) -> Vec<GitHubAccount> {
         let accounts = self.accounts.read().await.clone();
         let default_id = self.resolve_default_account_id().await;
@@ -1528,6 +1533,7 @@ impl CodexOAuthManager {
         Ok(())
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub async fn is_authenticated(&self) -> bool {
         let accounts = self.accounts.read().await;
         !accounts.is_empty()
@@ -1666,6 +1672,7 @@ impl CodexOAuthManager {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)] // 上游 provider 测试使用的辅助，Web 未移植对应用例
     pub(crate) async fn test_cache_access_token(&self, account_id: &str, token: &str) {
         assert!(self.accounts.read().await.contains_key(account_id));
         let now = chrono::Utc::now().timestamp_millis();
@@ -1680,6 +1687,7 @@ impl CodexOAuthManager {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)] // 上游 provider 测试使用的辅助，Web 未移植对应用例
     pub(crate) async fn test_refresh_token_for_account(&self, account_id: &str) -> Option<String> {
         self.accounts
             .read()
@@ -1689,6 +1697,7 @@ impl CodexOAuthManager {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)] // 上游 provider 测试使用的辅助，Web 未移植对应用例
     pub(crate) async fn test_set_token_updated_at_ms(
         &self,
         account_id: &str,

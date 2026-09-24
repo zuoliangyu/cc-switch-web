@@ -149,6 +149,7 @@ struct InferenceModelSpec {
     supports_1m: bool,
 }
 
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入 Claude Desktop 写入
 pub fn apply_provider(db: &Database, provider: &Provider) -> Result<(), AppError> {
     let paths = current_platform_paths()?;
     apply_provider_to_paths(db, provider, &paths)
@@ -233,6 +234,7 @@ pub fn get_status(db: &Database, proxy_running: bool) -> Result<ClaudeDesktopSta
     })
 }
 
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入 Claude Desktop 写入
 pub fn get_config_library_path() -> Result<PathBuf, AppError> {
     Ok(current_platform_paths()?.config_library_path)
 }
@@ -241,6 +243,7 @@ pub fn default_proxy_routes() -> Vec<ClaudeDesktopDefaultRoute> {
     DEFAULT_PROXY_ROUTES.to_vec()
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 暂未提供从 Claude 导入 Claude Desktop（仅测试覆盖）
 pub fn is_compatible_direct_provider(provider: &Provider) -> bool {
     validate_direct_provider(provider).is_ok()
 }

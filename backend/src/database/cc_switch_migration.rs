@@ -8,7 +8,7 @@ use rusqlite::backup::Backup;
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use tempfile::Builder;
 
@@ -349,6 +349,7 @@ mod tests {
     use rusqlite::params;
     use serial_test::serial;
     use std::ffi::OsString;
+    use std::path::PathBuf;
     use std::time::SystemTime;
     use tempfile::tempdir;
 

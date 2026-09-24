@@ -638,9 +638,3 @@ pub fn delete_file(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 检查 Claude Code 配置状态
-#[derive(Serialize, Deserialize)]
-pub struct ConfigStatus {
-    pub exists: bool,
-    pub path: String,
-}

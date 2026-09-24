@@ -2504,6 +2504,7 @@ fn convert_messages_to_input(messages: &[Value]) -> Result<Vec<Value>, ProxyErro
 }
 
 /// OpenAI Responses 响应 → Anthropic 响应
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub fn responses_to_anthropic(body: Value) -> Result<Value, ProxyError> {
     responses_to_anthropic_with_web_search_name(body, None)
 }

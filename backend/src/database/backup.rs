@@ -127,6 +127,7 @@ impl Database {
     }
 
     /// 导出为 SQLite 兼容的 SQL 文本
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub fn export_sql(&self, target_path: &Path) -> Result<(), AppError> {
         let dump = self.export_sql_string()?;
 
@@ -138,6 +139,7 @@ impl Database {
     }
 
     /// 从 SQL 文件导入，返回生成的备份 ID（若无备份则为空字符串）
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub fn import_sql(&self, source_path: &Path) -> Result<String, AppError> {
         if !source_path.exists() {
             return Err(AppError::InvalidInput(format!(

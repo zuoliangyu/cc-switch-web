@@ -3,6 +3,7 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub(crate) fn canonicalize_value(value: Value) -> Value {
     match value {
         Value::Array(values) => Value::Array(values.into_iter().map(canonicalize_value).collect()),
@@ -87,6 +88,7 @@ pub(crate) fn canonicalize_tool_arguments(value: Option<&Value>) -> String {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub(crate) fn short_value_hash(value: Option<&Value>) -> String {
     let Some(value) = value else {
         return "absent".to_string();

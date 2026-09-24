@@ -160,6 +160,7 @@ pub(crate) fn decompress_body_with_limit(
 
 /// 无输出上限的 [`decompress_body_with_limit`] 版本，供请求侧等已有自身
 /// 体积约束的调用方使用。
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub(crate) fn decompress_body(
     content_encoding: &str,
     body: &[u8],
@@ -170,6 +171,7 @@ pub(crate) fn decompress_body(
 /// 该 content-encoding（含堆叠，如 `gzip, zstd`）是否全部可被解压。
 ///
 /// 请求侧用它做闸门：无法解压的压缩体不能透传给 JSON 解析，需直接拒绝。
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub(crate) fn is_supported_content_encoding(content_encoding: &str) -> bool {
     let codings = split_codings(content_encoding);
     !codings.is_empty() && codings.iter().all(|c| is_single_supported(c))

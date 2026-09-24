@@ -429,6 +429,7 @@ impl XaiOAuthManager {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
     pub async fn list_accounts(&self) -> Vec<XaiOAuthAccount> {
         let accounts = self.accounts.read().await.clone();
         let default_account_id = self.resolve_default_account_id().await;

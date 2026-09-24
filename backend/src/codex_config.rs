@@ -1292,18 +1292,6 @@ pub fn restore_codex_settings_config_model_provider_for_backfill(
     Ok(())
 }
 
-pub fn write_codex_live_atomic_with_stable_provider(
-    auth: &Value,
-    config_text_opt: Option<&str>,
-) -> Result<(), AppError> {
-    let Some(config_text) = config_text_opt else {
-        return write_codex_live_atomic(auth, None);
-    };
-    let mut settings = json!({ "config": config_text });
-    normalize_codex_settings_config_model_provider(&mut settings, None)?;
-    write_codex_live_atomic(auth, settings.get("config").and_then(Value::as_str))
-}
-
 /// Write only Codex `config.toml` for provider switching.
 ///
 /// Codex login state lives in `auth.json`; provider routing, endpoint, model,
@@ -1631,6 +1619,7 @@ pub fn clear_stale_codex_live_auth_after_official_switch(
     Ok(true)
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub fn should_restore_codex_provider_token_for_backfill(
     category: Option<&str>,
     template_settings: &Value,
@@ -2706,6 +2695,7 @@ pub(crate) fn read_limited_string(path: &Path, max_bytes: u64) -> Result<String,
 }
 
 /// Read the cc-switch Codex model catalog file with a size cap.
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入
 pub(crate) fn read_codex_model_catalog_text(path: &Path) -> Result<String, AppError> {
     read_limited_string(path, MAX_CODEX_CATALOG_BYTES)
 }
@@ -2885,6 +2875,7 @@ fn build_simplified_catalog_from_texts(config_text: &str, catalog_text: &str) ->
 /// `modelCatalog` with empty `auth.json` (the API key living in the config's
 /// `experimental_bearer_token`), so the caller must decide config projection
 /// independently of whether it writes or deletes `auth.json`.
+#[allow(dead_code)] // 与上游对等保留，Web 暂未接入
 pub fn prepare_codex_live_config_text_with_optional_catalog(
     settings: &Value,
     config_text: &str,
@@ -4002,6 +3993,7 @@ pub fn strip_codex_unified_session_bucket_from_settings(
 /// `[mcp_servers]` 只是每次写 live 之后由 MCP 同步重新投影的产物。若回填时
 /// 烙进供应商存储配置，已在应用里删除的服务器会随下次激活该供应商被写回
 /// live，而逐条 reconcile 只认识 DB 现存条目、永远清不掉这种孤儿。
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub fn strip_codex_mcp_servers_from_settings(settings: &mut Value) -> Result<(), AppError> {
     let Some(config_text) = settings
         .get("config")
@@ -4327,6 +4319,7 @@ pub fn restore_codex_provider_token_for_backfill(
     Ok(())
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 运行时暂未接入（仅测试覆盖）
 pub fn restore_codex_settings_for_backfill(
     settings: &mut Value,
     template_settings: &Value,

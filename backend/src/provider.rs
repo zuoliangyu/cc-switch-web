@@ -241,6 +241,8 @@ impl Provider {
 }
 
 /// 供应商管理器
+// 仅作为旧版 config.json（MultiAppConfig）的反序列化结构；Web 的 JSON→SQLite 迁移只在测试中读取字段
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderManager {
     pub providers: IndexMap<String, Provider>,
@@ -996,6 +998,7 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
 
+    #[test]
     fn proxy_injected_oauth_excludes_codex_oauth() {
         let mut provider = Provider::with_id("p".to_string(), "P".to_string(), json!({}), None);
         assert!(!provider.uses_proxy_injected_oauth());

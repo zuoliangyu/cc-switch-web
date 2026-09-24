@@ -22,10 +22,13 @@ const ppioModelName = "Deepseek V4 Flash 0731";
 const ppioAnthropicEndpoint = "https://api.ppio.com/anthropic";
 const ppioOpenAiEndpoint = "https://api.ppio.com/openai/v1";
 const ppioChatCompletionsEndpoint = `${ppioOpenAiEndpoint}/chat/completions`;
+const ppioModelsEndpoint = `${ppioOpenAiEndpoint}/models`;
 const ppioBrandFields = {
   websiteUrl: "https://ppio.com",
-  apiKeyUrl: "https://ppio.com/settings/key-management",
+  apiKeyUrl: "https://ppio.com/activity/ccswitch",
   category: "aggregator",
+  isPartner: true,
+  partnerPromotionKey: "ppio",
   icon: "ppio",
   iconColor: "#2874FF",
 };
@@ -59,8 +62,8 @@ describe("PPIO provider presets", () => {
         },
       },
       endpointCandidates: [ppioAnthropicEndpoint],
+      modelsUrl: ppioModelsEndpoint,
     });
-    expect(claude).not.toHaveProperty("modelsUrl");
   });
 
   it("configures Claude Desktop with the native Anthropic endpoint", () => {

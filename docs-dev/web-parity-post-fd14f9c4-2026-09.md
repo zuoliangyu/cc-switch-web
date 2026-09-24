@@ -1,0 +1,244 @@
+# Web 端跟进上游 `fd14f9c4` 后续迁移计划（2026-09-24）
+
+> 状态：批次 1 已完成，批次 2 至批次 6 待执行
+> 上游仓库：`E:/zuolan_lib/AI_Hub/cc-switch`
+> 冻结基线：`fd14f9c4`（上一轮审计点，见 `web-parity-post-40cac1a6-2026-08.md`）
+> 当前审计点：`f8788719`（上游 v3.20.4 之后的 `main`）
+> 增量：165 个提交
+
+## 1. 目标与原则
+
+吸收 `cc-switch` 在 `fd14f9c4` 之后新增、且适用于浏览器 UI 与本地服务端运行时的功能和修复。Tauri 窗口、托盘、更新器、上游 CI 与发布记录不机械复制。
+
+迁移按风险拆包，每个迁移包独立补测试并完成局部验证：
+
+1. 预设、定价、图标与模型能力（低风险，机械同步为主）。
+2. 代理协议转换：xAI 原生 Responses 清洗、Images API、Chat 转换与 reasoning 档位。
+3. Codex 配置与 OAuth：config-only 认证写入、保留表迁移、托管账号生命周期。
+4. 用量与会话统计：增量字节游标扫描、自动/手动扫描模式、订阅用量。
+5. 新功能与交互：MiniMax Code、Claude Desktop Linux、Skills、Prompts、模型列表。
+6. Pi 预设体系：Web 端 Pi 预设为精简实现，需先补齐上游 `piModelCatalog` / `piThinkingProfiles` 目录体系，再吸收增量。
+
+## 2. 提交处置矩阵
+
+| 上游提交   | 内容                                                                                                              | Web 处置                                                          | 批次 | 状态     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---- | -------- |
+| `bad9c151` | fix(pricing): record DeepSeek V4 peak-tier rates and seed Gemini 3.7 Flash                                        | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `0cd922c5` | feat(sponsors): list PPIO as a project sponsor                                                                    | 同步预设与推广文案；README 赞助位按 Web README 独立维护           | 1    | 已迁移   |
+| `af31a87b` | docs(changelog): draft unreleased section covering v3.19.2..HEAD                                                  | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `18ca2da0` | chore(release): v3.20.0                                                                                           | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `0b5da510` | docs(release): add v3.20.0 release notes                                                                          | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `4549d290` | fix(capabilities): grant process:allow-exit so exit buttons can quit the app                                      | Tauri 窗口、权限与更新器                                          | 排除 | 不适用   |
+| `5ca9459d` | fix(usage): index Pi session dedup lookups (#6667)                                                                | Codex/Pi/Claude 会话统计修复                                      | 4    | 待迁移   |
+| `9a596158` | chore(presets): move TeamoRouter to teamorouter.cn, keep .com as fallback                                         | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `c911c7e3` | fix(prompts): keep unmanaged prompt files intact when a restore enables none (#6810)                              | Prompts 修复                                                      | 5    | 待迁移   |
+| `c2ec78dd` | fix(codex-oauth): isolate shared workspace accounts (#6780)                                                       | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `bd15ea11` | feat(terminal): add Otty support with tab-aware launching (#6620)                                                 | Otty 终端（macOS 桌面终端启动）                                   | 待定 | 待定     |
+| `bbe8bb93` | fix(codex): reconcile edit form key with live bearer token (#6534)                                                | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `0ae561b8` | fix(ci): run WSL2 contract tests via prebuilt binaries (#6472)                                                    | 上游 CI                                                           | 排除 | 不适用   |
+| `926af949` | fix(provider): always project edits to live configuration (#6779)                                                 | Provider live 投影、同步与代理设置保留                            | 3    | 待迁移   |
+| `cbb79127` | refactor(codex): unify provider switching on config-only auth writes                                              | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `97a7425f` | fix(codex): preflight switches before committing current, share normalization with proxy paths                    | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `9a1a6b83` | fix(codex): migrate stale reserved openai tables, suffix conflicting migration ids, surface auth cleanup failures | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `43818101` | fix(codex): rename stale reserved tables losslessly, match reserved ids exactly, cover inline tables              | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `bb54e87a` | fix(codex): credential-aware routing for migrated tables, exact-match shared predicate, migrate all reserved ids  | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `93bb91aa` | fix(codex): make migrated tables loadable, follow non-fallback routes, unreserve oss/ollama-chat                  | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `798602c3` | fix(codex): backfill names for all custom tables, never for Bedrock ones                                          | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `877df74f` | fix(codex): backfill names on official writes, preflight table conflicts 0.149 rejects                            | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `58687bd6` | docs(codex): reunite the legacy-reroute doc comment with its function                                             | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `c5e4f705` | fix(codex): stamp requires_openai_auth to match login preservation on third-party switches                        | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `270a4ff3` | feat(usage): add OpenCode Go subscription usage query via token plan path                                         | 订阅用量查询                                                      | 4    | 待迁移   |
+| `6243e20a` | fix(codex-oauth): align identity tests with JWT parsing (#6831)                                                   | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `092ea1f3` | feat(usage): add auto/manual session scan mode toggle                                                             | 会话增量扫描与自动/手动模式（含 schema 迁移）                     | 4    | 待迁移   |
+| `bcee61be` | perf(usage): incremental byte-cursor scan for Claude session logs                                                 | 会话增量扫描与自动/手动模式（含 schema 迁移）                     | 4    | 待迁移   |
+| `f8d97348` | fix(usage): detect non-append rewrites and surface read errors in session scan                                    | 会话增量扫描与自动/手动模式（含 schema 迁移）                     | 4    | 待迁移   |
+| `f05e2033` | fix(usage): report pinned-rewrite skips in session sync results                                                   | 会话增量扫描与自动/手动模式（含 schema 迁移）                     | 4    | 待迁移   |
+| `5ff199b5` | fix(usage): align session sync card spacing and gate Sync Now to manual mode                                      | 会话增量扫描与自动/手动模式（含 schema 迁移）                     | 4    | 待迁移   |
+| `9485cf2f` | chore(release): v3.20.1                                                                                           | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `3217f725` | docs(release): add v3.20.1 release notes                                                                          | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `d8065cc6` | fix(proxy): preserve mid-conversation system messages for prefix cache (#6941)                                    | 代理通用修复                                                      | 2    | 待迁移   |
+| `c88b00fa` | fix(codex): neutralize managed-OAuth official-auth fallback flag                                                  | 预设 requires_openai_auth=false 已同步；托管 OAuth 中和逻辑待迁移 | 3    | 部分迁移 |
+| `c08040e9` | fix(codex): declare xhigh reasoning tier for grok-4.5 xAI presets                                                 | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `b7da894b` | fix(codex): sanitize xAI native Responses for Grok                                                                | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `914c8bb5` | fix(codex): rewrite Grok agent_message input items                                                                | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `0a9a4378` | refactor(codex): simplify xAI agent_message rewrite                                                               | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `dfc9b066` | fix(codex): remap grok unknown models for subagents                                                               | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `bf325b25` | refactor(codex): thin xAI native request gate                                                                     | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `527b56f8` | fix(ci): clear clippy dead_code and question_mark                                                                 | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `9e110053` | fix(codex): address xAI native Responses review findings                                                          | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `d05a11cc` | refactor(codex): drop unused namespace SSE restore helpers                                                        | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `054673e0` | fix(codex): reject 2^64 in whole-float integer rewrite                                                            | xAI 原生 Responses 清洗系列                                       | 2    | 待迁移   |
+| `b45b2bd1` | feat(presets): add Tencent Token Plan presets across six apps (#7011)                                             | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `21fda0ea` | test(codex): align grok-4.5 reasoning tier expectations with 4-tier presets                                       | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `273c9cc2` | fix(codex): mark glm-5.3 as text-only (#6851)                                                                     | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `6d25f34e` | feat(presets): add QwenCloud presets across seven apps (#6214)                                                    | 同步非 Pi 预设；Pi 部分转批次 6                                   | 1    | 部分迁移 |
+| `92a9b4a9` | fix(usage): compact trend token axis labels (#7016)                                                               | Usage 前端展示                                                    | 4    | 待迁移   |
+| `e4b03a38` | fix(usage): stop deferring resumed Codex rollouts on filename/meta ID mismatch (#6905)                            | Codex/Pi/Claude 会话统计修复                                      | 4    | 待迁移   |
+| `cbbf7279` | feat(presets): add AICodeWith presets across eight apps                                                           | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `68d71cc6` | feat(presets): add 9527CODE presets across nine apps                                                              | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `4f62f676` | fix(presets): let the 9527CODE icon follow the theme                                                              | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `b1250dc7` | fix(tools): read Hermes latest version from GitHub Releases instead of PyPI                                       | 工具版本探测                                                      | 5    | 待迁移   |
+| `460aa8c7` | fix(pricing): seed Claude Fable 5.1 / Mythos 5.1 and restore Sonnet 5 to the $2/$10 standard price (#7051)        | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `c58a25b2` | fix(a11y): add accessible names to GUI controls (#7049)                                                           | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `92d52916` | fix(codex): reject duplicate managed accounts (#7061)                                                             | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `bc4ed66d` | fix(codex): backfill supports_parallel_tool_calls in catalog template (#6666)                                     | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `e47b5fca` | fix(codex): point Zhipu GLM presets at the official Responses endpoint (#6957)                                    | 同步预设及原生 Responses host 判定、web_search 拒绝名单           | 1    | 已迁移   |
+| `db41d701` | fix(codex): move $ref siblings into allOf for Moonshot/Kimi chat upstreams (#6863)                                | Chat 转换修复                                                     | 2    | 待迁移   |
+| `5a040348` | fix(codex): disable supports_search_tool for DeepSeek catalog models (#6653)                                      | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `db346128` | fix(codex): align OAuth client identity for GPT-6 (#7132)                                                         | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `741e802f` | feat(pricing): add GLM-5.3 to built-in model pricing table (#6591)                                                | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `38cfafdc` | fix(claude): expose Opus 5 and Sonnet 5 in takeover mode (#5882)                                                  | 代理通用修复                                                      | 2    | 待迁移   |
+| `b5f9fd0d` | fix(codex): resolve input_modalities for unknown models in vendor catalog (#6750)                                 | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `291946d5` | feat(pricing): add GPT-6 Astra pricing (#7162)                                                                    | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `872ec775` | fix(proxy): enable parallel tool calls for Codex OAuth (#7024)                                                    | 代理通用修复                                                      | 2    | 待迁移   |
+| `66ae6446` | feat(pricing): add GLM-5.3 Flash pricing (#7163)                                                                  | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `5f3ea4d6` | feat(provider): extend PPIO presets for Pi (#6870)                                                                | Pi 预设依赖上游完整 Pi 目录体系；其余应用小改动已随累计 diff 同步 | 6    | 待迁移   |
+| `9692ff5e` | feat(pricing): add Gemini 3.8 Flash pricing (#7164)                                                               | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `17be9092` | fix(codex): proxy image generations endpoint (#7036)                                                              | Codex Images API 代理                                             | 2    | 待迁移   |
+| `1b34d322` | feat(pi): add Tencent TokenHub and Token Plan presets (#7159)                                                     | Pi 预设依赖上游完整 Pi 目录体系；其余应用小改动已随累计 diff 同步 | 6    | 待迁移   |
+| `3e2562a4` | fix(usage): widen pricing model source select to fit localized labels                                             | Usage 前端展示                                                    | 4    | 待迁移   |
+| `3c1d3c94` | fix(tests): isolate LOCALAPPDATA so tests stop writing the real Claude Desktop config                             | 测试隔离 LOCALAPPDATA                                             | 5    | 待迁移   |
+| `12296aeb` | fix(proxy): stop mask_url panicking on multi-byte UTF-8 near the truncation boundary                              | 代理通用修复                                                      | 2    | 待迁移   |
+| `75be16cb` | fix(i18n): add the missing pi.form.providerKeyDuplicate and common.collapse keys                                  | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `2510a4e2` | fix(claude): exclude workflow journal.jsonl from session list                                                     | Codex/Pi/Claude 会话统计修复                                      | 4    | 待迁移   |
+| `e3b5a628` | docs: fix the locales path in the README directory trees (#6100)                                                  | 上游 README/用户手册                                              | 排除 | 不适用   |
+| `bd1265d2` | fix(updater): show the real reason when an update check fails (#6482)                                             | Tauri 窗口、权限与更新器                                          | 排除 | 不适用   |
+| `2cd40064` | fix(codex): stamp requires_openai_auth on takeover writes to match the live login state                           | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `ccc140a2` | feat(pricing): refresh seed for September 2026 vendor price changes                                               | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `648d89cd` | fix(provider): pin models URL for JieKou and Novita Claude presets                                                | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `e724270d` | fix(codex): proxy image edits endpoint                                                                            | Codex Images API 代理                                             | 2    | 待迁移   |
+| `389dd96c` | feat(provider): add SoleAPI sponsor presets across all nine apps                                                  | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `b6254432` | chore(release): v3.20.2                                                                                           | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `f3b18df1` | docs(release): add v3.20.2 release notes                                                                          | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `f21e0944` | chore(provider): remove Atlas Cloud sponsor status, keep presets                                                  | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `2d54e261` | fix(provider): update MiniMax defaults to M3 and remove expired offers (#7255)                                    | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `99f9dd2c` | fix(codex): honor proxy URL when model_provider is omitted (#7263)                                                | Codex config-only 认证写入与保留表迁移                            | 3    | 待迁移   |
+| `2f3c0262` | feat(presets): rebrand DashScope as 千问AI平台 and refresh Qwen models (#7183)                                    | 同步非 Pi 预设；Pi 部分转批次 6                                   | 1    | 部分迁移 |
+| `e0c2fd2b` | fix(provider): preserve child metadata during universal sync (#7212)                                              | Provider live 投影、同步与代理设置保留                            | 3    | 待迁移   |
+| `11317c62` | fix(proxy): preserve per-app settings on shutdown and port allocation (#7210)                                     | Provider live 投影、同步与代理设置保留                            | 3    | 待迁移   |
+| `e0982799` | fix(codex): proxy image edits and Images API follow-ups (#7177)                                                   | Codex Images API 代理                                             | 2    | 待迁移   |
+| `45f9e819` | fix(codex): detect growing rollouts with a persisted byte cursor (#7219)                                          | Codex/Pi/Claude 会话统计修复                                      | 4    | 待迁移   |
+| `b78192e8` | fix(proxy): skip empty reasoning_content placeholders in Anthropic SSE streaming (#7227)                          | 代理通用修复                                                      | 2    | 待迁移   |
+| `5e0f3442` | fix(codex): coalesce adjacent commentary with pending tool calls (#7280)                                          | Chat 转换修复                                                     | 2    | 待迁移   |
+| `6e4b0e6e` | fix(proxy): clamp sub-floor max_tokens to the Responses API minimum (#7287)                                       | 代理通用修复                                                      | 2    | 待迁移   |
+| `7726c834` | fix(codex): mirror vision-capable DeepSeek catalog and un-gate the legacy v4-flash alias (#7286)                  | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `bfbbf15c` | fix(usage): show Claude Fable weekly limit from the usage API limits array                                        | 订阅用量查询                                                      | 4    | 待迁移   |
+| `08984ba5` | feat(codex): switch Kimi presets to native Responses direct-connect                                               | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `5e129273` | feat(codex): refresh aggregator model presets and catalogs                                                        | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `deb0e874` | feat(claude): add "Disable Artifact Tool" quick toggle to provider editor                                         | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `3b1292fe` | fix(tray): show bound ChatGPT account quota for managed Codex cards                                               | 托盘不适用；评估 usage_cache 后端部分                             | 4    | 待迁移   |
+| `5c053626` | fix(claude): align quick model selection with form order                                                          | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `45b9a952` | fix(codex): skip unchanged incomplete rollout tails                                                               | Codex/Pi/Claude 会话统计修复                                      | 4    | 待迁移   |
+| `f874803f` | feat(presets): rename DouBaoSeed preset to localized Volcengine Doubao                                            | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `6867b64d` | fix(presets): declare third-party Token Plan DeepSeek V4 rows text-only                                           | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `746e2288` | fix(pricing): move retired DeepSeek V4 family to the V4.1 Flash tier                                              | 同步模型能力、DeepSeek 目录模板、media sanitizer 与 catalog 回填  | 1    | 已迁移   |
+| `1a725016` | chore(release): v3.20.3                                                                                           | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `d695a2d7` | docs(release): add v3.20.3 release notes                                                                          | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `1d5d90f4` | fix(presets): update APIKEY.FUN URLs to apikey.fan                                                                | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `dc0febe5` | feat(usage): display output tokens per second in request log table and detail panel (#3369)                       | Usage 前端展示                                                    | 4    | 待迁移   |
+| `556bb2ca` | fix(misc): fetch npm dist-tags from the dedicated endpoint with the probe timeout (#7346)                         | 工具版本探测                                                      | 5    | 待迁移   |
+| `f49c7d68` | fix(models): support Zhipu OpenAI Responses model lists (#7330)                                                   | 模型列表获取与批量添加                                            | 5    | 待迁移   |
+| `c6286e14` | fix(proxy): keep reasoning effort for grok-4.6 and pass xhigh through verbatim (#7318)                            | reasoning effort 白名单与 max 档位                                | 2    | 待迁移   |
+| `bd247a4a` | fix(proxy): omit missing tool descriptions instead of serializing null (#7319)                                    | Chat 转换修复                                                     | 2    | 待迁移   |
+| `42ac174d` | feat(claude-desktop): support 3P configuration on Linux (#7331)                                                   | Claude Desktop Linux 3P 配置                                      | 5    | 待迁移   |
+| `15884b20` | fix(codex): recover stale account bindings during takeover (#7395)                                                | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `06082e18` | feat: add MiniMax Code harness support (#7383)                                                                    | MiniMax Code 新应用                                               | 5    | 待迁移   |
+| `33c80626` | fix(skills): raise archive entry limit so large skill repos install (#7489)                                       | Skills 安装修复                                                   | 5    | 待迁移   |
+| `a659440b` | fix(prompts): refresh active prompts after external file edits (#7194)                                            | Prompts 修复                                                      | 5    | 待迁移   |
+| `f2d0b2a6` | Rebalance sponsor CTAs around Kimi Code plan with dual-region links (#7522)                                       | 上游 README/用户手册                                              | 排除 | 不适用   |
+| `1408f382` | Add Kimi Global preset variants (kimi.ai platform + api endpoints) (#7526)                                        | 同步非 Pi 预设；Pi 部分转批次 6                                   | 1    | 部分迁移 |
+| `fdbe3a85` | feat(opencode): 支持从获取的模型列表中搜索并批量添加所选模型 (#7515)                                              | 模型列表获取与批量添加                                            | 5    | 待迁移   |
+| `8272707d` | fix(skills): 支持 skillId 与目录名不一致的技能安装和更新 (#6381)                                                  | Skills 安装修复                                                   | 5    | 待迁移   |
+| `2c735bd9` | fix(ui): stop expanding stale cached usage tiers on ineligible provider cards                                     | Usage 前端展示                                                    | 4    | 待迁移   |
+| `7f39d885` | test(claude-desktop): run Linux path tests on unix hosts and cover Linux in provider sync tests                   | Claude Desktop Linux 3P 配置                                      | 5    | 待迁移   |
+| `48e572cc` | feat(codex): refresh CN presets from the Responses API audit                                                      | 同步预设及原生 Responses host 判定、web_search 拒绝名单           | 1    | 已迁移   |
+| `e06ff90f` | fix(presets): move MiniMax CN and BaiLing to their current official endpoints                                     | 预设与模型能力已同步；coding_plan 端点转批次 4                    | 1    | 部分迁移 |
+| `d8e98be2` | fix(pricing): restore DeepSeek V4 Pro price and seed Qwen3.8 and Hy4 models                                       | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `060099d7` | docs(user-manual): point Chat-only Codex examples at plan endpoints                                               | 上游 README/用户手册                                              | 排除 | 不适用   |
+| `09498c30` | fix(ui): render monochrome preset icons in the foreground color                                                   | 单色预设图标使用前景色                                            | 1    | 已迁移   |
+| `0859fa6a` | fix(presets): correct AICodeWith Codex-family endpoint to /v1                                                     | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `4d2c6f07` | feat(presets): add FluxA Token Plan partner presets                                                               | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `f6c99822` | fix(claude-desktop): expose the 1M context variant for DeepSeek V4 routes                                         | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `970a6e4f` | docs(partner): add a FluxA purchase link and tighten its sponsor blurb                                            | 上游 README/用户手册                                              | 排除 | 不适用   |
+| `37d04760` | fix(omo): detect unified config on the WSL side when the OpenCode dir is in WSL (#7550)                           | WSL 探测；Web 此前决定 Windows 不做 WSL 检测                      | 待定 | 待定     |
+| `83a24dfb` | fix(proxy): normalize Codex detail:original images for Chat gateways (#7476)                                      | Chat 转换修复                                                     | 2    | 待迁移   |
+| `a35e5000` | fix(proxy): lift additional_tools input carriers on the Codex chat conversion (#7454)                             | Chat 转换修复                                                     | 2    | 待迁移   |
+| `5a80e300` | fix(codex): keep stored auth when the live snapshot has no credential (#7434)                                     | Codex OAuth 账号生命周期                                          | 3    | 待迁移   |
+| `56df6513` | fix(proxy): strip stop param for GitHub Copilot to unblock auto mode classifier (#5404)                           | 代理通用修复                                                      | 2    | 待迁移   |
+| `de970c13` | fix(i18n): use the Pi form's own term for the zh-TW duplicate-key message (#7187)                                 | zh-TW 文案；Web 无 zh-TW                                          | 排除 | 不适用   |
+| `06c03621` | fix(pi): fix provider logo (#6826)                                                                                | Pi 表单 logo                                                      | 6    | 待迁移   |
+| `4837fe2c` | fix(ui): reset provider scroll when switching apps (#5211)                                                        | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `c715ee2b` | fix(claude): hide session URL attribution (#7053)                                                                 | 编辑器与交互细节                                                  | 5    | 待迁移   |
+| `701c079b` | fix(misc): ignore shell startup output when probing tool versions in WSL (#7348)                                  | WSL 探测；Web 此前决定 Windows 不做 WSL 检测                      | 待定 | 待定     |
+| `d6e05152` | fix(proxy): preserve max effort for GPT-5.6 and GPT-6 Astra (#7531)                                               | reasoning effort 白名单与 max 档位                                | 2    | 待迁移   |
+| `c8e76bbc` | fix(proxy): omit missing tool descriptions in the Codex responses-to-chat converter (#7378)                       | Chat 转换修复                                                     | 2    | 待迁移   |
+| `6f6087cd` | fix(lib): reset skip_taskbar before window.show() across entry points (#6348)                                     | Tauri 窗口、权限与更新器                                          | 排除 | 不适用   |
+| `09c5d39d` | fix(mcode): refresh provider state after removal (#7578)                                                          | MiniMax Code 新应用                                               | 5    | 待迁移   |
+| `4b1ec8b5` | fix(ci): stabilize frontend tests and verify renderer build                                                       | 上游 CI                                                           | 排除 | 不适用   |
+| `bbee784d` | feat(presets): add Soshow aggregator presets                                                                      | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `f8821c03` | feat(settings): add a GitHub star prompt to the About card                                                        | About 卡片 GitHub Star 提示（指向上游仓库）                       | 待定 | 待定     |
+| `54640b95` | fix: add SudoCode.chat alternate API endpoint                                                                     | 同步预设、测试与 i18n                                             | 1    | 已迁移   |
+| `bccfaf37` | fix(i18n): remove outdated OpenCode Go referral offer                                                             | 同步 partnerPromotion 文案                                        | 1    | 已迁移   |
+| `42200b42` | feat(pricing): add Grok 4.7 and GLM-5.3-FlashX                                                                    | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `84efe1fb` | chore(release): v3.20.4                                                                                           | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `43e1d990` | docs(release): add v3.20.4 release notes                                                                          | 版本发布与发布说明                                                | 排除 | 不适用   |
+| `8e478b2b` | fix(proxy): accept the whole grok-4.x (x>=5) family in the reasoning-effort whitelist (#7369)                     | reasoning effort 白名单与 max 档位                                | 2    | 待迁移   |
+| `85894582` | feat(pricing): seed Claude Opus 5.5 (#7600)                                                                       | 同步定价 seed/repair 与上游回归测试                               | 1    | 已迁移   |
+| `85caa69e` | feat(pricing): 添加新 Anthropic 和 OpenAI 定价 (#7610)                                                            | 定价已同步；usage_stats 回填测试依赖上游 helper，未迁移           | 1    | 已迁移   |
+| `f2537fdf` | fix(models): tolerate non-Zhipu-shaped `models` field in model list responses (#7595)                             | 模型列表获取与批量添加                                            | 5    | 待迁移   |
+| `da193d4f` | fix: 更新预设供应商模型与标准定价，清理已下线模型条目 (#7621)                                                     | 同步非 Pi 预设；Pi 部分转批次 6                                   | 1    | 部分迁移 |
+| `f8788719` | feat(icons): add Sub2API icon (#6632)                                                                             | 新增 SVG 与本地图片图标                                           | 1    | 已迁移   |
+
+## 3. 分批影响范围
+
+### 3.1 批次 1：预设、定价、图标与模型能力
+
+- 前端预设：`claudeDesktop`、`claude`、`codex`、`gemini`、`grokBuild`、`hermes`、`openclaw`、`opencode` 八类预设与 `userAgentPresets` 按上游累计 diff 同步；除 Codex 预设保留 Web 既有的 `providerType` 限定（不含 `codex_oauth`）外，均与上游 `f8788719` 逐字一致。
+- i18n：仅同步 `providerForm.partnerPromotion.*` 与 `providerForm.presets.*` 子树（zh/en/ja），其余新增文案随所属功能批次同步。
+- 图标：SVG 图标写入 `src/icons/extracted` 内联索引，PNG 与 URL 型 SVG 按 Web 约定放入 `src/assets/icons` 并登记到 `src/icons/local.ts`。
+- 后端：`model_pricing` seed 与 repair 链路与上游逐字一致；同步 `model_capabilities`、DeepSeek catalog 模板、media sanitizer、catalog `supports_parallel_tool_calls` 回填、未知模型 `input_modalities` 解析，以及智谱/CN 厂商原生 Responses host 判定与 web_search 拒绝名单。
+- 测试：同步上游预设测试与 10 项定价回归测试；Web 独有的目录快照测试更新为新数量与名单。
+
+验收标准：新预设可在 Web 已支持应用中创建；所有 `nameKey` / `partnerPromotionKey` 在 zh/en/ja 中存在；定价 seed 升级链路可把旧库修复到当前价位。
+
+### 3.2 批次 2：代理协议转换
+
+- xAI 原生 Responses 请求清洗（`agent_message` 改写、子代理未知模型重映射、整数浮点校验）。
+- Codex `/images/generations`、`/images/edits` 代理与 usage 解析。
+- Moonshot `$ref` → `allOf`、commentary 与 pending tool call 合并、`additional_tools`、缺失工具描述、`detail:original` 图片。
+- 前缀缓存保留中途 system 消息、空 `reasoning_content`、`max_tokens` 下限、Codex OAuth 并行工具调用、GPT-5.6/GPT-6 max 档位、Copilot `stop` 参数、`mask_url` UTF-8 边界。
+
+### 3.3 批次 3：Codex 配置与 OAuth
+
+- config-only 认证写入与切换前预检；保留 `openai` 表的无损迁移、冲突 id 后缀、名称回填、`requires_openai_auth` 与登录保留一致。
+- 托管 OAuth 中和 official-auth fallback 标记；共享 workspace 账号隔离、重复账号拒绝、失效绑定恢复、GPT-6 客户端身份。
+- Provider 编辑始终投影到 live 配置；universal sync 保留子项 metadata；代理关闭与端口分配保留 per-app 设置。
+
+### 3.4 批次 4：用量与会话统计
+
+- Claude/Codex/Pi/Gemini/Grok Build 会话日志增量字节游标扫描，非追加重写检测，自动/手动扫描模式（含 schema 迁移，需按 Web 迁移编号重新排号）。
+- OpenCode Go 订阅用量、Claude Fable 周限额、MiniMax CN / BaiLing 用量端点。
+- 请求日志 output tokens/s、趋势图坐标轴压缩等前端展示。
+
+### 3.5 批次 5：新功能与交互
+
+- MiniMax Code 新应用（上游 81 个文件，约 3300 行）。
+- Claude Desktop 在 Linux 上的 3P 配置（Web 常部署于 Linux/Docker，优先级较高）。
+- Skills 大仓库归档上限与 skillId/目录名不一致；Prompts 恢复与外部编辑刷新；Zhipu Responses 模型列表；OpenCode 模型批量添加；编辑器小开关与 a11y。
+
+### 3.6 批次 6：Pi 预设体系
+
+- 先对齐上游 `piProviderPresets` 数据结构与 `piModelCatalog` / `piThinkingProfiles`，再吸收本轮 Pi 增量（Tencent TokenHub、PPIO、Kimi Global、QwenCloud 等），并恢复上游 Pi 相关测试。
+
+## 4. 风险与回滚边界
+
+- 批次 1 的 Codex 后端改动仅涉及 catalog 生成与 host 判定，不改变认证写入路径。
+- 批次 3 与上一轮 OAuth 生命周期迁移高度重叠，必须在 Web 多账号数据模型上重新推导，不直接套用上游补丁。
+- 批次 4 的 schema 迁移需与 Web 自有 `user_version` 编号协调，不复用上游编号。
+
+## 5. 执行记录
+
+- 2026-09-24：以 `f8788719` 为审计点，确认相对 `fd14f9c4` 新增 165 个非 merge 提交，台账 hash 覆盖 165/165。
+- 2026-09-24：完成批次 1。前端预设按上游累计 diff 3-way 同步；移除依赖上游 Pi 目录体系的 PPIO/Tencent Pi 测试片段，Kimi Global 双胞胎在 Hermes 中与国内版共用 Provider Key（上游有意为之），唯一性测试对其豁免。
+- 2026-09-24：批次 1 后端逐提交 3-way 回放定价与模型能力改动；修正两处 3-way 错位（`codex.rs` 测试被拼接进 `grok_build_toml_exposes_upstream_connection`、`forwarder.rs` 测试块错位），改为整函数移植上游测试。
+- 2026-09-24：批次 1 验证通过：TypeScript 类型检查无错误；前端 94 个测试文件 596 项通过、2 项跳过；Rust 全量 1681 项通过、3 项忽略。

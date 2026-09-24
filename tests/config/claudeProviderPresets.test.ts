@@ -81,7 +81,7 @@ describe("AWS Bedrock Provider Presets", () => {
 
 describe("Claude Provider Presets", () => {
   it("should match the complete upstream catalog", () => {
-    expect(providerPresets).toHaveLength(77);
+    expect(providerPresets).toHaveLength(94);
     expect(providerPresets.map((preset) => preset.name)).toEqual(
       expect.arrayContaining([
         "Kimi",

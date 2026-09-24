@@ -17,12 +17,13 @@ function readTranslation(tree: TranslationTree, path: string): unknown {
 }
 
 describe("Hermes Provider 预设目录", () => {
-  it("完整包含 66 个上游预设并保持唯一 Provider Key", () => {
-    const keys = hermesProviderPresets.map(
-      (preset) => preset.settingsConfig.name,
-    );
+  it("完整包含 83 个上游预设并保持唯一 Provider Key", () => {
+    // Kimi Global 双胞胎与国内版是二选一的同一 Hermes Provider，上游有意共用 Key。
+    const keys = hermesProviderPresets
+      .filter((preset) => !/^Kimi( For Coding)? Global$/.test(preset.name))
+      .map((preset) => preset.settingsConfig.name);
 
-    expect(hermesProviderPresets).toHaveLength(66);
+    expect(hermesProviderPresets).toHaveLength(83);
     expect(new Set(keys).size).toBe(keys.length);
   });
 

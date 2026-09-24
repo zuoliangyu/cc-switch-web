@@ -109,9 +109,11 @@ describe("current provider presets", () => {
       "AICoding",
       "SubRouter",
       "APIKEY.FUN",
+      "9527CODE",
       "Code0",
       "A6API",
       "SSSAiCode",
+      "SoleAPI",
       "ETok.ai",
       "Cubence",
       "CrazyRouter",
@@ -121,6 +123,7 @@ describe("current provider presets", () => {
       "CherryIN",
       "OpenRouter",
       "TheRouter",
+      "AICodeWith",
       "自定义",
     ]);
   });
@@ -201,7 +204,6 @@ describe("current provider presets", () => {
       expect(names).not.toContain(retired);
     }
     for (const locale of [zh, en, ja]) {
-      expect(locale.providerForm.partnerPromotion.atlascloud).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.ccsub).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.sudocode).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.teamorouter).toBeTruthy();

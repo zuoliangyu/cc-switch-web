@@ -558,8 +558,30 @@ pub(crate) fn write_live_with_common_config(
     let mut effective_provider = provider.clone();
     effective_provider.settings_config =
         build_effective_settings_with_common_config(db, app_type, provider)?;
+    neutralize_codex_proxy_oauth_fallback(app_type, &mut effective_provider);
 
     write_live_snapshot(app_type, &effective_provider)
+}
+
+/// 代理托管 OAuth 卡片（xai_oauth、github_copilot 等）按设计无 key，但预设快照继承了
+/// 旧版 `requires_openai_auth = true`，会被写入层的无 key 安全闸门拒绝。这里在生效
+/// 快照中把该标记中和为 false，而不是豁免闸门：写出的配置在 0.149 下被视为未认证、
+/// 不会读取 auth.json。`codex_oauth` 由判定函数排除（上游 c88b00fa）。
+pub(crate) fn neutralize_codex_proxy_oauth_fallback(app_type: &AppType, provider: &mut Provider) {
+    if !matches!(app_type, AppType::Codex) || !provider.uses_proxy_injected_oauth() {
+        return;
+    }
+    let Some(settings) = provider.settings_config.as_object_mut() else {
+        return;
+    };
+    let Some(config_text) = settings.get("config").and_then(Value::as_str) else {
+        return;
+    };
+    if let Some(updated) =
+        crate::codex_config::neutralize_codex_official_auth_fallback_for_proxy_oauth(config_text)
+    {
+        settings.insert("config".to_string(), Value::String(updated));
+    }
 }
 
 pub(crate) fn strip_common_config_from_live_settings(
@@ -697,7 +719,11 @@ fn codex_live_category(provider: &Provider) -> Option<&str> {
 /// token 注入、TOML 解析）。current 已切换后才被写入层拒绝，会让下一次切换把旧
 /// live 配置回填进新 Provider 的数据库记录（上游 97a7425f）。
 pub(crate) fn preflight_codex_live_write(db: &Database, provider: &Provider) -> Result<(), AppError> {
-    let settings = build_effective_settings_with_common_config(db, &AppType::Codex, provider)?;
+    let mut effective = provider.clone();
+    effective.settings_config =
+        build_effective_settings_with_common_config(db, &AppType::Codex, provider)?;
+    neutralize_codex_proxy_oauth_fallback(&AppType::Codex, &mut effective);
+    let settings = effective.settings_config;
     let obj = settings
         .as_object()
         .ok_or_else(|| AppError::Config("Codex 供应商配置必须是 JSON 对象".to_string()))?;
@@ -1448,6 +1474,69 @@ pub fn remove_hermes_provider_from_live(provider_id: &str) -> Result<(), AppErro
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn proxy_oauth_codex_snapshot_neutralizes_official_auth_fallback() {
+        let poisoned_config = "model_provider = \"custom\"\n\n[model_providers.custom]\nname = \"xai\"\nbase_url = \"https://api.x.ai/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = true\n";
+        let settings = json!({
+            "auth": { "OPENAI_API_KEY": "" },
+            "config": poisoned_config,
+        });
+
+        // The raw managed-OAuth snapshot is exactly what the keyless safety
+        // gate refuses — the switch regression this neutralization fixes.
+        assert!(crate::codex_config::preflight_codex_live_write(
+            None,
+            &settings["auth"],
+            Some(poisoned_config)
+        )
+        .is_err());
+
+        let mut provider = Provider::with_id(
+            "grok-oauth".to_string(),
+            "xAI (Grok) OAuth".to_string(),
+            settings.clone(),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("xai_oauth".to_string()),
+            ..Default::default()
+        });
+        neutralize_codex_proxy_oauth_fallback(&AppType::Codex, &mut provider);
+        let config = provider.settings_config["config"].as_str().expect("config");
+        assert!(config.contains("requires_openai_auth = false"));
+        assert!(crate::codex_config::preflight_codex_live_write(
+            None,
+            &provider.settings_config["auth"],
+            Some(config)
+        )
+        .is_ok());
+
+        // codex_oauth keeps its fallback shape — the official login IS its
+        // credential — and non-Codex app types are untouched entirely.
+        let mut official = Provider::with_id(
+            "chatgpt".to_string(),
+            "ChatGPT".to_string(),
+            settings.clone(),
+            None,
+        );
+        official.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("codex_oauth".to_string()),
+            ..Default::default()
+        });
+        neutralize_codex_proxy_oauth_fallback(&AppType::Codex, &mut official);
+        assert!(official.settings_config["config"]
+            .as_str()
+            .expect("config")
+            .contains("requires_openai_auth = true"));
+
+        let mut claude_card = provider.clone();
+        claude_card.settings_config = settings;
+        neutralize_codex_proxy_oauth_fallback(&AppType::Claude, &mut claude_card);
+        assert!(claude_card.settings_config["config"]
+            .as_str()
+            .expect("config")
+            .contains("requires_openai_auth = true"));
+    }
 
     #[test]
     fn update_toml_common_config_preserves_comments_and_key_order() {

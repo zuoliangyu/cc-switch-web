@@ -104,6 +104,14 @@ impl Provider {
     /// 是否使用"托管账号"鉴权（GitHub Copilot / Codex OAuth），
     /// 这类供应商的真实 token 由代理在出站时通过 OAuth 注入到
     /// `Authorization` 头，不依赖 settings 里的 `ANTHROPIC_AUTH_TOKEN`。
+    /// 第三方托管 OAuth（xai_oauth、github_copilot 等）：真实凭据由本地代理逐请求
+    /// 注入，卡片本身无 key，存储的配置只是上游快照。`codex_oauth` 刻意排除——
+    /// auth.json 中的官方 ChatGPT 登录就是它的凭据，`requires_openai_auth = true`
+    /// 回退是其正确形态（上游 c88b00fa）。
+    pub fn uses_proxy_injected_oauth(&self) -> bool {
+        self.is_xai_oauth() || self.is_github_copilot()
+    }
+
     pub fn uses_managed_account_auth(&self) -> bool {
         self.is_github_copilot()
             || self.is_codex_oauth()
@@ -867,6 +875,29 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::HashMap;
+
+    fn proxy_injected_oauth_excludes_codex_oauth() {
+        let mut provider = Provider::with_id("p".to_string(), "P".to_string(), json!({}), None);
+        assert!(!provider.uses_proxy_injected_oauth());
+
+        for (provider_type, expected) in [
+            ("xai_oauth", true),
+            ("github_copilot", true),
+            // the official ChatGPT login IS this card's credential — its
+            // auth.json fallback shape must never be neutralized
+            ("codex_oauth", false),
+        ] {
+            provider.meta = Some(ProviderMeta {
+                provider_type: Some(provider_type.to_string()),
+                ..ProviderMeta::default()
+            });
+            assert_eq!(
+                provider.uses_proxy_injected_oauth(),
+                expected,
+                "{provider_type}"
+            );
+        }
+    }
 
     #[test]
     fn provider_meta_serializes_pricing_model_source() {

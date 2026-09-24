@@ -51,8 +51,13 @@ pub fn sync_gemini_usage(db: &Database) -> Result<SessionSyncResult, AppError> {
         return Ok(result);
     }
 
+    // 一轮只预取一次全表游标；失败中止本轮（见 load_sync_cursors 文档）。
+    let cursors = crate::services::session_usage::load_sync_cursors(db)?;
     for file_path in &files {
-        match sync_single_gemini_file(db, file_path) {
+        let last_modified = cursors
+            .get(file_path.to_string_lossy().as_ref())
+            .map_or(0, |c| c.last_modified);
+        match sync_single_gemini_file(db, file_path, last_modified) {
             Ok((imported, skipped)) => {
                 result.imported += imported;
                 result.skipped += skipped;
@@ -119,8 +124,14 @@ fn collect_gemini_session_files(gemini_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// 同步单个 Gemini 会话 JSON 文件，返回 (imported, skipped)
-fn sync_single_gemini_file(db: &Database, file_path: &Path) -> Result<(u32, u32), AppError> {
+/// 同步单个 Gemini 会话 JSON 文件，返回 (imported, skipped)。
+///
+/// `last_modified` 来自调用方批量预取的游标（见 [`crate::services::session_usage::load_sync_cursors`]）。
+fn sync_single_gemini_file(
+    db: &Database,
+    file_path: &Path,
+    last_modified: i64,
+) -> Result<(u32, u32), AppError> {
     let file_path_str = file_path.to_string_lossy().to_string();
 
     // 获取文件元数据
@@ -132,9 +143,6 @@ fn sync_single_gemini_file(db: &Database, file_path: &Path) -> Result<(u32, u32)
         .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-
-    // 检查同步状态
-    let (last_modified, _last_offset) = get_sync_state(db, &file_path_str)?;
 
     // 文件未变化则跳过
     if file_modified <= last_modified {
@@ -361,17 +369,6 @@ fn insert_gemini_session_entry(
 
     // changes() > 0 表示新插入或已更新，== 0 表示值完全相同（无实际变更）
     Ok(conn.changes() > 0)
-}
-
-/// 获取文件的同步状态
-fn get_sync_state(db: &Database, file_path: &str) -> Result<(i64, i64), AppError> {
-    let conn = lock_conn!(db.conn);
-    let result = conn.query_row(
-        "SELECT last_modified, last_line_offset FROM session_log_sync WHERE file_path = ?1",
-        rusqlite::params![file_path],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-    );
-    Ok(result.unwrap_or((0, 0)))
 }
 
 /// 更新文件的同步状态

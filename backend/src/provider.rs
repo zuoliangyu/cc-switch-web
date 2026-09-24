@@ -118,6 +118,126 @@ impl Provider {
             || self.is_xai_oauth()
             || self.claude_base_url_contains("chatgpt.com/backend-api/codex")
     }
+
+    /// Resolve `(base_url, api_key)` for usage queries (native balance /
+    /// coding-plan and the JS-script `{{apiKey}}`/`{{baseUrl}}` fallback)
+    /// from the stored provider config.
+    ///
+    /// Each app persists credentials in a different shape, so callers must pass
+    /// the owning app type. This mirrors the frontend `getProviderCredentials`
+    /// in `UsageScriptModal.tsx`.
+    pub fn resolve_usage_credentials(
+        &self,
+        app_type: &crate::app_config::AppType,
+    ) -> (String, String) {
+        use crate::app_config::AppType;
+
+        let settings = &self.settings_config;
+        let str_at =
+            |value: Option<&Value>| value.and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+        // First present, non-empty string among `keys`, mirroring the frontend's
+        // `a || b || c` — JS `||` skips empty strings, and presets seed fields like
+        // `ANTHROPIC_AUTH_TOKEN` as present-but-empty placeholders, so a plain
+        // `.get().or_else()` chain (which only skips *absent* keys) would stop short.
+        fn first_non_empty(env: Option<&Value>, keys: &[&str]) -> String {
+            let Some(env) = env else {
+                return String::new();
+            };
+            for key in keys {
+                if let Some(s) = env.get(key).and_then(|v| v.as_str()) {
+                    if !s.is_empty() {
+                        return s.to_string();
+                    }
+                }
+            }
+            String::new()
+        }
+
+        let (base_url, api_key) = match app_type {
+            // Codex keeps its key in `auth.OPENAI_API_KEY` and its base URL
+            // inside a TOML `config` string, not in an `env` map.
+            AppType::Codex => {
+                let auth = settings.get("auth");
+                let config_text = settings.get("config").and_then(|v| v.as_str());
+                let api_key = crate::codex_config::extract_codex_api_key(auth, config_text)
+                    .unwrap_or_default();
+                let base_url = config_text
+                    .and_then(crate::codex_config::extract_codex_base_url)
+                    .unwrap_or_default();
+                (base_url, api_key)
+            }
+            // Gemini uses Google-specific env keys (with a legacy GOOGLE_API_KEY fallback).
+            AppType::Gemini => {
+                let env = settings.get("env");
+                let base_url = str_at(env.and_then(|e| e.get("GOOGLE_GEMINI_BASE_URL")));
+                let api_key = first_non_empty(env, &["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+                (base_url, api_key)
+            }
+            // GrokBuild 的 base_url 与 api_key 必须各自解析：extract_credentials 在
+            // 凭据缺失时整个 Option 变 None，一并 unwrap_or_default 会把明明写在
+            // 配置里的 base_url 也清成空串。凭据缺失是常态（env_key 指向的变量在
+            // GUI 进程里读不到），端点不该被连坐——否则用量脚本的 {{baseUrl}} 变成
+            // 相对路径、余额查询只报「API key is empty」掩盖真因。
+            // 与上面 Codex 分支的写法保持一致。
+            AppType::GrokBuild => {
+                let config_text = settings.get("config").and_then(Value::as_str);
+                let base_url = config_text
+                    .and_then(crate::grok_config::extract_base_url)
+                    .unwrap_or_default();
+                let api_key = config_text
+                    .and_then(crate::grok_config::extract_credentials)
+                    .map(|(_, api_key)| api_key)
+                    .unwrap_or_default();
+                (base_url, api_key)
+            }
+            // Hermes (config.yaml) flattens credentials at the top level, snake_case.
+            AppType::Hermes => (
+                str_at(settings.get("base_url")),
+                str_at(settings.get("api_key")),
+            ),
+            // OpenClaw (openclaw.json) flattens credentials at the top level, camelCase.
+            AppType::OpenClaw => (
+                str_at(settings.get("baseUrl")),
+                str_at(settings.get("apiKey")),
+            ),
+            // Pi custom providers use the native models.json field names.
+            AppType::Pi => (
+                crate::pi_config::provider_base_url(settings).unwrap_or_default(),
+                str_at(settings.get("apiKey")),
+            ),
+            // OpenCode (OMO) nests credentials under `options` (the SDK options object).
+            AppType::OpenCode => {
+                let options = settings.get("options");
+                (
+                    str_at(options.and_then(|o| o.get("baseURL"))),
+                    str_at(options.and_then(|o| o.get("apiKey"))),
+                )
+            }
+            // Claude and Claude Desktop both use the Anthropic-style env map, keeping
+            // the OpenRouter/Google key fallbacks the JS-script path relies on.
+            // Listed explicitly (not `_`) so a new AppType fails to compile here.
+            AppType::Claude | AppType::ClaudeDesktop => {
+                let env = settings.get("env");
+                let base_url = str_at(env.and_then(|e| e.get("ANTHROPIC_BASE_URL")));
+                let api_key = first_non_empty(
+                    env,
+                    &[
+                        "ANTHROPIC_AUTH_TOKEN",
+                        "ANTHROPIC_API_KEY",
+                        "OPENROUTER_API_KEY",
+                        "GOOGLE_API_KEY",
+                    ],
+                );
+                (base_url, api_key)
+            }
+        };
+
+        // Normalize like the JS-script path (extract_base_url_from_provider) so a
+        // future delegation from services/provider/usage.rs is behavior-preserving
+        // and `{{baseUrl}}/path` concatenation never produces a double slash.
+        (base_url.trim_end_matches('/').to_string(), api_key)
+    }
 }
 
 /// 供应商管理器
@@ -1056,6 +1176,54 @@ mod tests {
         assert!(!third_party.is_codex_oauth());
         assert!(!third_party.is_xai_oauth());
         assert!(!third_party.uses_managed_account_auth());
+    }
+
+    #[test]
+    fn resolve_usage_credentials_reads_each_app_shape() {
+        use crate::app_config::AppType;
+        let make = |config: serde_json::Value| {
+            Provider::with_id("p".to_string(), "P".to_string(), config, None)
+        };
+
+        // Claude：跳过预设留下的空 AUTH_TOKEN 占位，落到 API_KEY；base_url 去尾斜杠
+        let claude = make(json!({ "env": {
+            "ANTHROPIC_BASE_URL": "https://opencode.ai/zen/go/",
+            "ANTHROPIC_AUTH_TOKEN": "",
+            "ANTHROPIC_API_KEY": "sk-claude"
+        }}));
+        assert_eq!(
+            claude.resolve_usage_credentials(&AppType::Claude),
+            ("https://opencode.ai/zen/go".to_string(), "sk-claude".to_string())
+        );
+
+        let codex = make(json!({
+            "auth": { "OPENAI_API_KEY": "sk-codex" },
+            "config": "model_provider = \"go\"\n[model_providers.go]\nbase_url = \"https://opencode.ai/zen/go/v1\"\n"
+        }));
+        assert_eq!(
+            codex.resolve_usage_credentials(&AppType::Codex),
+            ("https://opencode.ai/zen/go/v1".to_string(), "sk-codex".to_string())
+        );
+
+        let opencode = make(json!({ "options": {
+            "baseURL": "https://opencode.ai/zen/go/v1",
+            "apiKey": "sk-opencode"
+        }}));
+        assert_eq!(
+            opencode.resolve_usage_credentials(&AppType::OpenCode),
+            ("https://opencode.ai/zen/go/v1".to_string(), "sk-opencode".to_string())
+        );
+
+        let pi = make(json!({
+            "baseUrl": "https://opencode.ai/zen/go/v1",
+            "apiKey": "sk-pi",
+            "api": "openai-completions",
+            "models": []
+        }));
+        assert_eq!(
+            pi.resolve_usage_credentials(&AppType::Pi),
+            ("https://opencode.ai/zen/go/v1".to_string(), "sk-pi".to_string())
+        );
     }
 
     #[test]

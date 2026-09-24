@@ -1373,12 +1373,11 @@
       "pi_session": "Pi 会话日志"
     },
     "sessionSync": {
-      "trigger": "同步会话日志",
-      "import": "导入会话",
-      "resync": "同步",
-      "imported": "从会话日志导入了 {{count}} 条记录",
-      "upToDate": "会话日志已是最新",
-      "failed": "会话同步失败"
+      "description": "定期扫描各客户端的本地会话记录以统计用量；关闭后仅在手动同步时扫描",
+      "syncCompleted": "同步完成：新增 {{imported}} 条，扫描 {{files}} 个文件，错误 {{errors}}",
+      "syncFailed": "会话用量同步失败：{{error}}",
+      "syncNow": "立即同步",
+      "title": "自动扫描会话记录"
     },
     "totalRecords": "共 {{total}} 条记录",
     "goToPage": "跳转",
@@ -3019,7 +3018,8 @@
     "expired": "会话已过期",
     "expiredHint": "请运行 {{tool}} 命令刷新登录",
     "queryFailed": "查询失败",
-    "refresh": "刷新"
+    "refresh": "刷新",
+    "sevenDayFable": "Fable"
   },
   "claudeDesktop": {
     "modelConfigTitle": "模型配置",

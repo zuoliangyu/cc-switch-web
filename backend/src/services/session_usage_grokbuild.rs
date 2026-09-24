@@ -5,7 +5,7 @@ use crate::error::AppError;
 use crate::proxy::usage::calculator::CostCalculator;
 use crate::proxy::usage::parser::TokenUsage;
 use crate::services::session_usage::{
-    get_sync_state, metadata_modified_nanos, update_sync_state, SessionSyncResult,
+    metadata_modified_nanos, update_sync_state, SessionSyncResult,
 };
 use crate::services::usage_stats::{
     find_model_pricing, has_recent_grokbuild_proxy_activity, SESSION_PROXY_DEDUP_WINDOW_SECONDS,
@@ -53,8 +53,13 @@ pub fn sync_grokbuild_usage(db: &Database) -> Result<SessionSyncResult, AppError
         ..Default::default()
     };
 
+    // 一轮只预取一次全表游标；失败中止本轮（见 load_sync_cursors 文档）。
+    let cursors = crate::services::session_usage::load_sync_cursors(db)?;
     for file_path in &files {
-        match sync_single_grok_file(db, file_path) {
+        let last_modified = cursors
+            .get(file_path.to_string_lossy().as_ref())
+            .map_or(0, |c| c.last_modified);
+        match sync_single_grok_file(db, file_path, last_modified) {
             Ok(file_result) => result.merge(file_result),
             Err(error) => {
                 let message = format!(
@@ -108,7 +113,12 @@ fn collect_files_named(root: &Path, name: &str, files: &mut Vec<PathBuf>, depth:
     }
 }
 
-fn sync_single_grok_file(db: &Database, file_path: &Path) -> Result<SessionSyncResult, AppError> {
+/// `last_modified` 来自调用方批量预取的游标（见 [`crate::services::session_usage::load_sync_cursors`]）。
+fn sync_single_grok_file(
+    db: &Database,
+    file_path: &Path,
+    last_modified: i64,
+) -> Result<SessionSyncResult, AppError> {
     let file_path_str = file_path.to_string_lossy().to_string();
     let metadata = fs::metadata(file_path)
         .map_err(|error| AppError::Config(format!("无法读取文件元数据: {error}")))?;
@@ -122,7 +132,6 @@ fn sync_single_grok_file(db: &Database, file_path: &Path) -> Result<SessionSyncR
         );
         return Ok(SessionSyncResult::default());
     }
-    let (last_modified, _) = get_sync_state(db, &file_path_str)?;
     if file_modified <= last_modified {
         return Ok(SessionSyncResult::default());
     }
@@ -434,6 +443,12 @@ mod tests {
 
     const OLD_EPOCH: i64 = 1_700_000_000;
 
+    fn test_last_modified(db: &Database, path: &Path) -> i64 {
+        crate::services::session_usage::get_sync_state(db, &path.to_string_lossy())
+            .map(|(modified, _)| modified)
+            .unwrap_or(0)
+    }
+
     fn model_counters(model: &str, input: u64, output: u64, cached: u64, ticks: u64) -> String {
         format!(
             r#""{model}":{{"inputTokens":{input},"outputTokens":{output},"cachedReadTokens":{cached},"apiDurationMs":1000,"costUsdTicks":{ticks}}}"#
@@ -508,12 +523,12 @@ mod tests {
         ];
         let path = write_session_file(temp.path(), "session-idem", &lines);
 
-        assert_eq!(sync_single_grok_file(&db, &path)?.imported, 2);
+        assert_eq!(sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?.imported, 2);
         {
             let conn = lock_conn!(db.conn);
             conn.execute("DELETE FROM session_log_sync", [])?;
         }
-        let rescan = sync_single_grok_file(&db, &path)?;
+        let rescan = sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?;
         assert_eq!(rescan.imported, 0);
         assert_eq!(rescan.skipped, 2);
 
@@ -546,10 +561,10 @@ mod tests {
         ];
         let path = write_session_file(temp.path(), "session-settle", &lines);
 
-        let result = sync_single_grok_file(&db, &path)?;
+        let result = sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?;
         assert_eq!(result.imported, 1);
         assert_eq!(result.deferred_files, 1);
-        assert_eq!(get_sync_state(&db, &path.to_string_lossy())?, (0, 0));
+        assert_eq!(crate::services::session_usage::get_sync_state(&db, &path.to_string_lossy())?, (0, 0));
         Ok(())
     }
 
@@ -577,7 +592,7 @@ mod tests {
             )],
         );
 
-        let result = sync_single_grok_file(&db, &path)?;
+        let result = sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?;
         assert_eq!(result.imported, 0);
         assert_eq!(result.skipped, 1);
         assert!(query_rows(&db)?.is_empty());
@@ -603,7 +618,7 @@ mod tests {
         );
         let path = write_session_file(temp.path(), "session-cost", &[complete, partial]);
 
-        assert_eq!(sync_single_grok_file(&db, &path)?.imported, 2);
+        assert_eq!(sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?.imported, 2);
         let rows = query_rows(&db)?;
         let complete_cost = Decimal::from_str(&rows[0].4).expect("complete cost");
         let partial_cost = Decimal::from_str(&rows[1].4).expect("partial cost");
@@ -633,7 +648,7 @@ mod tests {
             )],
         );
 
-        assert_eq!(sync_single_grok_file(&db, &path)?.imported, 1);
+        assert_eq!(sync_single_grok_file(&db, &path, test_last_modified(&db, &path))?.imported, 1);
         let rows = query_rows(&db)?;
         assert_eq!(
             Decimal::from_str(&rows[0].4).expect("cost"),
@@ -654,7 +669,7 @@ mod tests {
             .set_len(MAX_GROK_FILE_BYTES + 1)
             .unwrap();
 
-        assert_eq!(sync_single_grok_file(&db, &path).unwrap().imported, 0);
+        assert_eq!(sync_single_grok_file(&db, &path, test_last_modified(&db, &path)).unwrap().imported, 0);
     }
 
     #[test]

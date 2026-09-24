@@ -193,6 +193,7 @@ pub(crate) async fn query_provider_usage_internal(
         copilot_account_id,
         template_type,
         settings_config,
+        usage_credentials,
     ) = {
         let providers = state.db.get_all_providers(app_type.as_str())?;
 
@@ -214,8 +215,19 @@ pub(crate) async fn query_provider_usage_internal(
         let settings_config = provider
             .map(|p| p.settings_config.clone())
             .unwrap_or_default();
+        // Token Plan 按 app 解析凭据（上游 cc-switch 270a4ff3：OpenCode Go 预设遍布
+        // claude/claude-desktop/codex/opencode/pi，不能只读 Claude env）。
+        let usage_credentials = provider
+            .map(|p| p.resolve_usage_credentials(&app_type))
+            .unwrap_or_default();
 
-        (is_copilot, account_id, template_type, settings_config)
+        (
+            is_copilot,
+            account_id,
+            template_type,
+            settings_config,
+            usage_credentials,
+        )
     };
 
     if is_copilot_template {
@@ -251,19 +263,7 @@ pub(crate) async fn query_provider_usage_internal(
     }
 
     if template_type == TEMPLATE_TYPE_TOKEN_PLAN {
-        let env = settings_config.get("env");
-        let base_url = env
-            .and_then(|value| value.get("ANTHROPIC_BASE_URL"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        let api_key = env
-            .and_then(|value| {
-                value
-                    .get("ANTHROPIC_AUTH_TOKEN")
-                    .or_else(|| value.get("ANTHROPIC_API_KEY"))
-            })
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
+        let (base_url, api_key) = &usage_credentials;
 
         let quota = crate::services::coding_plan::get_coding_plan_quota(base_url, api_key)
             .await

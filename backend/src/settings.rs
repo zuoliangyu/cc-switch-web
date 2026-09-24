@@ -235,6 +235,10 @@ pub struct AppSettings {
     /// User has confirmed the usage query first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage_confirmed: Option<bool>,
+    /// 会话用量自动扫描开关（默认开启=自动模式）。关闭后停止后台定时扫描各客户端
+    /// 会话日志，仅在用户点击"立即同步"时手动扫描；代理记账不受此开关影响。
+    #[serde(default = "default_true")]
+    pub session_auto_sync_enabled: bool,
     /// User has confirmed the stream check first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_check_confirmed: Option<bool>,
@@ -353,6 +357,7 @@ impl Default for AppSettings {
             unify_codex_migrate_existing: None,
             proxy_confirmed: None,
             usage_confirmed: None,
+            session_auto_sync_enabled: true,
             stream_check_confirmed: None,
             enable_failover_toggle: false,
             show_profile_switcher: true,

@@ -279,12 +279,19 @@ impl Database {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         // 18. Session Log Sync 表（会话日志增量同步游标）
+        //
+        // last_byte_offset：Claude 路径的字节游标（seek 增量读）；NULL 表示尚无字节
+        // 游标（旧行号游标或非 Claude 路径行），此时回退全量读。
+        // last_tail_fingerprint：游标边界前尾部字节的指纹，用于识别文件被外部重写
+        // （同尺寸/更大的替换无法靠 size 检测）；NULL 表示无指纹可校验，按纯追加处理。
         conn.execute(
             "CREATE TABLE IF NOT EXISTS session_log_sync (
                 file_path TEXT PRIMARY KEY,
                 last_modified INTEGER NOT NULL,
                 last_line_offset INTEGER NOT NULL DEFAULT 0,
-                last_synced_at INTEGER NOT NULL
+                last_synced_at INTEGER NOT NULL,
+                last_byte_offset INTEGER,
+                last_tail_fingerprint INTEGER
             )",
             [],
         )
@@ -480,6 +487,11 @@ impl Database {
                         log::info!("迁移数据库从 v13 到 v14（添加会话用量持久去重账本）");
                         Self::migrate_v13_to_v14(conn)?;
                         Self::set_user_version(conn, 14)?;
+                    }
+                    14 => {
+                        log::info!("迁移数据库从 v14 到 v15（会话日志字节游标与尾部指纹列）");
+                        Self::migrate_v14_to_v15(conn)?;
+                        Self::set_user_version(conn, 15)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1355,6 +1367,25 @@ impl Database {
              ON session_usage_dedup(data_source, semantic_id, has_entry_id);",
         )
         .map_err(|e| AppError::Database(format!("创建会话用量去重账本失败: {e}")))?;
+        Ok(())
+    }
+
+    /// v14 -> v15: Claude 会话日志的字节游标列与尾部指纹列（上游 cc-switch v17 -> v18）。
+    ///
+    /// 存量行保持 NULL，首轮扫描按旧行号游标转换为字节位置后继续增量；之后写入
+    /// 字节偏移走 seek 增量，并记录游标边界前的尾部指纹用于识别外部重写
+    /// （截断由 size 检测，同尺寸/更大的替换只有指纹能发现）。
+    fn migrate_v14_to_v15(conn: &Connection) -> Result<(), AppError> {
+        // 缺表的库（异常/测试夹具）跳过：create_tables 会以含列的新 DDL 建表。
+        if Self::table_exists(conn, "session_log_sync")? {
+            Self::add_column_if_missing(conn, "session_log_sync", "last_byte_offset", "INTEGER")?;
+            Self::add_column_if_missing(
+                conn,
+                "session_log_sync",
+                "last_tail_fingerprint",
+                "INTEGER",
+            )?;
+        }
         Ok(())
     }
 

@@ -14,8 +14,13 @@ import {
   Activity,
   RefreshCw,
   Coins,
+  Loader2,
+  ScanSearch,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { usageApi } from "@/lib/api/usage";
 import { useQueryClient } from "@tanstack/react-query";
 import { usageKeys } from "@/lib/query/usage";
 import {
@@ -40,9 +45,46 @@ const APP_FILTER_OPTIONS: AppTypeFilter[] = [
   "pi",
 ];
 
-export function UsageDashboard() {
+interface UsageDashboardProps {
+  sessionAutoSyncEnabled?: boolean;
+  onSessionAutoSyncEnabledChange?: (next: boolean) => Promise<void> | void;
+}
+
+export function UsageDashboard({
+  sessionAutoSyncEnabled = true,
+  onSessionAutoSyncEnabledChange,
+}: UsageDashboardProps = {}) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const [syncingSession, setSyncingSession] = useState(false);
+
+  // 手动触发一次会话日志同步：手动模式下是唯一的直连用量补录途径，
+  // 入口按钮仅在关闭自动扫描时展示（自动模式有后台定时扫描，无需手动触发）
+  const runManualSessionSync = async () => {
+    setSyncingSession(true);
+    try {
+      const result = await usageApi.syncSessionUsage();
+      await queryClient.invalidateQueries({ queryKey: usageKeys.all });
+      const message = t("usage.sessionSync.syncCompleted", {
+        imported: result.imported,
+        files: result.filesScanned,
+        errors: result.errors.length,
+      });
+      if (result.errors.length > 0) {
+        toast.warning(message);
+      } else {
+        toast.success(message);
+      }
+    } catch (error) {
+      toast.error(
+        t("usage.sessionSync.syncFailed", {
+          error: String(error),
+        }),
+      );
+    } finally {
+      setSyncingSession(false);
+    }
+  };
   const [range, setRange] = useState<UsageRangeSelection>({ preset: "today" });
   const [appType, setAppType] = useState<AppTypeFilter>("all");
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(30000);
@@ -196,6 +238,44 @@ export function UsageDashboard() {
             </TabsContent>
           </motion.div>
         </Tabs>
+      </div>
+
+      <div className="rounded-xl glass-card px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <ScanSearch className="h-5 w-5 text-sky-500" />
+          <div>
+            <h3 className="text-base font-semibold">
+              {t("usage.sessionSync.title")}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {t("usage.sessionSync.description")}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {!sessionAutoSyncEnabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncingSession}
+              onClick={() => void runManualSessionSync()}
+            >
+              {syncingSession ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              {t("usage.sessionSync.syncNow")}
+            </Button>
+          )}
+          <Switch
+            checked={sessionAutoSyncEnabled}
+            onCheckedChange={(value) =>
+              void onSessionAutoSyncEnabledChange?.(value)
+            }
+            aria-label={t("usage.sessionSync.title")}
+          />
+        </div>
       </div>
 
       {/* Pricing Configuration */}

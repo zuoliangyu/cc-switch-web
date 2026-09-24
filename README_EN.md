@@ -85,7 +85,7 @@ Open [http://localhost:8890](http://localhost:8890). Web data persists in the `c
 
 ## Version
 
-The current repository version is `2.1.0`. This release adds the latest upstream Provider and reasoning capabilities, Codex OAuth lifecycle handling, Hosted WebSearch, and secure native Windows CLI detection, while fixing third-party Provider session migration and full-suite test stability. See `CHANGELOG.md` and `docs-dev/web-parity-post-40cac1a6-2026-08.md` for release details and the upstream migration ledger.
+The current repository version is `2.2.0`. This release adds the MiniMax Code app and role-based Claude model mapping, incremental session usage scanning with subscription usage, and Codex OAuth account isolation within shared workspaces, while syncing the latest upstream Provider presets and proxy protocol fixes. See `CHANGELOG.md` and `docs-dev/web-parity-post-fd14f9c4-2026-09.md` for release details and the upstream migration ledger.
 
 This repository treats `0.1.0` as its initial Web release baseline; previous inherited release history has been removed and should be considered part of the upstream project history.
 

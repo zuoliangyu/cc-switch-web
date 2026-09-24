@@ -4,6 +4,46 @@
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-24
+
+本版本完成 `fd14f9c4..f8788719` 共 165 个上游提交的 Web 适配（140 项迁移、25 项不适用），新增 MiniMax Code 应用，补齐 Claude 按角色的模型映射，并修复 Codex OAuth 在共享 workspace 下的账号串用问题。数据库升级到 Web Schema v16。
+
+### 新增
+
+- MiniMax Code 成为完整应用目标：原生 `custom_provider` 累加式 Provider、MCP、Skills、Prompts（`~/.minimax/AGENTS.md`）、只读会话与恢复，以及从原生运行库导入用量；会话删除仍交由 MiniMax Code 原生处理。
+- Claude 按角色的模型映射：Sonnet / Opus / Fable / Haiku / Subagent 角色行支持显示名与 1M 标记，“一键设置”按表单顺序填充；Routing 接管期间按目标 Provider 重写 Claude 模型菜单。
+- 会话用量改为增量字节游标扫描，支持自动/手动扫描模式；新增 OpenCode Go 订阅用量、Claude Fable 周限额与 MiniMax CN / BaiLing 用量端点，请求日志展示 output tokens/s。
+- Codex 代理支持 `/images/generations`、`/images/edits` 与 usage 解析；新增 GPT-5.6 / GPT-6 的 max 推理档位。
+- Codex OAuth 支持对指定账号原地重新登录、取消进行中的登录，重复添加同一 ChatGPT 账号时给出明确提示。
+- OpenCode 可从获取到的模型列表中搜索并批量添加；Claude 通用配置新增 Disable Artifact Tool 快捷开关。
+- macOS 会话终端支持 Otty（优先新建 Tab，失败再新建窗口）；About 卡片新增 GitHub Star 提示。
+- Pi 预设目录体系与上游对齐，补齐 QwenCloud、千问 AI 平台、Kimi Global、PPIO、腾讯 TokenHub 等预设。
+
+### 改进
+
+- 同步各应用最新 Provider 预设、模型能力与定价（含 DeepSeek V4 峰时价与 Gemini 3.7 Flash），清理已下线模型。
+- Codex 配置支持 config-only 认证写入与切换前预检，保留 `openai` 表无损迁移；Routing 接管按实际登录状态对齐 `requires_openai_auth`，代理注入 OAuth 的 Provider 中和官方认证回退标记。
+- Codex OAuth 托管账号改为本地账号 ID 与 ChatGPT workspace 分离的 v2 模型，同一 workspace 下的不同用户可分别管理。
+- Provider 编辑始终投影到 live 配置；统一 Provider 同步保留子项元数据；Routing 关闭与端口分配保留各应用独立设置。
+- 代理协议转换：xAI 原生 Responses 清洗、Moonshot `$ref` 展开、commentary 与待定工具调用合并、前缀缓存保留中途 system 消息、Copilot `stop` 参数等。
+- Skills 大仓库归档上限与 skillId 元数据解析；Prompts 在外部修改后聚焦刷新；智谱 Responses 模型列表；npm dist-tags 版本探测；Claude Desktop 支持 Linux 3P 配置。
+- OpenCode 配置目录位于 WSL 时，优先在 WSL 侧 home 探测 OMO 统一配置。
+- GUI 控件补充无障碍名称；切换应用时供应商列表回到顶部。
+
+### 修复
+
+- Codex OAuth 官方透传此前把本地账号 ID 当作 `chatgpt-account-id` 发送；现在改为发送 ChatGPT workspace ID，并校验请求的 bearer 属于所绑定账号，共享 workspace 下不再串用账号。
+- 删除托管账号后重新登录，旧 Provider 绑定不再导致切换、接管或启动恢复永久失败，而是提示重新选择账号；账号存储损坏时仍中止，不改动 live 配置。
+- 隐藏署名时同时关闭 session URL 归属。
+- 从配置中移除 MiniMax Code Provider 后刷新列表；刷新页面后选中的 MiniMax Code 不再被重置回 Claude。
+
+### 验证
+
+- TypeScript 类型检查通过。
+- 前端 106 个测试文件共 706 项通过、2 项跳过。
+- Rust 1920 项通过、5 项忽略、0 失败。
+- `pnpm build`（前端打包 + release 二进制）成功。
+
 ## [2.1.0] - 2026-08-18
 
 本版本完成 `40cac1a6..fd14f9c4` 共 24 个上游提交的 Web 适配，重点补齐 Provider 模型能力、Codex OAuth 生命周期、Hosted WebSearch 与 Windows CLI 安全检测，并修复第三方 Provider 修改配置后无法检索旧会话的问题。

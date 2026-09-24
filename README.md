@@ -85,7 +85,7 @@ docker run -d --name cc-switch-web \
 
 ## 当前版本
 
-当前仓库版本为 `2.1.0`。本版本补齐上游 Provider 与 reasoning 能力、Codex OAuth 生命周期、Hosted WebSearch、Windows 原生 CLI 安全检测，并修复第三方 Provider 历史会话迁移与全量测试稳定性。逐版变更明细和本轮上游迁移记录见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-40cac1a6-2026-08.md`。
+当前仓库版本为 `2.2.0`。本版本新增 MiniMax Code 应用与 Claude 按角色的模型映射，完成会话用量增量扫描与订阅用量、Codex OAuth 共享 workspace 账号隔离，并同步上游最新 Provider 预设与代理协议修复。逐版变更明细和本轮上游迁移记录见 `CHANGELOG.md` 与 `docs-dev/web-parity-post-fd14f9c4-2026-09.md`。
 
 仓库以 `0.1.0` 作为 Web 分支的初始发布基线，此前继承的历史发布记录已移除，更早历史请以上游项目为准。
 

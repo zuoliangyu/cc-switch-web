@@ -1398,3 +1398,44 @@ fn schema_v14_creates_session_usage_dedup_for_new_and_existing_databases() {
     )
     .expect("insert ledger row");
 }
+
+#[test]
+fn schema_v15_adds_byte_cursor_columns_to_existing_sync_table() {
+    // 真实升级路径：v14 库带旧 DDL 的 session_log_sync（无字节游标/指纹列）与存量
+    // 游标行；迁移后两列补上、存量行保持 NULL（首轮按旧行号游标转换）。
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE session_log_sync (
+            file_path TEXT PRIMARY KEY,
+            last_modified INTEGER NOT NULL,
+            last_line_offset INTEGER NOT NULL DEFAULT 0,
+            last_synced_at INTEGER NOT NULL
+         );
+         INSERT INTO session_log_sync VALUES ('/tmp/a.jsonl', 5, 3, 1);",
+    )
+    .expect("seed legacy sync table");
+    Database::set_user_version(&conn, 14).expect("set v14");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to current");
+
+    assert_eq!(
+        Database::get_user_version(&conn).expect("user_version"),
+        SCHEMA_VERSION
+    );
+    for column in ["last_byte_offset", "last_tail_fingerprint"] {
+        assert!(
+            Database::has_column(&conn, "session_log_sync", column).expect("has column"),
+            "missing {column}"
+        );
+    }
+    let (byte_offset, fingerprint): (Option<i64>, Option<i64>) = conn
+        .query_row(
+            "SELECT last_byte_offset, last_tail_fingerprint
+             FROM session_log_sync WHERE file_path = '/tmp/a.jsonl'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("read legacy row");
+    assert_eq!(byte_offset, None, "存量行的字节游标必须为 NULL");
+    assert_eq!(fingerprint, None, "存量行的尾部指纹必须为 NULL");
+}

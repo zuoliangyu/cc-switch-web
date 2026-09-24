@@ -3675,6 +3675,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup Gemini common-config credential scrub failed: {err}");
     }
     crate::services::webdav_auto_sync::start_worker(app_state.db.clone());
+    crate::services::session_usage::start_background_sync_worker(app_state.db.clone());
     let db_for_codex_history_migration = app_state.db.clone();
     tokio::task::spawn_blocking(move || {
         match crate::codex_history_migration::maybe_migrate_codex_third_party_history_provider_bucket() {

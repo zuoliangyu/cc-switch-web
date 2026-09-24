@@ -636,7 +636,14 @@ export function SettingsPage({
                   })}
                   icon={<ScrollText className="h-5 w-5 theme-primary-text" />}
                 />
-                <UsageDashboard />
+                <UsageDashboard
+                  sessionAutoSyncEnabled={
+                    settings?.sessionAutoSyncEnabled ?? true
+                  }
+                  onSessionAutoSyncEnabledChange={(sessionAutoSyncEnabled) =>
+                    handleAutoSave({ sessionAutoSyncEnabled })
+                  }
+                />
               </TabsContent>
               <TabsContent value="about" className="space-y-6 mt-0 pb-4">
                 <SettingsIntroCard

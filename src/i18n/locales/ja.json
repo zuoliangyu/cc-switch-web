@@ -1371,12 +1371,11 @@
       "pi_session": "Pi セッション"
     },
     "sessionSync": {
-      "trigger": "セッションログを同期",
-      "import": "セッションをインポート",
-      "resync": "同期",
-      "imported": "セッションログから {{count}} 件のレコードをインポートしました",
-      "upToDate": "セッションログは最新です",
-      "failed": "セッション同期に失敗しました"
+      "description": "各クライアントのローカルセッションログを定期的にスキャンして使用量を集計します。オフにすると手動同期時のみスキャンします",
+      "syncCompleted": "同期完了：{{imported}} 件追加、{{files}} ファイルをスキャン、エラー {{errors}} 件",
+      "syncFailed": "セッション使用量の同期に失敗しました：{{error}}",
+      "syncNow": "今すぐ同期",
+      "title": "セッションログの自動スキャン"
     },
     "totalRecords": "全 {{total}} 件",
     "goToPage": "移動",
@@ -3013,7 +3012,8 @@
     "expired": "セッション期限切れ",
     "expiredHint": "{{tool}}コマンドを実行してログインを更新してください",
     "queryFailed": "クエリに失敗しました",
-    "refresh": "更新"
+    "refresh": "更新",
+    "sevenDayFable": "Fable"
   },
   "claudeDesktop": {
     "modelConfigTitle": "モデル設定",

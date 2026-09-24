@@ -1371,12 +1371,11 @@
       "pi_session": "Pi Session"
     },
     "sessionSync": {
-      "trigger": "Sync session logs",
-      "import": "Import Sessions",
-      "resync": "Sync",
-      "imported": "Imported {{count}} records from session logs",
-      "upToDate": "Session logs are up to date",
-      "failed": "Session sync failed"
+      "description": "Periodically scans each client's local session logs to track usage; when off, logs are only scanned on manual sync",
+      "syncCompleted": "Sync completed: {{imported}} imported, {{files}} files scanned, {{errors}} errors",
+      "syncFailed": "Session usage sync failed: {{error}}",
+      "syncNow": "Sync Now",
+      "title": "Auto-Scan Session Logs"
     },
     "totalRecords": "{{total}} records total",
     "goToPage": "Go",
@@ -3013,7 +3012,8 @@
     "expired": "Session expired",
     "expiredHint": "Run the {{tool}} command to refresh your login",
     "queryFailed": "Query failed",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "sevenDayFable": "Fable"
   },
   "claudeDesktop": {
     "modelConfigTitle": "Model Configuration",

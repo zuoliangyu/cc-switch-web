@@ -133,6 +133,79 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn sync_universal_to_apps_preserves_child_metadata() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(crate::database::Database::memory().expect("memory db"));
+        let state = AppState::new(db.clone());
+        let mut universal = crate::provider::UniversalProvider::new(
+            "metadata".into(),
+            "Original".into(),
+            "custom".into(),
+            "https://old.example".into(),
+            "old-key".into(),
+        );
+        universal.apps.claude = true;
+        universal.apps.codex = true;
+        universal.apps.gemini = true;
+        universal.meta = Some(
+            serde_json::from_value(json!({
+                "usage_script": {"enabled": false, "language": "javascript", "code": "parent"}
+            }))
+            .unwrap(),
+        );
+        state.db.save_universal_provider(&universal).unwrap();
+        ProviderService::sync_universal_to_apps(&state, &universal.id).unwrap();
+
+        let mut expected = Vec::new();
+        for (index, app) in ["claude", "codex", "gemini"].iter().enumerate() {
+            let id = format!("universal-{app}-metadata");
+            let mut child = state.db.get_provider_by_id(&id, app).unwrap().unwrap();
+            assert_eq!(
+                serde_json::to_value(&child.meta).unwrap(),
+                serde_json::to_value(&universal.meta).unwrap()
+            );
+            child.meta = Some(
+                serde_json::from_value(json!({
+                    "usage_script": {"enabled": true, "language": "javascript", "code": app,
+                        "apiKey": "usage-only-key", "autoQueryInterval": 15},
+                    "commonConfigEnabled": false,
+                    "endpointAutoSelect": true
+                }))
+                .unwrap(),
+            );
+            child.created_at = Some(123 + index as i64);
+            child.sort_index = Some(10 + index);
+            child.settings_config["local_setting"] = json!(app);
+            state.db.save_provider(app, &child).unwrap();
+            expected.push(child);
+        }
+
+        universal.name = "Updated".into();
+        universal.base_url = "https://new.example".into();
+        universal.api_key = "new-key".into();
+        // 父级 meta 缺失或存在都不能覆盖子供应商设置。
+        for parent_meta in [None, universal.meta.clone()] {
+            universal.meta = parent_meta;
+            state.db.save_universal_provider(&universal).unwrap();
+            ProviderService::sync_universal_to_apps(&state, &universal.id).unwrap();
+            for (app, before) in ["claude", "codex", "gemini"].iter().zip(&expected) {
+                let after = state.db.get_provider_by_id(&before.id, app).unwrap().unwrap();
+                assert_eq!(
+                    serde_json::to_value(&after.meta).unwrap(),
+                    serde_json::to_value(&before.meta).unwrap(),
+                    "{app}"
+                );
+                assert_eq!(after.created_at, before.created_at, "{app}");
+                assert_eq!(after.sort_index, before.sort_index, "{app}");
+                assert_eq!(after.name, "Updated");
+                assert_eq!(after.settings_config["local_setting"], json!(app));
+            }
+        }
+    }
+
+    #[test]
     fn validate_provider_settings_rejects_missing_auth() {
         let provider = Provider::with_id(
             "codex".into(),
@@ -2821,6 +2894,10 @@ impl ProviderService {
                 let mut merged = existing.settings_config.clone();
                 Self::merge_json(&mut merged, &claude_provider.settings_config);
                 claude_provider.settings_config = merged;
+                // 已有子供应商的应用专属配置与排序不属于统一供应商管理的字段（上游 e0c2fd2b）。
+                claude_provider.meta = existing.meta;
+                claude_provider.created_at = existing.created_at;
+                claude_provider.sort_index = existing.sort_index;
             }
             state.db.save_provider("claude", &claude_provider)?;
         } else {
@@ -2836,6 +2913,10 @@ impl ProviderService {
                 let mut merged = existing.settings_config.clone();
                 Self::merge_json(&mut merged, &codex_provider.settings_config);
                 codex_provider.settings_config = merged;
+                // 已有子供应商的应用专属配置与排序不属于统一供应商管理的字段（上游 e0c2fd2b）。
+                codex_provider.meta = existing.meta;
+                codex_provider.created_at = existing.created_at;
+                codex_provider.sort_index = existing.sort_index;
             }
             state.db.save_provider("codex", &codex_provider)?;
         } else {
@@ -2850,6 +2931,10 @@ impl ProviderService {
                 let mut merged = existing.settings_config.clone();
                 Self::merge_json(&mut merged, &gemini_provider.settings_config);
                 gemini_provider.settings_config = merged;
+                // 已有子供应商的应用专属配置与排序不属于统一供应商管理的字段（上游 e0c2fd2b）。
+                gemini_provider.meta = existing.meta;
+                gemini_provider.created_at = existing.created_at;
+                gemini_provider.sort_index = existing.sort_index;
             }
             state.db.save_provider("gemini", &gemini_provider)?;
         } else {

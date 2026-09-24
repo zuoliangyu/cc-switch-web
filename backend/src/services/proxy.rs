@@ -2309,6 +2309,38 @@ impl ProxyService {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[serial]
+    async fn stop_with_restore_preserves_app_failover_settings() {
+        // 上游 11317c62：停止路径不得把 Claude 的重试/超时配置复制到其它应用。
+        // Web 端 stop 只写全局配置，此测试锁定各应用独立字段在停止后保持不变
+        // （仅 enabled 会被手动关闭流程清除）。
+        let _home = TempHome::new();
+        crate::settings::reload_settings().unwrap();
+        let db = Arc::new(Database::memory().unwrap());
+        let mut expected = Vec::new();
+        for (app, retries) in [("claude", 6), ("codex", 0), ("gemini", 2), ("grokbuild", 3)] {
+            let mut config = db.get_proxy_config_for_app(app).await.unwrap();
+            config.auto_failover_enabled = retries % 2 != 0;
+            config.max_retries = retries;
+            config.streaming_first_byte_timeout = 30 + retries;
+            config.streaming_idle_timeout = 90 + retries;
+            config.non_streaming_timeout = 300 + retries;
+            config.circuit_failure_threshold = 5 + retries;
+            db.update_proxy_config_for_app(config.clone()).await.unwrap();
+            config.enabled = false;
+            expected.push(serde_json::to_value(&config).unwrap());
+        }
+        let service = ProxyService::new(db.clone());
+        service.stop_with_restore().await.unwrap();
+        for expected in &expected {
+            let app = expected["appType"].as_str().unwrap();
+            let actual = db.get_proxy_config_for_app(app).await.unwrap();
+            assert_eq!(serde_json::to_value(actual).unwrap(), *expected, "{app}");
+        }
+    }
+
+
     // 上游接管测试使用的两个入口在 Web 端合并为 apply_codex_takeover_fields 与
     // write_codex_takeover_live；以下适配器让上游测试原样运行（上游 2cd40064）。
     impl ProxyService {

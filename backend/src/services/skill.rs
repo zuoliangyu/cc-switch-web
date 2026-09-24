@@ -652,6 +652,8 @@ impl SkillService {
                 }
             }
             AppType::Pi => return Ok(crate::pi_config::get_pi_agent_dir()?.join("skills")),
+            // MiniMax Code 数据目录已通过 MINIMAX_DATA_DIR / MAVIS_DATA_DIR 覆盖（上游 06082e18）。
+            AppType::Mcode => return Ok(crate::mcode_config::data_dir().join("skills")),
         }
 
         // 默认路径：回退到用户主目录下的标准位置
@@ -666,6 +668,7 @@ impl SkillService {
             AppType::OpenClaw => home.join(".openclaw").join("skills"),
             AppType::Hermes => home.join(".hermes").join("skills"),
             AppType::Pi => home.join(".pi").join("agent").join("skills"),
+            AppType::Mcode => crate::mcode_config::data_dir().join("skills"),
         })
     }
 
@@ -1237,7 +1240,6 @@ impl SkillService {
         if dest.exists() {
             fs::remove_dir_all(&dest)?;
         }
-        Self::copy_dir_recursive(&source, &dest)?;
 
         let new_hash = Self::compute_dir_hash(&dest).ok();
         let skill_md = dest.join("SKILL.md");
@@ -1854,7 +1856,9 @@ impl SkillService {
             .map(|skill| (skill.directory.to_lowercase(), skill))
             .collect();
 
-        if app_dir.exists() {
+        // Unselected MCode directories may have been installed outside CC Switch.
+        // Explicit disable/uninstall handles removal of managed deployments.
+        if app_dir.exists() && !matches!(app, AppType::Mcode) {
             for entry in fs::read_dir(&app_dir)? {
                 let entry = entry?;
                 let path = entry.path();
@@ -2486,6 +2490,9 @@ impl SkillService {
         }
 
         for app in AppType::all() {
+            if matches!(app, AppType::Mcode) && !skill.apps.mcode {
+                continue;
+            }
             let app_dir = match Self::get_app_skills_dir(&app) {
                 Ok(dir) => dir,
                 Err(_) => continue,
@@ -3551,6 +3558,7 @@ mod tests {
                     opencode: true,
                     hermes: false,
                     pi: false,
+                    mcode: false,
                 },
             }],
         )
@@ -3611,6 +3619,7 @@ mod tests {
                 opencode: false,
                 hermes: false,
                 pi: false,
+                mcode: false,
             },
             installed_at: 0,
             content_hash: Some("disabled-hash".to_string()),
@@ -3664,6 +3673,66 @@ mod tests {
             .exists());
     }
 
+    /// 上游 06082e18：MiniMax Code 技能目录位于其数据目录下，自动同步只部署已启用的
+    /// Skill，不清理 CC Switch 之外安装的同名/未选中目录。
+    #[test]
+    #[serial]
+    fn sync_to_mcode_deploys_enabled_and_preserves_unmanaged_directories() {
+        let _home = TempHome::new();
+        std::env::remove_var("MINIMAX_DATA_DIR");
+        std::env::remove_var("MAVIS_DATA_DIR");
+        let home = crate::config::get_home_dir();
+        let ssot = home.join(".cc-switch-web").join("skills");
+        write_skill(&ssot.join("mcode-skill"), "MCode Skill");
+        write_skill(&ssot.join("disabled-skill"), "Disabled");
+        let mcode_skills = home.join(".minimax").join("skills");
+        write_skill(&mcode_skills.join("user-skill"), "User");
+        write_skill(&mcode_skills.join("disabled-skill"), "User Copy");
+
+        let db = create_test_db();
+        for (directory, mcode) in [("mcode-skill", true), ("disabled-skill", false)] {
+            db.save_skill(&InstalledSkill {
+                id: format!("local:{directory}"),
+                name: directory.to_string(),
+                description: None,
+                directory: directory.to_string(),
+                repo_owner: None,
+                repo_name: None,
+                repo_branch: None,
+                readme_url: None,
+                apps: SkillApps {
+                    mcode,
+                    ..Default::default()
+                },
+                installed_at: 0,
+                content_hash: None,
+                updated_at: 0,
+            })
+            .expect("save skill");
+        }
+
+        assert_eq!(
+            SkillService::get_app_skills_dir(&AppType::Mcode).unwrap(),
+            mcode_skills
+        );
+        SkillService::sync_to_app(&db, &AppType::Mcode).expect("sync MCode skills");
+
+        assert!(mcode_skills.join("mcode-skill").join("SKILL.md").exists());
+        assert!(mcode_skills.join("user-skill").join("SKILL.md").exists());
+        assert!(mcode_skills.join("disabled-skill").join("SKILL.md").exists());
+
+        SkillService::toggle_app(&db, "local:mcode-skill", &AppType::Mcode, false)
+            .expect("disable MCode skill");
+        assert!(!mcode_skills.join("mcode-skill").exists());
+        assert!(
+            !db.get_installed_skill("local:mcode-skill")
+                .unwrap()
+                .unwrap()
+                .apps
+                .mcode
+        );
+    }
+
     #[test]
     #[serial]
     fn uninstall_skill_creates_backup_before_removing_ssot() {
@@ -3695,6 +3764,7 @@ mod tests {
                 opencode: false,
                 hermes: false,
                 pi: false,
+                mcode: false,
             },
             installed_at: 123,
             content_hash: Some("backup-hash".to_string()),
@@ -3758,6 +3828,7 @@ mod tests {
                 opencode: false,
                 hermes: false,
                 pi: false,
+                mcode: false,
             },
             installed_at: 456,
             content_hash: Some("restore-hash".to_string()),
@@ -3831,6 +3902,7 @@ mod tests {
                 opencode: false,
                 hermes: false,
                 pi: false,
+                mcode: false,
             },
             installed_at: 789,
             content_hash: Some("delete-backup-hash".to_string()),

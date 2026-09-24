@@ -43,6 +43,7 @@ const APP_FILTER_OPTIONS: AppTypeFilter[] = [
   "gemini",
   "grokbuild",
   "pi",
+  "mcode",
 ];
 
 interface UsageDashboardProps {

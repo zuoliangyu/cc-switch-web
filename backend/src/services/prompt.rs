@@ -1,10 +1,11 @@
 use indexmap::IndexMap;
+use std::path::Path;
 
 use crate::app_config::AppType;
 use crate::config::write_text_file;
 use crate::error::AppError;
 use crate::prompt::Prompt;
-use crate::prompt_files::prompt_file_path;
+use crate::prompt_files::{prompt_file_path, validate_prompt_content};
 use crate::services::pi_prompt_files::PiAgentsFileGuard;
 use crate::store::AppState;
 
@@ -60,9 +61,13 @@ impl PromptService {
         if app == AppType::Pi {
             return upsert_pi_prompt(state, id, prompt);
         }
+        if app == AppType::Mcode {
+            return upsert_mcode_prompt(state, id, prompt, &prompt_file_path(&app)?);
+        }
         // 检查是否为已启用的提示词
         let is_enabled = prompt.enabled;
 
+        validate_prompt_content(&app, &prompt.content)?;
         state.db.save_prompt(app.as_str(), &prompt)?;
 
         if is_enabled {
@@ -90,6 +95,15 @@ impl PromptService {
         if app == AppType::Pi {
             return delete_pi_prompt(state, id);
         }
+        let _guard = if app == AppType::Mcode {
+            Some(
+                MCODE_PROMPT_LOCK
+                    .lock()
+                    .map_err(|error| AppError::Message(error.to_string()))?,
+            )
+        } else {
+            None
+        };
         let prompts = state.db.get_prompts(app.as_str())?;
 
         if let Some(prompt) = prompts.get(id) {
@@ -105,6 +119,9 @@ impl PromptService {
     pub fn enable_prompt(state: &AppState, app: AppType, id: &str) -> Result<(), AppError> {
         if app == AppType::Pi {
             return enable_pi_prompt(state, id);
+        }
+        if app == AppType::Mcode {
+            return enable_mcode_prompt(state, id, &prompt_file_path(&app)?);
         }
         // 回填当前 live 文件内容到已启用的提示词，或创建备份
         let target_path = prompt_file_path(&app)?;
@@ -163,6 +180,7 @@ impl PromptService {
         }
 
         if let Some(prompt) = prompts.get_mut(id) {
+            validate_prompt_content(&app, &prompt.content)?;
             prompt.enabled = true;
             write_text_file(&target_path, &prompt.content)?; // 原子写入
             state.db.save_prompt(app.as_str(), prompt)?;
@@ -191,6 +209,7 @@ impl PromptService {
             }
             std::fs::read_to_string(&file_path).map_err(|e| AppError::io(&file_path, e))?
         };
+        validate_prompt_content(&app, &content)?;
         let timestamp = get_unix_timestamp()?;
 
         let id = format!("imported-{timestamp}");
@@ -223,7 +242,89 @@ impl PromptService {
             std::fs::read_to_string(&file_path).map_err(|e| AppError::io(&file_path, e))?;
         Ok(Some(content))
     }
+}
 
+static MCODE_PROMPT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn upsert_mcode_prompt(
+    state: &AppState,
+    id: &str,
+    prompt: Prompt,
+    target_path: &Path,
+) -> Result<(), AppError> {
+    let _guard = MCODE_PROMPT_LOCK
+        .lock()
+        .map_err(|error| AppError::Message(error.to_string()))?;
+    validate_prompt_content(&AppType::Mcode, &prompt.content)?;
+    let prompts = state.db.get_prompts("mcode")?;
+    let clear_live = !prompt.enabled
+        && prompts.get(id).is_some_and(|previous| previous.enabled)
+        && !prompts
+            .iter()
+            .any(|(key, prompt)| key != id && prompt.enabled)
+        && target_path.exists();
+    if !prompt.enabled && !clear_live {
+        return state.db.save_prompt("mcode", &prompt);
+    }
+    crate::mcode_config::write_and_commit(
+        target_path,
+        || write_text_file(target_path, if clear_live { "" } else { &prompt.content }),
+        || state.db.save_prompt("mcode", &prompt),
+    )
+}
+
+fn enable_mcode_prompt(state: &AppState, id: &str, target_path: &Path) -> Result<(), AppError> {
+    let _guard = MCODE_PROMPT_LOCK
+        .lock()
+        .map_err(|error| AppError::Message(error.to_string()))?;
+    let mut prompts = state.db.get_prompts("mcode")?;
+    let target = prompts
+        .get(id)
+        .ok_or_else(|| AppError::InvalidInput(format!("提示词 {id} 不存在")))?;
+    validate_prompt_content(&AppType::Mcode, &target.content)?;
+
+    let live_content = match std::fs::read_to_string(target_path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(AppError::io(target_path, error)),
+    };
+    if !live_content.trim().is_empty() {
+        let timestamp = get_unix_timestamp()?;
+        if let Some(current) = prompts.values_mut().find(|prompt| prompt.enabled) {
+            current.content = live_content;
+            current.updated_at = Some(timestamp);
+        } else if !prompts
+            .values()
+            .any(|prompt| prompt.content.trim() == live_content.trim())
+        {
+            let backup_id = format!("backup-{}", uuid::Uuid::new_v4());
+            prompts.insert(
+                backup_id.clone(),
+                Prompt {
+                    id: backup_id,
+                    name: format!(
+                        "原始提示词 {}",
+                        chrono::Local::now().format("%Y-%m-%d %H:%M")
+                    ),
+                    content: live_content,
+                    description: Some("自动备份的原始提示词".to_string()),
+                    enabled: false,
+                    created_at: Some(timestamp),
+                    updated_at: Some(timestamp),
+                },
+            );
+        }
+    }
+    for (key, prompt) in &mut prompts {
+        prompt.enabled = key == id;
+    }
+    let content = &prompts[id].content;
+    validate_prompt_content(&AppType::Mcode, content)?;
+    crate::mcode_config::write_and_commit(
+        target_path,
+        || write_text_file(target_path, content),
+        || state.db.save_mcode_prompts(&prompts),
+    )
 }
 
 fn pi_active_prompt_id(
@@ -450,5 +551,55 @@ mod tests {
             std::fs::read_to_string(agent_dir.join("AGENTS.md")).unwrap(),
             "external change"
         );
+    }
+
+    /// 移植自上游 tests/mcode_commands.rs（06082e18）。
+    #[test]
+    #[serial]
+    fn failed_mcode_prompt_writes_preserve_state_and_can_be_retried() {
+        let temp = tempfile::tempdir().expect("temp home");
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        std::env::remove_var("MINIMAX_DATA_DIR");
+        std::env::remove_var("MAVIS_DATA_DIR");
+        crate::settings::reload_settings().expect("reload settings");
+        let state = memory_state();
+        let path = temp.path().join(".minimax/AGENTS.md");
+        let active: Prompt = serde_json::from_value(serde_json::json!({
+            "id":"active", "name":"Active", "content":"original", "enabled":true
+        }))
+        .unwrap();
+        state.db.save_prompt("mcode", &active).unwrap();
+        // A directory at the file path deterministically rejects the atomic rename.
+        std::fs::create_dir_all(&path).unwrap();
+        let mut edited = active.clone();
+        edited.content = "updated".into();
+        assert!(
+            PromptService::upsert_prompt(&state, AppType::Mcode, &active.id, edited.clone())
+                .is_err()
+        );
+        let mut disabled = active.clone();
+        disabled.enabled = false;
+        assert!(
+            PromptService::upsert_prompt(&state, AppType::Mcode, &active.id, disabled.clone())
+                .is_err()
+        );
+        let stored = &state.db.get_prompts("mcode").unwrap()[&active.id];
+        assert!(stored.enabled);
+        assert_eq!(stored.content, "original");
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::write(&path, "original").unwrap();
+        PromptService::upsert_prompt(&state, AppType::Mcode, &active.id, disabled).unwrap();
+        assert!(!state.db.get_prompts("mcode").unwrap()[&active.id].enabled);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "");
+        PromptService::upsert_prompt(&state, AppType::Mcode, &active.id, edited).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "updated");
+        assert!(state.db.get_prompts("mcode").unwrap()[&active.id].enabled);
+
+        match previous {
+            Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+            None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+        }
+        crate::settings::reload_settings().expect("restore settings");
     }
 }

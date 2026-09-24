@@ -66,7 +66,8 @@ type ProviderFilter =
   | "opencode"
   | "openclaw"
   | "gemini"
-  | "pi";
+  | "pi"
+  | "mcode";
 
 export function SessionManagerPage({ appId }: { appId: string }) {
   const { t } = useTranslation();
@@ -343,7 +344,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   };
 
   const deletableFilteredSessions = useMemo(
-    () => filteredSessions.filter((session) => Boolean(session.sourcePath)),
+    () =>
+      filteredSessions.filter(
+        (session) =>
+          Boolean(session.sourcePath) && session.providerId !== "mcode",
+      ),
     [filteredSessions],
   );
 
@@ -356,7 +361,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
 
   const selectedDeletableSessions = useMemo(
-    () => selectedSessions.filter((session) => Boolean(session.sourcePath)),
+    () =>
+      selectedSessions.filter(
+        (session) =>
+          Boolean(session.sourcePath) && session.providerId !== "mcode",
+      ),
     [selectedSessions],
   );
 
@@ -390,7 +399,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     );
 
   const toggleSessionChecked = (session: SessionMeta, checked: boolean) => {
-    if (!session.sourcePath) return;
+    if (!session.sourcePath || session.providerId === "mcode") return;
     const key = getSessionKey(session);
     setSelectedSessionKeys((current) => {
       const next = new Set(current);
@@ -788,6 +797,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 <span>Gemini CLI</span>
                               </div>
                             </SelectItem>
+                            <SelectItem value="mcode">MiniMax Code</SelectItem>
                             <SelectItem value="pi">
                               <div className="flex items-center gap-2">
                                 <ProviderIcon icon="pi" name="Pi" size={14} />
@@ -932,7 +942,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               isChecked={selectedSessionKeys.has(
                                 getSessionKey(session),
                               )}
-                              isCheckDisabled={!session.sourcePath}
+                              isCheckDisabled={
+                                !session.sourcePath ||
+                                session.providerId === "mcode"
+                              }
                               onSelect={setSelectedKey}
                               onToggleChecked={(checked) =>
                                 toggleSessionChecked(session, checked)
@@ -1084,7 +1097,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 setDeleteTargets([selectedSession])
                               }
                               disabled={
-                                !selectedSession.sourcePath || isDeleting
+                                !selectedSession.sourcePath ||
+                                selectedSession.providerId === "mcode" ||
+                                isDeleting
                               }
                             >
                               <Trash2 className="size-3.5" />

@@ -725,6 +725,8 @@ impl Database {
                 provider_name: row.get::<_, Option<String>>(2)?.unwrap_or_else(|| {
                     if provider_id == "_pi_session" {
                         "Pi (Session)".to_string()
+                    } else if provider_id == "_mcode_session" {
+                        "MiniMax Code (Session)".to_string()
                     } else {
                         "Unknown".to_string()
                     }

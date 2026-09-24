@@ -81,6 +81,10 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
         AppType::OpenClaw => crate::openclaw_config::get_openclaw_dir(),
         AppType::Hermes => crate::hermes_config::get_hermes_dir(),
         AppType::Pi => crate::pi_config::get_pi_agent_dir().map_err(|e| e.to_string())?,
+        AppType::Mcode => crate::mcode_config::config_path()
+            .parent()
+            .unwrap()
+            .to_path_buf(),
     };
 
     Ok(dir.to_string_lossy().to_string())
@@ -100,6 +104,7 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::OpenClaw => crate::openclaw_config::get_default_openclaw_dir(),
         AppType::Hermes => crate::hermes_config::get_default_hermes_dir(),
         AppType::Pi => config::get_home_dir().join(".pi").join("agent"),
+        AppType::Mcode => config::get_home_dir().join(".minimax"),
     };
 
     Ok(dir.to_string_lossy().to_string())

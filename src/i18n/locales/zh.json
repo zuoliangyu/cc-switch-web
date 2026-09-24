@@ -754,7 +754,8 @@
     "opencode": "OpenCode",
     "openclaw": "OpenClaw",
     "hermes": "Hermes",
-    "pi": "Pi"
+    "pi": "Pi",
+    "mcode": "MiniMax Code"
   },
   "appSwitcher": {
     "more": "更多应用"
@@ -1366,7 +1367,8 @@
       "codex": "Codex",
       "gemini": "Gemini",
       "grokbuild": "Grok Build",
-      "pi": "Pi"
+      "pi": "Pi",
+      "mcode": "MiniMax Code"
     },
     "dataSource": {
       "proxy": "代理",
@@ -1626,7 +1628,8 @@
         "gemini": "Gemini",
         "grokbuild": "Grok Build",
         "opencode": "OpenCode",
-        "openclaw": "OpenClaw"
+        "openclaw": "OpenClaw",
+        "mcode": "MiniMax Code"
       }
     },
     "userLevelPath": "用户级 MCP 配置路径",

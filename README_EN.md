@@ -15,11 +15,12 @@ Architecture and positioning:
 
 ## Usage
 
-CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, Pi, and other AI coding tools from your browser.
+CC Switch Web runs a local Rust service so you can manage and one-click switch provider configurations for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, Pi, MiniMax Code, and other AI coding tools from your browser.
 
 Capabilities already available on the Web branch:
 
-- Provider management for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, and Pi
+- Provider management for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, Pi, and MiniMax Code
+- MiniMax Code providers/models (native `custom_provider`), MCP, Skills, global instructions (`AGENTS.md`), read-only session history, and usage import; deleting sessions stays in the native MiniMax Code app
 - Pi Provider, Prompts, Skills, Sessions, and Usage support; Pi keeps ownership of `/login`, `auth.json`, the default Provider/Model, proxying, failover, and managed OAuth
 - Official subscription quota display for Claude, Codex, and Gemini
 - Managed ChatGPT (Codex OAuth) account center, Claude preset, and quota display

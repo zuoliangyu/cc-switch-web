@@ -160,8 +160,9 @@ export function EditProviderDialog({
 
       // OpenCode uses additive mode - each provider's config is stored independently in DB
       // Reading live config would return the full opencode.json (with $schema, provider, mcp etc.)
-      // instead of just the provider fragment, causing incorrect nested structure on save
-      if (appId === "opencode") {
+      // instead of just the provider fragment, causing incorrect nested structure on save.
+      // MiniMax Code's native config is owned by the catalog coordinator as well.
+      if (appId === "opencode" || appId === "mcode") {
         if (!cancelled) {
           setLiveSettings(null);
           setHasLoadedLive(true);

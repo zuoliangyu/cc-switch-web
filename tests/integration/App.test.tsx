@@ -2,6 +2,8 @@ import { Suspense, type ComponentType } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { server } from "../msw/server";
 import { resetProviderState } from "../msw/state";
 
 const toastSuccessMock = vi.fn();
@@ -23,6 +25,7 @@ vi.mock("@/components/providers/ProviderList", () => ({
     onDuplicate,
     onConfigureUsage,
     onOpenWebsite,
+    onRemoveFromConfig,
     onCreate,
   }: any) => (
     <div>
@@ -40,6 +43,9 @@ vi.mock("@/components/providers/ProviderList", () => ({
       </button>
       <button onClick={() => onOpenWebsite("https://example.com")}>
         open-website
+      </button>
+      <button onClick={() => onRemoveFromConfig?.(Object.values(providers)[0])}>
+        remove
       </button>
       <button onClick={() => onCreate?.()}>create</button>
     </div>
@@ -250,5 +256,64 @@ describe("App integration with MSW", () => {
     expect(mainScrollContainer.scrollLeft).toBe(0);
     expect(providerScrollContainer!.scrollTop).toBe(0);
     expect(providerScrollContainer!.scrollLeft).toBe(0);
+  });
+
+  // 上游 09c5d39d：MiniMax Code 从配置移除后需刷新供应商列表（成员关系来自 meta）。
+  it("refreshes MiniMax Code provider membership after removing it from live config", async () => {
+    localStorage.setItem("cc-switch-last-app", "mcode");
+    let liveConfigManaged = true;
+    let providerRequests = 0;
+    server.use(
+      http.post("http://runtime.local/get_providers", async ({ request }) => {
+        const { app } = (await request.json()) as { app: string };
+        if (app !== "mcode") return;
+        providerRequests += 1;
+        return HttpResponse.json({
+          custom: {
+            id: "custom",
+            name: "Custom MiniMax Code",
+            settingsConfig: {},
+            meta: { liveConfigManaged },
+          },
+        });
+      }),
+      http.post(
+        "http://runtime.local/remove_provider_from_live_config",
+        async ({ request }) => {
+          expect(await request.json()).toEqual({ id: "custom", app: "mcode" });
+          liveConfigManaged = false;
+          return HttpResponse.json(true);
+        },
+      ),
+    );
+
+    try {
+      renderApp(App);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list")).toHaveTextContent(
+          '"liveConfigManaged":true',
+        ),
+      );
+      const requestsBeforeRemoval = providerRequests;
+      fireEvent.click(screen.getByText("remove"));
+      fireEvent.click(screen.getByText("confirm-delete"));
+
+      await waitFor(() =>
+        expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument(),
+      );
+      expect(liveConfigManaged).toBe(false);
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list")).toHaveTextContent(
+          '"liveConfigManaged":false',
+        ),
+      );
+      expect(providerRequests).toBeGreaterThan(requestsBeforeRemoval);
+      expect(screen.getByTestId("provider-list")).toHaveTextContent(
+        "Custom MiniMax Code",
+      );
+    } finally {
+      localStorage.removeItem("cc-switch-last-app");
+    }
   });
 });

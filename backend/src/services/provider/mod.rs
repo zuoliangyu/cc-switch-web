@@ -960,6 +960,57 @@ base_url = "http://localhost:8080"
         }
     }
 
+    /// 上游 06082e18：MiniMax Code 供应商直接读写原生 config.yaml 的 custom_provider，
+    /// 列表合并原生条目，删除同时移除原生条目并保留无关配置。
+    #[test]
+    #[serial]
+    fn mcode_provider_add_list_and_delete_use_native_config() {
+        let _home = TestHome::new();
+        std::env::remove_var("MINIMAX_DATA_DIR");
+        std::env::remove_var("MAVIS_DATA_DIR");
+        crate::settings::reload_settings().expect("reload settings");
+        let state = AppState::new(std::sync::Arc::new(
+            crate::database::Database::memory().unwrap(),
+        ));
+        let config_path = crate::mcode_config::config_path();
+        std::fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &config_path,
+            "defaultModel: minimax/MiniMax-M3\ncustom_provider:\n  native:\n    name: Native\n    options:\n      baseURL: https://native.example/v1\n      apiKey: native-key\n    models:\n      m: {}\n",
+        )
+        .unwrap();
+
+        let provider = Provider::with_id(
+            "cc-switch-minimax".into(),
+            "MiniMax".into(),
+            json!({
+                "name": "MiniMax",
+                "api": "anthropic-messages",
+                "options": {"baseURL": "https://api.minimaxi.com/anthropic", "apiKey": "test-key"},
+                "models": {"MiniMax-M3": {}}
+            }),
+            None,
+        );
+        ProviderService::add(&state, AppType::Mcode, provider, true).unwrap();
+        let native = crate::mcode_config::get_providers().unwrap();
+        assert!(native.contains_key("cc-switch-minimax"));
+        assert!(native.contains_key("native"));
+
+        let listed = ProviderService::list(&state, AppType::Mcode).unwrap();
+        assert_eq!(listed["native"].name, "Native");
+        assert_eq!(
+            ProviderService::provider_live_config_managed(&listed["native"]),
+            Some(true)
+        );
+
+        ProviderService::delete(&state, AppType::Mcode, "cc-switch-minimax").unwrap();
+        let native = crate::mcode_config::get_providers().unwrap();
+        assert!(!native.contains_key("cc-switch-minimax"));
+        assert!(native.contains_key("native"));
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(raw.contains("defaultModel"));
+    }
+
     #[test]
     fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
         for key in [
@@ -1254,6 +1305,30 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::list(state);
         }
+        if app_type == AppType::Mcode {
+            let native = crate::mcode_config::get_providers()?;
+            let mut saved = state.db.get_all_providers("mcode")?;
+            for (id, config) in &native {
+                if !saved.contains_key(id) {
+                    let name = config.get("name").and_then(Value::as_str).unwrap_or(id);
+                    saved.insert(
+                        id.clone(),
+                        Provider::with_id(id.clone(), name.into(), config.clone(), None),
+                    );
+                }
+            }
+            for (id, provider) in &mut saved {
+                if let Some(config) = native.get(id) {
+                    if let Some(name) = config.get("name").and_then(Value::as_str) {
+                        provider.name = name.into();
+                    }
+                    provider.settings_config = config.clone();
+                }
+                Self::set_provider_live_config_managed(provider, native.contains_key(id));
+                state.db.save_provider("mcode", provider)?;
+            }
+            return Ok(saved);
+        }
         state.db.get_all_providers(app_type.as_str())
     }
 
@@ -1271,6 +1346,27 @@ impl ProviderService {
         }
         crate::settings::get_effective_current_provider(&state.db, &app_type)
             .map(|opt| opt.unwrap_or_default())
+    }
+
+    fn save_mcode_provider(
+        state: &AppState,
+        provider: &Provider,
+        write_live: bool,
+    ) -> Result<bool, AppError> {
+        let previous = state.db.get_provider_by_id(&provider.id, "mcode")?;
+        state.db.save_provider("mcode", provider)?;
+        if write_live {
+            if let Err(error) =
+                crate::mcode_config::set_provider(&provider.id, provider.settings_config.clone())
+            {
+                match previous {
+                    Some(previous) => state.db.save_provider("mcode", &previous)?,
+                    None => state.db.delete_provider("mcode", &provider.id)?,
+                }
+                return Err(error);
+            }
+        }
+        Ok(true)
     }
 
     /// Add a new provider
@@ -1349,6 +1445,10 @@ impl ProviderService {
                 ));
             }
             return Ok(true);
+        }
+
+        if app_type == AppType::Mcode {
+            return Self::save_mcode_provider(state, &provider, add_to_live);
         }
 
         // Save to database
@@ -1601,6 +1701,9 @@ impl ProviderService {
                 }),
             )?;
             Self::set_provider_live_config_managed(&mut provider, live_config_managed);
+            if app_type == AppType::Mcode {
+                return Self::save_mcode_provider(state, &provider, live_config_managed);
+            }
             state.db.save_provider(app_type.as_str(), &provider)?;
             if !live_config_managed {
                 return Ok(true);
@@ -1680,6 +1783,7 @@ impl ProviderService {
                     AppType::OpenCode => remove_opencode_provider_from_live(id)?,
                     AppType::OpenClaw => remove_openclaw_provider_from_live(id)?,
                     AppType::Hermes => remove_hermes_provider_from_live(id)?,
+                    AppType::Mcode => crate::mcode_config::remove_provider(id)?,
                     _ => {}
                 }
             }
@@ -1756,6 +1860,7 @@ impl ProviderService {
             AppType::Hermes => {
                 remove_hermes_provider_from_live(id)?;
             }
+            AppType::Mcode => crate::mcode_config::remove_provider(id)?,
             _ => {
                 return Err(AppError::Message(format!(
                     "App {} does not support remove from live config",
@@ -2108,6 +2213,7 @@ impl ProviderService {
                     AppType::OpenCode => remove_opencode_provider_from_live(&provider.id),
                     AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
                     AppType::Hermes => remove_hermes_provider_from_live(&provider.id),
+                    AppType::Mcode => crate::mcode_config::remove_provider(&provider.id),
                     _ => Ok(()),
                 };
 
@@ -2358,7 +2464,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi => Ok(String::new()),
+            AppType::Pi | AppType::Mcode => Ok(String::new()),
         }
     }
 
@@ -2377,7 +2483,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi => Ok(String::new()),
+            AppType::Pi | AppType::Mcode => Ok(String::new()),
         }
     }
 
@@ -2951,6 +3057,9 @@ impl ProviderService {
                     ));
                 }
             }
+            AppType::Mcode => {
+                crate::mcode_config::validate_provider(&provider.id, &provider.settings_config)?
+            }
             AppType::Pi => {
                 crate::pi_config::validate_provider_node(&provider.id, &provider.settings_config)?;
             }
@@ -3196,6 +3305,20 @@ impl ProviderService {
                 let base_url = crate::pi_config::provider_base_url(&provider.settings_config)
                     .unwrap_or_default();
                 Ok((api_key, base_url))
+            }
+            AppType::Mcode => {
+                // MiniMax Code 的 custom_provider 把凭据放在 options 下。
+                let options = provider.settings_config.get("options");
+                let field = |top: &str, nested: &str| {
+                    provider
+                        .settings_config
+                        .get(top)
+                        .or_else(|| options.and_then(|options| options.get(nested)))
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                Ok((field("apiKey", "apiKey"), field("baseUrl", "baseURL")))
             }
         }
     }

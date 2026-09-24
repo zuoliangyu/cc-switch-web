@@ -17,6 +17,7 @@ const visibleApps: VisibleApps = {
   openclaw: true,
   hermes: true,
   pi: true,
+  mcode: true,
 };
 
 export const getDefaultSettings = (): Settings => ({

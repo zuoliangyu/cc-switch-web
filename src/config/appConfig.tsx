@@ -25,6 +25,7 @@ export const APP_IDS: AppId[] = [
   "openclaw",
   "hermes",
   "pi",
+  "mcode",
 ];
 
 /** App IDs shown in MCP panel (Pi 不支持 MCP 投影) */
@@ -35,6 +36,7 @@ export const MCP_SKILLS_APP_IDS = [
   "grokbuild",
   "opencode",
   "hermes",
+  "mcode",
 ] as const satisfies readonly AppId[];
 
 export const SKILLS_APP_IDS = [
@@ -108,6 +110,12 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     icon: <ProviderIcon icon="hermes" name="Hermes" size={14} />,
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
+  mcode: {
+    label: "MiniMax Code",
+    icon: <ProviderIcon icon="minimax" name="MiniMax Code" size={14} />,
+    activeClass: "theme-chip-warning",
+    badgeClass: "theme-chip-warning border-0 gap-1.5",
   },
   pi: {
     label: "Pi",

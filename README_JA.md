@@ -15,11 +15,12 @@ CC Switch Web は [cc-switch](https://github.com/farion1231/cc-switch) の Web �
 
 ## 使い方
 
-CC Switch Web はローカルで Rust サービスを起動し、Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi などの AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
+CC Switch Web はローカルで Rust サービスを起動し、Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi、MiniMax Code などの AI コーディングツールのプロバイダー設定をブラウザから管理・ワンクリック切替できます。
 
 Web ブランチで既に利用できる機能:
 
-- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi の Provider 管理
+- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi、MiniMax Code の Provider 管理
+- MiniMax Code の Provider/モデル（ネイティブ `custom_provider`）、MCP、Skills、グローバル指示（`AGENTS.md`）、読み取り専用のセッション履歴、使用量の取り込み。セッション削除は MiniMax Code 本体で行う
 - Pi の Provider、Prompts、Skills、Sessions、Usage。Pi の `/login`、`auth.json`、デフォルト Provider/Model、プロキシ、フェイルオーバー、OAuth 管理は Pi 本体が所有
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
 - ChatGPT（Codex OAuth）の管理アカウントセンター、Claude プリセット、クォータ表示

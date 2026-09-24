@@ -212,6 +212,13 @@ impl StreamCheckService {
     ) -> Result<StreamCheckResult, AppError> {
         let start = Instant::now();
 
+        // MiniMax Code 由其原生运行时直连上游，界面不提供连通性测试（上游 06082e18）。
+        if matches!(app_type, AppType::Mcode) {
+            return Err(AppError::InvalidInput(
+                "MiniMax Code providers do not support stream checks".to_string(),
+            ));
+        }
+
         if matches!(
             app_type,
             AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi
@@ -295,7 +302,11 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi => {
+            AppType::OpenCode
+            | AppType::OpenClaw
+            | AppType::Hermes
+            | AppType::Pi
+            | AppType::Mcode => {
                 unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
@@ -1310,7 +1321,7 @@ impl StreamCheckService {
             AppType::Hermes => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
-            AppType::Pi => {
+            AppType::Pi | AppType::Mcode => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }

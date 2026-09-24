@@ -44,6 +44,8 @@ pub struct VisibleApps {
     pub hermes: bool,
     #[serde(default = "default_true")]
     pub pi: bool,
+    #[serde(default = "default_true")]
+    pub mcode: bool,
 }
 
 impl Default for VisibleApps {
@@ -57,6 +59,7 @@ impl Default for VisibleApps {
             openclaw: true,
             hermes: true,
             pi: true,
+            mcode: true,
         }
     }
 }
@@ -798,7 +801,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
         AppType::Hermes => None,
-        AppType::Pi => None,
+        AppType::Pi | AppType::Mcode => None,
     }
 }
 
@@ -818,7 +821,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::GrokBuild => settings.current_provider_grokbuild = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
-        AppType::Hermes | AppType::Pi => {}
+        AppType::Hermes | AppType::Pi | AppType::Mcode => {}
     }
 
     update_settings(settings)

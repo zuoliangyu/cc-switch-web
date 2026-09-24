@@ -6,3 +6,5 @@ pub(super) mod openclaw;
 pub(super) mod opencode;
 pub(crate) mod pi;
 mod utils;
+
+pub mod mcode;

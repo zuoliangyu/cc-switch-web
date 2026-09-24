@@ -245,6 +245,41 @@ fn schema_v12_adds_grokbuild_skill_and_mcp_flags() {
     assert_eq!(skill, (1, 0));
 }
 
+/// 上游 06082e18 的 v18 -> v19 在 Web 版本链中对应 v15 -> v16。
+#[test]
+fn schema_v16_adds_mcode_skill_and_mcp_flags() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE mcp_servers (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );
+        CREATE TABLE skills (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0
+        );
+        INSERT INTO mcp_servers (id, enabled_codex) VALUES ('mcp-1', 1);
+        INSERT INTO skills (id, enabled_codex) VALUES ('skill-1', 1);",
+    )
+    .expect("create v15 tables");
+    Database::set_user_version(&conn, 15).expect("set v15");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v16");
+
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    for table in ["mcp_servers", "skills"] {
+        assert!(Database::has_column(&conn, table, "enabled_mcode").unwrap());
+        let flags: (i64, i64) = conn
+            .query_row(
+                &format!("SELECT enabled_codex, enabled_mcode FROM {table}"),
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(flags, (1, 0), "{table}");
+    }
+}
+
 #[test]
 fn schema_v13_adds_grokbuild_proxy_row_and_preserves_existing_values() {
     let conn = Connection::open_in_memory().expect("open memory db");

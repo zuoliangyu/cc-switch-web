@@ -1,6 +1,6 @@
 # Web 端跟进上游 `fd14f9c4` 后续迁移计划（2026-09-24）
 
-> 状态：批次 1、2、3、4、6 已完成；批次 5 部分完成（剩余项见第 6 节）
+> 状态：批次 1–6 已完成；待定项处理见第 6 节
 > 上游仓库：`E:/zuolan_lib/AI_Hub/cc-switch`
 > 冻结基线：`fd14f9c4`（上一轮审计点，见 `web-parity-post-40cac1a6-2026-08.md`）
 > 当前审计点：`f8788719`（上游 v3.20.4 之后的 `main`）
@@ -142,7 +142,7 @@
 | `bd247a4a` | fix(proxy): omit missing tool descriptions instead of serializing null (#7319)                                    | 直接迁移                                                                                                                                                                  | 2    | 已迁移   |
 | `42ac174d` | feat(claude-desktop): support 3P configuration on Linux (#7331)                                                   | Claude Desktop Linux 3P 配置                                                                                                                                              | 5    | 已迁移   |
 | `15884b20` | fix(codex): recover stale account bindings during takeover (#7395)                                                | 按 Web 结构移植：目标预检与恢复前 `ensure_account_exists`，失效绑定给出“选择账号”指引；开启接管（含已接管幂等路径）校验 Codex 当前绑定；恢复遇已删除账号保留现有登录，存储损坏仍中止；切走侧沿用 `CodexLiveAuthSwitchGuard`。Web 接管期不写托管 live auth，上游 takeover 状态矩阵测试改写为直连/接管/持久化重启三组 Web 测试 | 3    | 已迁移 |
-| `06082e18` | feat: add MiniMax Code harness support (#7383)                                                                    | MiniMax Code 新应用                                                                                                                                                       | 5    | 待迁移   |
+| `06082e18` | feat: add MiniMax Code harness support (#7383)                                                                    | MiniMax Code 作为完整应用接入：原生 `custom_provider` 累加式 Provider、MCP、Skills、Prompts（`~/.minimax/AGENTS.md`）、只读会话与恢复、原生运行库用量导入；schema 按 Web 编号 v15→v16 增加 `enabled_mcode`。全部走通用按应用路由，无新增 web_server 路由。Skills 沿用 Web Pi 的“原生目录存在即启用”模型，不引入上游依赖 Pi 归属校验（区间外 84e75ad2）的回滚/重定向；Web 无 deeplink 与 `input_token_semantics` 列，相应部分不适用 | 5    | 已迁移 |
 | `33c80626` | fix(skills): raise archive entry limit so large skill repos install (#7489)                                       | Skills 安装修复                                                                                                                                                           | 5    | 已迁移   |
 | `a659440b` | fix(prompts): refresh active prompts after external file edits (#7194)                                            | Prompts 修复                                                                                                                                                              | 5    | 已迁移   |
 | `f2d0b2a6` | Rebalance sponsor CTAs around Kimi Code plan with dual-region links (#7522)                                       | 上游 README/用户手册                                                                                                                                                      | 排除 | 不适用   |
@@ -173,7 +173,7 @@
 | `d6e05152` | fix(proxy): preserve max effort for GPT-5.6 and GPT-6 Astra (#7531)                                               | 直接迁移                                                                                                                                                                  | 2    | 已迁移   |
 | `c8e76bbc` | fix(proxy): omit missing tool descriptions in the Codex responses-to-chat converter (#7378)                       | 直接迁移                                                                                                                                                                  | 2    | 已迁移   |
 | `6f6087cd` | fix(lib): reset skip_taskbar before window.show() across entry points (#6348)                                     | Tauri 窗口、权限与更新器                                                                                                                                                  | 排除 | 不适用   |
-| `09c5d39d` | fix(mcode): refresh provider state after removal (#7578)                                                          | MiniMax Code 新应用                                                                                                                                                       | 5    | 待迁移   |
+| `09c5d39d` | fix(mcode): refresh provider state after removal (#7578)                                                          | 从配置移除 MiniMax Code 供应商后刷新 Provider 列表；集成测试按 Web 结构改写 | 5    | 已迁移 |
 | `4b1ec8b5` | fix(ci): stabilize frontend tests and verify renderer build                                                       | 上游 CI                                                                                                                                                                   | 排除 | 不适用   |
 | `bbee784d` | feat(presets): add Soshow aggregator presets                                                                      | 同步预设、测试与 i18n                                                                                                                                                     | 1    | 已迁移   |
 | `f8821c03` | feat(settings): add a GitHub star prompt to the About card                                                        | About 卡片 GitHub Star 提示（指向上游仓库）                                                                                                                               | 待定 | 待定     |
@@ -254,11 +254,12 @@
 - 2026-09-24：批次 3c 前端完成。`auth.ts` 增加 `targetAccountId`、`authCancelLogin` 与 `CODEX_OAUTH_DUPLICATE_ACCOUNT_ERROR`，runtime client 接入 `/api/auth/cancel-login`；`useManagedAuth` 按上游引入流程代次、后端取消串行化、定向重登与重试沿用目标账号（保留 Web 无 githubDomain 的签名）；Web 轮询路由把重复账号错误码以 409 原样返回，前端映射为 `codexOauth.duplicateAccount`。移植上游 `useManagedAuth` 测试 6 项（移除账号 toast 用例属区间外功能未移植），`CodexOAuthSection` 测试补定向重登与重试用例；清理 `.claude/worktrees` 三个已合并 worktree。前端 102 个测试文件 677 项通过、2 项跳过。
 - 2026-09-24：批次 3c 后端完成。核对发现 `codex_oauth_auth.rs` 测试模块已与上游 `f8788719` 逐字一致；c2ec78dd 的 forwarder 改动此前未迁移（Web 仍以本地账号 ID 作为 `chatgpt-account-id`），本轮按上游改为 workspace ID 并校验 bearer 会话。15884b20 按 Web 结构移植（目标预检、接管开启校验、恢复跳过已删除绑定）。新增测试：codex_config 4 项、proxy 快照回滚 2 项与失效绑定 2 项、provider 失效绑定 2 项、forwarder 3 项。Rust 全量 1882 项通过、3 项忽略。
 - 2026-09-24：批次 5b 完成编辑器细节与 OpenCode 批量添加（deb0e874、c715ee2b、c58a25b2、4837fe2c、fdbe3a85）；5c053626 依赖 Web 未迁移的区间外角色模型映射，标记不适用。i18n 按 key 路径从上游复制（仅 zh/en/ja）。前端 103 个测试文件 690 项通过、2 项跳过。
+- 2026-09-24：批次 5c 完成 MiniMax Code（06082e18、09c5d39d）。后端 30 个文件，Web `SCHEMA_VERSION` 15→16（`migrate_v15_to_v16`）；新增 `mcode_config`、`mcp::mcode`、`session_usage_mcode`、`session_manager::providers::mcode`。前端新增 `McodeProviderForm`、`mcodeProviderPresets`、`useDarkMode`，并修复 `VALID_APPS` 缺 mcode 导致刷新后回退到 Claude。三语 README 同步应用范围。上游 `src-tauri/tests` 中 mcode 相关用例移植为模块内单测。验证：Rust 全量 1900 项通过、5 项忽略（无新增 warning）；前端 104 个测试文件 697 项通过、2 项跳过；TypeScript 类型检查通过。
 
 ## 6. 剩余待办
 
 1. ~~批次 3c 前端~~：已完成（见第 5 节 2026-09-24 批次 3c 前端记录）。
 2. ~~批次 3c 后端~~：已完成（见第 5 节 2026-09-24 批次 3c 后端记录）。
-3. 批次 5：MiniMax Code 新应用（06082e18、09c5d39d，约 81 文件，含 schema 与 app_config）。编辑器细节与 OpenCode 批量添加已完成（5c053626 不适用）。
+3. ~~批次 5~~：已完成（MiniMax Code、编辑器细节、OpenCode 批量添加）。
 4. 待定项（需用户决策）：bd15ea11 Otty 终端、701c079b / 37d04760 WSL 探测、f8821c03 GitHub Star 提示。
 5. 收尾：全量 `cargo test`、`npx tsc --noEmit`、`npx vitest run --exclude '.claude/**'`、`pnpm build`；清理 `.claude/worktrees` 下三个已合并 worktree。

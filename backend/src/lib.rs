@@ -14,6 +14,7 @@ mod gemini_config;
 mod gemini_mcp;
 mod grok_config;
 mod hermes_config;
+mod mcode_config;
 mod mcp;
 mod model_capabilities;
 mod openclaw_config;

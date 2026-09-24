@@ -97,6 +97,7 @@ const UnifiedMcpPanel = React.forwardRef<
       opencode: 0,
       openclaw: 0,
       hermes: 0,
+      mcode: 0,
     };
     serverEntries.forEach(([_, server]) => {
       for (const app of MCP_SKILLS_APP_IDS) {

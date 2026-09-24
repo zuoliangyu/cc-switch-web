@@ -3,7 +3,7 @@ pub(crate) mod providers;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use providers::{claude, codex, gemini, grokbuild, openclaw, opencode, pi};
+use providers::{claude, codex, gemini, grokbuild, mcode, openclaw, opencode, pi};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +55,7 @@ pub struct DeleteSessionOutcome {
 }
 
 pub fn scan_sessions() -> Vec<SessionMeta> {
-    let (r1, r2, r3, r4, r5, r6, r7) = std::thread::scope(|s| {
+    let (r1, r2, r3, r4, r5, r6, r7, r8) = std::thread::scope(|s| {
         let h1 = s.spawn(codex::scan_sessions);
         let h2 = s.spawn(claude::scan_sessions);
         let h3 = s.spawn(opencode::scan_sessions);
@@ -63,6 +63,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
         let h5 = s.spawn(gemini::scan_sessions);
         let h6 = s.spawn(grokbuild::scan_sessions);
         let h7 = s.spawn(pi::scan_sessions);
+        let h8 = s.spawn(mcode::scan_sessions);
         (
             h1.join().unwrap_or_default(),
             h2.join().unwrap_or_default(),
@@ -71,6 +72,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
             h5.join().unwrap_or_default(),
             h6.join().unwrap_or_default(),
             h7.join().unwrap_or_default(),
+            h8.join().unwrap_or_default(),
         )
     });
 
@@ -82,6 +84,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     sessions.extend(r5);
     sessions.extend(r6);
     sessions.extend(r7);
+    sessions.extend(r8);
 
     sessions.sort_by(|a, b| {
         let a_ts = a.last_active_at.or(a.created_at).unwrap_or(0);
@@ -100,6 +103,9 @@ pub fn load_messages(provider_id: &str, source_path: &str) -> Result<Vec<Session
     // OpenCode SQLite sessions use a "sqlite:" prefixed source_path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {
         return opencode::load_messages_sqlite(source_path);
+    }
+    if provider_id == "mcode" {
+        return mcode::load_messages(source_path);
     }
 
     let path = Path::new(source_path);
@@ -123,6 +129,13 @@ pub fn delete_session(
     // OpenCode SQLite sessions bypass the file-based deletion path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {
         return opencode::delete_session_sqlite(session_id, source_path);
+    }
+    // MCode 会话与其运行时状态耦合，只能在 MCode 内删除（上游 06082e18）。
+    if provider_id == "mcode" {
+        return Err(
+            "Delete this session in MCode so its runtime state and history are removed together"
+                .into(),
+        );
     }
 
     let roots = provider_roots(provider_id)?;

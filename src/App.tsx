@@ -107,6 +107,7 @@ const VALID_APPS: AppId[] = [
   "opencode",
   "openclaw",
   "hermes",
+  "mcode",
 ];
 
 const getInitialApp = (): AppId => {
@@ -170,6 +171,7 @@ function App() {
     openclaw: true,
     hermes: true,
     pi: true,
+    mcode: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -201,7 +203,8 @@ function App() {
       activeApp !== "opencode" &&
       activeApp !== "openclaw" &&
       activeApp !== "gemini" &&
-      activeApp !== "pi"
+      activeApp !== "pi" &&
+      activeApp !== "mcode"
     ) {
       setCurrentView("providers");
     }
@@ -255,6 +258,7 @@ function App() {
 
     const checkEnvOnSwitch = async () => {
       try {
+        if (activeApp === "mcode") return;
         const conflicts = await checkEnvConflicts(activeApp);
         if (conflicts.length === 0) {
           return;
@@ -331,7 +335,9 @@ function App() {
     status: proxyStatus,
   } = useProxyStatus();
   const isCurrentAppTakeoverActive =
-    activeApp !== "pi" && (takeoverStatus?.[activeApp] || false);
+    activeApp !== "pi" &&
+    activeApp !== "mcode" &&
+    (takeoverStatus?.[activeApp] || false);
   const activeProviderId = useMemo(() => {
     const target = proxyStatus?.active_targets?.find(
       (t) => t.app_type === activeApp,
@@ -366,7 +372,8 @@ function App() {
     activeApp === "opencode" ||
     activeApp === "openclaw" ||
     activeApp === "gemini" ||
-    activeApp === "pi";
+    activeApp === "pi" ||
+    activeApp === "mcode";
 
   const {
     addProvider,
@@ -513,6 +520,11 @@ function App() {
       } else if (activeApp === "pi") {
         await queryClient.invalidateQueries({ queryKey: ["piLiveProviderIds"] });
         await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
+      } else if (activeApp === "mcode") {
+        // MiniMax Code 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
+        await queryClient.invalidateQueries({
+          queryKey: ["providers", "mcode"],
+        });
       }
       toast.success(
         t("notifications.removeFromConfigSuccess", {
@@ -780,7 +792,8 @@ function App() {
                         activeApp === "opencode" ||
                         activeApp === "openclaw" ||
                         activeApp === "hermes" ||
-                        activeApp === "pi"
+                        activeApp === "pi" ||
+                        activeApp === "mcode"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined
@@ -969,7 +982,8 @@ function App() {
               activeApp !== "opencode" &&
               activeApp !== "openclaw" &&
               activeApp !== "hermes" &&
-              activeApp !== "pi" && (
+              activeApp !== "pi" &&
+              activeApp !== "mcode" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableLocalProxy && (
                     <ProxyToggle activeApp={activeApp} />
@@ -980,6 +994,7 @@ function App() {
                 </div>
               )}
             {currentView === "providers" &&
+              activeApp !== "mcode" &&
               (settingsData?.showProfileSwitcher ?? true) && (
                 <div className="flex shrink-0 items-center">
                   <ProfileSwitcher activeApp={activeApp} />

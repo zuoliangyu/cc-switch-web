@@ -162,7 +162,7 @@ export function ProviderCard({
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
   const isAdditiveMode =
-    (appId === "opencode" && !isAnyOmo) || appId === "pi";
+    (appId === "opencode" && !isAnyOmo) || appId === "pi" || appId === "mcode";
 
   const { data: health } = useProviderHealth(
     provider.id,
@@ -288,7 +288,7 @@ export function ProviderCard({
     ? isCurrent
     : appId === "openclaw"
       ? Boolean(isDefaultModel)
-      : appId === "opencode"
+      : appId === "opencode" || appId === "mcode"
         ? false
         : appId === "pi"
           ? false
@@ -537,6 +537,7 @@ export function ProviderCard({
               onDuplicate={() => onDuplicate(provider)}
               onTest={
                 onTest &&
+                appId !== "mcode" &&
                 !isOfficial &&
                 !isCopilot &&
                 !isCodexOauth &&

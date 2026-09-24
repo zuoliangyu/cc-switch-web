@@ -15,11 +15,12 @@ CC Switch Web 是 [cc-switch](https://github.com/farion1231/cc-switch) 的 Web �
 
 ## 如何使用
 
-CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes 和 Pi 等 AI 编码工具的供应商配置并一键切换。
+CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi 和 MiniMax Code 等 AI 编码工具的供应商配置并一键切换。
 
 当前 Web 分支已具备的能力：
 
-- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes 和 Pi 的 Provider 管理
+- Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi 和 MiniMax Code 的 Provider 管理
+- MiniMax Code 的 Provider/模型（原生 `custom_provider`）、MCP、Skills、全局指令（`AGENTS.md`）、只读会话历史与用量导入；会话删除仍由 MiniMax Code 原生应用负责
 - Pi 的 Provider、Prompts、Skills、Sessions 与 Usage；Pi `/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管明确由 Pi 原生管理
 - Claude、Codex、Gemini 的官方订阅额度展示
 - ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示

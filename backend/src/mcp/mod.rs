@@ -50,6 +50,7 @@ pub(crate) fn merge_imported_server(
                 grokbuild: matches!(app, AppType::GrokBuild),
                 opencode: matches!(app, AppType::OpenCode),
                 hermes: false,
+                mcode: false,
             },
             description: None,
             homepage: None,
@@ -76,3 +77,5 @@ pub(crate) use grokbuild::{
 pub(crate) use opencode::{
     import_from_opencode, remove_server_from_opencode, sync_single_server_to_opencode,
 };
+
+pub(crate) mod mcode;

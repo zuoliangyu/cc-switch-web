@@ -1011,6 +1011,57 @@ base_url = "http://localhost:8080"
         assert!(raw.contains("defaultModel"));
     }
 
+    // 上游 50270d5e：Fable 等角色模型字段不进入 Claude 通用配置。
+    /// Regression for issue #4272: Fable tier env keys must not enter the shared
+    /// Claude common-config snippet (same class as haiku/sonnet/opus model pins).
+    #[test]
+    fn extract_claude_common_config_strips_fable_model_env_keys() {
+        let settings = json!({
+            "env": {
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "haiku-mapped",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku Mapped",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet-mapped[1M]",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet Mapped",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "opus-mapped[1M]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus Mapped",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "deepseek-v4-flash[1M]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "deepseek-v4-flash",
+                "ANTHROPIC_MODEL": "default-mapped",
+                "ENABLE_TOOL_SEARCH": "true"
+            },
+            "theme": "dark"
+        });
+
+        let snippet = ProviderService::extract_claude_common_config(&settings)
+            .expect("extract should succeed");
+        let value: Value = serde_json::from_str(&snippet).expect("snippet is valid JSON");
+        let env = value.get("env");
+
+        for stripped in [
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+            "ANTHROPIC_MODEL",
+        ] {
+            assert!(
+                env.and_then(|e| e.get(stripped)).is_none(),
+                "provider-specific model key {stripped} must not enter common config"
+            );
+        }
+
+        assert_eq!(
+            env.and_then(|e| e.get("ENABLE_TOOL_SEARCH"))
+                .and_then(|v| v.as_str()),
+            Some("true")
+        );
+        assert_eq!(value.get("theme").and_then(|v| v.as_str()), Some("dark"));
+    }
+
     #[test]
     fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
         for key in [
@@ -1972,11 +2023,15 @@ impl ProviderService {
             )
             .map_err(|e| AppError::Message(format!("更新 Live 备份失败: {e}")))?;
 
-            // 关键修复：接管模式下切换供应商不会写回 Live 配置，
-            // 需要主动清理 Claude Live 中的“模型覆盖”字段，避免仍以旧模型名发起请求。
+            // 接管模式下按目标供应商重写 Claude Live：模型字段写成稳定角色别名与
+            // 真实显示名，Claude Code 模型菜单随供应商切换（上游 f93b935d）。
             if matches!(app_type, AppType::Claude) {
-                if let Err(e) = state.proxy_service.cleanup_claude_model_overrides_in_live() {
-                    log::warn!("清理 Claude Live 模型字段失败（不影响切换结果）: {e}");
+                if let Err(e) = futures::executor::block_on(
+                    state
+                        .proxy_service
+                        .sync_claude_live_from_provider_while_proxy_active(provider),
+                ) {
+                    log::warn!("同步 Claude 接管 Live 失败（不影响切换结果）: {e}");
                 }
             } else if matches!(app_type, AppType::Codex) {
                 futures::executor::block_on(state.proxy_service.reapply_codex_takeover_live())

@@ -16,7 +16,7 @@ use crate::proxy::types::*;
 use crate::services::provider::{
     build_effective_settings_with_common_config, write_live_with_common_config,
 };
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -27,17 +27,30 @@ const PROXY_TAKEOVER_APPS: [&str; 4] = ["claude", "codex", "gemini", "grokbuild"
 
 /// 代理接管模式下需要从 Claude Live 配置中移除的"模型覆盖"字段。
 ///
-/// 原因：接管模式切换供应商时不会写回 Live 配置，如果保留这些字段，
-/// Claude Code 会继续以旧模型名发起请求，导致新供应商不支持时失败。
-const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 6] = [
+/// 原因：接管模式下 `*_MODEL` 必须由 CC Switch 写成稳定的 Claude 角色别名，
+/// 再由本地代理映射到当前供应商真实模型；`*_MODEL_NAME` 也需要同步接管，
+/// 否则 Claude Code 模型菜单会残留上一个供应商的显示名称（上游 f93b935d）。
+const CLAUDE_MODEL_OVERRIDE_ENV_KEYS: [&str; 12] = [
     "ANTHROPIC_MODEL",
-    "ANTHROPIC_REASONING_MODEL",
+    "ANTHROPIC_REASONING_MODEL", // legacy: 已废弃，但旧配置可能残留
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
-    // Legacy key (已废弃)：历史版本使用该字段区分 small/fast 模型
-    "ANTHROPIC_SMALL_FAST_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+    "ANTHROPIC_SMALL_FAST_MODEL", // Legacy key (已废弃)：历史版本使用该字段区分 small/fast 模型
+    "CLAUDE_CODE_SUBAGENT_MODEL",
 ];
+
+const CLAUDE_TAKEOVER_HAIKU_MODEL: &str = "claude-haiku-4-5";
+const CLAUDE_TAKEOVER_SONNET_MODEL: &str = "claude-sonnet-5";
+const CLAUDE_TAKEOVER_OPUS_MODEL: &str = "claude-opus-5";
+const CLAUDE_TAKEOVER_FABLE_MODEL: &str = "claude-fable-5";
+// 写给 Claude Code 时沿用文档示例的大写形式；解析侧大小写不敏感。
+const CLAUDE_ONE_M_MARKER_FOR_CLIENT: &str = "[1M]";
 
 /// Claude Live 配置接管时的 token 注入策略（跟随上游 cc-switch 61e68d75）。
 ///
@@ -184,28 +197,36 @@ impl ProxyService {
         Ok(())
     }
 
-    /// 清理接管模式下 Claude Live 配置中的模型覆盖字段。
-    ///
-    /// 这可以避免"接管开启后切换供应商仍使用旧模型"的问题。
-    /// 注意：此方法不会修改 Token/Base URL 的接管占位符，仅移除模型字段。
-    pub fn cleanup_claude_model_overrides_in_live(&self) -> Result<(), String> {
-        let mut config = self.read_claude_live()?;
+    fn claude_provider_with_effective_settings(
+        &self,
+        provider: &Provider,
+    ) -> Result<Provider, String> {
+        let mut effective_provider = provider.clone();
+        effective_provider.settings_config = build_effective_settings_with_common_config(
+            self.db.as_ref(),
+            &AppType::Claude,
+            provider,
+        )
+        .map_err(|e| format!("构建 claude 有效配置失败: {e}"))?;
+        Ok(effective_provider)
+    }
 
-        let Some(env) = config.get_mut("env").and_then(|v| v.as_object_mut()) else {
-            return Ok(());
-        };
+    /// 接管期间切换 Claude 供应商：按目标供应商重写 Live，模型字段写成稳定角色
+    /// 别名 + 真实显示名，使 Claude Code 模型菜单跟随当前供应商（上游 f93b935d）。
+    pub async fn sync_claude_live_from_provider_while_proxy_active(
+        &self,
+        provider: &Provider,
+    ) -> Result<(), String> {
+        let effective_provider = self.claude_provider_with_effective_settings(provider)?;
+        let mut effective_settings = effective_provider.settings_config.clone();
+        let (proxy_url, _) = self.build_proxy_urls().await?;
 
-        let mut changed = false;
-        for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
-            if env.remove(key).is_some() {
-                changed = true;
-            }
-        }
-
-        if changed {
-            self.write_claude_live(&config)?;
-        }
-
+        Self::apply_claude_takeover_fields_for_provider(
+            &mut effective_settings,
+            &proxy_url,
+            &effective_provider,
+        );
+        self.write_claude_live(&effective_settings)?;
         Ok(())
     }
 
@@ -471,7 +492,9 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes | AppType::Pi | AppType::Mcode => return Err("该应用不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi | AppType::Mcode => {
+                return Err("该应用不支持代理功能".to_string())
+            }
         };
 
         self.sync_live_config_to_provider(app_type, &live_config)
@@ -822,7 +845,9 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes | AppType::Pi | AppType::Mcode => return Err("该应用不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi | AppType::Mcode => {
+                return Err("该应用不支持代理功能".to_string())
+            }
         };
 
         if Self::live_has_proxy_placeholder_for_app(app_type, &config) {
@@ -907,19 +932,54 @@ impl ProxyService {
         } else {
             ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken
         };
+        // Copilot/Codex 接管时 live config 可能还是旧供应商；显示模型必须跟随目标 provider。
+        let takeover_model_fields = if provider.uses_managed_account_auth() {
+            Self::build_claude_takeover_model_fields(&provider.settings_config)
+        } else {
+            Self::build_claude_takeover_model_fields(live_config)
+        };
 
-        Self::apply_claude_takeover_fields_with_policy(live_config, proxy_url, auth_policy);
+        Self::apply_claude_takeover_fields_with_policy_and_models(
+            live_config,
+            proxy_url,
+            auth_policy,
+            takeover_model_fields,
+        );
     }
 
-    /// 真正改写 Claude Live 配置的核心：
-    /// - 设置 ANTHROPIC_BASE_URL → 本机代理
-    /// - 移除模型覆盖 env（CLAUDE_MODEL_OVERRIDE_ENV_KEYS）
-    /// - 按 policy 写 token 占位符
     fn apply_claude_takeover_fields_with_policy(
         live_config: &mut Value,
         proxy_url: &str,
         auth_policy: ClaudeTakeoverAuthPolicy,
     ) {
+        // 必须在 remove/insert 前 snapshot：避免读到自己刚写入的接管别名。
+        let takeover_model_fields = Self::build_claude_takeover_model_fields(live_config);
+
+        Self::apply_claude_takeover_fields_with_policy_and_models(
+            live_config,
+            proxy_url,
+            auth_policy,
+            takeover_model_fields,
+        );
+    }
+
+    /// 真正改写 Claude Live 配置的核心：
+    /// - 设置 ANTHROPIC_BASE_URL → 本机代理
+    /// - 移除模型覆盖 env（CLAUDE_MODEL_OVERRIDE_ENV_KEYS），再写入稳定角色别名与显示名
+    /// - 按 policy 写 token 占位符
+    fn apply_claude_takeover_fields_with_policy_and_models(
+        live_config: &mut Value,
+        proxy_url: &str,
+        auth_policy: ClaudeTakeoverAuthPolicy,
+        takeover_model_fields: Vec<(&'static str, String)>,
+    ) {
+        if !live_config.is_object() {
+            *live_config = json!({});
+        }
+        if !live_config.get("env").is_some_and(Value::is_object) {
+            live_config["env"] = json!({});
+        }
+
         let token_keys = [
             "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_API_KEY",
@@ -929,9 +989,12 @@ impl ProxyService {
 
         if let Some(env) = live_config.get_mut("env").and_then(|v| v.as_object_mut()) {
             env.insert("ANTHROPIC_BASE_URL".to_string(), json!(proxy_url));
-            // 关键：接管模式下移除模型覆盖字段，避免切换供应商后仍用旧模型名发起请求
+            // 移除旧模型覆盖字段后写入稳定角色别名，避免切换供应商后仍用旧模型名发起请求
             for key in CLAUDE_MODEL_OVERRIDE_ENV_KEYS {
                 env.remove(key);
+            }
+            for (key, value) in takeover_model_fields {
+                env.insert(key.to_string(), Value::String(value));
             }
 
             match auth_policy {
@@ -963,23 +1026,118 @@ impl ProxyService {
                     env.insert(token_key.to_string(), json!(PROXY_TOKEN_PLACEHOLDER));
                 }
             }
-        } else {
-            // 没有 env 字段：按 policy 选择占位符字段名建一个新的。
-            let token_key = match auth_policy {
-                ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken => "ANTHROPIC_AUTH_TOKEN",
-                ClaudeTakeoverAuthPolicy::ManagedAccount { keep_auth_token } => {
-                    if keep_auth_token {
-                        "ANTHROPIC_AUTH_TOKEN"
-                    } else {
-                        "ANTHROPIC_API_KEY"
-                    }
-                }
-            };
-            live_config["env"] = json!({
-                "ANTHROPIC_BASE_URL": proxy_url,
-                token_key: PROXY_TOKEN_PLACEHOLDER,
-            });
         }
+    }
+
+    fn build_claude_takeover_model_fields(config: &Value) -> Vec<(&'static str, String)> {
+        let Some(env) = config.get("env").and_then(Value::as_object) else {
+            return Vec::new();
+        };
+
+        let default_model = Self::claude_env_string(env, "ANTHROPIC_MODEL");
+        let small_fast_model = Self::claude_env_string(env, "ANTHROPIC_SMALL_FAST_MODEL");
+        let haiku_model = Self::claude_env_string(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL")
+            .or(small_fast_model)
+            .or(default_model);
+        let sonnet_model = Self::claude_env_string(env, "ANTHROPIC_DEFAULT_SONNET_MODEL")
+            .or(default_model)
+            .or(small_fast_model);
+        let opus_model = Self::claude_env_string(env, "ANTHROPIC_DEFAULT_OPUS_MODEL")
+            .or(default_model)
+            .or(small_fast_model);
+        // Fable 未配置时不写稳定别名；映射侧会 fable→opus 降级（与官方一致）。
+        let fable_model = Self::claude_env_string(env, "ANTHROPIC_DEFAULT_FABLE_MODEL");
+
+        let subagent_model = Self::claude_env_string(env, "CLAUDE_CODE_SUBAGENT_MODEL");
+
+        let mut fields = Vec::with_capacity(9);
+        Self::push_claude_takeover_role_fields(
+            &mut fields,
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            CLAUDE_TAKEOVER_HAIKU_MODEL,
+            false,
+            haiku_model,
+        );
+        Self::push_claude_takeover_role_fields(
+            &mut fields,
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            CLAUDE_TAKEOVER_SONNET_MODEL,
+            true,
+            sonnet_model,
+        );
+        Self::push_claude_takeover_role_fields(
+            &mut fields,
+            env,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+            CLAUDE_TAKEOVER_OPUS_MODEL,
+            true,
+            opus_model,
+        );
+        Self::push_claude_takeover_role_fields(
+            &mut fields,
+            env,
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+            CLAUDE_TAKEOVER_FABLE_MODEL,
+            true,
+            fable_model,
+        );
+        if let Some(subagent_model) = subagent_model {
+            fields.push(("CLAUDE_CODE_SUBAGENT_MODEL", subagent_model.to_string()));
+        }
+        fields
+    }
+
+    fn push_claude_takeover_role_fields(
+        fields: &mut Vec<(&'static str, String)>,
+        env: &Map<String, Value>,
+        model_key: &'static str,
+        name_key: &'static str,
+        takeover_model: &'static str,
+        supports_one_m: bool,
+        upstream_model: Option<&str>,
+    ) {
+        let Some(upstream_model) = upstream_model else {
+            return;
+        };
+
+        let mut client_model = takeover_model.to_string();
+        if supports_one_m && Self::has_claude_one_m_marker(upstream_model) {
+            client_model.push_str(CLAUDE_ONE_M_MARKER_FOR_CLIENT);
+        }
+        fields.push((model_key, client_model));
+
+        let display_name = Self::claude_env_string(env, name_key)
+            .map(str::to_string)
+            .unwrap_or_else(|| Self::strip_claude_one_m_marker(upstream_model));
+        if !display_name.is_empty() {
+            fields.push((name_key, display_name));
+        }
+    }
+
+    fn claude_env_string<'a>(env: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
+        env.get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    fn has_claude_one_m_marker(model: &str) -> bool {
+        model
+            .trim_end()
+            .to_ascii_lowercase()
+            .ends_with(crate::claude_desktop_config::ONE_M_CONTEXT_MARKER)
+    }
+
+    fn strip_claude_one_m_marker(model: &str) -> String {
+        crate::proxy::model_mapper::strip_one_m_suffix_for_upstream(model)
+            .trim()
+            .to_string()
     }
 
     /// 读取指定 AppType 当前生效的 provider（不存在则 Ok(None)）。
@@ -1069,7 +1227,9 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 return Err("OpenClaw 不支持代理功能".to_string());
             }
-            AppType::Hermes | AppType::Pi | AppType::Mcode => return Err("该应用不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi | AppType::Mcode => {
+                return Err("该应用不支持代理功能".to_string())
+            }
         }
 
         Ok(())
@@ -1343,7 +1503,9 @@ impl ProxyService {
                 // OpenClaw doesn't support proxy features
                 Err("OpenClaw 不支持代理功能".to_string())
             }
-            AppType::Hermes | AppType::Pi | AppType::Mcode => Err("该应用不支持代理功能".to_string()),
+            AppType::Hermes | AppType::Pi | AppType::Mcode => {
+                Err("该应用不支持代理功能".to_string())
+            }
         }
     }
 
@@ -1730,7 +1892,11 @@ impl ProxyService {
             }
             AppType::GrokBuild => serde_json::to_string(&effective_settings)
                 .map_err(|e| format!("序列化 Grok Build 配置失败: {e}"))?,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi | AppType::Mcode => {
+            AppType::OpenCode
+            | AppType::OpenClaw
+            | AppType::Hermes
+            | AppType::Pi
+            | AppType::Mcode => {
                 return Err(format!("未知的应用类型: {app_type}"));
             }
         };
@@ -1980,7 +2146,10 @@ impl ProxyService {
         if has_backup || live_taken_over {
             Self::update_live_backup_from_provider_for_db(self.db.as_ref(), app_type, &provider)
                 .await?;
-            if matches!(app_type_enum, AppType::Codex) {
+            if matches!(app_type_enum, AppType::Claude) {
+                self.sync_claude_live_from_provider_while_proxy_active(&provider)
+                    .await?;
+            } else if matches!(app_type_enum, AppType::Codex) {
                 self.reapply_codex_takeover_live().await?;
             }
         }
@@ -3506,6 +3675,338 @@ base_url = \"https://old.example/v1\"
             let live = restarted.read_codex_live().unwrap();
             assert_eq!(live["auth"], native_auth, "corrupt={corrupt}");
         }
+    }
+
+    fn assert_env_str(env: &Map<String, Value>, key: &str, expected: Option<&str>) {
+        assert_eq!(env.get(key).and_then(|value| value.as_str()), expected);
+    }
+
+    // 以下接管模型别名测试移植自上游 f93b935d / b3e5e32c / 4b57f7e1。
+    #[test]
+    fn managed_account_claude_takeover_sources_copilot_models_from_provider() {
+        let mut provider = Provider::with_id(
+            "copilot".to_string(),
+            "GitHub Copilot".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://api.githubcopilot.com",
+                    "ANTHROPIC_MODEL": "claude-sonnet-4.6",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4.5",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4.6",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-sonnet-4.6",
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4.6[1M]"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("github_copilot".to_string()),
+            ..Default::default()
+        });
+
+        let mut live_config = json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://stale.example.com",
+                "ANTHROPIC_API_KEY": "stale-key",
+                "ANTHROPIC_MODEL": "stale-model",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "stale-haiku",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Stale Haiku",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "stale-sonnet",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Stale Sonnet",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "stale-opus",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Stale Opus",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "stale-subagent"
+            }
+        });
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live_config,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live_config
+            .get("env")
+            .and_then(|value| value.as_object())
+            .expect("env should exist");
+        assert_env_str(env, "ANTHROPIC_MODEL", None);
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            Some("claude-haiku-4-5"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            Some("claude-haiku-4.5"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            Some("claude-sonnet-5"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            Some("claude-sonnet-4.6"),
+        );
+        assert_env_str(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", Some("claude-opus-5"));
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+            Some("claude-sonnet-4.6"),
+        );
+        assert_env_str(
+            env,
+            "CLAUDE_CODE_SUBAGENT_MODEL",
+            Some("claude-sonnet-4.6[1M]"),
+        );
+    }
+
+    #[test]
+    fn managed_account_claude_takeover_removes_stale_subagent_model_when_provider_omits_it() {
+        let mut provider = Provider::with_id(
+            "codex".to_string(),
+            "Codex".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://chatgpt.com/backend-api/codex",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "provider-sonnet"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("codex_oauth".to_string()),
+            ..Default::default()
+        });
+
+        let mut live_config = json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://stale.example.com",
+                "ANTHROPIC_API_KEY": "stale-key",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "stale-subagent"
+            }
+        });
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live_config,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live_config
+            .get("env")
+            .and_then(|value| value.as_object())
+            .expect("env should exist");
+        assert_env_str(env, "CLAUDE_CODE_SUBAGENT_MODEL", None);
+    }
+
+    #[test]
+    fn managed_account_claude_takeover_sources_codex_models_from_provider() {
+        let mut provider = Provider::with_id(
+            "codex".to_string(),
+            "Codex".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "https://chatgpt.com/backend-api/codex",
+                    "ANTHROPIC_MODEL": "gpt-5.4",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.4-mini",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.4",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.4"
+                }
+            }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            provider_type: Some("codex_oauth".to_string()),
+            ..Default::default()
+        });
+
+        let mut live_config = json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://stale.example.com",
+                "ANTHROPIC_AUTH_TOKEN": "stale-token",
+                "ANTHROPIC_MODEL": "stale-model",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "stale-haiku",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Stale Haiku",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": "stale-sonnet",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Stale Sonnet",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "stale-opus",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Stale Opus"
+            }
+        });
+        ProxyService::apply_claude_takeover_fields_for_provider(
+            &mut live_config,
+            "http://127.0.0.1:15721",
+            &provider,
+        );
+
+        let env = live_config
+            .get("env")
+            .and_then(|value| value.as_object())
+            .expect("env should exist");
+        assert_env_str(env, "ANTHROPIC_MODEL", None);
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            Some("claude-haiku-4-5"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            Some("gpt-5.4-mini"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            Some("claude-sonnet-5"),
+        );
+        assert_env_str(env, "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME", Some("gpt-5.4"));
+        assert_env_str(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", Some("claude-opus-5"));
+        assert_env_str(env, "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", Some("gpt-5.4"));
+        assert_env_str(env, "ANTHROPIC_API_KEY", None);
+        assert_env_str(env, "ANTHROPIC_AUTH_TOKEN", Some(PROXY_TOKEN_PLACEHOLDER));
+    }
+
+    #[test]
+    fn normal_claude_takeover_without_env_writes_placeholder_and_base_url() {
+        let mut live_config = json!({});
+        ProxyService::apply_claude_takeover_fields_with_policy(
+            &mut live_config,
+            "http://127.0.0.1:15721",
+            ClaudeTakeoverAuthPolicy::PreserveExistingOrAuthToken,
+        );
+        let env = live_config["env"].as_object().expect("env");
+        assert_env_str(env, "ANTHROPIC_BASE_URL", Some("http://127.0.0.1:15721"));
+        assert_env_str(env, "ANTHROPIC_AUTH_TOKEN", Some(PROXY_TOKEN_PLACEHOLDER));
+    }
+
+    /// 上游 f93b935d：接管期间切换 Claude 供应商时按目标供应商重写 Live 的模型别名与显示名。
+    #[tokio::test]
+    #[serial]
+    async fn switch_proxy_target_updates_claude_live_model_aliases() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+
+        let db = Arc::new(Database::memory().expect("init db"));
+        let service = ProxyService::new(db.clone());
+
+        let provider_a = Provider::with_id(
+            "a".to_string(),
+            "A".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_API_KEY": "a-key",
+                    "ANTHROPIC_BASE_URL": "https://api.a.example",
+                    "ANTHROPIC_MODEL": "claude-old"
+                },
+                "permissions": { "allow": ["Bash"] }
+            }),
+            None,
+        );
+        let provider_b = Provider::with_id(
+            "b".to_string(),
+            "B".to_string(),
+            json!({
+                "env": {
+                    "ANTHROPIC_API_KEY": "b-key",
+                    "ANTHROPIC_BASE_URL": "https://api.b.example",
+                    "ANTHROPIC_MODEL": "claude-new",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-v4-flash",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "DeepSeek V4 Flash",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-v4-pro[1M]",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "DeepSeek V4 Pro",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-ultra [1m]",
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-v4-pro[1M]"
+                },
+                "permissions": { "allow": ["Read"] }
+            }),
+            None,
+        );
+
+        db.save_provider("claude", &provider_a)
+            .expect("save provider a");
+        db.save_provider("claude", &provider_b)
+            .expect("save provider b");
+        db.set_current_provider("claude", "a")
+            .expect("set current provider");
+        crate::settings::set_current_provider(&AppType::Claude, Some("a"))
+            .expect("set local current provider");
+        db.save_live_backup(
+            "claude",
+            &serde_json::to_string(&provider_a.settings_config).expect("serialize provider a"),
+        )
+        .await
+        .expect("seed live backup");
+        service
+            .write_claude_live(&json!({
+                "env": {
+                    "ANTHROPIC_BASE_URL": "http://127.0.0.1:15721",
+                    "ANTHROPIC_API_KEY": PROXY_TOKEN_PLACEHOLDER,
+                    "ANTHROPIC_MODEL": "stale-model",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Stale Sonnet",
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "stale-subagent"
+                },
+                "permissions": { "allow": ["Bash"] }
+            }))
+            .expect("seed taken-over live file");
+
+        service
+            .switch_proxy_target("claude", "b")
+            .await
+            .expect("switch proxy target");
+
+        let live = service.read_claude_live().expect("read live config");
+        assert_eq!(
+            live.get("permissions"),
+            provider_b.settings_config.get("permissions"),
+            "provider-derived live settings should be refreshed"
+        );
+        let env = live["env"].as_object().expect("live env");
+        assert_env_str(env, "ANTHROPIC_API_KEY", Some(PROXY_TOKEN_PLACEHOLDER));
+        assert_env_str(env, "ANTHROPIC_MODEL", None);
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            Some("claude-haiku-4-5"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            Some("DeepSeek V4 Flash"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            Some("claude-sonnet-5[1M]"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            Some("DeepSeek V4 Pro"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            Some("claude-opus-5[1M]"),
+        );
+        assert_env_str(
+            env,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+            Some("deepseek-v4-ultra"),
+        );
+        assert_env_str(
+            env,
+            "CLAUDE_CODE_SUBAGENT_MODEL",
+            Some("deepseek-v4-pro[1M]"),
+        );
+
+        let backup = db
+            .get_live_backup("claude")
+            .await
+            .expect("get live backup")
+            .expect("backup exists");
+        let restored: Value = serde_json::from_str(&backup.original_config).expect("backup json");
+        assert_eq!(restored["env"]["ANTHROPIC_API_KEY"], "b-key");
     }
 
     #[test]

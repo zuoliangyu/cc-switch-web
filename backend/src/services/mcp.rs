@@ -564,8 +564,7 @@ mod tests {
     #[serial]
     fn mcode_automatic_sync_preserves_unmanaged_same_name_servers() {
         let (_home, state, path) = mcode_test_state();
-        let native =
-            serde_json::json!({"mcpServers":{"context7":{"command":"native-server","enabled":true}}});
+        let native = serde_json::json!({"mcpServers":{"context7":{"command":"native-server","enabled":true}}});
         std::fs::write(&path, native.to_string()).unwrap();
         let server = McpServer {
             id: "context7".into(),

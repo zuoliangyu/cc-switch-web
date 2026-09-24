@@ -1038,7 +1038,7 @@
     "haikuModelPlaceholder": "",
     "modelHelper": "可选：指定默认使用的 Claude 模型，留空则使用系统默认。",
     "modelMappingLabel": "模型映射",
-    "modelMappingHint": "如果供应商原生提供 Claude 系列模型，通常无需配置。仅在需要将请求映射到不同模型名称时填写。",
+    "modelMappingHint": "显示名称只影响 /model 菜单；1M 只是给 Claude Code 的上下文能力声明。",
     "advancedOptionsToggle": "高级选项",
     "advancedOptionsHint": "包含 API 格式、认证字段、模型映射等配置。大多数场景下保持默认即可。",
     "categoryOfficial": "官方",

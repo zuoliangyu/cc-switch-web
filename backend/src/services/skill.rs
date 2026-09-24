@@ -3719,7 +3719,10 @@ mod tests {
 
         assert!(mcode_skills.join("mcode-skill").join("SKILL.md").exists());
         assert!(mcode_skills.join("user-skill").join("SKILL.md").exists());
-        assert!(mcode_skills.join("disabled-skill").join("SKILL.md").exists());
+        assert!(mcode_skills
+            .join("disabled-skill")
+            .join("SKILL.md")
+            .exists());
 
         SkillService::toggle_app(&db, "local:mcode-skill", &AppType::Mcode, false)
             .expect("disable MCode skill");

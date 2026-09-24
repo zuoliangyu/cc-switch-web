@@ -761,6 +761,205 @@ base_url = "http://localhost:8080"
         assert_eq!(stored.settings_config["auth"], json!({}));
     }
 
+    fn managed_codex_provider(id: &str, account_id: &str) -> Provider {
+        let mut provider = Provider::with_id(
+            id.to_string(),
+            id.to_string(),
+            json!({ "auth": {}, "config": "model = \"gpt-5\"\n" }),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            auth_binding: Some(crate::provider::AuthBinding {
+                source: crate::provider::AuthBindingSource::ManagedAccount,
+                auth_provider: Some("codex_oauth".to_string()),
+                account_id: Some(account_id.to_string()),
+            }),
+            ..Default::default()
+        });
+        provider
+    }
+
+    /// 上游 15884b20：删除托管账号后重新登录会得到新的本地 ID，旧绑定必须能改绑或切走，
+    /// 且失效目标给出“选择账号”指引。
+    #[test]
+    #[serial]
+    fn deleted_codex_account_can_rebind_or_switch_directly() {
+        for rebind in [true, false] {
+            let _home = TestHome::new();
+            crate::settings::reload_settings().expect("reload settings");
+            let db = std::sync::Arc::new(crate::database::Database::memory().unwrap());
+            let state = AppState::new(db.clone());
+            let token = crate::codex_config::test_codex_id_token("same-user");
+            futures::executor::block_on(async {
+                state
+                    .codex_oauth_state
+                    .read()
+                    .await
+                    .add_test_account_with_workspace_and_access_token(
+                        "old-local-id",
+                        "workspace",
+                        "old-access",
+                        Some(&token),
+                    )
+                    .await
+                    .unwrap();
+            });
+            let current = managed_codex_provider("current", "old-local-id");
+            state.db.save_provider("codex", &current).unwrap();
+            ProviderService::switch(&state, AppType::Codex, &current.id).unwrap();
+            let live: Value =
+                crate::config::read_json_file(&crate::codex_config::get_codex_auth_path()).unwrap();
+            assert_eq!(live["tokens"]["access_token"], "old-access");
+
+            futures::executor::block_on(async {
+                let manager = state.codex_oauth_state.read().await;
+                manager.remove_account("old-local-id").await.unwrap();
+                // 普通登录即便同一用户/workspace 也会生成新的本地 ID。
+                manager
+                    .add_test_account_with_workspace_and_access_token(
+                        "new-local-id",
+                        "workspace",
+                        "new-access",
+                        Some(&token),
+                    )
+                    .await
+                    .unwrap();
+            });
+
+            let stale = managed_codex_provider("stale", "old-local-id");
+            state.db.save_provider("codex", &stale).unwrap();
+            let error = ProviderService::switch(&state, AppType::Codex, &stale.id)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("选择账号"), "{error}");
+            assert_eq!(
+                crate::settings::get_effective_current_provider(&state.db, &AppType::Codex)
+                    .unwrap()
+                    .as_deref(),
+                Some("current")
+            );
+
+            let target =
+                managed_codex_provider(if rebind { "current" } else { "target" }, "new-local-id");
+            if rebind {
+                ProviderService::update(&state, AppType::Codex, None, target.clone()).unwrap();
+            } else {
+                state.db.save_provider("codex", &target).unwrap();
+                ProviderService::switch(&state, AppType::Codex, &target.id).unwrap();
+            }
+            let auth: Value =
+                crate::config::read_json_file(&crate::codex_config::get_codex_auth_path()).unwrap();
+            assert_eq!(
+                auth["tokens"]["access_token"], "new-access",
+                "rebind={rebind}"
+            );
+            assert!(
+                crate::codex_config::codex_auth_matches_recorded_managed_oauth(
+                    &auth,
+                    "new-local-id"
+                )
+                .unwrap(),
+                "rebind={rebind}"
+            );
+            assert_eq!(
+                crate::settings::get_effective_current_provider(&state.db, &AppType::Codex)
+                    .unwrap()
+                    .as_deref(),
+                Some(target.id.as_str())
+            );
+        }
+    }
+
+    /// 上游 15884b20：已删除账号的旧 marker 不能认领之后同一用户的原生登录；
+    /// 账号存储损坏时无法证明删除，切换必须中止且不改动 live。
+    /// Web 端接管期间不写托管 live auth，此处覆盖直连场景，接管场景见 proxy 测试。
+    #[test]
+    #[serial]
+    fn missing_codex_account_preserves_native_login_but_corrupt_store_blocks_recovery() {
+        for corrupt in [false, true] {
+            let _home = TestHome::new();
+            crate::settings::reload_settings().unwrap();
+            crate::settings::update_settings(crate::settings::AppSettings {
+                preserve_codex_official_auth_on_switch: true,
+                ..Default::default()
+            })
+            .unwrap();
+            let db = std::sync::Arc::new(crate::database::Database::memory().unwrap());
+            let state = AppState::new(db.clone());
+            futures::executor::block_on(async {
+                state
+                    .codex_oauth_state
+                    .read()
+                    .await
+                    .add_test_account_with_user_identity("old", "access", "user")
+                    .await
+                    .unwrap();
+            });
+            let current = managed_codex_provider("current", "old");
+            state.db.save_provider("codex", &current).unwrap();
+            ProviderService::switch(&state, AppType::Codex, "current").unwrap();
+            let mut auth: Value =
+                crate::config::read_json_file(&crate::codex_config::get_codex_auth_path()).unwrap();
+            futures::executor::block_on(async {
+                state
+                    .codex_oauth_state
+                    .read()
+                    .await
+                    .remove_account("old")
+                    .await
+                    .unwrap();
+            });
+            // A stale marker must not claim a later native login of the same user.
+            auth["tokens"]["refresh_token"] = json!("native-rotated-token");
+            crate::config::write_json_file(&crate::codex_config::get_codex_auth_path(), &auth)
+                .unwrap();
+            crate::codex_config::record_codex_managed_oauth_live_auth(&auth, "old").unwrap();
+            if corrupt {
+                std::fs::write(
+                    crate::config::get_app_config_dir().join("codex_oauth_auth.json"),
+                    "{broken",
+                )
+                .unwrap();
+            }
+            let restarted = AppState::new(state.db.clone());
+            let target = Provider::with_id(
+                "target".into(),
+                "Third party".into(),
+                json!({
+                    "auth": { "OPENAI_API_KEY": "sk-target" },
+                    "config": "model_provider = \"custom\"\n[model_providers.custom]\nname = \"custom\"\nbase_url = \"https://example.test/v1\"\nwire_api = \"chat\"\n"
+                }),
+                None,
+            );
+            state.db.save_provider("codex", &target).unwrap();
+            let before = crate::codex_config::CodexLiveStateSnapshot::capture().unwrap();
+            let result = ProviderService::switch(&restarted, AppType::Codex, "target");
+            if corrupt {
+                assert!(result.is_err(), "corrupt store must block recovery");
+                assert_eq!(
+                    crate::codex_config::CodexLiveStateSnapshot::capture().unwrap(),
+                    before
+                );
+                assert_eq!(
+                    state.db.get_current_provider("codex").unwrap().as_deref(),
+                    Some("current")
+                );
+            } else {
+                result.unwrap();
+                assert!(
+                    !crate::codex_config::codex_managed_oauth_live_auth_marker_exists(),
+                    "missing account must relinquish ownership"
+                );
+            }
+            assert_eq!(
+                crate::config::read_json_file::<Value>(&crate::codex_config::get_codex_auth_path())
+                    .unwrap(),
+                auth,
+                "corrupt={corrupt}"
+            );
+        }
+    }
+
     #[test]
     fn sensitive_key_matcher_covers_credentials_without_hiding_token_limits() {
         for key in [
@@ -971,6 +1170,8 @@ impl ProviderService {
         };
         let bundle = futures::executor::block_on(async {
             let manager = state.codex_oauth_state.read().await;
+            // 已删除账号的旧绑定给出“选择账号”指引，而不是裸 not-found（上游 15884b20）。
+            manager.ensure_account_exists(&account_id).await?;
             manager
                 .get_valid_token_bundle_for_account(&account_id)
                 .await
@@ -1002,7 +1203,8 @@ impl ProviderService {
     fn prepare_outgoing_managed_codex_live_auth(
         state: &AppState,
         account_id: Option<&str>,
-    ) -> Result<Option<crate::proxy::providers::codex_oauth_auth::CodexLiveAuthSwitchGuard>, AppError> {
+    ) -> Result<Option<crate::proxy::providers::codex_oauth_auth::CodexLiveAuthSwitchGuard>, AppError>
+    {
         let Some(account_id) = account_id else {
             return Ok(None);
         };

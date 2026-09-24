@@ -8425,4 +8425,274 @@ model_catalog_json = "cc-switch-model-catalog.json"
             "file larger than MAX_CODEX_CATALOG_BYTES must be rejected"
         );
     }
+
+    // 以下测试移植自上游 c2ec78dd / 6243e20a（共享 workspace 账号隔离与身份解析）。
+    struct CodexLiveTestHome {
+        _dir: tempfile::TempDir,
+        original_test_home: Option<std::ffi::OsString>,
+    }
+
+    impl CodexLiveTestHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("create isolated Codex live test home");
+            let original_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            crate::settings::reload_settings().expect("reload settings for isolated test home");
+
+            Self {
+                _dir: dir,
+                original_test_home,
+            }
+        }
+    }
+
+    impl Drop for CodexLiveTestHome {
+        fn drop(&mut self) {
+            match &self.original_test_home {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+            let _ = crate::settings::reload_settings();
+        }
+    }
+
+    #[test]
+    fn codex_id_token_user_identity_requires_a_nonempty_subject() {
+        let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
+        let subject_payload = URL_SAFE_NO_PAD.encode(json!({ "sub": "stable-user" }).to_string());
+        assert_eq!(
+            extract_codex_id_token_user_identity(&test_codex_id_token("stable-user")),
+            Some("sub:stable-user".to_string())
+        );
+        assert_eq!(extract_codex_id_token_user_identity("not-a-jwt"), None);
+        assert_eq!(
+            extract_codex_id_token_user_identity(&format!("{header}.{subject_payload}")),
+            None
+        );
+        assert_eq!(
+            extract_codex_id_token_user_identity(&format!("{header}.{subject_payload}..extra")),
+            None
+        );
+        assert_eq!(
+            extract_codex_id_token_user_identity(&format!("invalid.{subject_payload}.signature")),
+            None
+        );
+        assert_eq!(
+            extract_codex_id_token_user_identity(&test_codex_id_token("   ")),
+            None
+        );
+
+        let payload = URL_SAFE_NO_PAD.encode(json!({ "email": "user@example.test" }).to_string());
+        assert_eq!(
+            extract_codex_id_token_user_identity(&format!("{header}.{payload}.")),
+            None
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn managed_chatgpt_login_matches_local_marker_and_workspace() {
+        let _home = CodexLiveTestHome::new();
+        let shared_chatgpt_user_token = |subject: &str| {
+            let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
+            let payload = URL_SAFE_NO_PAD.encode(
+                json!({
+                    "sub": subject,
+                    "https://api.openai.com/auth": {
+                        "chatgpt_user_id": "shared-team-user-id"
+                    }
+                })
+                .to_string(),
+            );
+            format!("{header}.{payload}.")
+        };
+        // 原生 auth 保留 workspace ID；marker 用本地 ID 区分同 workspace 登录。
+        let full_bundle = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": shared_chatgpt_user_token("user-a"),
+                "access_token": "access",
+                "refresh_token": "refresh-secret",
+                "account_id": "workspace-shared"
+            },
+            "last_refresh": "2026-01-02T03:04:05.000000000Z"
+        });
+        record_codex_managed_oauth_live_auth(&full_bundle, "local-account-a")
+            .expect("record managed auth marker");
+        crate::config::write_json_file(&get_codex_auth_path(), &full_bundle)
+            .expect("write managed live auth");
+        assert!(
+            codex_live_auth_matches_managed_request("local-account-a", "access").unwrap(),
+            "the selected account's exact live bearer must match"
+        );
+        assert!(
+            !codex_live_auth_matches_managed_request("local-account-a", "other-access").unwrap(),
+            "another user's bearer in the same workspace must not match"
+        );
+        let managed_id_token = full_bundle
+            .pointer("/tokens/id_token")
+            .and_then(Value::as_str)
+            .expect("managed id token");
+        assert!(
+            codex_live_auth_is_managed_chatgpt_login(&full_bundle, "local-account-a"),
+            "a full refreshable bundle for the managed account must be recognized"
+        );
+        assert!(
+            !codex_live_auth_is_managed_chatgpt_login(&full_bundle, "local-account-b"),
+            "another local login in the same workspace must not match"
+        );
+        let mut other_user = full_bundle.clone();
+        other_user["tokens"]["id_token"] = json!(shared_chatgpt_user_token("user-b"));
+        assert!(
+            !codex_live_auth_is_managed_chatgpt_login(&other_user, "local-account-a"),
+            "a native login for another user in the same workspace must not match"
+        );
+        crate::config::write_json_file(&get_codex_auth_path(), &other_user)
+            .expect("write other user's native login");
+        assert!(
+            read_codex_live_auth_refresh_for_account("local-account-a").is_none(),
+            "another user's refresh token must not be adopted"
+        );
+        clear_codex_live_auth_for_managed_account("local-account-a")
+            .expect("clear stale local ownership marker");
+        assert!(
+            get_codex_auth_path().exists(),
+            "removing local account A must not delete native account B"
+        );
+
+        crate::config::write_json_file(
+            &get_codex_managed_oauth_live_auth_marker_path(),
+            &json!({
+                "version": 2,
+                "account_id": "workspace-shared"
+            }),
+        )
+        .expect("write legacy managed auth marker");
+        assert!(
+            read_codex_live_auth_refresh_for_managed_account(
+                "workspace-shared",
+                Some(managed_id_token),
+            )
+            .is_err(),
+            "a legacy marker must not migrate across users in one workspace"
+        );
+        assert!(
+            !codex_live_auth_is_managed_chatgpt_login(&other_user, "workspace-shared"),
+            "a legacy marker without user identity must not establish ownership"
+        );
+        assert!(
+            read_codex_live_auth_refresh_for_account("workspace-shared").is_none(),
+            "a legacy marker must not authorize refresh-token adoption"
+        );
+        clear_codex_live_auth_for_managed_account("workspace-shared")
+            .expect("clear ambiguous legacy marker");
+        assert!(
+            get_codex_auth_path().exists(),
+            "clearing an ambiguous legacy marker must preserve native auth"
+        );
+
+        // 非 chatgpt 模式（API key）不应命中。
+        let api_key_auth = json!({ "OPENAI_API_KEY": "sk-live" });
+        assert!(!codex_live_auth_is_managed_chatgpt_login(
+            &api_key_auth,
+            "local-account-a"
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn legacy_managed_marker_migrates_by_user_without_breaking_refresh_rollback() {
+        let _home = CodexLiveTestHome::new();
+        let id_token = test_codex_id_token("legacy-user");
+        let auth_r0 = codex_managed_oauth_auth_value(
+            "legacy-workspace",
+            "access-r0",
+            Some(&id_token),
+            "refresh-r0",
+            "2026-01-01T00:00:00Z",
+        );
+        crate::config::write_json_file(&get_codex_auth_path(), &auth_r0)
+            .expect("write legacy live auth");
+        crate::config::write_json_file(
+            &get_codex_managed_oauth_live_auth_marker_path(),
+            &json!({
+                "version": 2,
+                "account_id": "legacy-workspace"
+            }),
+        )
+        .expect("write legacy marker");
+        let snapshot = CodexLiveStateSnapshot::capture().expect("capture legacy generation");
+
+        let migrated =
+            read_codex_live_auth_refresh_for_managed_account("legacy-workspace", Some(&id_token))
+                .expect("migrate matching legacy marker")
+                .expect("read matching live refresh");
+        assert_eq!(migrated.refresh_token, "refresh-r0");
+        assert!(codex_live_auth_is_managed_chatgpt_login(
+            &auth_r0,
+            "legacy-workspace"
+        ));
+
+        let auth_r1 = codex_managed_oauth_auth_value(
+            "legacy-workspace",
+            "access-r1",
+            Some(&id_token),
+            "refresh-r1",
+            "2026-01-02T00:00:00Z",
+        );
+        crate::config::write_json_file(&get_codex_auth_path(), &auth_r1)
+            .expect("write rotated live auth");
+        snapshot
+            .restore_preserving_newer_same_account_auth()
+            .expect("rollback after marker migration");
+
+        let restored: Value = crate::config::read_json_file(&get_codex_auth_path())
+            .expect("read preserved rotated auth");
+        assert_eq!(restored, auth_r1);
+        assert!(codex_live_auth_is_managed_chatgpt_login(
+            &restored,
+            "legacy-workspace"
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn legacy_managed_marker_removal_requires_manager_identity() {
+        let _home = CodexLiveTestHome::new();
+        let id_token = test_codex_id_token("legacy-user");
+        let auth = codex_managed_oauth_auth_value(
+            "legacy-workspace",
+            "access",
+            Some(&id_token),
+            "refresh",
+            "2026-01-01T00:00:00Z",
+        );
+        crate::config::write_json_file(&get_codex_auth_path(), &auth)
+            .expect("write legacy live auth");
+        crate::config::write_json_file(
+            &get_codex_managed_oauth_live_auth_marker_path(),
+            &json!({
+                "version": 2,
+                "account_id": "legacy-workspace"
+            }),
+        )
+        .expect("write legacy marker");
+
+        let other_user = test_codex_id_token("other-user");
+        assert!(prepare_codex_live_auth_for_managed_account_removal(
+            "legacy-workspace",
+            Some(&other_user),
+        )
+        .is_err());
+        assert!(get_codex_auth_path().exists());
+        assert!(get_codex_managed_oauth_live_auth_marker_path().exists());
+
+        prepare_codex_live_auth_for_managed_account_removal("legacy-workspace", Some(&id_token))
+            .expect("prove and migrate legacy ownership");
+        clear_codex_live_auth_for_managed_account("legacy-workspace")
+            .expect("remove proven managed live auth");
+        assert!(!get_codex_auth_path().exists());
+        assert!(!get_codex_managed_oauth_live_auth_marker_path().exists());
+    }
 }

@@ -321,6 +321,12 @@ impl ProxyService {
         }
 
         if enabled {
+            // 0) Codex 当前供应商绑定已删除的托管账号时提示重新选择账号；已接管的
+            //    幂等路径同样校验，避免接管期间请求才失败（上游 15884b20）。
+            if matches!(app, AppType::Codex) {
+                self.ensure_current_codex_managed_account_exists().await?;
+            }
+
             // 1) 代理服务未运行则自动启动
             if !self.is_running().await {
                 self.start().await?;
@@ -1835,6 +1841,32 @@ impl ProxyService {
         target_obj.remove("auth");
     }
 
+    async fn ensure_current_codex_managed_account_exists(&self) -> Result<(), String> {
+        let Some(provider_id) =
+            crate::settings::get_effective_current_provider(self.db.as_ref(), &AppType::Codex)
+                .map_err(|error| error.to_string())?
+        else {
+            return Ok(());
+        };
+        let Some(account_id) = self
+            .db
+            .get_provider_by_id(&provider_id, AppType::Codex.as_str())
+            .map_err(|error| error.to_string())?
+            .filter(crate::proxy::providers::is_codex_official_provider)
+            .and_then(|provider| provider.meta)
+            .and_then(|meta| meta.managed_account_id_for("codex_oauth"))
+            .filter(|id| !id.trim().is_empty())
+        else {
+            return Ok(());
+        };
+        self.codex_oauth_state
+            .read()
+            .await
+            .ensure_account_exists(account_id.trim())
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn apply_managed_codex_auth_to_restore(
         &self,
         target: &mut Value,
@@ -1865,6 +1897,20 @@ impl ProxyService {
             return Ok(None);
         };
         let manager = self.codex_oauth_state.read().await;
+        // 绑定账号已被删除（经持久化存储确认）时不能阻塞恢复：保留当前 live 登录，
+        // 等用户重新选择账号（上游 15884b20）。存储不可读等其它错误仍然中止。
+        match manager.ensure_account_exists(&account_id).await {
+            Ok(()) => {}
+            Err(
+                crate::proxy::providers::codex_oauth_auth::CodexOAuthError::AccountUnavailable(_),
+            ) => {
+                log::warn!(
+                    "Codex 当前供应商绑定的托管账号 {account_id} 已删除，恢复时保留现有登录"
+                );
+                return Ok(None);
+            }
+            Err(error) => return Err(format!("Codex OAuth 账号不可用: {error}")),
+        }
         let bundle = manager
             .get_valid_token_bundle_for_account(&account_id)
             .await
@@ -3159,6 +3205,307 @@ base_url = \"https://old.example/v1\"
             )
             .unwrap()
         );
+    }
+
+    fn managed_codex_provider_for_test(id: &str, account_id: &str) -> Provider {
+        let mut provider = Provider::with_id(
+            id.to_string(),
+            id.to_string(),
+            json!({ "auth": {}, "config": "model = \"gpt-5\"\n" }),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            auth_binding: Some(AuthBinding {
+                source: AuthBindingSource::ManagedAccount,
+                auth_provider: Some("codex_oauth".to_string()),
+                account_id: Some(account_id.to_string()),
+            }),
+            ..Default::default()
+        });
+        provider
+    }
+
+    /// 上游 15884b20：接管期间删除绑定账号后，已接管的幂等开启给出“选择账号”指引，
+    /// 关闭接管不被失效绑定阻塞且保留现有登录；改绑后恢复写入新账号。
+    #[tokio::test]
+    #[serial]
+    async fn deleted_codex_account_recovers_during_takeover() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().unwrap();
+        let db = Arc::new(Database::memory().unwrap());
+        let service = ProxyService::new(db.clone());
+        let mut global = db.get_global_proxy_config().await.unwrap();
+        global.listen_port = 0;
+        db.update_global_proxy_config(global).await.unwrap();
+
+        let token = crate::codex_config::test_codex_id_token("same-user");
+        service
+            .codex_oauth_state
+            .read()
+            .await
+            .add_test_account_with_workspace_and_access_token(
+                "old-local-id",
+                "workspace",
+                "old-access",
+                Some(&token),
+            )
+            .await
+            .unwrap();
+        let current = managed_codex_provider_for_test("current", "old-local-id");
+        db.save_provider("codex", &current).unwrap();
+        db.set_current_provider("codex", &current.id).unwrap();
+        crate::settings::set_current_provider(&AppType::Codex, Some(&current.id)).unwrap();
+        let old_auth = crate::codex_config::codex_managed_oauth_auth_value(
+            "workspace",
+            "old-access",
+            Some(&token),
+            "test-refresh-token",
+            "2026-09-14T00:00:00Z",
+        );
+        crate::codex_config::write_codex_live_atomic(&old_auth, Some("model = \"gpt-5\"\n"))
+            .unwrap();
+
+        service.set_takeover_for_app("codex", true).await.unwrap();
+        assert!(db.get_live_backup("codex").await.unwrap().is_some());
+
+        {
+            let manager = service.codex_oauth_state.read().await;
+            manager.remove_account("old-local-id").await.unwrap();
+            manager
+                .add_test_account_with_workspace_and_access_token(
+                    "new-local-id",
+                    "workspace",
+                    "new-access",
+                    Some(&token),
+                )
+                .await
+                .unwrap();
+        }
+
+        let error = service
+            .set_takeover_for_app("codex", true)
+            .await
+            .unwrap_err();
+        assert!(error.contains("选择账号"), "{error}");
+
+        service.set_takeover_for_app("codex", false).await.unwrap();
+        assert!(db.get_live_backup("codex").await.unwrap().is_none());
+        assert!(!service.detect_takeover_in_live_config_for_app(&AppType::Codex));
+        let restored = service.read_codex_live().unwrap();
+        assert_eq!(restored["auth"]["tokens"]["access_token"], "old-access");
+
+        // 改绑到重新登录得到的新本地 ID 后，接管与恢复均正常，恢复写入新账号。
+        let rebound = managed_codex_provider_for_test("current", "new-local-id");
+        db.save_provider("codex", &rebound).unwrap();
+        service.set_takeover_for_app("codex", true).await.unwrap();
+        service.set_takeover_for_app("codex", false).await.unwrap();
+        let restored = service.read_codex_live().unwrap();
+        assert_eq!(restored["auth"]["tokens"]["access_token"], "new-access");
+        assert!(
+            crate::codex_config::codex_auth_matches_recorded_managed_oauth(
+                &restored["auth"],
+                "new-local-id",
+            )
+            .unwrap()
+        );
+        if service.is_running().await {
+            service.stop().await.unwrap();
+        }
+    }
+
+    // 上游 c2ec78dd：快照回滚按本地账号而非 workspace 判定同账号。
+    #[test]
+    #[serial]
+    fn codex_snapshot_rollback_preserves_newer_native_login_without_marker() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let id_token = crate::codex_config::test_codex_id_token("native-user");
+
+        let auth_r0 = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": id_token,
+                "access_token": "access-r0",
+                "refresh_token": "refresh-r0",
+                "account_id": "acct-a"
+            },
+            "last_refresh": "2026-01-01T00:00:00Z"
+        });
+        crate::codex_config::write_codex_live_atomic(&auth_r0, Some("model = \"before\"\n"))
+            .expect("seed R0 live");
+        let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()
+            .expect("capture transaction snapshot");
+
+        let auth_r1 = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": crate::codex_config::test_codex_id_token("native-user"),
+                "access_token": "access-r1",
+                "refresh_token": "refresh-r1",
+                "account_id": "acct-a"
+            },
+            "last_refresh": "2026-01-02T00:00:00Z"
+        });
+        crate::codex_config::write_codex_live_atomic(&auth_r1, Some("model = \"after\"\n"))
+            .expect("write concurrent R1 live");
+
+        snapshot
+            .restore_preserving_newer_same_account_auth()
+            .expect("selective rollback");
+
+        let restored: Value =
+            crate::config::read_json_file(&crate::codex_config::get_codex_auth_path())
+                .expect("read restored auth");
+        assert_eq!(restored, auth_r1, "newer same-account auth must survive");
+        assert!(!crate::codex_config::codex_managed_oauth_live_auth_marker_exists());
+        assert_eq!(
+            std::fs::read_to_string(crate::codex_config::get_codex_config_path())
+                .expect("read rolled-back config"),
+            "model = \"before\"\n"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_snapshot_rollback_restores_previous_local_account_in_same_workspace() {
+        let _home = TempHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let id_token_a = crate::codex_config::test_codex_id_token("user-a");
+
+        let auth_a = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": id_token_a,
+                "access_token": "access-a",
+                "refresh_token": "refresh-a",
+                "account_id": "workspace-shared"
+            },
+            "last_refresh": "2026-01-01T00:00:00Z"
+        });
+        crate::codex_config::write_codex_live_atomic(&auth_a, Some("model = \"before\"\n"))
+            .expect("seed account A live");
+        crate::codex_config::record_codex_managed_oauth_live_auth(&auth_a, "local-a")
+            .expect("record A marker");
+        let snapshot = crate::codex_config::CodexLiveStateSnapshot::capture()
+            .expect("capture account A snapshot");
+
+        let auth_b = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": crate::codex_config::test_codex_id_token("user-b"),
+                "access_token": "access-b",
+                "refresh_token": "refresh-b",
+                "account_id": "workspace-shared"
+            },
+            "last_refresh": "2026-01-02T00:00:00Z"
+        });
+        crate::codex_config::write_codex_live_atomic(&auth_b, Some("model = \"after\"\n"))
+            .expect("write account B live");
+        crate::codex_config::record_codex_managed_oauth_live_auth(&auth_b, "local-b")
+            .expect("record B marker");
+
+        snapshot
+            .restore_preserving_newer_same_account_auth()
+            .expect("cross-account rollback");
+
+        let restored: Value =
+            crate::config::read_json_file(&crate::codex_config::get_codex_auth_path())
+                .expect("read restored auth");
+        assert_eq!(restored, auth_a, "failed A to B change must restore A");
+        assert!(
+            crate::codex_config::codex_auth_matches_recorded_managed_oauth(&restored, "local-a")
+                .expect("check restored A marker")
+        );
+        assert_eq!(
+            std::fs::read_to_string(crate::codex_config::get_codex_config_path())
+                .expect("read rolled-back config"),
+            "model = \"before\"\n"
+        );
+    }
+
+    /// 上游 15884b20：接管期间删除绑定账号后异常退出，重启从磁盘加载账号存储，
+    /// 启动恢复不被失效绑定阻塞，且保留之后的 CLI 原生登录；存储损坏时恢复中止。
+    #[tokio::test]
+    #[serial]
+    async fn deleted_codex_account_recovers_after_persisted_startup() {
+        for corrupt in [false, true] {
+            let _home = TempHome::new();
+            crate::settings::reload_settings().unwrap();
+            let db = Arc::new(Database::memory().unwrap());
+            let service = ProxyService::new(db.clone());
+            let token = crate::codex_config::test_codex_id_token("same-user");
+            {
+                let manager = service.codex_oauth_state.read().await;
+                manager
+                    .add_test_account_with_workspace_and_access_token(
+                        "old-local-id",
+                        "workspace",
+                        "old-access",
+                        Some(&token),
+                    )
+                    .await
+                    .unwrap();
+            }
+            let current = managed_codex_provider_for_test("current", "old-local-id");
+            db.save_provider("codex", &current).unwrap();
+            db.set_current_provider("codex", &current.id).unwrap();
+            crate::settings::set_current_provider(&AppType::Codex, Some(&current.id)).unwrap();
+            service
+                .update_live_backup_from_provider("codex", &current)
+                .await
+                .unwrap();
+            {
+                let manager = service.codex_oauth_state.read().await;
+                manager.remove_account("old-local-id").await.unwrap();
+                manager
+                    .add_test_account_with_workspace_and_access_token(
+                        "new-local-id",
+                        "workspace",
+                        "new-access",
+                        Some(&token),
+                    )
+                    .await
+                    .unwrap();
+            }
+            drop(service);
+
+            // Model a later CLI login. Startup recovery must leave it intact.
+            let native_auth = crate::codex_config::codex_managed_oauth_auth_value(
+                "native-workspace",
+                "native-access",
+                Some(&token),
+                "native-refresh",
+                "2026-09-14T00:00:00Z",
+            );
+            crate::codex_config::write_codex_live_atomic(
+                &native_auth,
+                Some("model_provider = \"cc-switch-official\"\n"),
+            )
+            .unwrap();
+            if corrupt {
+                std::fs::write(
+                    crate::config::get_app_config_dir().join("codex_oauth_auth.json"),
+                    "{broken",
+                )
+                .unwrap();
+            }
+
+            let restarted = ProxyService::new(db.clone());
+            let result = restarted
+                .restore_live_config_for_app_with_fallback(&AppType::Codex)
+                .await;
+            if corrupt {
+                assert!(result.is_err(), "corrupt store must block recovery");
+            } else {
+                result.unwrap();
+            }
+            let live = restarted.read_codex_live().unwrap();
+            assert_eq!(live["auth"], native_auth, "corrupt={corrupt}");
+        }
     }
 
     #[test]

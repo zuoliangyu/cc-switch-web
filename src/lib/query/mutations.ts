@@ -5,7 +5,10 @@ import { providersApi, sessionsApi, settingsApi, type AppId } from "@/lib/api";
 import type { DeleteSessionOptions } from "@/lib/api/sessions";
 import type { SwitchResult } from "@/lib/api/providers";
 import type { Provider, SessionMeta, Settings } from "@/types";
-import { extractErrorMessage } from "@/utils/errorUtils";
+import {
+  extractErrorMessage,
+  translatePiProviderMutationError,
+} from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import { invalidateHermesProviderCaches } from "@/hooks/useHermes";
@@ -124,7 +127,13 @@ export const useAddProviderMutation = (appId: AppId) => {
       );
     },
     onError: (error: Error) => {
-      const detail = extractErrorMessage(error) || t("common.unknown");
+      const rawDetail = extractErrorMessage(error);
+      const detail =
+        (appId === "pi"
+          ? translatePiProviderMutationError(rawDetail, t)
+          : "") ||
+        rawDetail ||
+        t("common.unknown");
       toast.error(
         t("notifications.addFailed", {
           defaultValue: "添加供应商失败: {{error}}",
@@ -173,7 +182,13 @@ export const useUpdateProviderMutation = (appId: AppId) => {
       );
     },
     onError: (error: Error) => {
-      const detail = extractErrorMessage(error) || t("common.unknown");
+      const rawDetail = extractErrorMessage(error);
+      const detail =
+        (appId === "pi"
+          ? translatePiProviderMutationError(rawDetail, t)
+          : "") ||
+        rawDetail ||
+        t("common.unknown");
       toast.error(
         t("notifications.updateFailed", {
           defaultValue: "更新供应商失败: {{error}}",
@@ -234,7 +249,13 @@ export const useDeleteProviderMutation = (appId: AppId) => {
       );
     },
     onError: (error: Error) => {
-      const detail = extractErrorMessage(error) || t("common.unknown");
+      const rawDetail = extractErrorMessage(error);
+      const detail =
+        (appId === "pi"
+          ? translatePiProviderMutationError(rawDetail, t)
+          : "") ||
+        rawDetail ||
+        t("common.unknown");
       toast.error(
         t("notifications.deleteFailed", {
           defaultValue: "删除供应商失败: {{error}}",

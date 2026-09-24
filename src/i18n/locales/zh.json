@@ -56,7 +56,8 @@
     "deleting": "删除中...",
     "auto": "自动",
     "enabled": "已开启",
-    "notSet": "未设置"
+    "notSet": "未设置",
+    "collapse": "收起"
   },
   "firstRunNotice": {
     "title": "欢迎使用 CC Switch",
@@ -2598,7 +2599,8 @@
       "modelIdentityRequired": "每个模型都必须填写 id 和 name",
       "modelLimitsRequired": "每个模型都必须填写正数 contextWindow 和 maxTokens",
       "modelCapabilitiesRequired": "每个模型都必须明确 reasoning 和 input",
-      "invalidThinkingLevelMap": "thinkingLevelMap 只能使用 off、minimal、low、medium、high、xhigh、max，值必须为字符串或 null"
+      "invalidThinkingLevelMap": "thinkingLevelMap 只能使用 off、minimal、low、medium、high、xhigh、max，值必须为字符串或 null",
+      "writeConflict": "Pi 配置正在被其他进程修改，请稍后再试。"
     },
     "prompts": {
       "nativeTitle": "Pi 原生提示资源",
@@ -2622,6 +2624,9 @@
     "sessions": {
       "discoveryUnavailable": "Pi 会话目录当前不可枚举",
       "requiresProjectContext": "配置的相对 sessionDir“{{path}}”需要 Pi 启动时的项目上下文，Web 端不会猜测目录。"
+    },
+    "form": {
+      "providerKeyDuplicate": "该供应商标识已存在"
     }
   },
   "proxyConfig": {

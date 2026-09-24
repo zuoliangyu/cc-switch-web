@@ -17,7 +17,7 @@ import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
-import { PROVIDER_TYPES } from "@/config/constants";
+import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import {
@@ -222,15 +222,31 @@ export function ProviderCard({
     ? provider.meta?.usage_script?.autoQueryInterval || 0
     : 0;
 
+  // 脚本用量只在「已启用 + 非官方 + 非官方订阅模板 + 非托管 Codex 官方账号」时才查询；
+  // 展开判定必须复用同一谓词，因为禁用的 React Query observer 仍会返回同 key 的旧缓存
+  // （上游 cc-switch 2c735bd9）。官方供应商走 SubscriptionQuotaFooter，不展示脚本用量。
+  const isOfficialSubscriptionUsage =
+    provider.meta?.usage_script?.templateType ===
+    TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
+  const scriptUsageActive =
+    usageEnabled &&
+    !isBoundCodexOfficial &&
+    !isOfficial &&
+    !isOfficialSubscriptionUsage;
   const { data: usage } = useUsageQuery(provider.id, appId, {
-    enabled: usageEnabled && !isBoundCodexOfficial,
+    enabled: scriptUsageActive,
     autoQueryInterval,
   });
 
   const isTokenPlan =
     provider.meta?.usage_script?.templateType === "token_plan";
+  // 官方订阅的额度窗口不能按普通多套餐展开；缓存残留的旧脚本结果同样不认。
   const hasMultiplePlans =
-    usage?.success && usage.data && usage.data.length > 1 && !isTokenPlan;
+    scriptUsageActive &&
+    !isTokenPlan &&
+    usage?.success &&
+    usage.data &&
+    usage.data.length > 1;
 
   const [isExpanded, setIsExpanded] = useState(false);
 

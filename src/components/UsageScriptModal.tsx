@@ -22,6 +22,10 @@ import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_TYPES, PROVIDER_TYPES } from "@/config/constants";
+import {
+  CODING_PLAN_PROVIDERS,
+  detectCodingPlanProvider,
+} from "@/config/codingPlanProviders";
 
 interface UsageScriptModalProps {
   provider: Provider;
@@ -119,19 +123,7 @@ const TEMPLATE_NAME_KEYS: Record<string, string> = {
     "usageScript.templateOfficialSubscription",
 };
 
-const TOKEN_PLAN_PROVIDERS = [
-  { id: "kimi", label: "Kimi For Coding", pattern: /api\.kimi\.com\/coding/i },
-  {
-    id: "zhipu",
-    label: "Zhipu GLM (智谱)",
-    pattern: /bigmodel\.cn|api\.z\.ai/i,
-  },
-  {
-    id: "minimax",
-    label: "MiniMax",
-    pattern: /api\.minimaxi?\.com|api\.minimax\.io/i,
-  },
-] as const;
+const TOKEN_PLAN_PROVIDERS = CODING_PLAN_PROVIDERS;
 
 const BALANCE_PROVIDERS = [
   { id: "deepseek", label: "DeepSeek", pattern: /api\.deepseek\.com/i },
@@ -151,11 +143,7 @@ function detectBalanceProvider(baseUrl: string | undefined): boolean {
 }
 
 function detectTokenPlanProvider(baseUrl: string | undefined): string | null {
-  if (!baseUrl) return null;
-  for (const provider of TOKEN_PLAN_PROVIDERS) {
-    if (provider.pattern.test(baseUrl)) return provider.id;
-  }
-  return null;
+  return detectCodingPlanProvider(baseUrl);
 }
 
 const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
@@ -183,8 +171,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (!config) return { apiKey: undefined, baseUrl: undefined };
 
       // 处理不同应用的配置格式
-      if (appId === "claude") {
-        // Claude: { env: { ANTHROPIC_AUTH_TOKEN | ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL } }
+      if (appId === "claude" || appId === "claude-desktop") {
+        // Claude / Claude Desktop: { env: { ANTHROPIC_AUTH_TOKEN | ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL } }
         const env = (config as any).env || {};
         return {
           apiKey: env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY,
@@ -221,6 +209,13 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         return {
           apiKey: (config as any).apiKey,
           baseUrl: (config as any).baseUrl,
+        };
+      } else if (appId === "opencode") {
+        // OpenCode: 凭据嵌在 options（SDK options 对象）
+        const options = (config as any).options || {};
+        return {
+          apiKey: options.apiKey,
+          baseUrl: options.baseURL,
         };
       }
       return { apiKey: undefined, baseUrl: undefined };

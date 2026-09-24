@@ -17,6 +17,7 @@ import {
   useSwitchProviderMutation,
 } from "@/lib/query";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { injectCodingPlanUsageScript } from "@/config/codingPlanProviders";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import {
   extractCodexWireApi,
@@ -81,7 +82,9 @@ export function useProviderActions(
         ensureCodexOfficialSeed?: boolean;
       },
     ) => {
-      await addProviderMutation.mutateAsync(provider);
+      // 命中 Coding Plan 路由表的新供应商自动启用套餐用量查询（上游 cc-switch 270a4ff3）
+      const enhanced = injectCodingPlanUsageScript(activeApp, provider);
+      await addProviderMutation.mutateAsync(enhanced);
 
       // OpenClaw: register models to allowlist after adding provider
       if (activeApp === "openclaw" && provider.suggestedDefaults) {

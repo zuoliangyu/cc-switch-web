@@ -22,6 +22,7 @@ interface SubscriptionQuotaViewProps {
 export const TIER_I18N_KEYS: Record<string, string> = {
   five_hour: "subscription.fiveHour",
   seven_day: "subscription.sevenDay",
+  seven_day_fable: "subscription.sevenDayFable",
   seven_day_opus: "subscription.sevenDayOpus",
   seven_day_sonnet: "subscription.sevenDaySonnet",
   gemini_pro: "subscription.geminiPro",

@@ -212,4 +212,43 @@ describe("App integration with MSW", () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).toHaveBeenCalled();
   });
+
+  it("resets provider view scroll when switching apps", async () => {
+    const { container } = renderApp(App);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list").textContent).toContain(
+        "claude-1",
+      ),
+    );
+
+    const mainScrollContainer = container.querySelector("main") as HTMLElement;
+    const providerScrollContainer = Array.from(
+      container.querySelectorAll<HTMLElement>(".overflow-y-auto"),
+    ).find(
+      (element) =>
+        element !== mainScrollContainer && element.className.includes("pb-12"),
+    );
+
+    expect(mainScrollContainer).not.toBeNull();
+    expect(providerScrollContainer).toBeDefined();
+
+    mainScrollContainer.scrollTop = 320;
+    mainScrollContainer.scrollLeft = 12;
+    providerScrollContainer!.scrollTop = 640;
+    providerScrollContainer!.scrollLeft = 24;
+
+    fireEvent.click(screen.getByText("switch-codex"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list").textContent).toContain(
+        "codex-1",
+      ),
+    );
+
+    expect(mainScrollContainer.scrollTop).toBe(0);
+    expect(mainScrollContainer.scrollLeft).toBe(0);
+    expect(providerScrollContainer!.scrollTop).toBe(0);
+    expect(providerScrollContainer!.scrollLeft).toBe(0);
+  });
 });

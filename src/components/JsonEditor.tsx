@@ -22,6 +22,7 @@ interface JsonEditorProps {
   language?: "json" | "javascript";
   height?: string | number;
   showMinimap?: boolean; // 添加此属性以防未来使用
+  ariaLabel?: string;
 }
 
 const JsonEditor: React.FC<JsonEditorProps> = ({
@@ -33,6 +34,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
   showValidation = true,
   language = "json",
   height,
+  ariaLabel,
 }) => {
   const { t } = useTranslation();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,9 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       baseTheme,
       sizingTheme,
       jsonLinter,
+      EditorView.contentAttributes.of(
+        ariaLabel ? { "aria-label": ariaLabel } : {},
+      ),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const newValue = update.state.doc.toString();
@@ -208,7 +213,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       view.destroy();
       viewRef.current = null;
     };
-  }, [darkMode, rows, height, language, jsonLinter]); // 依赖项中不包含 onChange 和 placeholder，避免不必要的重建
+  }, [ariaLabel, darkMode, rows, height, language, jsonLinter]); // 依赖项中不包含 onChange 和 placeholder，避免不必要的重建
 
   // 当 value 从外部改变时更新编辑器内容
   useEffect(() => {

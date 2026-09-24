@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -301,6 +301,23 @@ function App() {
 
   const effectiveEditingProvider = useLastValidValue(editingProvider);
   const effectiveUsageProvider = useLastValidValue(usageProvider);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const providerScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 切换应用时回到列表顶部，避免沿用上一个应用的滚动位置（上游 4837fe2c）。
+  useLayoutEffect(() => {
+    if (currentView !== "providers") return;
+
+    for (const container of [
+      mainScrollRef.current,
+      providerScrollContainerRef.current,
+    ]) {
+      if (container) {
+        container.scrollTop = 0;
+        container.scrollLeft = 0;
+      }
+    }
+  }, [activeApp, currentView]);
 
   const promptPanelRef = useRef<any>(null);
   const mcpPanelRef = useRef<any>(null);
@@ -729,7 +746,10 @@ function App() {
         default:
           return (
             <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex-1 overflow-y-auto overflow-x-hidden pb-12 px-1">
+              <div
+                ref={providerScrollContainerRef}
+                className="flex-1 overflow-y-auto overflow-x-hidden pb-12 px-1"
+              >
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeApp}
@@ -800,7 +820,7 @@ function App() {
       <AnimatePresence mode="wait">
         <motion.div
           key={currentView}
-          className="flex-1 min-h-0"
+          className="flex flex-1 min-h-0 flex-col"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -863,6 +883,7 @@ function App() {
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label={t("common.back")}
                   onClick={() =>
                     setCurrentView(
                       currentView === "skillsDiscovery"
@@ -1373,7 +1394,10 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 flex flex-col overflow-y-auto animate-fade-in">
+      <main
+        ref={mainScrollRef}
+        className="flex-1 min-h-0 flex flex-col overflow-y-auto animate-fade-in"
+      >
         {isOpenClawView && openclawHealthWarnings.length > 0 && (
           <OpenClawHealthBanner warnings={openclawHealthWarnings} />
         )}

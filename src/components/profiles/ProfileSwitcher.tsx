@@ -87,6 +87,9 @@ export function ProfileSwitcher({ activeApp }: { activeApp: AppId }) {
             type="button"
             role="combobox"
             aria-expanded={open}
+            aria-label={t("profiles.switcherAriaLabel", {
+              name: currentProfile?.name ?? t("profiles.none"),
+            })}
             title={t(`profiles.switcherTooltip.${scope}`)}
             className={cn(
               "inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors md:px-2.5",
@@ -105,6 +108,7 @@ export function ProfileSwitcher({ activeApp }: { activeApp: AppId }) {
           side="bottom"
           align="start"
           sideOffset={6}
+          aria-label={t(`profiles.switcherTooltip.${scope}`)}
           className="z-[100] w-64 p-0"
         >
           <Command>

@@ -2,6 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { isWindows, isLinux } from "@/lib/platform";
 import { isTextEditableTarget } from "@/utils/domUtils";
@@ -32,6 +33,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   footer,
   contentClassName,
 }) => {
+  const { t } = useTranslation();
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -103,6 +105,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                   variant="outline"
                   size="icon"
                   onClick={onClose}
+                  aria-label={t("common.back")}
                   className="h-10 w-10 rounded-2xl border-border-default bg-background/80 select-none"
                 >
                   <ArrowLeft className="h-4 w-4" />

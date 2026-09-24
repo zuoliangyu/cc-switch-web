@@ -91,6 +91,7 @@
     "enableToolSearch": "Tool Search を有効化",
     "effortHigh": "高強度思考",
     "disableAutoUpgrade": "自動アップグレードを無効化",
+    "disableArtifact": "Artifact ツールを無効化",
     "winEnvDetected": "Windows 環境変数のプレースホルダー（{{vars}}）を検出しました。Claude Code は自動展開しません。",
     "winEnvUnknown": "{{vars}} はホワイトリストに含まれないため、そのまま保持されます。",
     "winEnvConvert": "絶対パスへ展開",
@@ -887,6 +888,9 @@
     "fetchModelsNotSupported": "このプロバイダーはモデル一覧の取得に対応していません",
     "fetchModelsEndpointNotFound": "モデル一覧エンドポイントが見つかりません（ルートとサブパス両方を試行済み）。OpenAI 互換 /v1/models が公開されているか確認してください。",
     "fetchModelsSuccess": "{{count}}件のモデルを取得",
+    "fetchedModelsTitle": "利用可能なモデル（{{count}}件）",
+    "modelAlreadyAdded": "追加済み",
+    "addSelectedModels": "選択したモデルを追加（{{count}}件）",
     "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください",
     "fetchingModels": "取得中...",
     "websiteUrl": "Web サイト URL",
@@ -1799,6 +1803,7 @@
     }
   },
   "profiles": {
+    "switcherAriaLabel": "プロジェクト：{{name}}",
     "switcherTooltip": {
       "claude": "プロジェクト：Claude Code のプロバイダー / MCP / Skills / Prompt をワンクリックで切り替え",
       "claude-desktop": "プロジェクト：Claude Desktop のプロバイダーをワンクリックで切り替え",
@@ -2359,6 +2364,7 @@
     },
     "switchFailed": "切り替えに失敗しました: {{error}}",
     "takeover": {
+      "ariaLabel": "{{appLabel}} ローカルルーティング",
       "hint": "ルーティングするアプリを選択します。有効にすると、そのアプリのリクエストはローカルプロキシ経由で転送されます",
       "enabled": "{{app}} ルーティング有効",
       "disabled": "{{app}} ルーティング無効",

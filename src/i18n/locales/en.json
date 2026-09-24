@@ -91,6 +91,7 @@
     "enableToolSearch": "Enable Tool Search",
     "effortHigh": "High Effort Thinking",
     "disableAutoUpgrade": "Disable Auto-Upgrade",
+    "disableArtifact": "Disable Artifact Tool",
     "winEnvDetected": "Windows env-var placeholders detected ({{vars}}); Claude Code will not auto-expand them.",
     "winEnvUnknown": "{{vars}} not in whitelist, will be kept as-is.",
     "winEnvConvert": "Expand to absolute paths",
@@ -887,6 +888,9 @@
     "fetchModelsNotSupported": "This provider does not support fetching model list",
     "fetchModelsEndpointNotFound": "Models endpoint not found (tried root and subpath candidates). Confirm the provider exposes OpenAI-compatible /v1/models.",
     "fetchModelsSuccess": "Found {{count}} models",
+    "fetchedModelsTitle": "Available models ({{count}})",
+    "modelAlreadyAdded": "Already added",
+    "addSelectedModels": "Add selected ({{count}})",
     "fetchModelsTimeout": "Request timed out, please check network connection",
     "fetchingModels": "Fetching...",
     "websiteUrl": "Website URL",
@@ -1799,6 +1803,7 @@
     }
   },
   "profiles": {
+    "switcherAriaLabel": "Project: {{name}}",
     "switcherTooltip": {
       "claude": "Projects: switch the Claude Code provider / MCP / Skills / Prompt in one click",
       "claude-desktop": "Projects: switch the Claude Desktop provider in one click",
@@ -2359,6 +2364,7 @@
     },
     "switchFailed": "Switch failed: {{error}}",
     "takeover": {
+      "ariaLabel": "{{appLabel}} local routing",
       "hint": "Select apps to route — once enabled, requests from that app will be routed through the local proxy",
       "enabled": "{{app}} routing enabled",
       "disabled": "{{app}} routing disabled",

@@ -102,6 +102,7 @@ import {
   listWebDbBackups,
   logoutWebManagedAuth,
   pollWebManagedAuthAccount,
+  cancelWebManagedAuthLogin,
   renameWebDbBackup,
   removeWebProviderFromFailoverQueue,
   removeWebManagedAuthAccount,
@@ -565,9 +566,15 @@ export async function invoke<T>(
     case "auth_start_login":
       return (await startWebManagedAuthLogin(
         args?.authProvider as string,
+        (args?.targetAccountId as string | null | undefined) ?? null,
       )) as T;
     case "auth_poll_for_account":
       return (await pollWebManagedAuthAccount(
+        args?.authProvider as string,
+        args?.deviceCode as string,
+      )) as T;
+    case "auth_cancel_login":
+      return (await cancelWebManagedAuthLogin(
         args?.authProvider as string,
         args?.deviceCode as string,
       )) as T;

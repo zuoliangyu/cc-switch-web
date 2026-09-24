@@ -23,7 +23,7 @@ use crate::database::{Database, FailoverQueueItem, Profile};
 use crate::prompt::Prompt;
 use crate::provider::Provider;
 use crate::proxy::circuit_breaker::CircuitBreakerConfig;
-use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
+use crate::proxy::providers::codex_oauth_auth::{CodexOAuthError, CodexOAuthManager};
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::types::{
@@ -2585,7 +2585,17 @@ async fn auth_poll_for_account(
         &state.xai_oauth_state,
     )
     .await
-    .map_err(|e| ApiError::internal(format!("failed to poll auth account: {e}")))?;
+    .map_err(|e| {
+        // 重复账号错误码原样透传，前端据此映射本地化提示（上游 92d52916）。
+        if e == CodexOAuthError::DuplicateAccount.to_string() {
+            ApiError {
+                status: StatusCode::CONFLICT,
+                message: e,
+            }
+        } else {
+            ApiError::internal(format!("failed to poll auth account: {e}"))
+        }
+    })?;
     Ok(Json(account))
 }
 

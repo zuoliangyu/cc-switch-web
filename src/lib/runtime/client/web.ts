@@ -592,8 +592,22 @@ export async function disableWebCurrentOmoSlim(): Promise<void> {
 
 export async function startWebManagedAuthLogin(
   authProvider: string,
+  targetAccountId?: string | null,
 ): Promise<import("@/lib/api/auth").ManagedAuthDeviceCodeResponse> {
-  return requestWithBody("/api/auth/start-login", "POST", { authProvider });
+  return requestWithBody("/api/auth/start-login", "POST", {
+    authProvider,
+    targetAccountId: targetAccountId || null,
+  });
+}
+
+export async function cancelWebManagedAuthLogin(
+  authProvider: string,
+  deviceCode: string,
+): Promise<boolean> {
+  return requestWithBody("/api/auth/cancel-login", "POST", {
+    authProvider,
+    deviceCode,
+  });
 }
 
 export async function pollWebManagedAuthAccount(

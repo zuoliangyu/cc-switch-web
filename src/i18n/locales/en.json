@@ -1187,6 +1187,7 @@
     "authStatus": "Auth status",
     "notAuthenticated": "Not authenticated",
     "loginRequired": "Please sign in to ChatGPT first",
+    "duplicateAccount": "This ChatGPT account has already been added. Use the existing account.",
     "loggedInAccounts": "Logged in accounts",
     "accountCount": "{{count}} account(s)",
     "defaultAccount": "Default",

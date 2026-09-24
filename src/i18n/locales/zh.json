@@ -1187,6 +1187,7 @@
     "authStatus": "认证状态",
     "notAuthenticated": "未认证",
     "loginRequired": "请先登录 ChatGPT 账号",
+    "duplicateAccount": "该 ChatGPT 账号已添加，请直接使用现有账号。",
     "loggedInAccounts": "已登录账号",
     "accountCount": "{{count}} 个账号",
     "defaultAccount": "默认",

@@ -1187,6 +1187,7 @@
     "authStatus": "認証状態",
     "notAuthenticated": "未認証",
     "loginRequired": "先に ChatGPT にログインしてください",
+    "duplicateAccount": "この ChatGPT アカウントは追加済みです。既存のアカウントを使用してください。",
     "loggedInAccounts": "ログイン済みアカウント",
     "accountCount": "{{count}} アカウント",
     "defaultAccount": "デフォルト",

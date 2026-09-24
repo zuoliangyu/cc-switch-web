@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   useManagedAuth: vi.fn(),
   renderAccountQuota: vi.fn(),
   addAccount: vi.fn(),
+  reauthAccount: vi.fn(),
+  retryAuth: vi.fn(),
 }));
 
 vi.mock("@/components/providers/forms/hooks/useManagedAuth", () => ({
@@ -29,6 +31,9 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 
 describe("CodexOAuthSection", () => {
   beforeEach(() => {
+    mocks.addAccount.mockReset();
+    mocks.reauthAccount.mockReset();
+    mocks.retryAuth.mockReset();
     mocks.useManagedAuth.mockReturnValue({
       accounts: [{ id: "account-1", login: "user@example.com" }],
       defaultAccountId: "account-1",
@@ -41,6 +46,8 @@ describe("CodexOAuthSection", () => {
       isRemovingAccount: false,
       isSettingDefaultAccount: false,
       addAccount: mocks.addAccount,
+      reauthAccount: mocks.reauthAccount,
+      retryAuth: mocks.retryAuth,
       removeAccount: vi.fn(),
       setDefaultAccount: vi.fn(),
       cancelAuth: vi.fn(),
@@ -76,6 +83,31 @@ describe("CodexOAuthSection", () => {
 
     expect(screen.getAllByText("需要重新登录").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /重新登录/ }));
-    expect(mocks.addAccount).toHaveBeenCalledTimes(1);
+    expect(mocks.reauthAccount).toHaveBeenCalledWith("legacy-account");
+    expect(mocks.addAccount).not.toHaveBeenCalled();
+  });
+
+  it("已有正常账号也可原地重新登录", () => {
+    render(<CodexOAuthSection />);
+
+    fireEvent.click(screen.getByRole("button", { name: "重新登录" }));
+
+    expect(mocks.reauthAccount).toHaveBeenCalledWith("account-1");
+    expect(mocks.addAccount).not.toHaveBeenCalled();
+  });
+
+  it("登录失败后重试沿用原目标账号", () => {
+    mocks.useManagedAuth.mockReturnValue({
+      ...mocks.useManagedAuth(),
+      pollingState: "error",
+      error: "start failed",
+    });
+
+    render(<CodexOAuthSection />);
+
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+
+    expect(mocks.retryAuth).toHaveBeenCalledTimes(1);
+    expect(mocks.addAccount).not.toHaveBeenCalled();
   });
 });

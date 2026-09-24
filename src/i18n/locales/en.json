@@ -56,7 +56,8 @@
     "deleting": "Deleting...",
     "auto": "Auto",
     "enabled": "Enabled",
-    "notSet": "Not Set"
+    "notSet": "Not Set",
+    "collapse": "Collapse"
   },
   "firstRunNotice": {
     "title": "Welcome to CC Switch",
@@ -2599,7 +2600,8 @@
       "modelIdentityRequired": "Every model needs an id and name",
       "modelLimitsRequired": "Every model needs positive contextWindow and maxTokens values",
       "modelCapabilitiesRequired": "Every model must define reasoning and input",
-      "invalidThinkingLevelMap": "thinkingLevelMap may only use off, minimal, low, medium, high, xhigh, and max with string or null values"
+      "invalidThinkingLevelMap": "thinkingLevelMap may only use off, minimal, low, medium, high, xhigh, and max with string or null values",
+      "writeConflict": "Another process is updating Pi's configuration. Try again shortly."
     },
     "prompts": {
       "nativeTitle": "Pi native prompt resources",
@@ -2623,6 +2625,9 @@
     "sessions": {
       "discoveryUnavailable": "Pi sessions cannot currently be discovered",
       "requiresProjectContext": "The relative sessionDir \"{{path}}\" needs the project context used to launch Pi. The web app will not guess it."
+    },
+    "form": {
+      "providerKeyDuplicate": "This provider key already exists"
     }
   },
   "proxyConfig": {

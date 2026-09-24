@@ -14,8 +14,29 @@ import {
 import JsonEditor from "@/components/JsonEditor";
 import { RequestHeadersEditor } from "./RequestHeadersEditor";
 import { normalizeRequestHeaders } from "./helpers/requestHeaders";
-import { PI_API_FORMATS, piProviderPresets } from "@/config/piProviderPresets";
+import {
+  piProviderPresets,
+  type PiApiFormat,
+  type PiProviderPreset,
+} from "@/config/piProviderPresets";
+import type { ProviderCategory } from "@/types";
 import type { ProviderFormProps, ProviderFormValues } from "./ProviderForm";
+
+const PI_API_FORMATS: readonly PiApiFormat[] = [
+  "openai-completions",
+  "openai-responses",
+  "anthropic-messages",
+  "google-generative-ai",
+  "bedrock-converse-stream",
+];
+
+const getPiPresetDisplayName = (
+  preset: PiProviderPreset,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) =>
+  preset.nameKey
+    ? t(preset.nameKey, { defaultValue: preset.name })
+    : preset.name;
 
 const asObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -140,6 +161,9 @@ export function PiProviderForm({
     JSON.stringify(initialConfig, null, 2),
   );
   const [submitting, setSubmitting] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<PiProviderPreset | null>(
+    null,
+  );
 
   const setStructuredConfig = (updates: Record<string, unknown>) => {
     try {
@@ -150,12 +174,20 @@ export function PiProviderForm({
     }
   };
 
-  const applyPreset = (presetId: string) => {
-    const preset = piProviderPresets.find((entry) => entry.id === presetId);
+  const applyPreset = (presetKey: string) => {
+    const preset = piProviderPresets.find(
+      (entry) => entry.providerKey === presetKey,
+    );
     if (!preset) return;
-    const config = structuredClone(preset.config);
-    setProviderKey(preset.id);
-    setName(preset.name);
+    const config = structuredClone(preset.settingsConfig) as Record<
+      string,
+      unknown
+    >;
+    const displayName = getPiPresetDisplayName(preset, t);
+    setSelectedPreset(preset);
+    setProviderKey(preset.providerKey);
+    setName(displayName);
+    setWebsiteUrl(preset.websiteUrl ?? "");
     setBaseUrl(stringField(config.baseUrl));
     setApiKey(stringField(config.apiKey));
     setApi(stringField(config.api));
@@ -223,10 +255,13 @@ export function PiProviderForm({
         notes: notes.trim() || undefined,
         websiteUrl: websiteUrl.trim() || undefined,
         settingsConfig: JSON.stringify(settingsConfig),
-        icon: initialData?.icon ?? "pi",
-        iconColor: initialData?.iconColor,
+        // 无图标时留空，由列表按 Pi 默认图标兜底，避免预设 logo 被固定写成 "pi"。
+        icon: initialData?.icon || selectedPreset?.icon || "",
+        iconColor: initialData?.iconColor || selectedPreset?.iconColor || "",
         providerKey: key,
-        presetCategory: initialData?.category ?? "custom",
+        presetCategory: (initialData?.category ??
+          selectedPreset?.category ??
+          "custom") as ProviderCategory,
         meta: initialData?.meta,
       };
       await onSubmit(values);
@@ -247,8 +282,8 @@ export function PiProviderForm({
             </SelectTrigger>
             <SelectContent>
               {piProviderPresets.map((preset) => (
-                <SelectItem key={preset.id} value={preset.id}>
-                  {preset.name}
+                <SelectItem key={preset.providerKey} value={preset.providerKey}>
+                  {getPiPresetDisplayName(preset, t)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -3,6 +3,7 @@ import {
   mergePiProviderSettings,
   validatePiModels,
 } from "@/components/providers/forms/PiProviderForm";
+import { piProviderPresets } from "@/config/piProviderPresets";
 
 const model = {
   id: "model-a",
@@ -56,5 +57,14 @@ describe("Pi Provider 配置", () => {
       validatePiModels([{ ...model, thinkingLevelMap: { turbo: "turbo" } }]),
     ).toBe("pi.provider.invalidThinkingLevelMap");
     expect(validatePiModels([model])).toBeNull();
+  });
+
+  it("上游 Pi 预设目录的每个模型都能通过表单校验", () => {
+    for (const preset of piProviderPresets) {
+      expect(
+        validatePiModels(preset.settingsConfig.models),
+        preset.providerKey,
+      ).toBeNull();
+    }
   });
 });

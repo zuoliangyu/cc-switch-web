@@ -56,7 +56,8 @@
     "deleting": "削除中...",
     "auto": "自動",
     "enabled": "有効",
-    "notSet": "未設定"
+    "notSet": "未設定",
+    "collapse": "折りたたむ"
   },
   "firstRunNotice": {
     "title": "CC Switch へようこそ",
@@ -2599,7 +2600,8 @@
       "modelIdentityRequired": "各モデルには id と name が必要です",
       "modelLimitsRequired": "各モデルには正の contextWindow と maxTokens が必要です",
       "modelCapabilitiesRequired": "各モデルには reasoning と input の明示が必要です",
-      "invalidThinkingLevelMap": "thinkingLevelMap は off、minimal、low、medium、high、xhigh、max のみ使用でき、値は文字列または null である必要があります"
+      "invalidThinkingLevelMap": "thinkingLevelMap は off、minimal、low、medium、high、xhigh、max のみ使用でき、値は文字列または null である必要があります",
+      "writeConflict": "別のプロセスが Pi の設定を更新しています。しばらくしてから再試行してください。"
     },
     "prompts": {
       "nativeTitle": "Pi ネイティブプロンプトリソース",
@@ -2623,6 +2625,9 @@
     "sessions": {
       "discoveryUnavailable": "Pi セッションディレクトリを現在列挙できません",
       "requiresProjectContext": "相対 sessionDir「{{path}}」には Pi 起動時のプロジェクトコンテキストが必要です。Web 側ではディレクトリを推測しません。"
+    },
+    "form": {
+      "providerKeyDuplicate": "このプロバイダーキーは既に存在します"
     }
   },
   "proxyConfig": {

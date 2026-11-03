@@ -127,19 +127,52 @@ export interface SkillRepo {
   enabled: boolean;
 }
 
-export interface SkillRepoFailure { owner: string; name: string; branch: string; error: string; }
-export interface SkillDiscoveryResult { skills: DiscoverableSkill[]; failures: SkillRepoFailure[]; }
-export interface SkillUpdateCheckResult { updates: SkillUpdateInfo[]; failures: SkillRepoFailure[]; }
-export interface ZipSkippedSkill { directory: string; existingId: string; existingName: string; }
-export interface SkillAppSyncOutcome { app: string; ok: boolean; error?: string; failedSkills: { directory: string; error: string }[]; }
+export interface SkillRepoFailure {
+  owner: string;
+  name: string;
+  branch: string;
+  error: string;
+}
+export interface SkillDiscoveryResult {
+  skills: DiscoverableSkill[];
+  failures: SkillRepoFailure[];
+}
+export interface SkillUpdateCheckResult {
+  updates: SkillUpdateInfo[];
+  failures: SkillRepoFailure[];
+}
+export interface ZipSkippedSkill {
+  directory: string;
+  existingId: string;
+  existingName: string;
+}
+export interface SkillAppSyncOutcome {
+  app: string;
+  ok: boolean;
+  error?: string;
+  failedSkills: { directory: string; error: string }[];
+}
 
 // ========== API ==========
 
 export const skillsApi = {
-  async storagePaths(): Promise<{ccSwitch: string; unified: string}> { return invoke("skill_storage_paths"); },
-  async discoverReport(): Promise<SkillDiscoveryResult> { return await invoke("discover_available_skills"); },
-  async checkUpdatesReport(): Promise<SkillUpdateCheckResult> { return await invoke("check_skill_updates"); },
-  async resync(): Promise<SkillAppSyncOutcome[]> { return await invoke("resync_skills"); },
+  async storagePaths(): Promise<{ ccSwitch: string; unified: string }> {
+    return invoke("skill_storage_paths");
+  },
+
+  /** 已安装 Skill 主副本所在目录（Web 不打开本机文件管理器，只用于复制路径） */
+  async installedSkillDir(directory: string): Promise<string> {
+    return invoke("get_installed_skill_dir", { directory });
+  },
+  async discoverReport(): Promise<SkillDiscoveryResult> {
+    return await invoke("discover_available_skills");
+  },
+  async checkUpdatesReport(): Promise<SkillUpdateCheckResult> {
+    return await invoke("check_skill_updates");
+  },
+  async resync(): Promise<SkillAppSyncOutcome[]> {
+    return await invoke("resync_skills");
+  },
 
   // ========== 统一管理 API (v3.10.0+) ==========
 

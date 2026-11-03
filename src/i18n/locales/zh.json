@@ -565,6 +565,81 @@
       "deleteConfirmTitle": "确认删除备份",
       "deleteConfirmMessage": "此备份将被永久删除，此操作无法撤消。"
     },
+    "backupStorage": {
+      "title": "其他备份",
+      "total": "合计 {{size}}",
+      "itemCount": "{{count}} 项",
+      "copyPath": "复制路径",
+      "pathCopied": "已复制路径",
+      "delete": "删除",
+      "deleting": "删除中...",
+      "managedAbove": "在上方列表中管理",
+      "legacy": "旧版遗留",
+      "loadFailed": "读取备份占用失败",
+      "copyPathFailed": "复制路径失败",
+      "deleteConfirmTitle": "删除「{{name}}」？",
+      "deleteConfirmMessage": "将永久删除 {{path}} 中的 {{size}} 备份，此操作无法撤消。",
+      "deleteSuccess": "已删除，释放 {{size}}",
+      "deleteFailed": "删除失败",
+      "items": {
+        "database": {
+          "name": "数据库备份",
+          "hint": "自动备份与手动备份的数据库快照。"
+        },
+        "skills": {
+          "name": "Skill 卸载备份",
+          "hint": "卸载 Skill 前留的副本，可在 Skills 页恢复。删除后这些已卸载的 Skill 无法再恢复。"
+        },
+        "codexHistoryUnify": {
+          "name": "Codex 会话统一迁移备份",
+          "hint": "开启「统一 Codex 会话历史」并迁入既有会话时留的会话副本。关闭该开关时的「恢复备份」依赖它，删除后无法再把迁移过的官方会话还原回原分组。"
+        },
+        "codexHistoryUnifyRestore": {
+          "name": "Codex 会话统一还原备份",
+          "hint": "执行「恢复备份」前留的会话副本，CC Switch 不会再读取。"
+        },
+        "codexHistoryProviderMigration": {
+          "name": "Codex 会话分组迁移备份",
+          "hint": "第三方会话分组迁移前留的副本，CC Switch 不会再读取。"
+        },
+        "liveFirstWrite": {
+          "name": "配置文件首次写入备份",
+          "hint": "CC Switch 第一次改写各客户端配置文件前的原始文件。删除后无法再找回改写前的原文件，下次写入时会重新备份当时的文件。"
+        },
+        "hermes": {
+          "name": "Hermes 配置备份",
+          "hint": "保存 Hermes 配置前的副本，按「备份保留数量」自动裁剪。"
+        },
+        "openclaw": {
+          "name": "OpenClaw 配置备份",
+          "hint": "保存 OpenClaw 配置前的副本，按「备份保留数量」自动裁剪。"
+        },
+        "proxyLiveBackup": {
+          "name": "旧版路由接管备份",
+          "hint": "升级时从旧版路由接管备份转存出的配置副本，CC Switch 不会再读取。"
+        },
+        "envVars": {
+          "name": "环境变量清理备份",
+          "hint": "清理冲突环境变量前记录的原值。删除后无法再查到被清理变量的原值。"
+        },
+        "legacyConfigBackups": {
+          "name": "旧版 config.json 备份",
+          "hint": "旧版本留下的文件，当前版本不会再读取。"
+        },
+        "legacyConfigArchive": {
+          "name": "旧版 config.json 归档",
+          "hint": "迁移到数据库前的旧配置文件，当前版本不会再读取。"
+        },
+        "legacyDbUpgrade": {
+          "name": "旧版数据库升级备份",
+          "hint": "旧版本升级数据库时留的副本，当前版本不会再读取。"
+        },
+        "legacyToolSearch": {
+          "name": "旧版 Tool Search 补丁备份",
+          "hint": "已移除的 Tool Search 补丁功能留下的文件，当前版本不会再读取。"
+        }
+      }
+    },
     "webdavSync": {
       "title": "WebDAV 云同步",
       "description": "通过 WebDAV 在多设备间同步数据库和技能配置。",
@@ -618,6 +693,15 @@
       "saved": "已保存",
       "unsavedChanges": "请先保存配置",
       "saveBeforeSync": "请先保存配置，再使用上传/下载。",
+      "clear": "清除配置",
+      "clearing": "清除中...",
+      "clearSuccess": "已清除本机的 WebDAV 配置",
+      "clearFailed": "清除配置失败：{{error}}",
+      "clearConfirm": {
+        "title": "清除 WebDAV 配置",
+        "message": "将从本机删除已保存的 WebDAV 地址、账号、密码和远程目录，并停止自动同步。云端已上传的数据不会被删除。",
+        "confirm": "清除"
+      },
       "fetchingRemote": "获取远端信息...",
       "fetchRemoteFailed": "获取远端信息失败，请检查配置和网络后重试。",
       "confirmDownload": {
@@ -1632,11 +1716,14 @@
     "headerValuePlaceholder": "CC Switch",
     "addHeader": "添加请求头",
     "npmPackage": "接口格式",
+    "nativeConfigHint": "请在下方以 JSON 编辑 OpenCode V2 原生配置。保存时保留供应商和模型字段。",
     "selectPackage": "选择接口格式",
     "npmPackageHint": "选择 AI 服务的 API 接口格式",
     "builtinDefaults": "使用 OpenCode 内置供应商默认值",
     "customProviderRequired": "新的供应商标识需要填写 npm 包和至少一个模型；只有配置中已有的同名供应商可以沿用默认定义",
     "duplicateRequiresDefinition": "此供应商缺少 npm 包或模型定义，无法直接复制。请先补全 npm 包和至少一个模型，再复制为自定义供应商。",
+    "duplicateRequiresNativeDefinition": "此 V2 原生供应商缺少 package 或模型定义，无法直接复制。请先补全 package 和至少一个模型，再以新的标识复制。",
+    "nativeCustomProviderRequired": "新的供应商标识需要填写 package 和至少一个模型；只有配置中已有的同名供应商可以沿用默认定义",
     "baseUrl": "Base URL",
     "baseUrlHint": "自定义 API 端点地址",
     "models": "模型配置",
@@ -2147,6 +2234,17 @@
         "name": "@upstash/context7-mcp",
         "description": "Context7 文档搜索工具，提供最新的库文档和代码示例，配置 key 会有更高限额"
       }
+    },
+    "connectivity": {
+      "checkAll": "检查连通性",
+      "test": "测试连接",
+      "state": {
+        "unchecked": "未检查",
+        "connected": "连接成功",
+        "disconnected": "连接失败",
+        "checking": "正在检查连接",
+        "disabled": "未启用"
+      }
     }
   },
   "prompts": {
@@ -2459,6 +2557,10 @@
       "skillDirNotFound": "技能目录不存在：{{path}}",
       "directoryConflict": "技能目录 '{{directory}}' 已被 {{existing_repo}} 占用，无法从 {{new_repo}} 安装",
       "emptyArchive": "下载的压缩包为空",
+      "invalidRepoRef": "仓库地址不合法：{{owner}}/{{name}}",
+      "archiveTooLarge": "压缩包解压后超过 {{limit_mb}} MB 上限，已中止",
+      "archiveDownloadTooLarge": "仓库压缩包下载超过 {{limit_mb}} MB 上限，已中止",
+      "archiveTooManyEntries": "压缩包条目过多（{{count}}），上限 {{limit}}",
       "downloadFailed": "下载失败：HTTP {{status}}",
       "allBranchesFailed": "所有分支下载失败，尝试了：{{branches}}",
       "httpError": "HTTP 错误 {{status}}",
@@ -2610,7 +2712,12 @@
     "repoFailures": "{{count}} 个仓库读取失败（点击查看）",
     "zipSkipped": "已跳过 {{count}} 个重名技能",
     "searchFailed": "搜索失败，请重试",
-    "resyncAfterSettings": "修改同步方式后，可点击“立即重新同步”应用到现有技能。"
+    "resyncAfterSettings": "修改同步方式后，可点击“立即重新同步”应用到现有技能。",
+    "copyName": "复制名称",
+    "copiedName": "已复制 {{name}}",
+    "copyDirPath": "复制目录路径",
+    "copiedDirPath": "已复制目录路径",
+    "copyDirPathFailed": "没能复制目录路径"
   },
   "iconPicker": {
     "search": "搜索图标",

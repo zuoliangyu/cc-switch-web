@@ -320,7 +320,12 @@ const SKILL_BACKUP_RETAIN_COUNT: usize = 20;
 /// 真实技能仓库（如 13k+ 条目）会被 10_000 误拒；30_000 留出余量（上游 33c80626）。
 const MAX_ARCHIVE_ENTRIES: usize = 30_000;
 const MAX_ARCHIVE_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_ARCHIVE_DOWNLOAD_BYTES: u64 = 128 * 1024 * 1024;
+/// 压缩体上限。下载的是整个仓库归档，`docs/` 里的图片常常比技能本身大一个数量级
+/// （#8421），响应体流式落到临时文件而不进内存，上限对齐解压预算。
+const MAX_ARCHIVE_DOWNLOAD_BYTES: u64 = MAX_ARCHIVE_TOTAL_BYTES;
+
+/// 技能归档下载请求的 User-Agent。
+const SKILL_DOWNLOAD_USER_AGENT: &str = concat!("CC-Switch-Web/", env!("CARGO_PKG_VERSION"));
 const MAX_SYMLINK_TARGET_BYTES: u64 = 4 * 1024;
 const DIRECTORY_BUDGET_COST: u64 = 4096;
 /// 空文件与不足一块的小文件照样占 inode 和一个磁盘块；只按内容字节计费时，
@@ -1766,6 +1771,7 @@ impl SkillService {
         let ssot_dir = Self::get_ssot_dir()?;
         let agents_lock = parse_agents_lock();
         let mut imported = Vec::new();
+        let mut not_enabled = Vec::new();
 
         // 将 lock 文件中发现的仓库保存到 skill_repos
         save_repos_from_lock(
@@ -1831,7 +1837,28 @@ impl SkillService {
             let (name, description) = Self::read_skill_name_desc(&skill_md, &dir_name);
 
             // 启用状态仅信任用户本次显式选择，不再根据“在哪些位置找到”自动推断。
-            let apps = selection.apps;
+            let mut apps = selection.apps;
+
+            // 勾选的应用里还没有这个 Skill（它是在别处发现的）：导入时就投影过去。
+            // 只存标志的话，界面显示已启用、应用却读不到，要等下次切换供应商才补上。
+            // 已经在应用目录里的保持原样；投影失败就不记这个应用的启用，
+            // 让库里的标志始终等于磁盘上的事实。
+            for app in AppType::all() {
+                let exists_in_app = Self::get_app_skills_dir(&app)
+                    .map(|dir| dir.join(&dir_name).exists())
+                    .unwrap_or(false);
+                if matches!(app, AppType::Pi | AppType::Mcode)
+                    || !apps.is_enabled_for(&app)
+                    || exists_in_app
+                {
+                    continue;
+                }
+                if let Err(error) = Self::sync_to_app_dir(&dir_name, &app) {
+                    log::warn!("导入 Skill {dir_name} 时同步到 {app:?} 失败: {error:#}");
+                    apps.set_enabled_for(&app, false);
+                    not_enabled.push(format!("{dir_name} ({}): {error:#}", app.as_str()));
+                }
+            }
 
             // 从 lock 文件提取仓库信息
             let (id, repo_owner, repo_name, repo_branch, readme_url) =
@@ -1860,7 +1887,15 @@ impl SkillService {
 
         log::info!("成功导入 {} 个 Skills", imported.len());
 
-        Ok(imported)
+        if not_enabled.is_empty() {
+            Ok(imported)
+        } else {
+            Err(anyhow!(
+                "Imported {} Skills; could not enable: {}",
+                imported.len(),
+                not_enabled.join("; ")
+            ))
+        }
     }
 
     // ========== 文件同步方法 ==========
@@ -1899,6 +1934,12 @@ impl SkillService {
     /// - Auto: 优先尝试 symlink，失败时回退到 copy
     /// - Symlink: 仅使用 symlink
     /// - Copy: 仅使用文件复制
+    /// 已安装 Skill 在 SSOT 目录下的主副本路径（目录名先过路径穿越校验）
+    pub fn get_installed_skill_dir(directory: &str) -> Result<PathBuf> {
+        let directory = Self::require_valid_directory(directory)?;
+        Ok(Self::get_ssot_dir()?.join(directory))
+    }
+
     pub fn sync_to_app_dir(directory: &str, app: &AppType) -> Result<()> {
         let directory = Self::require_valid_directory(directory)?;
         let ssot_dir = Self::get_ssot_dir()?;
@@ -1919,6 +1960,14 @@ impl SkillService {
         }
 
         let sync_method = Self::get_sync_method();
+        // WSL targets reject directory symlinks outright (ERROR_ACCESS_DENIED),
+        // so Auto skips the doomed symlink attempt and goes straight to copy.
+        let sync_method =
+            if matches!(sync_method, SyncMethod::Auto) && crate::config::is_wsl_path(&dest) {
+                SyncMethod::Copy
+            } else {
+                sync_method
+            };
 
         match sync_method {
             SyncMethod::Auto => {
@@ -2383,13 +2432,34 @@ impl SkillService {
         Self::validate_repo_ref(&repo.owner, &repo.name, &repo.branch)?;
 
         let temp_dir = tempfile::tempdir()?;
-        let temp_path = temp_dir.path().to_path_buf();
+        let temp_path = temp_dir.path();
         #[cfg(test)]
         if let Some(fixture) = &self.repo_fixture {
-            Self::copy_dir_recursive(fixture, &temp_path)?;
+            Self::copy_dir_recursive(fixture, temp_path)?;
             return Ok((temp_dir, repo.branch.clone()));
         }
 
+        let branch = Self::try_repo_branches(repo, temp_path, |url| async move {
+            self.download_and_extract(&url, temp_path).await
+        })
+        .await?;
+        Ok((temp_dir, branch))
+    }
+
+    /// 依次尝试「配置分支 → main → master」，返回第一个下载成功的分支。
+    ///
+    /// 只有「分支不存在」（HTTP 404）才换下一个分支：超时、超过体积上限、解压失败、
+    /// 网络错误换个分支也不会好，继续试只会让 master 的 404 盖掉真实原因，界面变成
+    /// 「仓库或分支不存在」。抽成接收 `attempt` 的函数是为了不联网也能单测这条规则。
+    async fn try_repo_branches<F, Fut>(
+        repo: &SkillRepo,
+        temp_path: &Path,
+        mut attempt: F,
+    ) -> Result<String>
+    where
+        F: FnMut(String) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
         let mut branches = Vec::new();
         if !repo.branch.is_empty() && !repo.branch.eq_ignore_ascii_case("HEAD") {
             branches.push(repo.branch.as_str());
@@ -2409,24 +2479,62 @@ impl SkillService {
             );
             Self::assert_github_archive_url(&url, &repo.owner, &repo.name)?;
 
-            match self.download_and_extract(&url, &temp_path).await {
-                Ok(_) => return Ok((temp_dir, branch.to_string())),
-                Err(e) => {
-                    let _ = fs::remove_dir_all(&temp_path);
-                    let _ = fs::create_dir_all(&temp_path);
+            match attempt(url).await {
+                Ok(()) => return Ok(branch.to_string()),
+                Err(e) if Self::is_branch_not_found(&e) => {
+                    // 每个分支各自重算预算，所以失败后必须把上一轮的残留清掉——
+                    // 否则 N 个候选分支等于 N 倍的落盘量堆在同一个目录里。
+                    let _ = fs::remove_dir_all(temp_path);
+                    let _ = fs::create_dir_all(temp_path);
                     last_error = Some(e);
-                    continue;
                 }
+                Err(e) => return Err(Self::with_repo_context(e, repo)),
             }
         }
 
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("所有分支下载失败")))
+        Err(last_error
+            .map(|e| Self::with_repo_context(e, repo))
+            .unwrap_or_else(|| anyhow::anyhow!("所有分支下载失败")))
+    }
+
+    /// 归档地址返回 404，即这个分支（或整个仓库）不存在。
+    fn is_branch_not_found(error: &anyhow::Error) -> bool {
+        serde_json::from_str::<serde_json::Value>(&error.to_string())
+            .is_ok_and(|v| v["code"] == "DOWNLOAD_FAILED" && v["context"]["status"] == "404")
+    }
+
+    /// 给结构化错误补上仓库坐标。
+    ///
+    /// 下载 / 解压这一层只拿到 URL，报出的错误不带 owner / name；而前端文案
+    /// （如 `skills.error.downloadTimeout`）要插值 `{{owner}}/{{name}}`，缺了就会把
+    /// 占位符原样显示出来。已有的键不覆盖，非结构化错误原样返回。
+    fn with_repo_context(error: anyhow::Error, repo: &SkillRepo) -> anyhow::Error {
+        let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&error.to_string()) else {
+            return error;
+        };
+        let Some(context) = value
+            .get_mut("context")
+            .and_then(serde_json::Value::as_object_mut)
+        else {
+            return error;
+        };
+        for (key, val) in [("owner", &repo.owner), ("name", &repo.name)] {
+            context
+                .entry(key)
+                .or_insert_with(|| serde_json::Value::String(val.clone()));
+        }
+        anyhow::anyhow!(value.to_string())
     }
 
     /// 下载并解压 ZIP
     async fn download_and_extract(&self, url: &str, dest: &Path) -> Result<()> {
         let client = crate::proxy::http_client::get();
-        let response = client.get(url).send().await?;
+        // 共享客户端不带默认 User-Agent；GitHub 归档下载对无 UA 请求更容易被限流成 429（#8813）
+        let response = client
+            .get(url)
+            .header(reqwest::header::USER_AGENT, SKILL_DOWNLOAD_USER_AGENT)
+            .send()
+            .await?;
         if !response.status().is_success() {
             let status = response.status().as_u16().to_string();
             return Err(anyhow::anyhow!(format_skill_error(
@@ -2441,21 +2549,25 @@ impl SkillService {
             )));
         }
 
+        // 归档写进匿名临时文件（关闭即删，失败路径也不留残留），内存只占一个块。
         let mut response = response;
-        let mut body = Vec::new();
+        let mut body = std::io::BufWriter::new(tempfile::tempfile()?);
+        let mut received: u64 = 0;
         while let Some(chunk) = response.chunk().await? {
-            if body.len().saturating_add(chunk.len()) as u64 > MAX_ARCHIVE_DOWNLOAD_BYTES {
+            received = received.saturating_add(chunk.len() as u64);
+            if received > MAX_ARCHIVE_DOWNLOAD_BYTES {
                 let limit_mb = (MAX_ARCHIVE_DOWNLOAD_BYTES / 1024 / 1024).to_string();
                 return Err(anyhow!(format_skill_error(
-                    "ARCHIVE_TOO_LARGE",
+                    "ARCHIVE_DOWNLOAD_TOO_LARGE",
                     &[("limit_mb", &limit_mb)],
-                    Some("checkZipContent"),
+                    None,
                 )));
             }
-            body.extend_from_slice(&chunk);
+            std::io::Write::write_all(&mut body, &chunk)?;
         }
 
-        let archive = zip::ZipArchive::new(std::io::Cursor::new(body))?;
+        let file = body.into_inner().map_err(|e| e.into_error())?;
+        let archive = zip::ZipArchive::new(file)?;
         Self::extract_repo_archive(archive, dest)
     }
 
@@ -4490,5 +4602,144 @@ mod tests {
         // 切换供应商走的同一条同步也不能碰它
         SkillService::sync_to_app(&db, &AppType::OpenClaw).expect("no-op sync");
         assert!(own_skill.exists());
+    }
+
+    fn branch_fallback_repo(branch: &str) -> SkillRepo {
+        SkillRepo {
+            owner: "acme".to_string(),
+            name: "skills".to_string(),
+            branch: branch.to_string(),
+            enabled: true,
+        }
+    }
+
+    fn http404_error() -> anyhow::Error {
+        anyhow!(format_skill_error(
+            "DOWNLOAD_FAILED",
+            &[("status", "404")],
+            Some("http404"),
+        ))
+    }
+
+    /// 按分支名返回预设结果，并记下实际尝试过的分支。
+    async fn run_branch_fallback(
+        repo: &SkillRepo,
+        mut outcome: impl FnMut(&str) -> Result<()>,
+    ) -> (Result<String>, Vec<String>) {
+        let temp = tempfile::tempdir().unwrap();
+        let mut attempted = Vec::new();
+        let result = SkillService::try_repo_branches(repo, temp.path(), |url| {
+            let branch = url
+                .rsplit('/')
+                .next()
+                .and_then(|file| file.strip_suffix(".zip"))
+                .unwrap()
+                .to_string();
+            let result = outcome(&branch);
+            attempted.push(branch);
+            async move { result }
+        })
+        .await;
+        (result, attempted)
+    }
+
+    fn error_json(error: &anyhow::Error) -> serde_json::Value {
+        serde_json::from_str(&error.to_string()).expect("structured skill error")
+    }
+
+    #[tokio::test]
+    async fn branch_fallback_keeps_non_404_error_from_main() {
+        let repo = branch_fallback_repo("main");
+
+        // 超过下载上限：不再去试 master，原始错误原样报出
+        let (result, attempted) = run_branch_fallback(&repo, |branch| match branch {
+            "main" => Err(anyhow!(format_skill_error(
+                "ARCHIVE_DOWNLOAD_TOO_LARGE",
+                &[("limit_mb", "512")],
+                None,
+            ))),
+            _ => Err(http404_error()),
+        })
+        .await;
+        assert_eq!(attempted, ["main"]);
+        let err = error_json(&result.unwrap_err());
+        assert_eq!(err["code"], "ARCHIVE_DOWNLOAD_TOO_LARGE");
+        assert_eq!(err["context"]["limit_mb"], "512");
+
+        // 超时（结构化与 reqwest 那种非结构化两种形状）同样不被 master 的 404 盖掉
+        let (result, attempted) = run_branch_fallback(&repo, |branch| match branch {
+            "main" => Err(anyhow!(format_skill_error(
+                "DOWNLOAD_TIMEOUT",
+                &[("timeout", "30")],
+                Some("checkNetwork"),
+            ))),
+            _ => Err(http404_error()),
+        })
+        .await;
+        assert_eq!(attempted, ["main"]);
+        assert_eq!(error_json(&result.unwrap_err())["code"], "DOWNLOAD_TIMEOUT");
+
+        let (result, attempted) = run_branch_fallback(&repo, |branch| match branch {
+            "main" => Err(anyhow!("operation timed out")),
+            _ => Err(http404_error()),
+        })
+        .await;
+        assert_eq!(attempted, ["main"]);
+        assert_eq!(result.unwrap_err().to_string(), "operation timed out");
+    }
+
+    #[tokio::test]
+    async fn branch_fallback_moves_on_only_after_404() {
+        // main 404、master 成功：装得上，且记下真实分支
+        let (result, attempted) =
+            run_branch_fallback(&branch_fallback_repo("main"), |branch| match branch {
+                "master" => Ok(()),
+                _ => Err(http404_error()),
+            })
+            .await;
+        assert_eq!(result.unwrap(), "master");
+        assert_eq!(attempted, ["main", "master"]);
+
+        // 自定义分支 404 时照旧回落到 main
+        let (result, attempted) =
+            run_branch_fallback(&branch_fallback_repo("dev"), |branch| match branch {
+                "main" => Ok(()),
+                _ => Err(http404_error()),
+            })
+            .await;
+        assert_eq!(result.unwrap(), "main");
+        assert_eq!(attempted, ["dev", "main"]);
+    }
+
+    #[tokio::test]
+    async fn branch_fallback_error_carries_repo_coordinates() {
+        // 只有 master 的仓库在 master 上出错：报的是 master 的错误，
+        // 且补上前端文案插值要用的 owner / name
+        let (result, attempted) =
+            run_branch_fallback(&branch_fallback_repo("main"), |branch| match branch {
+                "master" => Err(anyhow!(format_skill_error(
+                    "DOWNLOAD_TIMEOUT",
+                    &[("timeout", "30")],
+                    Some("checkNetwork"),
+                ))),
+                _ => Err(http404_error()),
+            })
+            .await;
+        assert_eq!(attempted, ["main", "master"]);
+        let err = error_json(&result.unwrap_err());
+        assert_eq!(err["code"], "DOWNLOAD_TIMEOUT");
+        assert_eq!(err["context"]["owner"], "acme");
+        assert_eq!(err["context"]["name"], "skills");
+        assert_eq!(err["context"]["timeout"], "30");
+        assert_eq!(err["suggestion"], "checkNetwork");
+
+        // 全部 404：报最后一个 404，同样带坐标
+        let (result, attempted) =
+            run_branch_fallback(&branch_fallback_repo("main"), |_| Err(http404_error())).await;
+        assert_eq!(attempted, ["main", "master"]);
+        let err = error_json(&result.unwrap_err());
+        assert_eq!(err["code"], "DOWNLOAD_FAILED");
+        assert_eq!(err["context"]["status"], "404");
+        assert_eq!(err["context"]["owner"], "acme");
     }
 }

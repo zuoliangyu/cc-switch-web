@@ -6,6 +6,8 @@ export type ClaudeDesktopMode = "direct" | "proxy";
 
 export interface ClaudeDesktopStatus {
   supported: boolean;
+  /** 本机装了 Claude Desktop（按它的数据目录或 macOS 应用包推断；接入了也算） */
+  installed: boolean;
   configured: boolean;
   appliedId: string | null;
   profilePath: string | null;
@@ -27,6 +29,7 @@ export interface ClaudeDesktopDefaultRoute {
 
 export const getDefaultClaudeDesktopStatus = (): ClaudeDesktopStatus => ({
   supported: false,
+  installed: false,
   configured: false,
   appliedId: null,
   profilePath: null,

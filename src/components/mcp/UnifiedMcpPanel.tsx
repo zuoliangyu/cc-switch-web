@@ -2,8 +2,10 @@ import { WindowedRows } from "@/components/common/WindowedRows";
 import { ResyncButton } from "@/components/common/ResyncButton";
 import { mcpApi } from "@/lib/api/mcp";
 import React, { useMemo, useState } from "react";
+import { useMcpConnectivity } from "@/hooks/useMcpConnectivity";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { Search, Server } from "lucide-react";
+import { Activity, Search, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -56,6 +58,8 @@ const UnifiedMcpPanel = React.forwardRef<
   } | null>(null);
 
   const { data: serversMap, isLoading } = useAllMcpServers();
+  // 只在用户点击时检查：检查会运行配置的命令（npx 下载、OAuth 弹窗、容器），打开页面不能触发
+  const connectivity = useMcpConnectivity(serversMap);
   const toggleAppMutation = useToggleMcpApp();
   const bulkToggleAppMutation = useBulkToggleMcpApp();
   const deleteServerMutation = useDeleteMcpServer();
@@ -231,11 +235,23 @@ const UnifiedMcpPanel = React.forwardRef<
 
   return (
     <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
-      <ResyncButton
-        run={() => mcpApi.resyncToApps()}
-        queryKey={["mcp", "all"]}
-        disabled={writePending}
-      />
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!connectivity.canCheck || connectivity.checking}
+          onClick={connectivity.checkAll}
+        >
+          <Activity className="h-4 w-4" />
+          {t("mcp.connectivity.checkAll")}
+        </Button>
+        <ResyncButton
+          run={() => mcpApi.resyncToApps()}
+          queryKey={["mcp", "all"]}
+          disabled={writePending}
+        />
+      </div>
       <AppCountBar
         totalLabel={t("mcp.serverCount", { count: serverEntries.length })}
         counts={enabledCounts}
@@ -289,6 +305,12 @@ const UnifiedMcpPanel = React.forwardRef<
                     onToggleApp={handleToggleApp}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    connection={
+                      MCP_SKILLS_APP_IDS.some((app) => server.apps[app])
+                        ? (connectivity.states[id] ?? "unchecked")
+                        : "disabled"
+                    }
+                    onTestConnection={() => connectivity.checkServer(id)}
                     disabled={writePending}
                     isLast={index === filteredServerEntries.length - 1}
                   />
@@ -339,6 +361,13 @@ interface UnifiedMcpListItemProps {
   onDelete: (id: string) => void;
   disabled?: boolean;
   isLast?: boolean;
+  connection:
+    | "unchecked"
+    | "checking"
+    | "connected"
+    | "disconnected"
+    | "disabled";
+  onTestConnection: () => void;
 }
 
 const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
@@ -350,6 +379,8 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
   onDelete,
   disabled,
   isLast,
+  connection,
+  onTestConnection,
 }) => {
   const { t } = useTranslation();
   const name = server.name || id;
@@ -374,6 +405,21 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
     <ListItemRow isLast={isLast}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
+          <span
+            role="img"
+            aria-label={t(`mcp.connectivity.state.${connection}`)}
+            title={t(`mcp.connectivity.state.${connection}`)}
+            className={cn(
+              "h-2 w-2 shrink-0 rounded-full",
+              connection === "connected"
+                ? "bg-emerald-500"
+                : connection === "disconnected"
+                  ? "bg-red-500"
+                  : connection === "checking"
+                    ? "animate-pulse bg-muted-foreground/50"
+                    : "bg-muted-foreground/30",
+            )}
+          />
           <span className="font-medium text-sm text-foreground truncate">
             {name}
           </span>
@@ -411,6 +457,20 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
       />
 
       <div className="flex items-center gap-0.5 flex-shrink-0 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        {connection !== "disabled" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onTestConnection}
+            disabled={connection === "checking"}
+            title={t("mcp.connectivity.test")}
+            aria-label={t("mcp.connectivity.test")}
+          >
+            <Activity size={14} />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"

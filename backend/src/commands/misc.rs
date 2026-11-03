@@ -633,7 +633,49 @@ fn effective_path_string() -> String {
         .and_then(|key| key.get_value::<String, &str>("Path"))
         .map(|raw| expand_env_chars(&raw))
         .unwrap_or_default();
-    merge_path_segments_win(&[&process, &user, &machine])
+    // fnm 的默认 Node 别名排在最后：只在 `fnm env` shell 里可见的 Node 也能找到，显式 PATH 仍优先。
+    let fnm = fnm_default_alias_dir_candidates(
+        std::env::var_os("FNM_DIR"),
+        &dirs::home_dir().unwrap_or_default(),
+        dirs::data_dir(),
+    )
+    .into_iter()
+    .filter(|dir| dir.is_dir())
+    .map(|dir| dir.to_string_lossy().into_owned())
+    .collect::<Vec<_>>()
+    .join(";");
+    merge_path_segments_win(&[&process, &user, &machine, &fnm])
+}
+
+/// fnm only puts Node on PATH through `fnm env`, which prepends a per-shell
+/// `%LOCALAPPDATA%\fnm_multishells\<id>` link to that shell's PATH. Nothing is
+/// written to the registry PATH, so a service launched outside that shell sees neither
+/// node, npm nor the npm global CLIs (#8484). `<fnm dir>\aliases\default` is a
+/// stable link to the default Node installation; on Windows node.exe, npm.cmd
+/// and npm global commands live directly in that directory (no `bin`).
+///
+/// Mirrors fnm's own base-dir lookup: `FNM_DIR`, then the legacy `~\.fnm`, then
+/// `%APPDATA%\fnm`. Callers keep only the directories that exist.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn fnm_default_alias_dir_candidates(
+    fnm_dir: Option<std::ffi::OsString>,
+    home: &Path,
+    data_dir: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let mut bases = Vec::new();
+    if let Some(dir) = fnm_dir.filter(|value| !value.is_empty()) {
+        push_unique_path(&mut bases, std::path::PathBuf::from(dir));
+    }
+    if !home.as_os_str().is_empty() {
+        push_unique_path(&mut bases, home.join(".fnm"));
+    }
+    if let Some(data_dir) = data_dir {
+        push_unique_path(&mut bases, data_dir.join("fnm"));
+    }
+    bases
+        .into_iter()
+        .map(|base| base.join("aliases").join("default"))
+        .collect()
 }
 
 #[cfg(target_os = "windows")]
@@ -1576,7 +1618,12 @@ fn launch_windows_command_terminal(command: &str, cwd: Option<&Path>) -> Result<
         "cc_switch_session_launcher_{}.bat",
         std::process::id()
     ));
-    let cwd_command = build_windows_cwd_command(cwd);
+    let (cwd_command, cwd_env) = build_windows_cwd_command(cwd);
+    let launch_env: Vec<(&str, &str)> = cwd_env
+        .as_deref()
+        .map(|value| (WINDOWS_CWD_ENV, value))
+        .into_iter()
+        .collect();
     let content = format!(
         "@echo off\r\n{cwd_command}{command}\r\ndel \"%~f0\" >nul 2>&1\r\n",
         cwd_command = cwd_command,
@@ -1589,12 +1636,22 @@ fn launch_windows_command_terminal(command: &str, cwd: Option<&Path>) -> Result<
     let ps_cmd = format!("& '{}'", bat_path);
 
     let result = match terminal {
-        "powershell" => run_windows_start_command(
-            &["powershell", "-NoExit", "-Command", &ps_cmd],
+        "powershell" => run_windows_start_command_with_env(
+            &[
+                windows_powershell_program(&effective_path_string()),
+                "-NoExit",
+                "-Command",
+                &ps_cmd,
+            ],
             "PowerShell",
+            &launch_env,
         ),
-        "wt" => run_windows_start_command(&["wt", "cmd", "/K", &bat_path], "Windows Terminal"),
-        _ => run_windows_start_command(&["cmd", "/K", &bat_path], "cmd"),
+        "wt" => run_windows_start_command_with_env(
+            &["wt", "cmd", "/K", &bat_path],
+            "Windows Terminal",
+            &launch_env,
+        ),
+        _ => run_windows_start_command_with_env(&["cmd", "/K", &bat_path], "cmd", &launch_env),
     };
 
     if result.is_err() && terminal != "cmd" {
@@ -1603,7 +1660,7 @@ fn launch_windows_command_terminal(command: &str, cwd: Option<&Path>) -> Result<
             terminal,
             result.as_ref().err()
         );
-        return run_windows_start_command(&["cmd", "/K", &bat_path], "cmd");
+        return run_windows_start_command_with_env(&["cmd", "/K", &bat_path], "cmd", &launch_env);
     }
 
     result
@@ -1805,11 +1862,22 @@ fn launch_windows_terminal(
     let terminal = preferred.as_deref().unwrap_or("cmd");
 
     let bat_file = temp_dir.join(format!("cc_switch_claude_{}.bat", std::process::id()));
-    let config_path_for_batch = escape_windows_batch_value(&config_file.to_string_lossy());
-    let cwd_command = build_windows_cwd_command(cwd);
+    // 配置文件和 .bat 同在 temp_dir（%TEMP% 含用户名），用 %~dp0 引用：目录由 cmd
+    // 运行时展开，不进 .bat 字节，非 ASCII 用户名下也不会乱码（#8034）。
+    let config_name = config_file
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let config_path_for_batch = format!("%~dp0{}", escape_windows_batch_value(&config_name));
+    let (cwd_command, cwd_env) = build_windows_cwd_command(cwd);
+    let launch_env: Vec<(&str, &str)> = cwd_env
+        .as_deref()
+        .map(|value| (WINDOWS_CWD_ENV, value))
+        .into_iter()
+        .collect();
 
     let content = format!(
-        "@echo off\r\n{cwd_command}echo Using provider-specific claude config:\r\necho {config_path}\r\nclaude --settings \"{config_path}\"\r\ndel \"{config_path}\" >nul 2>&1\r\ndel \"%~f0\" >nul 2>&1\r\n",
+        "@echo off\r\n{cwd_command}echo Using provider-specific claude config:\r\necho \"{config_path}\"\r\nclaude --settings \"{config_path}\"\r\ndel \"{config_path}\" >nul 2>&1\r\ndel \"%~f0\" >nul 2>&1\r\n",
         cwd_command = cwd_command,
         config_path = config_path_for_batch,
     );
@@ -1820,12 +1888,22 @@ fn launch_windows_terminal(
     let ps_cmd = format!("& '{}'", bat_path);
 
     let result = match terminal {
-        "powershell" => run_windows_start_command(
-            &["powershell", "-NoExit", "-Command", &ps_cmd],
+        "powershell" => run_windows_start_command_with_env(
+            &[
+                windows_powershell_program(&effective_path_string()),
+                "-NoExit",
+                "-Command",
+                &ps_cmd,
+            ],
             "PowerShell",
+            &launch_env,
         ),
-        "wt" => run_windows_start_command(&["wt", "cmd", "/K", &bat_path], "Windows Terminal"),
-        _ => run_windows_start_command(&["cmd", "/K", &bat_path], "cmd"),
+        "wt" => run_windows_start_command_with_env(
+            &["wt", "cmd", "/K", &bat_path],
+            "Windows Terminal",
+            &launch_env,
+        ),
+        _ => run_windows_start_command_with_env(&["cmd", "/K", &bat_path], "cmd", &launch_env),
     };
 
     if result.is_err() && terminal != "cmd" {
@@ -1834,7 +1912,7 @@ fn launch_windows_terminal(
             terminal,
             result.as_ref().err()
         );
-        return run_windows_start_command(&["cmd", "/K", &bat_path], "cmd");
+        return run_windows_start_command_with_env(&["cmd", "/K", &bat_path], "cmd", &launch_env);
     }
 
     result
@@ -2028,19 +2106,38 @@ fn is_windows_unc_path(path: &str) -> bool {
     path.starts_with(r"\\")
 }
 
+/// 非 ASCII 的项目目录经这个环境变量传给 Claude 启动 .bat。
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
-fn build_windows_cwd_command_str(path: &str) -> String {
-    let escaped = escape_windows_batch_value(path);
+const WINDOWS_CWD_ENV: &str = "CC_SWITCH_INTERNAL_CWD";
 
-    if is_windows_unc_path(path) {
-        format!("pushd \"{escaped}\" || exit /b 1\r\n")
+/// 生成切到项目目录的 .bat 行，第二项是需要给启动进程设置的 `WINDOWS_CWD_ENV` 值。
+///
+/// cmd 按控制台代码页解码 .bat 字节，非 ASCII 路径以 UTF-8 写进文件会乱码（#8034）；
+/// 环境变量在 Windows 内部保持 Unicode，所以这类路径改由环境变量传入。纯 ASCII
+/// 路径照旧写进文件，不依赖终端继承环境变量（旧版 Windows Terminal 不继承）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn build_windows_cwd_command_str(path: &str) -> (String, Option<String>) {
+    let (target, env_value, cleanup) = if path.is_ascii() {
+        (escape_windows_batch_value(path), None, String::new())
     } else {
-        format!("cd /d \"{escaped}\" || exit /b 1\r\n")
-    }
+        (
+            format!("%{WINDOWS_CWD_ENV}%"),
+            Some(path.to_string()),
+            format!("set \"{WINDOWS_CWD_ENV}=\"\r\n"),
+        )
+    };
+
+    let command = if is_windows_unc_path(path) {
+        // `cmd.exe` cannot make a UNC path current via `cd`; `pushd` maps it first.
+        format!("pushd \"{target}\" || exit /b 1\r\n{cleanup}")
+    } else {
+        format!("cd /d \"{target}\" || exit /b 1\r\n{cleanup}")
+    };
+    (command, env_value)
 }
 
 #[cfg(target_os = "windows")]
-fn build_windows_cwd_command(cwd: Option<&Path>) -> String {
+fn build_windows_cwd_command(cwd: Option<&Path>) -> (String, Option<String>) {
     cwd.map(|dir| build_windows_cwd_command_str(&dir.to_string_lossy()))
         .unwrap_or_default()
 }
@@ -2058,26 +2155,70 @@ fn escape_windows_batch_value(value: &str) -> String {
         .replace(')', "^)")
 }
 
+/// 组装 `cmd /C start ...`。终端里跑的 `claude` 等命令按这里的 PATH 查找：CC Switch
+/// 被 MSI 自动重启后只剩机器级 PATH（#6061），或是在装 CLI 之前就已启动，进程 PATH
+/// 都会缺用户级条目（#3877、#8446）。和检测、生命周期命令（#8173）一样用补全后的 PATH，
+/// 只影响启动的终端，不改 CC Switch 自身的环境；Windows Terminal 从命令行开新标签时
+/// 也沿用调用方的环境。
 #[cfg(target_os = "windows")]
-fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), String> {
-    use std::process::Command;
+fn windows_start_command(
+    args: &[&str],
+    envs: &[(&str, &str)],
+    effective_path: &str,
+) -> std::process::Command {
+    let mut command = std::process::Command::new("cmd");
+    command
+        .arg("/C")
+        .arg("start")
+        .args(args)
+        .env("PATH", effective_path)
+        .envs(envs.iter().copied())
+        .creation_flags(CREATE_NO_WINDOW);
+    command
+}
 
-    let mut full_args = vec!["/C", "start"];
-    full_args.extend(args);
+/// 首选终端为 PowerShell 时启动哪个程序。`powershell` 永远是系统自带的 Windows
+/// PowerShell 5.1；装了 PowerShell 7+ 的用户默认用的是 `pwsh`，所以补全后的 PATH 里
+/// 有 `pwsh.exe` 就用它，没有才退回 `powershell`。Microsoft Store 版的 `pwsh.exe` 是
+/// App Execution Alias（跟随不了的重解析点），`Path::exists` 会判成不存在，这里用
+/// `symlink_metadata`。
+#[cfg(target_os = "windows")]
+fn windows_powershell_program(path: &str) -> &'static str {
+    let has_pwsh = std::env::split_paths(path)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .any(|dir| std::fs::symlink_metadata(dir.join("pwsh.exe")).is_ok());
+    if has_pwsh {
+        "pwsh"
+    } else {
+        "powershell"
+    }
+}
 
-    let output = Command::new("cmd")
-        .args(&full_args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("启动 {terminal_name} 失败: {e}"))?;
+/// 同 `run_windows_start_command`，额外给启动的终端设置环境变量（`start` 会继承）。
+///
+/// stdio 指向 NUL、只等 `cmd` 的退出码，不能用 `output()` 捕获：`start` 打开的终端会
+/// 继承这里的 stdout/stderr 管道句柄，管道要等那个窗口和里面的进程全部退出才到 EOF，
+/// 调用就一直挂到用户关掉终端，界面也一直转圈（#6712）。启动失败仍能从退出码看出来。
+#[cfg(target_os = "windows")]
+fn run_windows_start_command_with_env(
+    args: &[&str],
+    terminal_name: &str,
+    envs: &[(&str, &str)],
+) -> Result<(), String> {
+    use std::process::Stdio;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    let status = windows_start_command(args, envs, &effective_path_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|e| format!("启动 {} 失败: {e}", terminal_name))?;
+
+    if !status.success() {
         return Err(format!(
-            "{} 启动失败 (exit code: {:?}): {}",
+            "{} 启动失败 (exit code: {:?})",
             terminal_name,
-            output.status.code(),
-            stderr
+            status.code()
         ));
     }
 
@@ -2086,6 +2227,98 @@ fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_powershell_program_prefers_pwsh_on_path() {
+        let root = tempfile::tempdir().unwrap();
+        let empty = root.path().join("empty");
+        let pwsh_dir = root.path().join("PowerShell 7");
+        std::fs::create_dir_all(&empty).unwrap();
+        std::fs::create_dir_all(&pwsh_dir).unwrap();
+        std::fs::write(pwsh_dir.join("pwsh.exe"), "").unwrap();
+
+        let without = empty.to_str().unwrap();
+        assert_eq!(windows_powershell_program(without), "powershell");
+        assert_eq!(windows_powershell_program(""), "powershell");
+
+        let with = format!("{};{}", empty.display(), pwsh_dir.display());
+        assert_eq!(windows_powershell_program(&with), "pwsh");
+    }
+
+    use super::*;
+
+    #[test]
+    fn fnm_default_alias_dir_candidates_follow_fnm_base_dir_order() {
+        let home = Path::new("/home/tester");
+        let data_dir = std::path::PathBuf::from("/home/tester/AppData/Roaming");
+        let alias = |base: &str| {
+            std::path::PathBuf::from(base)
+                .join("aliases")
+                .join("default")
+        };
+
+        assert_eq!(
+            fnm_default_alias_dir_candidates(Some("/opt/fnm".into()), home, Some(data_dir.clone())),
+            vec![
+                alias("/opt/fnm"),
+                alias("/home/tester/.fnm"),
+                alias("/home/tester/AppData/Roaming/fnm"),
+            ]
+        );
+        // Empty FNM_DIR / home are ignored instead of becoming relative paths.
+        assert_eq!(
+            fnm_default_alias_dir_candidates(Some("".into()), Path::new(""), Some(data_dir)),
+            vec![alias("/home/tester/AppData/Roaming/fnm")]
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_start_command_passes_restored_path_to_the_terminal() {
+        let root = tempfile::tempdir().unwrap();
+        let tool_dir = root.path().join("claude 用户 & bin");
+        std::fs::create_dir_all(&tool_dir).unwrap();
+        std::fs::write(
+            tool_dir.join("cc_switch_start_test_tool.cmd"),
+            "@echo restored-terminal-path\r\n@exit /b 0\r\n",
+        )
+        .unwrap();
+
+        // `start /B /WAIT` runs the child in the same hidden console, so the
+        // test observes what the launched terminal would resolve.
+        let args = [
+            "/B",
+            "/WAIT",
+            "cmd",
+            "/D",
+            "/C",
+            "cc_switch_start_test_tool",
+        ];
+        let system_path = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
+        let inherited = system_path.to_str().unwrap();
+        let effective = merge_path_segments_win(&[inherited, tool_dir.to_str().unwrap()]);
+        let parent_path = std::env::var_os("PATH");
+
+        let missing = windows_start_command(&args, &[], inherited)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            !decode_command_output(&missing.stdout).contains("restored-terminal-path"),
+            "the tool must be absent on the narrow PATH: {missing:?}"
+        );
+
+        let restored = windows_start_command(&args, &[], &effective)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            decode_command_output(&restored.stdout).contains("restored-terminal-path"),
+            "{restored:?}"
+        );
+        assert_eq!(std::env::var_os("PATH"), parent_path);
+    }
+
     #[test]
     fn mcode_installer_search_paths_preserve_override_priority_and_deduplicate() {
         use super::*;
@@ -2114,7 +2347,6 @@ mod tests {
         assert!(mcode_extra_search_paths(Path::new(""), None).is_empty());
         assert!(VALID_TOOLS.contains(&"mcode"));
     }
-    use super::*;
     use std::path::PathBuf;
 
     // 上游 bd15ea11：Otty 启动命令与 CLI 查找路径。
@@ -2420,14 +2652,15 @@ mod tests {
 
     #[test]
     fn build_windows_cwd_command_str_uses_cd_for_drive_paths() {
-        let command = build_windows_cwd_command_str(r"C:\work\repo");
+        let (command, env) = build_windows_cwd_command_str(r"C:\work\repo");
 
         assert_eq!(command, "cd /d \"C:\\work\\repo\" || exit /b 1\r\n");
+        assert_eq!(env, None);
     }
 
     #[test]
     fn build_windows_cwd_command_str_uses_pushd_for_unc_paths() {
-        let command = build_windows_cwd_command_str(r"\\wsl$\Ubuntu\home\coder\repo");
+        let (command, _) = build_windows_cwd_command_str(r"\\wsl$\Ubuntu\home\coder\repo");
 
         assert_eq!(
             command,
@@ -2437,12 +2670,30 @@ mod tests {
 
     #[test]
     fn build_windows_cwd_command_str_escapes_batch_metacharacters() {
-        let command = build_windows_cwd_command_str(r"\\server\share\100%&(test)");
+        let (command, _) = build_windows_cwd_command_str(r"\\server\share\100%&(test)");
 
         assert_eq!(
             command,
             "pushd \"\\\\server\\share\\100%%^&^(test^)\" || exit /b 1\r\n"
         );
+    }
+
+    #[test]
+    fn build_windows_cwd_command_str_passes_non_ascii_paths_via_env() {
+        // cmd 按控制台代码页解码 .bat，中文路径不能写进文件（#8034）。
+        let path = r"C:\Users\林增文\项目";
+        let (command, env) = build_windows_cwd_command_str(path);
+
+        assert!(command.is_ascii(), "batch line must stay ASCII: {command}");
+        assert_eq!(
+            command,
+            "cd /d \"%CC_SWITCH_INTERNAL_CWD%\" || exit /b 1\r\nset \"CC_SWITCH_INTERNAL_CWD=\"\r\n"
+        );
+        assert_eq!(env.as_deref(), Some(path));
+
+        let (unc_command, unc_env) = build_windows_cwd_command_str(r"\\server\共享\repo");
+        assert!(unc_command.starts_with("pushd \"%CC_SWITCH_INTERNAL_CWD%\" || exit /b 1\r\n"));
+        assert_eq!(unc_env.as_deref(), Some(r"\\server\共享\repo"));
     }
 
     #[test]
@@ -2525,12 +2776,24 @@ pub(crate) fn run_detected_tool_command_with_timeout(
             .creation_flags(CREATE_NO_WINDOW);
         command
     };
+    // 从 launchd / 服务管理器启动时继承的是窄 PATH。npm 装的 CLI 是 `#!/usr/bin/env node`
+    // 脚本，node 常不在工具自己的目录里，只补工具目录会 exit 127（#8653）；与安装/升级
+    // 同样补上登录 shell 的 PATH。
     #[cfg(not(target_os = "windows"))]
     let mut command = {
+        let inherited = effective_path_os()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let current_path = match super::tool_management::login_shell_path(None) {
+            Some(login_path) => {
+                super::tool_management::merge_path_segments(&login_path, &inherited)
+            }
+            None => inherited,
+        };
         let mut command = Command::new(&tool_path);
         command.args(args).env(
             "PATH",
-            prepend_search_dir_to_path(dir, &effective_path_os().unwrap_or_default()),
+            prepend_search_dir_to_path(dir, std::ffi::OsStr::new(&current_path)),
         );
         isolate_child_process_group(&mut command);
         command

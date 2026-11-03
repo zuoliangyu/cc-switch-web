@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::app_config::AppType;
 use crate::database::Profile;
 use crate::error::AppError;
+use crate::prompt::Prompt;
 use crate::services::skill::SkillService;
 use crate::services::{mcp::McpService, prompt::PromptService, provider::ProviderService};
 use crate::store::AppState;
@@ -54,6 +55,12 @@ impl ProfileScope {
         }
     }
 }
+
+/// 提示词槽位的「拍到时没有启用中的提示词」标记（应用时停用当前启用项）。
+///
+/// 不能用 None 表示：None 已约定为「该侧从未拍过、不动」。提示词 id 不会是空串；
+/// 旧版读到它会当作已删除的提示词跳过并给提示，不会误改配置。
+pub const NO_ACTIVE_PROMPT: &str = "";
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -181,12 +188,14 @@ impl ProfileService {
                 );
             }
             if let Some(slot) = payload.prompts.get_mut(app) {
-                *slot = state
-                    .db
-                    .get_prompts(app.as_str())?
-                    .values()
-                    .find(|prompt| prompt.enabled)
-                    .map(|prompt| prompt.id.clone());
+                *slot = Some(
+                    state
+                        .db
+                        .get_prompts(app.as_str())?
+                        .values()
+                        .find(|prompt| prompt.enabled)
+                        .map_or_else(|| NO_ACTIVE_PROMPT.to_string(), |prompt| prompt.id.clone()),
+                );
             }
         }
         Ok(payload)
@@ -378,8 +387,15 @@ impl ProfileService {
                 }
             }
 
+            // Prompt：None = 不动；NO_ACTIVE_PROMPT = 停用当前启用项；已激活则幂等跳过
             if let Some(Some(target_prompt)) = payload.prompts.get(app) {
-                match state.db.get_prompts(app_str)?.get(target_prompt) {
+                let prompts = state.db.get_prompts(app_str)?;
+                match prompts.get(target_prompt) {
+                    None if target_prompt == NO_ACTIVE_PROMPT => {
+                        if prompts.values().any(|p| p.enabled) {
+                            Self::disable_active_prompts(state, app, &mut warnings);
+                        }
+                    }
                     None => warnings.push(format!(
                         "[{app_str}] prompt '{target_prompt}' no longer exists, skipped"
                     )),
@@ -401,6 +417,30 @@ impl ProfileService {
             .db
             .set_current_profile_id(scope.as_str(), Some(profile_id))?;
         Ok(warnings)
+    }
+
+    /// 停用应用当前启用的提示词（项目快照里该应用没有启用项时）。
+    ///
+    /// 先经 `PromptService::get_prompts` 把 live 文件里的外部编辑回填进启用项，
+    /// 再走与界面「停用」相同的 `upsert_prompt(enabled=false)`：停掉最后一条启用项时清空文件。
+    fn disable_active_prompts(state: &AppState, app: &AppType, warnings: &mut Vec<String>) {
+        let app_str = app.as_str();
+        let prompts = match PromptService::get_prompts(state, app.clone()) {
+            Ok(prompts) => prompts,
+            Err(e) => {
+                warnings.push(format!("[{app_str}] read prompts failed: {e}"));
+                return;
+            }
+        };
+        for (id, prompt) in prompts.into_iter().filter(|(_, p)| p.enabled) {
+            let disabled = Prompt {
+                enabled: false,
+                ..prompt
+            };
+            if let Err(e) = PromptService::upsert_prompt(state, app.clone(), &id, disabled) {
+                warnings.push(format!("[{app_str}] disable prompt '{id}' failed: {e}"));
+            }
+        }
     }
 }
 

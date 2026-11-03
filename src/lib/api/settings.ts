@@ -133,6 +133,10 @@ export const settingsApi = {
     });
   },
 
+  async webdavSyncClearSettings(): Promise<{ success: boolean }> {
+    return await invoke("webdav_sync_clear_settings");
+  },
+
   async webdavSyncFetchRemoteInfo(): Promise<
     RemoteSnapshotInfo | { empty: true }
   > {
@@ -316,6 +320,15 @@ export interface BackupEntry {
   createdAt: string;
 }
 
+export interface BackupLocation {
+  id: string;
+  path: string;
+  sizeBytes: number;
+  itemCount: number;
+  lastModified?: string | null;
+  deletable: boolean;
+}
+
 export const backupsApi = {
   async createDbBackup(): Promise<string> {
     return await invoke("create_db_backup");
@@ -335,5 +348,14 @@ export const backupsApi = {
 
   async deleteDbBackup(filename: string): Promise<void> {
     await invoke("delete_db_backup", { filename });
+  },
+
+  async listBackupLocations(): Promise<BackupLocation[]> {
+    return await invoke("list_backup_locations");
+  },
+
+  /** 删除一类备份，返回释放的字节数 */
+  async deleteBackupLocation(id: string): Promise<number> {
+    return await invoke("delete_backup_location", { id });
   },
 };

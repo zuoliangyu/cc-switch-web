@@ -8,6 +8,7 @@ import type {
 
 type ProvidersByApp = Record<AppId, Record<string, Provider>>;
 type CurrentProviderState = Record<AppId, string>;
+type LiveProviderIdsByApp = Record<"opencode" | "openclaw" | "hermes", string[]>;
 
 const createDefaultProviders = (): ProvidersByApp => ({
   claude: {
@@ -85,6 +86,11 @@ const createDefaultCurrent = (): CurrentProviderState => ({
 
 let providers = createDefaultProviders();
 let current = createDefaultCurrent();
+let liveProviderIds: LiveProviderIdsByApp = {
+  opencode: [],
+  openclaw: [],
+  hermes: [],
+};
 let settingsState: Settings = {
   claudeConfigDir: "/default/claude",
   codexConfigDir: "/default/codex",
@@ -148,6 +154,7 @@ const cloneProviders = (value: ProvidersByApp) =>
 export const resetProviderState = () => {
   providers = createDefaultProviders();
   current = createDefaultCurrent();
+  liveProviderIds = { opencode: [], openclaw: [], hermes: [] };
   sessionsState = createDefaultSessions();
   sessionMessagesState = createDefaultSessionMessages();
   settingsState = {
@@ -162,6 +169,17 @@ export const getProviders = (appType: AppId) =>
   cloneProviders(providers)[appType] ?? {};
 
 export const getCurrentProviderId = (appType: AppId) => current[appType] ?? "";
+
+export const getLiveProviderIds = (
+  appType: "opencode" | "openclaw" | "hermes",
+) => [...liveProviderIds[appType]];
+
+export const setLiveProviderIds = (
+  appType: "opencode" | "openclaw" | "hermes",
+  ids: string[],
+) => {
+  liveProviderIds[appType] = [...ids];
+};
 
 export const setCurrentProviderId = (appType: AppId, providerId: string) => {
   current[appType] = providerId;

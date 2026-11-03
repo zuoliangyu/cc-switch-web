@@ -7,6 +7,7 @@ import {
   deleteProvider,
   deleteSession,
   getCurrentProviderId,
+  getLiveProviderIds,
   getSessionMessages,
   getProviders,
   listProviders,
@@ -290,6 +291,18 @@ export const handlers = [
       if (app === "gemini") return success("/default/gemini");
       return success("/default/opencode");
     },
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/get_opencode_live_provider_ids`, () =>
+    success(getLiveProviderIds("opencode")),
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/get_openclaw_live_provider_ids`, () =>
+    success(getLiveProviderIds("openclaw")),
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/get_hermes_live_provider_ids`, () =>
+    success(getLiveProviderIds("hermes")),
   ),
 
   // Sync current providers live (no-op success)

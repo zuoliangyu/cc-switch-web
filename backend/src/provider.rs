@@ -80,6 +80,11 @@ impl Provider {
         self.meta.as_ref().and_then(|m| m.provider_type.as_deref())
     }
 
+    /// The stored OpenCode source format; only native declarations record one.
+    pub fn opencode_config_format(&self) -> Option<OpenCodeConfigFormat> {
+        self.meta.as_ref().and_then(|m| m.opencode_config_format)
+    }
+
     fn claude_base_url_contains(&self, needle: &str) -> bool {
         self.settings_config
             .pointer("/env/ANTHROPIC_BASE_URL")
@@ -201,10 +206,11 @@ impl Provider {
                 str_at(settings.get("baseUrl")),
                 str_at(settings.get("apiKey")),
             ),
-            // Pi custom providers use the native models.json field names.
+            // Pi custom providers use the native models.json field names. Pi expands
+            // `$NAME` references in `apiKey`, so resolve them before sending (#8822).
             AppType::Pi => (
                 crate::pi_config::provider_base_url(settings).unwrap_or_default(),
-                str_at(settings.get("apiKey")),
+                crate::pi_config::resolve_usage_api_key(&str_at(settings.get("apiKey"))),
             ),
             // OpenCode (OMO) nests credentials under `options` (the SDK options object).
             AppType::OpenCode | AppType::Mcode => {
@@ -557,6 +563,13 @@ pub struct ProviderMeta {
     /// `None` 表示旧数据/未知状态，`Some(false)` 表示明确仅存在于数据库中。
     #[serde(rename = "liveConfigManaged", skip_serializing_if = "Option::is_none")]
     pub live_config_managed: Option<bool>,
+    /// Source format for OpenCode entries whose fields alone are ambiguous
+    /// (for example, a native V2 built-in provider containing only models).
+    #[serde(
+        rename = "opencodeConfigFormat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub opencode_config_format: Option<OpenCodeConfigFormat>,
     /// 供应商类型标识（用于特殊供应商检测）
     /// - "github_copilot": GitHub Copilot 供应商
     #[serde(rename = "providerType", skip_serializing_if = "Option::is_none")]
@@ -917,6 +930,13 @@ requires_openai_auth = true"#
 // OpenCode 供应商配置结构
 // ============================================================================
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenCodeConfigFormat {
+    V1,
+    V2,
+}
+
 /// OpenCode 供应商的 settings_config 结构
 ///
 /// OpenCode 使用 AI SDK 包名来指定供应商类型，与其他应用的配置格式不同。
@@ -1263,6 +1283,15 @@ mod tests {
                 "sk-pi".to_string()
             )
         );
+
+        // Pi 的 $NAME / !command 引用不能原样当 Key 发出去
+        for reference in ["$CC_SWITCH_TEST_UNSET_8822", "!echo sk-from-command"] {
+            let p = make(json!({
+                "baseUrl": "https://api.example.com/v1",
+                "apiKey": reference,
+            }));
+            assert_eq!(p.resolve_usage_credentials(&AppType::Pi).1, "");
+        }
     }
 
     #[test]

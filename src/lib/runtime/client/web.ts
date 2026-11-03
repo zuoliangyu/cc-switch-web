@@ -1449,6 +1449,13 @@ export async function saveWebdavSyncSettings(
   });
 }
 
+export async function clearWebdavSyncSettings(): Promise<{ success: boolean }> {
+  return requestWithBody<{ success: boolean }>(
+    "/api/webdav/settings/clear",
+    "POST",
+  );
+}
+
 export async function fetchWebdavRemoteInfo(): Promise<
   RemoteSnapshotInfo | { empty: true }
 > {
@@ -1564,6 +1571,19 @@ export async function renameWebDbBackup(
     oldFilename,
     newName,
   });
+}
+
+export async function listWebBackupLocations(): Promise<
+  import("@/lib/api/settings").BackupLocation[]
+> {
+  return requestJson("/api/backups/locations");
+}
+
+export async function deleteWebBackupLocation(id: string): Promise<number> {
+  return requestWithBody<number>(
+    `/api/backups/locations/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
 }
 
 export async function deleteWebDbBackup(filename: string): Promise<void> {
@@ -2607,4 +2627,34 @@ export const getWebSessionUsage = (appType: string, sessionId: string): Promise<
 
 export function resyncWebMcp(apps?: AppId[]): Promise<import("@/lib/api/mcp").McpAppSyncOutcome[]> { return requestWithBody("/api/mcp/resync", "POST", { apps }); }
 
+export async function getWebInstalledSkillDir(directory: string): Promise<string> {
+  return requestJson<string>(
+    `/api/skills/installed-dir?directory=${encodeURIComponent(directory)}`,
+  );
+}
+
 export function getWebSkillStoragePaths(): Promise<{ ccSwitch: string; unified: string }> { return requestJson("/api/skills/storage-paths"); }
+
+export async function startWebMcpConnectivityChecks(
+  serverIds: string[],
+): Promise<string> {
+  return requestWithBody<string>("/api/mcp/connectivity", "POST", {
+    serverIds,
+  });
+}
+
+export async function pollWebMcpConnectivityChecks(batchId: string): Promise<{
+  results: { serverId: string; connected: boolean }[];
+  done: boolean;
+}> {
+  return requestJson(`/api/mcp/connectivity/${encodeURIComponent(batchId)}`);
+}
+
+export async function cancelWebMcpConnectivityChecks(
+  batchId: string,
+): Promise<void> {
+  return requestWithBody<void>(
+    `/api/mcp/connectivity/${encodeURIComponent(batchId)}`,
+    "DELETE",
+  );
+}

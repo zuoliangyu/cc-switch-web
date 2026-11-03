@@ -5,6 +5,8 @@ mod claude_desktop_config;
 mod claude_mcp;
 mod claude_plugin;
 mod codex_config;
+// 写回与同名路径接口随 8641cd1d 的会话管理、历史迁移部分接入（批次 5a）
+#[allow(dead_code)]
 mod codex_rollout_file;
 mod codex_state_db;
 mod codex_history_migration;

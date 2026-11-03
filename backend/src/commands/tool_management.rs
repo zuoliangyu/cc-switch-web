@@ -5,13 +5,13 @@ fn shell_single_quote(value: &str) -> String {
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[derive(serde::Serialize)]
@@ -187,7 +187,7 @@ fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), S
     // GUI App 继承的是 launchd 的窄 PATH，而锚定探测用的是登录 shell —— 见
     // `login_shell_path` doc。命令自身用绝对路径不受影响，但工具**内部** spawn 的
     // npm/node 等子进程、以及 install 链里裸的 npm fallback 都需要真实 PATH。
-    if let Some(login_path) = login_shell_path() {
+    if let Some(login_path) = login_shell_path(None) {
         let inherited = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", merge_path_segments(&login_path, &inherited));
     }
@@ -195,13 +195,10 @@ fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), S
     finish_lifecycle_output(&output)
 }
 
-/// Windows 静默执行：command_line 是 .bat 内容（@echo off + call/wsl 行，CRLF 分隔），
+/// Windows 静默执行：command_line 是 .bat 内容（chcp 65001 + @echo off + call/wsl 行，CRLF 分隔），
 /// 写临时 .bat 后用 `cmd /C` 执行，`CREATE_NO_WINDOW` 抑制 console 窗口。
 #[cfg(target_os = "windows")]
 fn run_tool_lifecycle_silently(command_line: &str, label: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-
     // 每次调用使用独立目录，避免同进程并发升级时覆盖或删除另一工具的脚本。
     let script_dir = tempfile::Builder::new()
         .prefix("cc_switch_lifecycle_")
@@ -210,13 +207,22 @@ fn run_tool_lifecycle_silently(command_line: &str, label: &str) -> Result<(), St
     let bat_file = script_dir.path().join(format!("{label}.bat"));
     std::fs::write(&bat_file, command_line).map_err(|e| format!("写入批处理文件失败: {e}"))?;
 
-    let output = Command::new("cmd")
-        .arg("/C")
-        .arg(&bat_file)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    let output = windows_lifecycle_command(&bat_file, &effective_path_string()).output();
 
     finish_lifecycle_output(&output.map_err(|e| format!("启动安装进程失败: {e}"))?)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_lifecycle_command(bat_file: &Path, effective_path: &str) -> std::process::Command {
+    let mut command = std::process::Command::new("cmd");
+    command
+        .arg("/C")
+        .arg(bat_file)
+        // MSI 自动重启可能丢失用户 PATH（#8171）。执行与探测共用补全后的 PATH，
+        // 让裸 npm 兜底及工具内部启动的 node/npm 都能找到；仅设置子进程环境。
+        .env("PATH", effective_path)
+        .creation_flags(CREATE_NO_WINDOW);
+    command
 }
 
 /// 把子进程退出结果转成 `Result`：成功返回 `Ok`；失败提取 stderr（空则回退 stdout）
@@ -365,8 +371,15 @@ fn build_tool_lifecycle_command(
         lines.push("set -o pipefail".to_string());
     }
 
+    // .bat 以 UTF-8 写入，cmd 却按控制台代码页（中文系统 936、西文 437/850）解析，
+    // 用户名含非 ASCII 字符时锚定的 npm.cmd 路径会乱码（#8034）。首行是纯 ASCII，
+    // 任何代码页都能正确解析；chcp 之后的行按 UTF-8 读。CREATE_NO_WINDOW 下这是
+    // 独立的隐藏控制台，不影响用户终端。
     #[cfg(target_os = "windows")]
-    lines.push("@echo off".to_string());
+    {
+        lines.push("@chcp 65001>nul".to_string());
+        lines.push("@echo off".to_string());
+    }
 
     for tool in tools {
         let label = tool_display_name(tool);
@@ -611,7 +624,9 @@ enum LifecycleCommandShell {
 
 fn npm_install_command_for(tool: &str) -> Option<&'static str> {
     match tool {
-        "claude" => Some("npm i -g @anthropic-ai/claude-code@latest"),
+        "claude" => Some(
+            "npm i -g @anthropic-ai/claude-code@latest --ignore-scripts=false --include=optional --allow-scripts=@anthropic-ai/claude-code",
+        ),
         "codex" => Some("npm i -g @openai/codex@latest"),
         "gemini" => Some("npm i -g @google/gemini-cli@latest"),
         "grok" => Some("npm i -g @xai-official/grok@latest"),
@@ -628,6 +643,8 @@ fn npm_install_command_for(tool: &str) -> Option<&'static str> {
 /// `npm i -g` 时须追加的参数（前导空格已含），与 `npm_install_command_for` 的静态命令
 /// 保持一致，供锚定到某处 npm 的升级命令复用。
 ///
+/// Claude Code 的 postinstall 把平台 optional dependency 中的原生程序放到 bin/claude.exe。
+/// npm 12 拦截该脚本时会留下文本占位文件，Windows 执行后报“与 Windows 版本不兼容”。
 /// MiniMax Code 依赖 better-sqlite3 的安装脚本：npm 12 默认拦截依赖的 install 脚本，
 /// 只放行 `--allow-scripts` 列出的包（按注册表包名匹配），被拦后 SQLite 不可用；
 /// `--ignore-scripts=false` / `--include=optional` 抵消用户 npmrc 里的相反设置。
@@ -635,6 +652,9 @@ fn npm_install_command_for(tool: &str) -> Option<&'static str> {
 /// 加双引号：逗号在 PowerShell 里会被当成数组分隔符，bash/cmd 都会剥掉这层引号。
 fn npm_install_extra_args(tool: &str) -> &'static str {
     match tool {
+        "claude" => {
+            " --ignore-scripts=false --include=optional --allow-scripts=@anthropic-ai/claude-code"
+        }
         "mcode" => {
             " --ignore-scripts=false --include=optional \"--allow-scripts=@minimax-ai/code,better-sqlite3\""
         }
@@ -948,6 +968,9 @@ async fn get_single_tool_version_impl(
     let (local_version, local_error, installed_but_broken) = match probe {
         ShellProbe::Found(v) => (Some(v), None, false),
         ShellProbe::FoundButFailed(e) => (None, Some(e), true),
+        // 纯粹没装不带 error：版本列已显示「未安装」，再显示一行英文原因是重复的。
+        // WSL 的 shell 参数非法、执行失败等其它原因仍照常上报。
+        ShellProbe::NotFound(e) if e.ends_with(NOT_INSTALLED) => (None, None, false),
         ShellProbe::NotFound(e) => (None, Some(e), false),
     };
 
@@ -1266,6 +1289,16 @@ fn after_version_sentinel(output: &str) -> &str {
     }
 }
 
+/// 判断 shell 输出是否表示"找不到该命令"。
+/// 只认各 shell 的固定格式，避免把工具自身的 `module not found` 之类错误当成没装：
+/// bash/zsh `command not found`，dash/sh `<tool>: not found`，fish `Unknown command`。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn is_shell_command_missing(err: &str, tool: &str) -> bool {
+    err.contains("command not found")
+        || err.contains(&format!("{tool}: not found"))
+        || err.contains("Unknown command")
+}
+
 /// 从版本输出中提取纯版本号
 fn extract_version(raw: &str) -> String {
     VERSION_RE
@@ -1300,7 +1333,7 @@ enum ShellProbe {
 /// 只执行已定位到的真实可执行文件。
 #[cfg(not(target_os = "windows"))]
 fn try_get_version(tool: &str) -> ShellProbe {
-    use std::process::Command;
+    use std::process::{Command, Stdio};
 
     let output = {
         let shell = std::env::var("SHELL")
@@ -1308,10 +1341,21 @@ fn try_get_version(tool: &str) -> ShellProbe {
             .filter(|s| is_valid_shell(s))
             .unwrap_or_else(|| "sh".to_string());
         let flag = default_flag_for_shell(&shell);
-        Command::new(shell)
-            .arg(flag)
+        let mut cmd = Command::new(shell);
+        cmd.arg(flag)
             .arg(format!("{tool} --version"))
-            .output()
+            // 与 `resolve_path_default` 相同：交互式 shell（-lic）不能读到继承来的
+            // stdin，也不能因持有控制终端被 SIGTTIN 停住（从终端启动时整个应用卡死）。
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        isolate_child_process_group(&mut cmd);
+        cmd.spawn().map_err(|e| e.to_string()).and_then(|child| {
+            wait_child_output(
+                child,
+                CommandDeadline::from_timeout(Some(INSTALL_PROBE_TIMEOUT)),
+            )
+        })
     };
 
     match output {
@@ -1340,8 +1384,38 @@ fn try_get_version(tool: &str) -> ShellProbe {
     }
 }
 
+/// `hermes dashboard` 的启动命令行（交给终端启动器）。
+///
+/// Windows 上 Hermes 配置目录指向 WSL（UNC 路径）时，要进对应发行版里启动，
+/// 否则跑起来的是 Windows 本机的 hermes（或报找不到命令），#8689。
+/// Web UI 探测的 `127.0.0.1` 端口由 WSL2 的 localhost 转发到发行版里，不用改。
+pub(crate) fn hermes_dashboard_command_line() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(distro) = wsl_distro_for_tool("hermes") {
+            return wsl_hermes_dashboard_line(&distro);
+        }
+    }
+    Ok("hermes dashboard".to_string())
+}
+
+/// 用发行版里用户自己的登录交互 shell（`$SHELL -lic`）跑，PATH 才带得上
+/// `~/.local/bin` 这类在 `.bashrc` / `.profile` 里加的目录。只用一个 flag、
+/// 不像版本探测那样失败后换 flag 重试：dashboard 被 Ctrl+C 结束也是非零退出，
+/// 重试会把它再拉起来。
+#[cfg(target_os = "windows")]
+fn wsl_hermes_dashboard_line(distro: &str) -> Result<String, String> {
+    if !is_valid_wsl_distro_name(distro) {
+        return Err(format!("Invalid WSL distro name: {distro}"));
+    }
+    Ok(format!(
+        "wsl.exe -d {distro} -- sh -c {}",
+        windows_cmd_double_quote_arg("\"${SHELL:-sh}\" -lic 'hermes dashboard'")
+    ))
+}
+
 /// 校验 WSL 发行版名称是否合法
-/// WSL 发行版名称只允许字母、数字、连字符和下划线
+/// WSL 发行版名称只允许字母、数字、连字符、下划线和点（如 `Ubuntu-22.04`）
 #[cfg(target_os = "windows")]
 fn is_valid_wsl_distro_name(name: &str) -> bool {
     !name.is_empty()
@@ -1567,12 +1641,11 @@ fn try_get_version_wsl(
                 } else {
                     stderr
                 };
-                // wsl.exe 透传的退出码不总可靠，故同时用 exit 127 与 "command not found"
+                // wsl.exe 透传的退出码不总可靠，故同时用 exit 127 与 shell 的"找不到命令"
                 // 文本兜底判别"没装"；其余非零退出视作"装了但 --version 报错"。
                 let not_found = err.is_empty()
                     || out.status.code() == Some(127)
-                    || err.contains("command not found")
-                    || err.contains("not found");
+                    || is_shell_command_missing(&err, tool);
                 if not_found {
                     ShellProbe::NotFound(format!("[WSL:{distro}] {NOT_INSTALLED}"))
                 } else {
@@ -1808,6 +1881,45 @@ fn mcode_extra_search_paths(
     paths
 }
 
+/// PATHEXT 里 `.CMD` 是否排在 `.EXE` 之前。未设置或两者都不在时按 Windows 默认
+/// （`.EXE` 在前）处理。
+#[cfg(any(target_os = "windows", test))]
+fn pathext_prefers_cmd_over_exe(pathext: Option<&str>) -> bool {
+    let Some(pathext) = pathext else {
+        return false;
+    };
+    let position = |ext: &str| {
+        pathext
+            .split(';')
+            .map(str::trim)
+            .position(|entry| entry.eq_ignore_ascii_case(ext))
+    };
+    match (position(".cmd"), position(".exe")) {
+        (Some(cmd), Some(exe)) => cmd < exe,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+/// 同一目录里 `<tool>.cmd` 和 `<tool>.exe` 并存时，命令行敲 `<tool>` 只会按 PATHEXT
+/// 顺序命中其中一个，另一个被遮住。调用方只对已知是同一处安装多出来的入口用它
+/// （Hermes 换成 `.exe` 启动器后留下的旧 `hermes.cmd`，#8839）。
+#[cfg(any(target_os = "windows", test))]
+fn shadowed_by_pathext_sibling(path: &Path, pathext: Option<&str>) -> bool {
+    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+        return false;
+    };
+    let cmd_first = pathext_prefers_cmd_over_exe(pathext);
+    let shadowing_ext = if ext.eq_ignore_ascii_case("cmd") && !cmd_first {
+        "exe"
+    } else if ext.eq_ignore_ascii_case("exe") && cmd_first {
+        "cmd"
+    } else {
+        return false;
+    };
+    path.with_extension(shadowing_ext).is_file()
+}
+
 fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -1849,8 +1961,8 @@ fn extend_mise_node_search_paths(paths: &mut Vec<std::path::PathBuf>, home: &Pat
     }
 }
 
-/// The "effective PATH" used during detection. On Windows the inherited
-/// process PATH can be incomplete — most notably after an in-app self-update,
+/// The "effective PATH" used for CLI detection and lifecycle commands. On Windows
+/// the inherited process PATH can be incomplete — most notably after an in-app self-update,
 /// where the MSI/WiX-auto-launched process inherits only the machine-level PATH
 /// and drops the user-level PATH (see #6061). Any CLI installed in a user-PATH
 /// location (winget Claude `%LOCALAPPDATA%\Programs\claude`, the standalone
@@ -1882,7 +1994,49 @@ fn effective_path_string() -> String {
         .and_then(|k| k.get_value::<String, &str>("Path"))
         .map(|raw| expand_env_chars(&raw))
         .unwrap_or_default();
-    merge_path_segments_win(&[&process, &user, &machine])
+    // fnm 的默认 Node 别名排在最后：只在 `fnm env` shell 里可见的 Node 也能找到，显式 PATH 仍优先。
+    let fnm = fnm_default_alias_dir_candidates(
+        std::env::var_os("FNM_DIR"),
+        &dirs::home_dir().unwrap_or_default(),
+        dirs::data_dir(),
+    )
+    .into_iter()
+    .filter(|dir| dir.is_dir())
+    .map(|dir| dir.to_string_lossy().into_owned())
+    .collect::<Vec<_>>()
+    .join(";");
+    merge_path_segments_win(&[&process, &user, &machine, &fnm])
+}
+
+/// fnm only puts Node on PATH through `fnm env`, which prepends a per-shell
+/// `%LOCALAPPDATA%\fnm_multishells\<id>` link to that shell's PATH. Nothing is
+/// written to the registry PATH, so a service launched outside that shell sees neither
+/// node, npm nor the npm global CLIs (#8484). `<fnm dir>\aliases\default` is a
+/// stable link to the default Node installation; on Windows node.exe, npm.cmd
+/// and npm global commands live directly in that directory (no `bin`).
+///
+/// Mirrors fnm's own base-dir lookup: `FNM_DIR`, then the legacy `~\.fnm`, then
+/// `%APPDATA%\fnm`. Callers keep only the directories that exist.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn fnm_default_alias_dir_candidates(
+    fnm_dir: Option<std::ffi::OsString>,
+    home: &Path,
+    data_dir: Option<std::path::PathBuf>,
+) -> Vec<std::path::PathBuf> {
+    let mut bases = Vec::new();
+    if let Some(dir) = fnm_dir.filter(|value| !value.is_empty()) {
+        push_unique_path(&mut bases, std::path::PathBuf::from(dir));
+    }
+    if !home.as_os_str().is_empty() {
+        push_unique_path(&mut bases, home.join(".fnm"));
+    }
+    if let Some(data_dir) = data_dir {
+        push_unique_path(&mut bases, data_dir.join("fnm"));
+    }
+    bases
+        .into_iter()
+        .map(|base| base.join("aliases").join("default"))
+        .collect()
 }
 
 /// `extend_from_cli_path_env` consumes an `OsString` via `split_paths`. On
@@ -2459,7 +2613,7 @@ fn path_line_from_env_output(raw: &str) -> Option<&str> {
 /// 合并两段 PATH：`primary` 全部保留在前，`extra` 中未出现过的段按序追加。
 /// 空段直接丢弃（`a::b` 里的空段在 POSIX 下语义是"当前目录"，注入时不该带上）。
 #[cfg(not(target_os = "windows"))]
-fn merge_path_segments(primary: &str, extra: &str) -> String {
+pub(crate) fn merge_path_segments(primary: &str, extra: &str) -> String {
     let mut seen = std::collections::HashSet::new();
     let mut merged: Vec<&str> = Vec::new();
     for segment in primary.split(':').chain(extra.split(':')) {
@@ -2472,7 +2626,8 @@ fn merge_path_segments(primary: &str, extra: &str) -> String {
 }
 
 /// 用与 `resolve_path_default` 相同的登录 shell 解析用户的真实 PATH，
-/// 供 `run_tool_lifecycle_silently` 注入给安装/升级脚本。
+/// 供 `run_tool_lifecycle_silently` 注入给安装/升级脚本，也供
+/// `run_detected_tool_command_with_timeout` 注入给运行时调用的 CLI。
 ///
 /// **要解决的不对称**：探测阶段（`try_get_version` / `resolve_path_default`）跑的是
 /// `$SHELL -lic`，会读 `.zshrc`/`.zprofile`，看得到 nvm / homebrew / volta；而执行阶段
@@ -2492,20 +2647,27 @@ fn merge_path_segments(primary: &str, extra: &str) -> String {
 /// 任何 shell 下格式都正确。写绝对路径又绕过了 alias / function / PATH 三重不确定性
 /// （交互式 shell 会加载用户 alias）。
 ///
-/// 解析不到时返回 `None`，调用方保持原有行为（不注入），不引入新的失败模式。
+/// 解析不到（含超过 `deadline`）时返回 `None`，调用方保持原有行为（不注入），
+/// 不引入新的失败模式。
 #[cfg(not(target_os = "windows"))]
-fn login_shell_path() -> Option<String> {
-    use std::process::Command;
+pub(crate) fn login_shell_path(deadline: Option<CommandDeadline>) -> Option<String> {
+    use std::process::{Command, Stdio};
     let shell = std::env::var("SHELL")
         .ok()
         .filter(|s| is_valid_shell(s))
         .unwrap_or_else(|| "sh".to_string());
     let flag = default_flag_for_shell(&shell);
-    let out = Command::new(shell)
-        .arg(flag)
+    let mut cmd = Command::new(shell);
+    cmd.arg(flag)
         .arg("/usr/bin/env")
-        .output()
-        .ok()?;
+        // 与 `resolve_path_default` 相同：交互式 rc 不能读到继承来的 stdin，
+        // 也不能因持有控制终端被作业控制停住。
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    isolate_child_process_group(&mut cmd);
+    let child = cmd.spawn().ok()?;
+    let out = wait_child_output(child, deadline).ok()?;
     if !out.status.success() {
         return None;
     }
@@ -2692,6 +2854,8 @@ fn enumerate_tool_installations(tool: &str) -> Vec<ToolInstallation> {
 
     let mut seen: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
     let mut installs: Vec<ToolInstallation> = Vec::new();
+    #[cfg(target_os = "windows")]
+    let pathext = std::env::var("PATHEXT").ok();
 
     for dir in &search_paths {
         #[cfg(target_os = "windows")]
@@ -2701,6 +2865,13 @@ fn enumerate_tool_installations(tool: &str) -> Vec<ToolInstallation> {
 
         for tool_path in tool_executable_candidates(tool, dir) {
             if !tool_path.exists() {
+                continue;
+            }
+            // Hermes 发布启动器时换成 .exe 不会删掉旧的 .cmd，两者同在它自己的 bin 目录，
+            // 只算命令行实际命中的那个（#8839）。其他工具同目录并存可能是两处真实安装
+            // （如 npm prefix 与原生安装同目录），保持分开列出。
+            #[cfg(target_os = "windows")]
+            if tool == "hermes" && shadowed_by_pathext_sibling(&tool_path, pathext.as_deref()) {
                 continue;
             }
             // canonicalize 解析软链后去重：/opt/homebrew/bin/x → Cellar/...、nvm shim 等
@@ -2951,7 +3122,7 @@ fn quote_path_if_spaced(p: &str) -> String {
 /// token 边界字符在引号内是字面)。
 ///
 /// `!`(delayed expansion)只在 `setlocal enabledelayedexpansion` 下生效——我们
-/// .bat 头只有 `@echo off`、没开,所以不需要处理。`'` 在 cmd 中无特殊意义。
+/// .bat 头只有 `chcp 65001` 和 `@echo off`、没开,所以不需要处理。`'` 在 cmd 中无特殊意义。
 ///
 /// 镜像 POSIX `quote_path_if_spaced` 的"轻量条件包装"语义:不含任何特殊字符就保持
 /// 裸路径(命令展示更干净),否则用 `win_double_quote` 包并做必要转义。
@@ -3441,13 +3612,13 @@ fn default_install(installs: &[ToolInstallation]) -> Option<&ToolInstallation> {
 }
 
 #[derive(Clone, Copy)]
-struct CommandDeadline {
+pub(crate) struct CommandDeadline {
     expires_at: std::time::Instant,
     limit: std::time::Duration,
 }
 
 impl CommandDeadline {
-    fn from_timeout(timeout: Option<std::time::Duration>) -> Option<Self> {
+    pub(crate) fn from_timeout(timeout: Option<std::time::Duration>) -> Option<Self> {
         timeout.map(|limit| Self {
             expires_at: std::time::Instant::now() + limit,
             limit,
@@ -3924,10 +4095,83 @@ fn wsl_distro_from_path(path: &Path) -> Option<String> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-use super::*;
+    #[test]
+    fn pathext_order_decides_whether_cmd_beats_exe() {
+        assert!(!pathext_prefers_cmd_over_exe(None));
+        assert!(!pathext_prefers_cmd_over_exe(Some(
+            ".COM;.EXE;.BAT;.CMD;.VBS;.JS"
+        )));
+        assert!(pathext_prefers_cmd_over_exe(Some(".com;.cmd;.exe")));
+        assert!(pathext_prefers_cmd_over_exe(Some(".COM;.CMD")));
+        assert!(!pathext_prefers_cmd_over_exe(Some(".COM;.BAT")));
+    }
+
+    #[test]
+    fn same_dir_cmd_is_shadowed_by_exe_sibling_issue_8839() {
+        let dir = tempfile::tempdir().expect("temp dir should be created");
+        let cmd = dir.path().join("hermes.cmd");
+        let exe = dir.path().join("hermes.exe");
+        std::fs::write(&cmd, "").expect("cmd launcher should be created");
+
+        let default_pathext = Some(".COM;.EXE;.BAT;.CMD");
+        // A lone launcher is the install itself.
+        assert!(!shadowed_by_pathext_sibling(&cmd, default_pathext));
+
+        std::fs::write(&exe, "").expect("exe launcher should be created");
+        assert!(shadowed_by_pathext_sibling(&cmd, default_pathext));
+        assert!(!shadowed_by_pathext_sibling(&exe, default_pathext));
+
+        // A PATHEXT that lists .CMD first makes the .cmd the one that runs.
+        let cmd_first = Some(".COM;.CMD;.EXE");
+        assert!(!shadowed_by_pathext_sibling(&cmd, cmd_first));
+        assert!(shadowed_by_pathext_sibling(&exe, cmd_first));
+
+        // A different tool's launcher in the same directory never shadows.
+        let other = dir.path().join("codex.cmd");
+        std::fs::write(&other, "").expect("other launcher should be created");
+        assert!(!shadowed_by_pathext_sibling(&other, default_pathext));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn wsl_hermes_dashboard_runs_inside_the_distro_login_shell() {
+        let line =
+            super::wsl_hermes_dashboard_line("Ubuntu-22.04").expect("valid WSL command line");
+        assert_eq!(
+            line,
+            r#"wsl.exe -d Ubuntu-22.04 -- sh -c "\"${SHELL:-sh}\" -lic 'hermes dashboard'""#
+        );
+        assert!(super::wsl_hermes_dashboard_line("Ubuntu & calc").is_err());
+    }
+
+    #[test]
+    fn fnm_default_alias_dir_candidates_follow_fnm_base_dir_order() {
+        let home = Path::new("/home/tester");
+        let data_dir = std::path::PathBuf::from("/home/tester/AppData/Roaming");
+        let alias = |base: &str| {
+            std::path::PathBuf::from(base)
+                .join("aliases")
+                .join("default")
+        };
+
+        assert_eq!(
+            fnm_default_alias_dir_candidates(Some("/opt/fnm".into()), home, Some(data_dir.clone())),
+            vec![
+                alias("/opt/fnm"),
+                alias("/home/tester/.fnm"),
+                alias("/home/tester/AppData/Roaming/fnm"),
+            ]
+        );
+        // Empty FNM_DIR / home are ignored instead of becoming relative paths.
+        assert_eq!(
+            fnm_default_alias_dir_candidates(Some("".into()), Path::new(""), Some(data_dir)),
+            vec![alias("/home/tester/AppData/Roaming/fnm")]
+        );
+    }
+
+    use super::*;
     #[tokio::test]
     async fn lifecycle_coordinator_serializes_writes_and_rejects_duplicate_tools() {
         let coordinator = Arc::new(ToolLifecycleCoordinator::default());
@@ -4197,35 +4441,35 @@ use super::*;
         }
     }
 
-        #[test]
-        fn is_conflicting_thresholds() {
-            let make = |version: Option<&str>, runnable: bool| ToolInstallation {
-                path: "/x".to_string(),
-                version: version.map(str::to_string),
-                runnable,
-                error: None,
-                source: "nvm".to_string(),
-                is_path_default: false,
-                real: std::path::PathBuf::from("/x"),
-            };
-            // 单处 → 不冲突。
-            assert!(!is_conflicting(&[make(Some("1.0.0"), true)]));
-            // 两处同版本、都能跑 → 不冲突（同版本装两遍不打扰）。
-            assert!(!is_conflicting(&[
-                make(Some("1.0.0"), true),
-                make(Some("1.0.0"), true)
-            ]));
-            // 版本分歧 → 冲突。
-            assert!(is_conflicting(&[
-                make(Some("1.0.0"), true),
-                make(Some("2.0.0"), true)
-            ]));
-            // 同版本但运行态混合（一个能跑、一个跑不起来）→ 冲突。
-            assert!(is_conflicting(&[
-                make(Some("1.0.0"), true),
-                make(Some("1.0.0"), false)
-            ]));
-        }
+    #[test]
+    fn is_conflicting_thresholds() {
+        let make = |version: Option<&str>, runnable: bool| ToolInstallation {
+            path: "/x".to_string(),
+            version: version.map(str::to_string),
+            runnable,
+            error: None,
+            source: "nvm".to_string(),
+            is_path_default: false,
+            real: std::path::PathBuf::from("/x"),
+        };
+        // 单处 → 不冲突。
+        assert!(!is_conflicting(&[make(Some("1.0.0"), true)]));
+        // 两处同版本、都能跑 → 不冲突（同版本装两遍不打扰）。
+        assert!(!is_conflicting(&[
+            make(Some("1.0.0"), true),
+            make(Some("1.0.0"), true)
+        ]));
+        // 版本分歧 → 冲突。
+        assert!(is_conflicting(&[
+            make(Some("1.0.0"), true),
+            make(Some("2.0.0"), true)
+        ]));
+        // 同版本但运行态混合（一个能跑、一个跑不起来）→ 冲突。
+        assert!(is_conflicting(&[
+            make(Some("1.0.0"), true),
+            make(Some("1.0.0"), false)
+        ]));
+    }
 
     /// 锚定落空后的兜底:认不出渠道的原生可执行文件不再退回裸 `npm i -g`(#7650),
     /// 脚本 shim / node_modules 里的入口 / 定位不到默认那处仍保持旧的静态命令。
@@ -4333,5 +4577,115 @@ use super::*;
             }
             assert!(!is_native_executable(&dir.path().join("missing")));
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_lifecycle_restores_user_path_for_npm_and_its_child() {
+        let root = tempfile::tempdir().unwrap();
+        let npm_dir = root.path().join("npm 用户 & tools");
+        let node_dir = root.path().join("node 用户 tools");
+        std::fs::create_dir_all(&npm_dir).unwrap();
+        std::fs::create_dir_all(&node_dir).unwrap();
+        std::fs::write(
+            npm_dir.join("npm.cmd"),
+            "@echo off\r\ncmd /D /C cc_switch_lifecycle_test_node.cmd\r\nexit /b %errorlevel%\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            node_dir.join("cc_switch_lifecycle_test_node.cmd"),
+            "@echo restored-user-path\r\n@exit /b 0\r\n",
+        )
+        .unwrap();
+        let script = root.path().join("update.bat");
+        std::fs::write(&script, "@echo off\r\ncall npm --version\r\n").unwrap();
+
+        // Model an MSI-launched process with only the system directory on PATH.
+        // Inject the registry contribution without modifying the real registry
+        // or the test runner's process environment.
+        let system_path = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
+        let inherited = system_path.to_str().unwrap();
+        let user_path = format!("{};{}", npm_dir.display(), node_dir.display());
+        let effective = merge_path_segments_win(&[inherited, &user_path]);
+        let parent_path = std::env::var_os("PATH");
+
+        let missing = windows_lifecycle_command(&script, inherited)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            !missing.status.success(),
+            "npm must be absent on the narrow PATH"
+        );
+
+        let restored = windows_lifecycle_command(&script, &effective)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(restored.status.success(), "{restored:?}");
+        assert_eq!(
+            decode_command_output(&restored.stdout).trim(),
+            "restored-user-path"
+        );
+        assert_eq!(std::env::var_os("PATH"), parent_path);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_lifecycle_preserves_process_path_priority_and_failure() {
+        let root = tempfile::tempdir().unwrap();
+        let preferred = root.path().join("process tools");
+        let fallback = root.path().join("registry tools");
+        std::fs::create_dir_all(&preferred).unwrap();
+        std::fs::create_dir_all(&fallback).unwrap();
+        std::fs::write(
+            preferred.join("npm.cmd"),
+            "@echo process-npm-failed 1>&2\r\n@exit /b 23\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            fallback.join("npm.cmd"),
+            "@echo registry-npm\r\n@exit /b 0\r\n",
+        )
+        .unwrap();
+        let script = root.path().join("update.bat");
+        std::fs::write(&script, "@echo off\r\ncall npm --version\r\n").unwrap();
+        let effective =
+            merge_path_segments_win(&[preferred.to_str().unwrap(), fallback.to_str().unwrap()]);
+
+        let output = windows_lifecycle_command(&script, &effective)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(23));
+        assert_eq!(
+            finish_lifecycle_output(&output).unwrap_err(),
+            "process-npm-failed"
+        );
+    }
+
+    #[test]
+    fn shell_command_missing_matches_shell_formats_only() {
+        assert!(is_shell_command_missing(
+            "bash: line 1: claude: command not found",
+            "claude"
+        ));
+        assert!(is_shell_command_missing(
+            "zsh:1: command not found: claude",
+            "claude"
+        ));
+        assert!(is_shell_command_missing(
+            "sh: 1: claude: not found",
+            "claude"
+        ));
+        assert!(is_shell_command_missing(
+            "fish: Unknown command: claude",
+            "claude"
+        ));
+        assert!(!is_shell_command_missing(
+            "Error: Cannot find module 'x'\nmodule not found",
+            "claude"
+        ));
+        assert!(!is_shell_command_missing("config file not found", "claude"));
     }
 }

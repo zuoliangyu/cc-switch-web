@@ -18,6 +18,7 @@ import {
   Trash2,
   Upload,
   X,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +45,7 @@ import type { AppId } from "@/lib/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api";
 import { toast } from "sonner";
+import { copyText } from "@/lib/clipboard";
 import { SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
@@ -810,6 +812,28 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
     }
   };
 
+  const copyName = async () => {
+    try {
+      await copyText(skill.name);
+      toast.success(t("skills.copiedName", { name: skill.name }));
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    }
+  };
+
+  // Web 不调用本机文件管理器：复制主副本所在目录的路径
+  const copyDirPath = async () => {
+    try {
+      const dir = await skillsApi.installedSkillDir(skill.directory);
+      await copyText(dir);
+      toast.success(t("skills.copiedDirPath"), { description: dir });
+    } catch (error) {
+      toast.error(t("skills.copyDirPathFailed"), {
+        description: String(error),
+      });
+    }
+  };
+
   const sourceLabel = useMemo(() => {
     if (skill.repoOwner && skill.repoName) {
       return `${skill.repoOwner}/${skill.repoName}`;
@@ -821,9 +845,14 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
     <ListItemRow isLast={isLast}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="font-medium text-sm text-foreground truncate">
+          <button
+            type="button"
+            onClick={() => void copyName()}
+            title={t("skills.copyName")}
+            className="min-w-0 cursor-copy truncate text-start font-medium text-sm text-foreground hover:underline hover:underline-offset-[3px]"
+          >
             {skill.name}
-          </span>
+          </button>
           {skill.readmeUrl && (
             <button
               type="button"
@@ -880,6 +909,17 @@ const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
             )}
           </Button>
         ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => void copyDirPath()}
+          title={t("skills.copyDirPath")}
+          aria-label={t("skills.copyDirPath")}
+        >
+          <FolderOpen size={14} />
+        </Button>
         <Button
           type="button"
           variant="ghost"

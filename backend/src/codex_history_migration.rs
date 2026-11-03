@@ -22,14 +22,19 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use toml_edit::DocumentMut;
 
-const THIRD_PARTY_MIGRATION_NAME: &str = "codex-history-provider-migration-v1";
-const MIGRATION_NAME: &str = "codex-official-history-unify-v1";
-const RESTORE_BACKUP_NAME: &str = "codex-official-history-unify-restore-v1";
+pub(crate) const THIRD_PARTY_MIGRATION_NAME: &str = "codex-history-provider-migration-v1";
+pub(crate) const MIGRATION_NAME: &str = "codex-official-history-unify-v1";
+pub(crate) const RESTORE_BACKUP_NAME: &str = "codex-official-history-unify-restore-v1";
 const OFFICIAL_PROVIDER_ID: &str = "openai";
 const STATE_DB_FILENAME: &str = "state_5.sqlite";
 const STATE_DB_ID_CHUNK: usize = 500;
 
 static OP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// 用户在「备份与恢复」里删除迁移备份目录时拿同一把锁，避免抽掉正在写的备份。
+pub(crate) fn lock_history_op_for_backup_cleanup() -> std::sync::MutexGuard<'static, ()> {
+    lock_operation()
+}
 
 fn lock_operation() -> std::sync::MutexGuard<'static, ()> {
     OP_LOCK

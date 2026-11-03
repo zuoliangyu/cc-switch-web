@@ -793,6 +793,78 @@ async fn delete_mcp_server(
     Ok(Json(deleted))
 }
 
+/// 连通性检查的结果暂存（Web 无 IPC 通道，由前端轮询取走）。
+static MCP_CONNECTIVITY_RESULTS: once_cell::sync::Lazy<
+    std::sync::Mutex<
+        std::collections::HashMap<
+            String,
+            Vec<crate::services::mcp_connectivity::ConnectivityResult>,
+        >,
+    >,
+> = once_cell::sync::Lazy::new(Default::default);
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConnectivityStartRequest {
+    server_ids: Vec<String>,
+}
+
+/// 只在用户点「检查连通性 / 测试连接」时启动；最多 3 个并发，每个 30 秒超时。
+async fn start_mcp_connectivity_checks(
+    State(state): State<WebApiState>,
+    Json(payload): Json<McpConnectivityStartRequest>,
+) -> Result<Json<String>, ApiError> {
+    let servers = crate::services::mcp::McpService::get_all_servers(state.app_state.as_ref())
+        .map_err(|e| ApiError::internal(format!("failed to load mcp servers: {e}")))?;
+    let selected: Vec<_> = servers
+        .into_iter()
+        .filter(|(id, _)| payload.server_ids.contains(id))
+        .map(|(_, server)| server)
+        .collect();
+    let batch_slot = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+    let slot = batch_slot.clone();
+    let batch_id = crate::services::mcp_connectivity::start_checks(selected, move |result| {
+        let Some(id) = slot.lock().unwrap().clone() else {
+            return true;
+        };
+        let mut store = MCP_CONNECTIVITY_RESULTS.lock().unwrap();
+        match store.get_mut(&id) {
+            Some(results) => {
+                results.push(result);
+                true
+            }
+            // 前端已取消并清掉了结果：剩下排队的检查也不用跑了
+            None => false,
+        }
+    });
+    MCP_CONNECTIVITY_RESULTS
+        .lock()
+        .unwrap()
+        .insert(batch_id.clone(), Vec::new());
+    *batch_slot.lock().unwrap() = Some(batch_id.clone());
+    Ok(Json(batch_id))
+}
+
+/// 取走这一批已出的结果；批次跑完且结果取完后返回 done。
+async fn poll_mcp_connectivity_checks(Path(batch_id): Path<String>) -> Json<Value> {
+    let running = crate::services::mcp_connectivity::is_running(&batch_id);
+    let mut store = MCP_CONNECTIVITY_RESULTS.lock().unwrap();
+    let results = store
+        .get_mut(&batch_id)
+        .map(std::mem::take)
+        .unwrap_or_default();
+    if !running {
+        store.remove(&batch_id);
+    }
+    Json(json!({ "results": results, "done": !running }))
+}
+
+async fn cancel_mcp_connectivity_checks(Path(batch_id): Path<String>) -> StatusCode {
+    MCP_CONNECTIVITY_RESULTS.lock().unwrap().remove(&batch_id);
+    crate::services::mcp_connectivity::cancel_checks(&batch_id);
+    StatusCode::NO_CONTENT
+}
+
 async fn toggle_mcp_app(
     State(state): State<WebApiState>,
     Path((id, app)): Path<(String, String)>,
@@ -1411,6 +1483,18 @@ async fn skill_storage_paths() -> Json<Value> {
     Json(
         json!({ "ccSwitch": SkillService::ssot_dir_for_location(SkillStorageLocation::CcSwitch), "unified": SkillService::ssot_dir_for_location(SkillStorageLocation::Unified) }),
     )
+}
+
+#[derive(Deserialize)]
+struct SkillDirQuery {
+    directory: String,
+}
+
+/// 已安装 Skill 主副本所在目录。Web 不调用本机文件管理器，界面拿到路径后提供复制。
+async fn installed_skill_dir(Query(query): Query<SkillDirQuery>) -> Result<Json<String>, ApiError> {
+    crate::services::skill::SkillService::get_installed_skill_dir(&query.directory)
+        .map(|dir| Json(dir.to_string_lossy().into_owned()))
+        .map_err(|e| ApiError::bad_request(e.to_string()))
 }
 
 async fn resync_skills(
@@ -2504,6 +2588,13 @@ async fn webdav_sync_save_settings(
         .map_err(|e| ApiError::internal(format!("failed to save webdav sync settings: {e}")))
 }
 
+async fn webdav_sync_clear_settings() -> Result<Json<Value>, ApiError> {
+    crate::commands::webdav_sync_clear_settings_internal()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to clear webdav sync settings: {e}")))
+}
+
 async fn webdav_sync_fetch_remote_info() -> Result<Json<Value>, ApiError> {
     crate::commands::webdav_sync_fetch_remote_info_internal()
         .await
@@ -3091,6 +3182,22 @@ async fn list_db_backups() -> Result<Json<Vec<crate::database::backup::BackupEnt
     let backups = crate::database::Database::list_backups()
         .map_err(|e| ApiError::internal(format!("failed to list database backups: {e}")))?;
     Ok(Json(backups))
+}
+
+async fn list_backup_locations(
+) -> Result<Json<Vec<crate::services::backup_storage::BackupLocation>>, ApiError> {
+    tokio::task::spawn_blocking(crate::services::backup_storage::list_locations)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to list backup locations: {e}")))
+}
+
+async fn delete_backup_location(Path(id): Path<String>) -> Result<Json<u64>, ApiError> {
+    tokio::task::spawn_blocking(move || crate::services::backup_storage::delete_location(&id))
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to delete backup location: {e}")))?
+        .map(Json)
+        .map_err(|e| ApiError::bad_request(e.to_string()))
 }
 
 async fn restore_db_backup(
@@ -4169,7 +4276,48 @@ async fn shutdown_signal() {
     tokio::select! { _ = ctrl_c => {}, _ = terminate => {} }
 }
 
+/// 本进程打开文件描述符的软上限目标。macOS 的 `setrlimit` 不接受超过 `OPEN_MAX`（10240）的值。
+#[cfg(unix)]
+const OPEN_FILE_SOFT_LIMIT_TARGET: libc::rlim_t = 10240;
+
+/// 由 launchd / 服务管理器启动时继承的软上限（macOS 默认只有 256 个文件描述符）。
+/// 本地路由并发时客户端连接、上游连接、日志、数据库和配置文件都要占用描述符，突发请求下
+/// accept、上游连接和打开数据库会一起报 EMFILE（Too many open files）。启动时把软上限
+/// 提到硬上限（封顶 10240），硬上限更低或已经足够时不动。
+#[cfg(unix)]
+pub(crate) fn raise_open_file_limit() {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: 传入的是有效的 rlimit 指针，调用只读写这个结构体。
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } != 0 {
+        log::warn!(
+            "读取文件描述符上限失败: {}",
+            std::io::Error::last_os_error()
+        );
+        return;
+    }
+    let target = OPEN_FILE_SOFT_LIMIT_TARGET.min(limit.rlim_max);
+    if limit.rlim_cur >= target {
+        return;
+    }
+    let previous = limit.rlim_cur;
+    limit.rlim_cur = target;
+    // SAFETY: 同上；软上限不超过硬上限，不需要特权。
+    if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) } != 0 {
+        log::warn!(
+            "提高文件描述符上限失败（当前 {previous}）: {}",
+            std::io::Error::last_os_error()
+        );
+    } else {
+        log::info!("文件描述符软上限 {previous} → {target}");
+    }
+}
+
 pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<(), String> {
+    #[cfg(unix)]
+    raise_open_file_limit();
     let access_key = WebAccessKey::from_env()?;
     let db = Arc::new(Database::init().map_err(|e| format!("database init failed: {e}"))?);
     crate::mode::operation::recover_on_startup(db.as_ref());
@@ -4307,6 +4455,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/webdav/download", post(webdav_sync_download))
         .route("/api/webdav/settings", post(webdav_sync_save_settings))
         .route(
+            "/api/webdav/settings/clear",
+            post(webdav_sync_clear_settings),
+        )
+        .route(
             "/api/webdav/remote-info",
             get(webdav_sync_fetch_remote_info),
         )
@@ -4397,6 +4549,11 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(delete_db_backup),
         )
         .route("/api/backups/db/:filename/restore", post(restore_db_backup))
+        .route("/api/backups/locations", get(list_backup_locations))
+        .route(
+            "/api/backups/locations/:id",
+            axum::routing::delete(delete_backup_location),
+        )
         .route("/api/profiles", get(list_profiles).post(create_profile))
         .route(
             "/api/profiles/current/:scope",
@@ -4512,6 +4669,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/skills/discover", get(discover_available_skills))
         .route("/api/skills/resync", post(resync_skills))
         .route("/api/skills/storage-paths", get(skill_storage_paths))
+        .route("/api/skills/installed-dir", get(installed_skill_dir))
         .route("/api/mcp/resync", post(resync_mcp))
         .route("/api/skills/updates", get(check_skill_updates))
         .route("/api/skills/install", post(install_skill_unified))
@@ -4678,6 +4836,11 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(delete_mcp_server),
         )
         .route("/api/mcp/servers/:id/apps/:app", put(toggle_mcp_app))
+        .route("/api/mcp/connectivity", post(start_mcp_connectivity_checks))
+        .route(
+            "/api/mcp/connectivity/:batch",
+            get(poll_mcp_connectivity_checks).delete(cancel_mcp_connectivity_checks),
+        )
         .route(
             "/api/providers/:app/:id",
             put(update_provider).delete(delete_provider),
@@ -4844,3 +5007,30 @@ mod session_tests;
 #[cfg(test)]
 #[path = "web_resource_tests.rs"]
 mod resource_tests;
+
+#[cfg(all(test, unix))]
+mod open_file_limit_tests {
+    #[cfg(unix)]
+    #[test]
+    fn raise_open_file_limit_lifts_soft_limit_to_target_or_hard_limit() {
+        fn current() -> libc::rlimit {
+            let mut limit = libc::rlimit {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            assert_eq!(
+                unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+                0
+            );
+            limit
+        }
+
+        let before = current();
+        super::raise_open_file_limit();
+        let after = current();
+        let expected = super::OPEN_FILE_SOFT_LIMIT_TARGET.min(after.rlim_max);
+        assert!(after.rlim_cur >= expected);
+        assert!(after.rlim_cur >= before.rlim_cur);
+        assert_eq!(after.rlim_max, before.rlim_max);
+    }
+}

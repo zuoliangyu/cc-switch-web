@@ -1141,6 +1141,36 @@ impl StreamCheckService {
         }
     }
 
+    /// OpenCode 供应商是否按 V2 原生格式（`package` + `settings`）存储（#8969）。
+    fn opencode_is_native(provider: &Provider) -> bool {
+        crate::opencode_config::provider_format(
+            &provider.settings_config,
+            provider.opencode_config_format(),
+        ) == crate::provider::OpenCodeConfigFormat::V2
+    }
+
+    /// 先读本格式的字段，取不到再读另一种格式的同名字段。
+    fn opencode_str<'a>(provider: &'a Provider, v1: &str, v2: &str) -> Option<&'a str> {
+        let pointers = if Self::opencode_is_native(provider) {
+            [v2, v1]
+        } else {
+            [v1, v2]
+        };
+        pointers.into_iter().find_map(|pointer| {
+            provider
+                .settings_config
+                .pointer(pointer)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        })
+    }
+
+    /// OpenCode V1: `{ npm, options: { baseURL, apiKey }, ... }`；
+    /// V2（原生）: `{ package, settings: { baseURL, apiKey }, ... }`。
+    ///
+    /// 用户未显式填地址时，按 SDK 包回退到包自带默认端点；
+    /// openai-compatible 这类包没有默认端点，必须显式填。
     fn resolve_opencode_base_url(
         provider: &Provider,
         npm: Option<&str>,
@@ -1159,57 +1189,62 @@ impl StreamCheckService {
         fallback.map(|s| s.to_string()).ok_or_else(|| {
             AppError::localized(
                 "opencode_base_url_missing",
-                "OpenCode 供应商缺少 options.baseURL，且当前 SDK 包没有默认端点",
-                "OpenCode provider is missing `options.baseURL` and the SDK package has no default endpoint",
+                "OpenCode 供应商缺少 baseURL（V1 为 options.baseURL，V2 为 settings.baseURL），且当前 SDK 包没有默认端点",
+                "OpenCode provider is missing a base URL (`options.baseURL` in V1, `settings.baseURL` in V2) and the SDK package has no default endpoint",
             )
         })
     }
 
     fn extract_opencode_base_url(provider: &Provider) -> Option<String> {
-        provider
-            .settings_config
-            .get("options")
-            .and_then(|v| v.get("baseURL"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        Self::opencode_str(provider, "/options/baseURL", "/settings/baseURL").map(str::to_string)
     }
 
     fn extract_opencode_headers(
         provider: &Provider,
     ) -> Option<&serde_json::Map<String, serde_json::Value>> {
-        provider
-            .settings_config
-            .get("options")
-            .and_then(|v| v.get("headers"))
-            .and_then(|v| v.as_object())
-            .filter(|m| !m.is_empty())
+        let settings = &provider.settings_config;
+        let v1 = settings.pointer("/options/headers");
+        let v2 = settings.get("headers");
+        let ordered = if Self::opencode_is_native(provider) {
+            [v2, v1]
+        } else {
+            [v1, v2]
+        };
+        ordered
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_object())
+            .find(|m| !m.is_empty())
     }
 
     fn extract_opencode_api_key(provider: &Provider) -> Result<String, AppError> {
-        provider
-            .settings_config
-            .get("options")
-            .and_then(|v| v.get("apiKey"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        Self::opencode_str(provider, "/options/apiKey", "/settings/apiKey")
+            .map(str::to_string)
             .ok_or_else(|| {
                 AppError::localized(
                     "opencode_api_key_missing",
-                    "OpenCode 供应商缺少 options.apiKey",
-                    "OpenCode provider is missing `options.apiKey`",
+                    "OpenCode 供应商缺少 apiKey（V1 为 options.apiKey，V2 为 settings.apiKey）",
+                    "OpenCode provider is missing an API key (`options.apiKey` in V1, `settings.apiKey` in V2)",
                 )
             })
     }
 
+    /// SDK 包：V1 读 `npm`，V2 读 `package`，并把 V2 的包名归一到对应的 AI SDK 包。
     fn extract_opencode_npm(provider: &Provider) -> Option<String> {
-        provider
-            .settings_config
-            .get("npm")
-            .and_then(|v| v.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+        let raw = Self::opencode_str(provider, "/npm", "/package")?;
+        let raw = raw.strip_prefix("aisdk:").unwrap_or(raw);
+        let normalized = match raw {
+            "@opencode/ai/providers/openai-compatible" | "@opencode/ai/providers/openai/chat" => {
+                "@ai-sdk/openai-compatible"
+            }
+            "@opencode/ai/providers/openai" | "@opencode/ai/providers/openai/responses" => {
+                "@ai-sdk/openai"
+            }
+            "@opencode/ai/providers/anthropic" => "@ai-sdk/anthropic",
+            "@opencode/ai/providers/google" => "@ai-sdk/google",
+            other => other,
+        };
+        Some(normalized.to_string())
     }
 
     fn determine_status(latency_ms: u64, threshold: u64) -> HealthStatus {
@@ -1464,6 +1499,35 @@ impl StreamCheckService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opencode_native_provider_reads_settings_and_package() {
+        let mut p = Provider::with_id(
+            "native".into(),
+            "Native".into(),
+            serde_json::json!({
+                "package": "@opencode/ai/providers/anthropic",
+                "settings": {"baseURL": "https://native.example", "apiKey": "sk-native"},
+                "headers": {"X-Tenant": "t"}
+            }),
+            None,
+        );
+        p.meta = Some(crate::provider::ProviderMeta {
+            opencode_config_format: Some(crate::provider::OpenCodeConfigFormat::V2),
+            ..Default::default()
+        });
+        let npm = StreamCheckService::extract_opencode_npm(&p);
+        assert_eq!(npm.as_deref(), Some("@ai-sdk/anthropic"));
+        assert_eq!(
+            StreamCheckService::resolve_opencode_base_url(&p, npm.as_deref()).unwrap(),
+            "https://native.example"
+        );
+        assert_eq!(
+            StreamCheckService::extract_opencode_api_key(&p).unwrap(),
+            "sk-native"
+        );
+        assert!(StreamCheckService::extract_opencode_headers(&p).is_some());
+    }
 
     fn make_provider(settings_config: serde_json::Value) -> Provider {
         Provider::with_id(

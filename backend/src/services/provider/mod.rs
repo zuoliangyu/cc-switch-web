@@ -2026,6 +2026,15 @@ impl ProviderService {
             return Self::save_mcode_provider(state, &provider, add_to_live, true);
         }
 
+        // 累加式写 live 失败（如配置文件解析不了）时要撤回这一行，先记下原来的
+        let existing_row = if app_type.is_additive_mode() {
+            state
+                .db
+                .get_provider_by_id(&provider.id, app_type.as_str())?
+        } else {
+            None
+        };
+
         // Save to database
         state.db.save_provider(app_type.as_str(), &provider)?;
 
@@ -2049,7 +2058,23 @@ impl ProviderService {
             if !add_to_live {
                 return Ok(true);
             }
-            write_live_with_common_config(state.db.as_ref(), &app_type, &provider)?;
+            if let Err(error) =
+                write_live_with_common_config(state.db.as_ref(), &app_type, &provider)
+            {
+                // live 没写进去就不留这一行，免得界面显示已添加、配置文件里却没有
+                let rollback = match existing_row.as_ref() {
+                    Some(existing) => state.db.save_provider(app_type.as_str(), existing),
+                    None => state.db.delete_provider(app_type.as_str(), &provider.id),
+                };
+                if let Err(rollback) = rollback {
+                    log::warn!(
+                        "恢复 {} 供应商 '{}' 失败: {rollback}",
+                        app_type.as_str(),
+                        provider.id
+                    );
+                }
+                return Err(error);
+            }
             return Ok(true);
         }
 
@@ -2358,7 +2383,7 @@ impl ProviderService {
 
     /// Delete a provider
     ///
-    /// 同时检查本地 settings 和数据库的当前供应商，防止删除任一端正在使用的供应商。
+    /// 直连指针或代理路由指着的供应商不能删（见 `mode::current::is_referenced`）。
     /// 对于累加模式应用（OpenCode, OpenClaw），可以随时删除任意供应商，同时从 live 配置中移除。
     pub fn delete(state: &AppState, app_type: AppType, id: &str) -> Result<(), AppError> {
         if app_type == AppType::Pi {
@@ -3612,9 +3637,11 @@ impl ProviderService {
 
         // Remove provider-specific fields
         if let Some(obj) = config.as_object_mut() {
-            if let Some(options) = obj.get_mut("options").and_then(|v| v.as_object_mut()) {
-                options.remove("apiKey");
-                options.remove("baseURL");
+            for key in ["options", "settings"] {
+                if let Some(options) = obj.get_mut(key).and_then(|v| v.as_object_mut()) {
+                    options.remove("apiKey");
+                    options.remove("baseURL");
+                }
             }
             // Keep npm and models as they might be common
         }
@@ -3843,6 +3870,18 @@ impl ProviderService {
                         "OpenCode 配置必须是 JSON 对象",
                         "OpenCode configuration must be a JSON object",
                     ));
+                }
+                // The row is saved before the live write, which would refuse an invalid
+                // native declaration only after the database already holds it.
+                if !matches!(provider.category.as_deref(), Some("omo") | Some("omo-slim")) {
+                    let (fragment, format) = crate::opencode_config::provider_fragment(
+                        &provider.id,
+                        &provider.settings_config,
+                        provider.opencode_config_format(),
+                    )?;
+                    if format == crate::provider::OpenCodeConfigFormat::V2 {
+                        crate::opencode_config::validate_native_provider(&provider.id, fragment)?;
+                    }
                 }
             }
             AppType::OpenClaw => {
@@ -4443,3 +4482,25 @@ mod gemini_runtime_tests;
 
 #[cfg(test)]
 mod grok_runtime_tests;
+
+#[cfg(test)]
+mod opencode_native_tests {
+    use super::ProviderService;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn native_opencode_common_config_excludes_provider_credentials() {
+        let config = json!({
+            "settings": {"baseURL": "https://native.example", "apiKey": "test", "timeout": 1000},
+            "body": {"metadata": {"keep": true}}
+        });
+        let common: Value = serde_json::from_str(
+            &ProviderService::extract_opencode_common_config(&config).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            common,
+            json!({"settings": {"timeout": 1000}, "body": {"metadata": {"keep": true}}})
+        );
+    }
+}

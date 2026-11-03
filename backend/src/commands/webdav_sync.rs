@@ -180,6 +180,15 @@ pub async fn webdav_sync_save_settings_internal(
     Ok(json!({ "success": true }))
 }
 
+/// Forget the saved WebDAV config (URL, credentials, remote root, status) on
+/// this device. Remote snapshots are left untouched.
+pub async fn webdav_sync_clear_settings_internal() -> Result<Value, String> {
+    run_with_webdav_lock(async { settings::set_webdav_sync_settings(None) })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(json!({ "success": true }))
+}
+
 pub async fn webdav_sync_fetch_remote_info_internal() -> Result<Value, String> {
     let settings = require_enabled_webdav_settings()?;
     let info = webdav_sync_service::fetch_remote_info(&settings)

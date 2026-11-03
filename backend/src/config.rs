@@ -33,6 +33,28 @@ pub fn get_home_dir() -> PathBuf {
     })
 }
 
+/// 路径是否位于 WSL 网络共享（`\\wsl$\...` 或 `\\wsl.localhost\...`）；9P 共享不支持部分系统调用。
+#[cfg(windows)]
+pub(crate) fn is_wsl_path(path: &Path) -> bool {
+    use std::path::Prefix;
+    if let Some(Component::Prefix(prefix)) = path.components().next() {
+        match prefix.kind() {
+            Prefix::UNC(server, _) | Prefix::VerbatimUNC(server, _) => {
+                let s = server.to_string_lossy();
+                s.eq_ignore_ascii_case("wsl$") || s.eq_ignore_ascii_case("wsl.localhost")
+            }
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn is_wsl_path(_path: &Path) -> bool {
+    false
+}
+
 fn normalize_path_lexically(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
     for component in path.components() {
@@ -443,6 +465,12 @@ pub(crate) fn commit_staged(tmp: &Path, path: &Path) -> Result<(), AppError> {
             Foundation::ERROR_NOT_SUPPORTED, Storage::FileSystem::ReplaceFileW,
         };
 
+        // WSL UNC paths reject ReplaceFileW with ERROR_NOT_SUPPORTED (50) on
+        // every attempt; treat it as failed up front and let the rename
+        // fallback below do the work, instead of burning the syscall (and the
+        // retry loop) on each write.
+        let skip_replace = is_wsl_path(path);
+
         let replaced: Vec<u16> = path
             .as_os_str()
             .encode_wide()
@@ -459,15 +487,19 @@ pub(crate) fn commit_staged(tmp: &Path, path: &Path) -> Result<(), AppError> {
         for _ in 0..3 {
             // SAFETY: both path buffers are NUL-terminated UTF-16 and remain alive for the
             // duration of the call. Backup, exclusion, and reserved pointers are intentionally null.
-            let replaced_ok = unsafe {
-                ReplaceFileW(
-                    replaced.as_ptr(),
-                    replacement.as_ptr(),
-                    std::ptr::null(),
-                    0,
-                    std::ptr::null(),
-                    std::ptr::null(),
-                )
+            let replaced_ok = if skip_replace {
+                0
+            } else {
+                unsafe {
+                    ReplaceFileW(
+                        replaced.as_ptr(),
+                        replacement.as_ptr(),
+                        std::ptr::null(),
+                        0,
+                        std::ptr::null(),
+                        std::ptr::null(),
+                    )
+                }
             };
             if replaced_ok != 0 {
                 completed = true;
@@ -478,7 +510,7 @@ pub(crate) fn commit_staged(tmp: &Path, path: &Path) -> Result<(), AppError> {
             // WSL UNC paths reject ReplaceFileW with ERROR_NOT_SUPPORTED (50).
             // std::fs::rename uses a different replace-existing API on Windows.
             let replace_not_supported =
-                replace_error.raw_os_error() == Some(ERROR_NOT_SUPPORTED as i32);
+                skip_replace || replace_error.raw_os_error() == Some(ERROR_NOT_SUPPORTED as i32);
             if replace_error.kind() != std::io::ErrorKind::NotFound && !replace_not_supported {
                 last_error = Some(replace_error);
                 break;

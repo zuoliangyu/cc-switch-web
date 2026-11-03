@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
-use indexmap::IndexMap;
 use crate::app_config::AppType;
 use crate::services::mcp::McpService;
 use crate::store::AppState;
+use indexmap::IndexMap;
 use std::str::FromStr;
 
 // ============================================================================
@@ -42,7 +42,9 @@ pub(crate) async fn toggle_mcp_app_internal(
     enabled: bool,
 ) -> Result<(), String> {
     let app_ty = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    McpService::toggle_app(state, &server_id, app_ty, enabled).map_err(|e| e.to_string())
+    McpService::toggle_app_locked(state, &server_id, app_ty, enabled)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 从所有应用导入 MCP 服务器（复用已有的导入逻辑）

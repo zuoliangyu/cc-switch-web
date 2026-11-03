@@ -1,8 +1,10 @@
+pub(crate) mod backup_storage;
 pub(crate) mod balance;
 pub(crate) mod coding_plan;
 pub(crate) mod env_checker;
 pub(crate) mod env_manager;
 pub(crate) mod mcp;
+pub(crate) mod mcp_connectivity;
 pub(crate) mod model_fetch;
 pub(crate) mod model_pricing;
 pub(crate) mod omo;

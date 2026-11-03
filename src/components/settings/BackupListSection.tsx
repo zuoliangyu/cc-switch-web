@@ -21,6 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBackupManager } from "@/hooks/useBackupManager";
+import {
+  BackupStorageSection,
+  formatBytes,
+} from "@/components/settings/BackupStorageSection";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 interface BackupListSectionProps {
@@ -30,12 +34,6 @@ interface BackupListSectionProps {
     backupIntervalHours?: number;
     backupRetainCount?: number;
   }) => void;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatBackupDate(isoString: string): string {
@@ -405,6 +403,8 @@ export function BackupListSection({
           </div>
         )}
       </div>
+
+      <BackupStorageSection />
 
       {/* Restore Confirmation Dialog */}
       <Dialog

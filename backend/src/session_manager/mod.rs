@@ -378,7 +378,3 @@ mod tests {
         );
     }
 }
-
-pub(crate) fn grokbuild_session_roots() -> Vec<PathBuf> {
-    grokbuild::session_roots()
-}

@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use crate::error::AppError;
 use crate::opencode_config;
 
-use super::validation::validate_server_spec;
+use super::validation::{spec_transport_type, validate_server_spec};
 use super::{merge_imported_server, ImportedMcpServers};
 
 // ============================================================================
@@ -41,7 +41,7 @@ fn convert_to_opencode_format(spec: &Value) -> Result<Value, AppError> {
         .as_object()
         .ok_or_else(|| AppError::McpValidation("MCP spec must be a JSON object".into()))?;
 
-    let typ = obj.get("type").and_then(|v| v.as_str()).unwrap_or("stdio");
+    let typ = spec_transport_type(spec);
 
     let mut result = serde_json::Map::new();
 
@@ -284,6 +284,16 @@ mod tests {
         assert_eq!(result["url"], "https://example.com/mcp");
         assert_eq!(result["headers"]["Authorization"], "Bearer xxx");
         assert_eq!(result["enabled"], true);
+    }
+
+    #[test]
+    fn test_convert_url_without_type_to_remote() {
+        let spec = json!({ "url": "https://mcp.example.com/mcp" });
+
+        let result = convert_to_opencode_format(&spec).unwrap();
+        assert_eq!(result["type"], "remote");
+        assert_eq!(result["url"], "https://mcp.example.com/mcp");
+        assert!(result.get("command").is_none());
     }
 
     #[test]

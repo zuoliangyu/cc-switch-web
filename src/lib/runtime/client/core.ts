@@ -1,4 +1,9 @@
-import { resyncWebSkills, resyncWebMcp, getWebSkillStoragePaths } from "./web";
+import {
+  resyncWebSkills,
+  resyncWebMcp,
+  getWebSkillStoragePaths,
+  getWebInstalledSkillDir,
+} from "./web";
 import type { AppMode } from "@/types/proxy";
 import { getDefaultAppProxyConfig } from "./defaults";
 import type { AppId } from "@/lib/api/types";
@@ -116,6 +121,8 @@ import {
   getWebUpstreamProxyStatus,
   listWebManagedAuthAccounts,
   listWebDbBackups,
+  listWebBackupLocations,
+  deleteWebBackupLocation,
   logoutWebManagedAuth,
   pollWebManagedAuthAccount,
   cancelWebManagedAuthLogin,
@@ -206,6 +213,7 @@ import {
   setWebHermesMemory,
   setWebHermesMemoryEnabled,
   saveWebdavSyncSettings,
+  clearWebdavSyncSettings,
   setWebOpenClawAgentsDefaults,
   setWebOpenClawDefaultModel,
   setWebOpenClawEnv,
@@ -301,6 +309,8 @@ export async function invoke<T>(
         args?.settings as any,
         (args?.passwordTouched as boolean | undefined) ?? false,
       )) as T;
+    case "webdav_sync_clear_settings":
+      return (await clearWebdavSyncSettings()) as T;
     case "webdav_sync_fetch_remote_info":
       return (await fetchWebdavRemoteInfo()) as T;
     case "export_config_download":
@@ -438,6 +448,10 @@ export async function invoke<T>(
       )) as T;
     case "delete_db_backup":
       return (await deleteWebDbBackup(args?.filename as string)) as T;
+    case "list_backup_locations":
+      return (await listWebBackupLocations()) as T;
+    case "delete_backup_location":
+      return (await deleteWebBackupLocation(args?.id as string)) as T;
     case "get_providers": {
       const appId = args?.app as AppId | undefined;
       if (!appId) {
@@ -754,11 +768,13 @@ export async function invoke<T>(
     case "get_installed_skills":
       return (await getWebInstalledSkills()) as T;
     case "resync_mcp_to_apps":
-      return await resyncWebMcp(args?.apps as any) as T;
+      return (await resyncWebMcp(args?.apps as any)) as T;
     case "skill_storage_paths":
-      return await getWebSkillStoragePaths() as T;
+      return (await getWebSkillStoragePaths()) as T;
+    case "get_installed_skill_dir":
+      return (await getWebInstalledSkillDir(args?.directory as string)) as T;
     case "resync_skills":
-      return await resyncWebSkills() as T;
+      return (await resyncWebSkills()) as T;
     case "get_skill_backups":
       return (await getWebSkillBackups()) as T;
     case "discover_available_skills":

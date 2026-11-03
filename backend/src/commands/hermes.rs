@@ -37,11 +37,8 @@ pub(crate) fn get_hermes_web_ui_url_internal(path: Option<String>) -> Result<Str
 }
 
 pub(crate) fn launch_hermes_dashboard_internal() -> Result<bool, String> {
-    crate::commands::launch_terminal_command_internal(
-        "hermes dashboard".to_string(),
-        None,
-        None,
-    )
+    let command_line = crate::commands::tool_management::hermes_dashboard_command_line()?;
+    crate::commands::launch_terminal_command_internal(command_line, None, None)
 }
 
 pub(crate) fn get_hermes_model_config_internal(

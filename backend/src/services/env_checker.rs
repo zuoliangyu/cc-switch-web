@@ -25,16 +25,14 @@ pub fn check_env_conflicts(app: &str) -> Result<Vec<EnvConflict>, String> {
         _ => vec![],
     };
 
+    // Windows 查注册表里的系统 / 用户环境变量。
     #[cfg(target_os = "windows")]
     let conflicts = check_system_env(&keywords)?;
 
+    // Unix 只查 shell 配置文件。不扫描进程环境：它继承自启动服务的进程（容器环境变量、
+    // 从 Claude Desktop 拉起的终端注入的 ANTHROPIC_BASE_URL 等），在应用内也删不掉。
     #[cfg(not(target_os = "windows"))]
-    let mut conflicts = check_system_env(&keywords)?;
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        conflicts.extend(check_shell_configs(&keywords)?);
-    }
+    let conflicts = check_shell_configs(&keywords)?;
 
     Ok(conflicts)
 }
@@ -45,7 +43,10 @@ fn check_system_env(keywords: &[&str]) -> Result<Vec<EnvConflict>, String> {
 
     if let Ok(hkcu) = RegKey::predef(HKEY_CURRENT_USER).open_subkey("Environment") {
         for (name, value) in hkcu.enum_values().filter_map(Result::ok) {
-            if keywords.iter().any(|keyword| name.to_uppercase().contains(keyword)) {
+            if keywords
+                .iter()
+                .any(|keyword| name.to_uppercase().contains(keyword))
+            {
                 conflicts.push(EnvConflict {
                     var_name: name.clone(),
                     var_value: value.to_string(),
@@ -60,7 +61,10 @@ fn check_system_env(keywords: &[&str]) -> Result<Vec<EnvConflict>, String> {
         .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")
     {
         for (name, value) in hklm.enum_values().filter_map(Result::ok) {
-            if keywords.iter().any(|keyword| name.to_uppercase().contains(keyword)) {
+            if keywords
+                .iter()
+                .any(|keyword| name.to_uppercase().contains(keyword))
+            {
                 conflicts.push(EnvConflict {
                     var_name: name.clone(),
                     var_value: value.to_string(),
@@ -74,19 +78,6 @@ fn check_system_env(keywords: &[&str]) -> Result<Vec<EnvConflict>, String> {
     }
 
     Ok(conflicts)
-}
-
-#[cfg(not(target_os = "windows"))]
-fn check_system_env(keywords: &[&str]) -> Result<Vec<EnvConflict>, String> {
-    Ok(std::env::vars()
-        .filter(|(key, _)| keywords.iter().any(|keyword| key.to_uppercase().contains(keyword)))
-        .map(|(key, value)| EnvConflict {
-            var_name: key,
-            var_value: value,
-            source_type: "system".to_string(),
-            source_path: "Process Environment".to_string(),
-        })
-        .collect())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -135,4 +126,20 @@ fn check_shell_configs(keywords: &[&str]) -> Result<Vec<EnvConflict>, String> {
     }
 
     Ok(conflicts)
+}
+
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inherited_process_env_is_not_reported_on_unix() {
+        const VAR: &str = "ANTHROPIC_CC_SWITCH_INHERITED_PROBE";
+        std::env::set_var(VAR, "https://api.anthropic.com");
+        let conflicts = check_env_conflicts("claude");
+        std::env::remove_var(VAR);
+
+        let conflicts = conflicts.expect("check should succeed");
+        assert!(!conflicts.iter().any(|c| c.var_name == VAR));
+    }
 }

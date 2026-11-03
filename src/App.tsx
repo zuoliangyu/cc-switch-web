@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
+import { syncLanguageFromSettings } from "@/i18n";
 import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
@@ -67,6 +68,10 @@ import {
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import { UpdateBadge } from "@/components/UpdateBadge";
+import {
+  hasOpencodeDefinition,
+  isNativeOpencodeConfig,
+} from "@/components/providers/forms/helpers/opencodeFormUtils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -232,6 +237,10 @@ function App() {
   }, [currentView]);
 
   const { data: settingsData } = useSettingsQuery();
+  // 首屏语言来自 localStorage 缓存；拿到后端保存的语言后再校正一次
+  useEffect(() => {
+    syncLanguageFromSettings(settingsData?.language);
+  }, [settingsData?.language]);
   const visibleApps: VisibleApps = settingsData?.visibleApps ?? {
     claude: true,
     "claude-desktop": true,
@@ -621,16 +630,25 @@ function App() {
       provider.category !== "omo" &&
       provider.category !== "omo-slim"
     ) {
-      const { npm, models } = provider.settingsConfig;
+      // A copy gets a new ID, so it cannot inherit a built-in definition.
+      // Native V2 declarations name their package in `package`, not `npm`.
+      const isNative = isNativeOpencodeConfig(
+        JSON.stringify(provider.settingsConfig),
+        provider.meta?.opencodeConfigFormat,
+      );
       if (
-        typeof npm !== "string" ||
-        !npm.trim() ||
-        !models ||
-        typeof models !== "object" ||
-        Array.isArray(models) ||
-        Object.keys(models).length === 0
+        !hasOpencodeDefinition(
+          provider.settingsConfig,
+          isNative ? "package" : "npm",
+        )
       ) {
-        toast.error(t("opencode.duplicateRequiresDefinition"));
+        toast.error(
+          t(
+            isNative
+              ? "opencode.duplicateRequiresNativeDefinition"
+              : "opencode.duplicateRequiresDefinition",
+          ),
+        );
         return;
       }
     }
@@ -1091,7 +1109,7 @@ function App() {
               )}
             {currentView === "providers" &&
               activeApp !== "mcode" &&
-              (settingsData?.showProfileSwitcher ?? true) && (
+              (settingsData?.showProfileSwitcher ?? false) && (
                 <div className="flex shrink-0 items-center">
                   <ProfileSwitcher activeApp={activeApp} />
                 </div>

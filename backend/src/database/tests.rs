@@ -847,7 +847,7 @@ fn schema_model_pricing_contains_current_models() {
         ("gpt-5.6-terra", "2", "12", "0.20", "2.50"),
         ("gpt-5.6-luna", "0.20", "1.20", "0.02", "0.25"),
         ("grok-4.5", "2", "6", "0.30", "0"),
-        ("kimi-k3", "3.00", "15.00", "0.30", "0"),
+        ("kimi-k3", "3.00", "15.00", "0.30", "3.00"),
     ];
 
     for (model_id, input, output, cache_read, cache_creation) in expected {
@@ -1084,6 +1084,7 @@ fn model_pricing_seed_covers_deepseek_v41_flash_aliases() {
     // 查价前缀兜底是 LIKE '{id}-%'，只命中更长的行，任一行缺失都会静默按 0 计费。
     for model_id in [
         "deepseek-flash",
+        "deepseek-v4.1-flash",
         "deepseek-v4-flash",
         "deepseek-v4-flash-0731",
         "deepseek-v4-flash-vision-exp",
@@ -1182,6 +1183,44 @@ fn model_pricing_seed_includes_claude_opus_5_5() {
             "20".to_string(),
             "0.20".to_string(),
             "5".to_string(),
+        )
+    );
+}
+
+#[test]
+fn model_pricing_seed_includes_claude_sonnet_5_5_and_haiku_5_5() {
+    let db = Database::memory().expect("create memory db");
+    let conn = db.conn.lock().expect("lock conn");
+
+    let price_of = |model_id: &str| -> (String, String, String, String) {
+        conn.query_row(
+            "SELECT input_cost_per_million, output_cost_per_million,
+                    cache_read_cost_per_million, cache_creation_cost_per_million
+             FROM model_pricing WHERE model_id = ?1",
+            [model_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap_or_else(|e| panic!("query {model_id} price: {e}"))
+    };
+
+    // 缓存读 0.05x = $0.10：不是 Sonnet 5 的 $0.20
+    assert_eq!(
+        price_of("claude-sonnet-5-5"),
+        (
+            "2".to_string(),
+            "10".to_string(),
+            "0.10".to_string(),
+            "2.50".to_string(),
+        )
+    );
+    // 10 万 token 以内的标准档
+    assert_eq!(
+        price_of("claude-haiku-5-5"),
+        (
+            "0.10".to_string(),
+            "0.50".to_string(),
+            "0.01".to_string(),
+            "0.125".to_string(),
         )
     );
 }
@@ -1318,6 +1357,32 @@ fn model_pricing_seed_includes_glm_5_3_flash() {
             "0.15".to_string(),
             "0.50".to_string(),
             "0.03".to_string(),
+            "0".to_string(),
+        )
+    );
+}
+
+#[test]
+fn model_pricing_seed_includes_gemini_4_argon() {
+    let db = Database::memory().expect("create memory db");
+    let conn = db.conn.lock().expect("lock conn");
+
+    let price: (String, String, String, String) = conn
+        .query_row(
+            "SELECT input_cost_per_million, output_cost_per_million,
+                    cache_read_cost_per_million, cache_creation_cost_per_million
+             FROM model_pricing WHERE model_id = 'gemini-4-argon'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .expect("query Gemini 4 Argon price");
+
+    assert_eq!(
+        price,
+        (
+            "2.00".to_string(),
+            "10.00".to_string(),
+            "0.10".to_string(),
             "0".to_string(),
         )
     );

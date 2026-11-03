@@ -17,13 +17,13 @@ function readTranslation(tree: TranslationTree, path: string): unknown {
 }
 
 describe("Hermes Provider 预设目录", () => {
-  it("完整包含 84 个上游预设并保持唯一 Provider Key", () => {
+  it("完整包含 121 个上游预设并保持唯一 Provider Key", () => {
     // Kimi Global 双胞胎与国内版是二选一的同一 Hermes Provider，上游有意共用 Key。
     const keys = hermesProviderPresets
       .filter((preset) => !/^Kimi( For Coding)? Global$/.test(preset.name))
       .map((preset) => preset.settingsConfig.name);
 
-    expect(hermesProviderPresets).toHaveLength(84);
+    expect(hermesProviderPresets).toHaveLength(121);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
@@ -48,13 +48,11 @@ describe("Hermes Provider 预设目录", () => {
     ["zh", zh],
     ["en", en],
     ["ja", ja],
-  ])("%s 覆盖预设名称与合作推广文案", (_locale, translations) => {
+  ])("%s 覆盖预设名称", (_locale, translations) => {
     const keys = new Set<string>();
     for (const preset of hermesProviderPresets) {
+      // Web 不展示合作推广文案，只校验预设显示名称的翻译
       if (preset.nameKey) keys.add(preset.nameKey);
-      if (preset.partnerPromotionKey) {
-        keys.add(`providerForm.partnerPromotion.${preset.partnerPromotionKey}`);
-      }
     }
 
     const missing = [...keys].filter((key) => {

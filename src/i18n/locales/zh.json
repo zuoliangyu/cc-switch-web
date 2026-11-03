@@ -1220,14 +1220,12 @@
     "partnerPromotion": {
       "kimi": "Kimi 新用户首次成功充值，即可获赠充值金额 10% 的 API 额度，最高赠送 ¥1000。",
       "a6api": "A6API 是一家 Token 聚合站，内置实时价格排行自动筛选全网最低价，丝滑稳定不卡顿，简易操作省去比价繁琐，注册获得体验金！",
-      "code0": "code0.ai 是面向开发者的 AI 编程服务平台，支持 Claude Code、Codex、Gemini。CC Switch 用户专属福利：通过官网联系客服即可领取测试额度！",
       "apikeyfun": "APIKEY.FUN 为 CC Switch 的用户提供了特别优惠，通过专属链接注册，可享受最高充值永久 95 折优惠。",
       "apinebula": "APINEBULA 为 CC Switch 用户提供特别优惠：使用专属链接注册并在充值时填写 \"ccswitch\" 优惠码，可享九折优惠。",
       "etok": "官网加入ETok社群，订阅套餐。",
       "subrouter": "SubRouter 是中转站聚合平台，一个 Key 可接入多个模型与供应商。",
       "fenno": "Fenno.ai 是稳定高效的 API 中转服务商，可接入多种主流模型。CC Switch 用户专属福利：通过此链接订阅 1.99 刀 /50 刀额度的 Trial 计划，有效期 7 天！",
       "opencode_go": "OpenCode Go 提供多款编程模型的订阅服务，可通过此链接查看套餐详情并订阅。",
-      "zetaapi": "ZetaAPI 主打模型不掺水、不降智，价格低至官方价 35 折。CC Switch 用户专属福利：通过此链接注册，首次充值使用优惠码 CC-SWITCH 即可享受九折优惠！",
       "ccsub": "CCSub 是稳定、实惠的 AI API 中转平台，Claude Code 官方订阅的超强平替，一个 Key 覆盖全部模型，价格约为官方 1/3。",
       "sudocode": "SudoCode 让 Claude Code 与 Claude Desktop 接入 Claude Opus 5，Codex 接入 GPT-5.6，一个 Key 统一使用。CC Switch 用户注册并加入 QQ 群 726213516，联系群主领取 ¥10 试用额度。",
       "teamorouter": "TeamoRouter 是企业级 Agentic LLM 网关，价格最高可达 90% 折扣。为 CC Switch 的用户提供了特别福利：新用户通过此链接注册，首次充值享 10% 折扣！",
@@ -1247,7 +1245,6 @@
       "ctok": "官网加入CTok社群，订阅套餐。",
       "ddshub": "呆呆兽为CC Switch 的用户提供了特别福利，通过此链接注册后，首单充值可额外赠送 10% 额度（联系群主领取）！",
       "patewayai": "PatewayAI 为 CC Switch 的用户提供了特别福利，通过此链接注册可以获得3美元额度。",
-      "claudeapi": "ClaudeAPI 为 CC Switch 的用户提供了特别福利，通过此链接注册可以领取测试额度。",
       "claudecn": "ClaudeCN 是一家实体企业运营的企业级AI中转平台，支持企业采购流程，可对公打款、签约，服务合规有保障。",
       "runapi": "RunAPI 为 CC Switch 的用户提供了特别福利，通过此链接注册，首次充值即可享受 9 折优惠。",
       "volcengine_agentplan": "火山方舟 Agent Plan 为 CC Switch 的用户提供了专属福利：通过此链接订阅方舟 Agent Plan，新客户首两个月享 2.5 折优惠，再用专属邀请码 6J6FV5N2 领取奖励叠加 9.5 折，低至 9.4 元/月！",
@@ -1274,7 +1271,9 @@
       "deepseek": "DeepSeek",
       "together": "Together AI",
       "doubaoseed": "火山 豆包AI",
-      "tuzi": "兔子API"
+      "tuzi": "兔子API",
+      "tokenfactory": "词元工厂",
+      "yylx": "鱼鱼连线"
     },
     "parameterConfig": "参数配置 - {{name}} *",
     "mainModel": "主模型 (可选)",
@@ -1349,7 +1348,8 @@
     "categoryOfficial": "官方",
     "categoryCnOfficial": "开源官方",
     "categoryAggregation": "聚合服务",
-    "categoryThirdParty": "第三方"
+    "categoryThirdParty": "第三方",
+    "categoryLocal": "本地"
   },
   "codex": {
     "needsRouting": "需要路由",
@@ -1675,7 +1675,11 @@
     "sortAriaLabel": "切换预设排序",
     "sortNameAscTooltip": "按名称 A-Z 排序",
     "sortOriginalTooltip": "恢复默认分组顺序",
-    "noSearchResults": "没有匹配的预设供应商。"
+    "noSearchResults": "没有匹配的预设供应商。",
+    "family": {
+      "tencent": "腾讯云",
+      "volcengine": "火山引擎"
+    }
   },
   "usage": {
     "title": "使用统计",
@@ -3864,6 +3868,11 @@
       "loading": "正在查询额度…",
       "refresh": "刷新额度",
       "refreshAria": "刷新 {{login}} 的额度"
+    }
+  },
+  "kimi": {
+    "oauth": {
+      "title": "Kimi Code 官方登录"
     }
   }
 }

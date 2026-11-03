@@ -1220,14 +1220,12 @@
     "partnerPromotion": {
       "kimi": "New Kimi users get 10% of their first successful top-up back as bonus API credit, up to CNY ¥1,000.",
       "a6api": "A6API is a token aggregation platform with a built-in real-time price leaderboard that automatically picks the lowest price on the market. Smooth and stable, simple to operate, and no more tedious price comparisons. Register now to claim free trial credits!",
-      "code0": "code0.ai is an AI coding service platform for developers, supporting Claude Code, Codex, and Gemini. Exclusive for CC Switch users: contact support via the official website to claim free trial credits!",
       "apikeyfun": "APIKEY.FUN offers a special deal for CC Switch users. Register through the exclusive link to enjoy up to permanent 5% off top-ups.",
       "apinebula": "APINEBULA offers CC Switch users a special discount: register using the link and enter the \"ccswitch\" promo code during your first top-up to get 10% off.",
       "etok": "Join the ETok community on the official website and subscribe to a plan.",
       "subrouter": "SubRouter is an AI relay aggregator that lets one key access multiple models and providers.",
       "fenno": "Fenno.ai is a stable, efficient API relay giving you access to a wide range of mainstream models. Exclusive CC Switch offer: subscribe via this link to the $1.99 Trial Plan worth $50 in credits, valid for 7 days!",
       "opencode_go": "OpenCode Go offers subscription access to a range of coding models. View plan details and subscribe via this link.",
-      "zetaapi": "ZetaAPI delivers real, undegraded models at as low as 35% of official pricing. Exclusive CC Switch offer: register via this link and use promo code CC-SWITCH for 10% off your first top-up!",
       "ccsub": "CCSub is a stable, affordable AI API relay — a drop-in replacement for Claude.ai & OpenAI subscriptions, with one key for all models at ~30% of direct API cost.",
       "sudocode": "With one SudoCode key, Claude Code and Claude Desktop use Claude Opus 5, while Codex uses GPT-5.6. Sign up, join QQ group 726213516, and contact the group owner to claim CNY ¥10 in trial credit.",
       "teamorouter": "TeamoRouter is an enterprise-grade Agentic LLM gateway with pricing up to 90% off. It offers exclusive benefits for CC Switch users: register via this link as a new user for 10% off your first top-up!",
@@ -1247,7 +1245,6 @@
       "ctok": "Join the CTok community on the official website and subscribe to a plan.",
       "ddshub": "DDSHub offers a special bonus for CC Switch users — register via this link and get 10% extra credit on your first top-up (contact group admin to claim)!",
       "patewayai": "PatewayAI offers special benefits for CC Switch users. Register via this link to receive $3 credit.",
-      "claudeapi": "ClaudeAPI offers special benefits for CC Switch users. Register via this link to claim test credits.",
       "claudecn": "ClaudeCN is an enterprise-grade AI gateway operated by a registered company, supporting enterprise procurement processes with corporate payments, contracts, and compliance guarantees.",
       "runapi": "RunAPI offers special benefits for CC Switch users. Register via this link and enjoy 10% off your first top-up.",
       "volcengine_agentplan": "Volcengine Ark Agent Plan offers exclusive benefits for CC Switch users: subscribe via this link and new customers get 75% off for the first two months, plus an extra 5% off with the exclusive invite code 6J6FV5N2 — as low as ¥9.4/month!",
@@ -1274,7 +1271,9 @@
       "deepseek": "DeepSeek",
       "together": "Together AI",
       "doubaoseed": "Volcengine Doubao",
-      "tuzi": "Tu-zi"
+      "tuzi": "Tu-zi",
+      "tokenfactory": "TokenFactory",
+      "yylx": "YYLX"
     },
     "parameterConfig": "Parameter Config - {{name}} *",
     "mainModel": "Main Model (optional)",
@@ -1349,7 +1348,8 @@
     "categoryOfficial": "Official",
     "categoryCnOfficial": "Opensource Official",
     "categoryAggregation": "Aggregation",
-    "categoryThirdParty": "Third Party"
+    "categoryThirdParty": "Third Party",
+    "categoryLocal": "Local"
   },
   "codex": {
     "needsRouting": "Needs routing",
@@ -1675,7 +1675,11 @@
     "sortAriaLabel": "Toggle preset sorting",
     "sortNameAscTooltip": "Sort by name A-Z",
     "sortOriginalTooltip": "Restore default grouped order",
-    "noSearchResults": "No provider presets match your search."
+    "noSearchResults": "No provider presets match your search.",
+    "family": {
+      "tencent": "Tencent Cloud",
+      "volcengine": "Volcengine"
+    }
   },
   "usage": {
     "title": "Usage Statistics",
@@ -3864,6 +3868,11 @@
       "loading": "Checking quota…",
       "refresh": "Refresh quota",
       "refreshAria": "Refresh quota for {{login}}"
+    }
+  },
+  "kimi": {
+    "oauth": {
+      "title": "Kimi Code official sign-in"
     }
   }
 }

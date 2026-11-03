@@ -343,10 +343,13 @@ export function ClaudeDesktopProviderForm({
 
   const presetEntries = useMemo<PresetEntry[]>(
     () =>
-      claudeDesktopProviderPresets.map((preset, index) => ({
-        id: `claude-desktop-${index}`,
-        preset,
-      })),
+      // 先编号再过滤 hidden：AddProviderDialog 按 id 里的原数组下标回查预设
+      claudeDesktopProviderPresets
+        .map((preset, index) => ({
+          id: `claude-desktop-${index}`,
+          preset,
+        }))
+        .filter((entry) => !entry.preset.hidden),
     [],
   );
 
@@ -361,6 +364,9 @@ export function ClaudeDesktopProviderForm({
       }),
       third_party: t("providerForm.categoryThirdParty", {
         defaultValue: "第三方",
+      }),
+      local: t("providerForm.categoryLocal", {
+        defaultValue: "本地",
       }),
     }),
     [t],

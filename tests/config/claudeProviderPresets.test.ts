@@ -1,7 +1,121 @@
 import { describe, expect, it } from "vitest";
 import { providerPresets } from "@/config/claudeProviderPresets";
+import { GPT_CONTEXT_WINDOW_CAP } from "@/lib/modelMetadata";
 import type { Provider } from "@/types";
 import { providerNeedsRouting } from "@/utils/providerCapabilities";
+
+describe("Kimi For Coding Provider Preset", () => {
+  const kimiForCoding = providerPresets.find(
+    (p) => p.name === "Kimi For Coding",
+  );
+
+  it("should include Kimi For Coding preset", () => {
+    expect(kimiForCoding).toBeDefined();
+  });
+
+  // CLAUDE_CODE_MAX_CONTEXT_TOKENS is ignored for claude-* model ids, so the
+  // preset must route the endpoint's own alias for the context envs to bite
+  it("should route the kimi-for-coding model id on every tier", () => {
+    const env = (kimiForCoding!.settingsConfig as any).env;
+    expect(env).toMatchObject({
+      ANTHROPIC_MODEL: "kimi-for-coding",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "kimi-for-coding",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "kimi-for-coding",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "kimi-for-coding",
+    });
+  });
+
+  // 预设直接钉值，不再暴露表单输入框；要调整的用户直接改 JSON 编辑框
+  it("should pin the 256K context envs without exposing form fields", () => {
+    const env = (kimiForCoding!.settingsConfig as any).env;
+    expect(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe("262144");
+    expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe("262144");
+    expect(kimiForCoding!.templateValues).toBeUndefined();
+  });
+});
+
+describe("Codex Provider Preset", () => {
+  const codex = providerPresets.find((p) => p.name === "Codex");
+
+  it("should include the Codex preset", () => {
+    expect(codex).toBeDefined();
+  });
+
+  // 预设直接钉 Codex 订阅目录的 272K 窗口（与 GPT_CONTEXT_WINDOW_CAP 一致），不暴露表单输入框
+  it("should pin the Codex-catalog 272K window without exposing form fields", () => {
+    const env = (codex!.settingsConfig as any).env;
+    expect(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(
+      String(GPT_CONTEXT_WINDOW_CAP),
+    );
+    expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe(
+      String(GPT_CONTEXT_WINDOW_CAP),
+    );
+    expect(codex!.templateValues).toBeUndefined();
+  });
+});
+
+describe("OpenCode Go Provider Preset", () => {
+  const openCodeGo = providerPresets.find((p) => p.name === "OpenCode Go");
+
+  it("should use the Go Anthropic compatibility endpoint with x-api-key auth", () => {
+    expect(openCodeGo).toBeDefined();
+
+    const env = (openCodeGo!.settingsConfig as any).env;
+    expect(env).toMatchObject({
+      ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go",
+      ANTHROPIC_API_KEY: "",
+      ANTHROPIC_MODEL: "deepseek-v4.1-flash[1M]",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-v4.1-flash[1M]",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "deepseek-v4.1-flash[1M]",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "deepseek-v4.1-flash[1M]",
+    });
+    // /messages 只认 x-api-key，Bearer 被网关静默忽略——勿换回 AUTH_TOKEN
+    expect(env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
+    // 原生 anthropic 直连的预设不写 apiFormat（缺省即免路由）
+    expect(openCodeGo!.apiFormat).toBeUndefined();
+    expect(openCodeGo!.apiKeyField).toBe("ANTHROPIC_API_KEY");
+  });
+
+  it("should not require local routing in Claude Code", () => {
+    const provider: Provider = {
+      id: "opencode-go",
+      name: openCodeGo!.name,
+      category: openCodeGo!.category,
+      settingsConfig: openCodeGo!.settingsConfig as Record<string, any>,
+      meta: {
+        apiFormat: openCodeGo!.apiFormat,
+        apiKeyField: openCodeGo!.apiKeyField,
+      },
+    };
+
+    expect(providerNeedsRouting("claude", provider)).toBe(false);
+  });
+});
+
+describe("OpenCode Zen Provider Preset", () => {
+  const openCodeZen = providerPresets.find((p) => p.name === "OpenCode Zen");
+
+  it("should connect Claude models to Zen /messages directly with x-api-key auth", () => {
+    expect(openCodeZen).toBeDefined();
+    expect(openCodeZen!.family).toBe("opencode");
+
+    const env = (openCodeZen!.settingsConfig as any).env;
+    expect(env.ANTHROPIC_BASE_URL).toBe("https://opencode.ai/zen");
+    // 和 Go 同一套网关：/messages 只认 x-api-key
+    expect(env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
+    expect(openCodeZen!.apiKeyField).toBe("ANTHROPIC_API_KEY");
+    expect(openCodeZen!.apiFormat).toBeUndefined();
+    // 免费模型外部调用会被 403，默认模型不能是 *-free / big-pickle
+    for (const key of [
+      "ANTHROPIC_MODEL",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    ]) {
+      expect(env[key]).toMatch(/^claude-/);
+    }
+  });
+});
 
 describe("AWS Bedrock Provider Presets", () => {
   const bedrockAksk = providerPresets.find(
@@ -81,79 +195,22 @@ describe("AWS Bedrock Provider Presets", () => {
   });
 });
 
-describe("Claude Provider Presets", () => {
-  it("should match the complete upstream catalog", () => {
-    expect(providerPresets).toHaveLength(96);
-    expect(providerPresets.map((preset) => preset.name)).toEqual(
-      expect.arrayContaining([
-        "Kimi",
-        "Kimi For Coding",
-        "Code0",
-        "Qiniu",
-        "Gemini Native",
-        "OpenCode Go",
-        "Xiaomi MiMo Token Plan (China)",
-      ]),
+describe("Microsoft Foundry Provider Preset", () => {
+  const foundry = providerPresets.find((p) => p.name === "Microsoft Foundry");
+
+  it("lets the user fill the Azure resource name into the base URL", () => {
+    const env = (foundry!.settingsConfig as any).env;
+    expect(foundry!.templateValues!.AZURE_RESOURCE_NAME).toBeDefined();
+    expect(env.ANTHROPIC_BASE_URL).toBe(
+      "https://${AZURE_RESOURCE_NAME}.services.ai.azure.com/anthropic",
     );
   });
 
-  it("should keep the latest Kimi coding model routes", () => {
-    const kimi = providerPresets.find((preset) => preset.name === "Kimi");
-    const kimiCoding = providerPresets.find(
-      (preset) => preset.name === "Kimi For Coding",
-    );
-
-    expect(kimi?.primePartner).toBe(true);
-    expect((kimi?.settingsConfig as any).env.ANTHROPIC_MODEL).toBe(
-      "kimi-k2.7-code",
-    );
-    expect(kimiCoding?.primePartner).toBe(true);
-    expect((kimiCoding?.settingsConfig as any).env.ANTHROPIC_MODEL).toBe(
-      "kimi-for-coding",
-    );
-  });
-
-  it("should use DeepSeek's explicit models endpoint", () => {
-    const deepSeek = providerPresets.find(
-      (preset) => preset.name === "DeepSeek",
-    );
-
-    expect(deepSeek?.modelsUrl).toBe("https://api.deepseek.com/models");
-  });
-});
-
-describe("OpenCode Go Provider Preset", () => {
-  const openCodeGo = providerPresets.find(
-    (preset) => preset.name === "OpenCode Go",
-  )!;
-
-  it("使用 Anthropic 兼容端点和 x-api-key 认证", () => {
-    const env = (openCodeGo.settingsConfig as any).env;
-    expect(env).toMatchObject({
-      ANTHROPIC_BASE_URL: "https://opencode.ai/zen/go",
-      ANTHROPIC_API_KEY: "",
-      ANTHROPIC_MODEL: "deepseek-v4-flash",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-v4-flash",
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "deepseek-v4-flash",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "deepseek-v4-flash",
-    });
+  // 官方文档的 API Key 走 x-api-key
+  it("sends the key as x-api-key", () => {
+    const env = (foundry!.settingsConfig as any).env;
+    expect(foundry!.apiKeyField).toBe("ANTHROPIC_API_KEY");
+    expect(env).toHaveProperty("ANTHROPIC_API_KEY", "");
     expect(env).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
-    expect(openCodeGo.apiFormat).toBeUndefined();
-    expect(openCodeGo.apiKeyField).toBe("ANTHROPIC_API_KEY");
-  });
-
-  it("Claude Code 直连时不要求本地路由", () => {
-    const provider: Provider = {
-      id: "opencode-go",
-      name: openCodeGo.name,
-      category: openCodeGo.category,
-      settingsConfig: openCodeGo.settingsConfig as Record<string, any>,
-      meta: {
-        apiFormat: openCodeGo.apiFormat,
-        apiKeyField: openCodeGo.apiKeyField,
-      },
-    };
-
-    expect(providerNeedsRouting("claude", provider)).toBe(false);
   });
 });

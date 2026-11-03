@@ -190,6 +190,9 @@ export function GrokBuildProviderForm({
       third_party: t("providerForm.categoryThirdParty", {
         defaultValue: "第三方",
       }),
+      local: t("providerForm.categoryLocal", {
+        defaultValue: "本地",
+      }),
     }),
     [t],
   );

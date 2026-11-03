@@ -1220,14 +1220,12 @@
     "partnerPromotion": {
       "kimi": "Kimi の新規ユーザーは、初回チャージに成功するとチャージ金額の 10%（最大 CNY ¥1,000）が API クレジットとして進呈されます。",
       "a6api": "A6API はトークンアグリゲーションサイトです。リアルタイム価格ランキングを内蔵し、全ネット最安値を自動で選択。動作は滑らかで安定し、面倒な価格比較も不要。登録するだけで体験クレジットがもらえます！",
-      "code0": "code0.ai は開発者向けの AI コーディングサービスプラットフォームで、Claude Code、Codex、Gemini に対応。CC Switch ユーザー限定特典：公式サイトからサポートに連絡してテストクレジットを受け取れます！",
       "apikeyfun": "APIKEY.FUN は CC Switch ユーザー向けに特別優待を提供しています。専用リンクから登録すると、最大でチャージ永久 5% オフを受けられます。",
       "apinebula": "APINEBULA は CC Switch ユーザー向けに特別割引を提供しています。専用リンクから登録し、チャージ時にプロモコード「ccswitch」を入力すると、さらに 10% OFF の割引が適用されます。",
       "etok": "公式サイトで ETok コミュニティに参加し、プランを購読してください。",
       "subrouter": "SubRouter は、1つのキーで複数のモデルとプロバイダーにアクセスできる AI 中継アグリゲーターです。",
       "fenno": "Fenno.ai は安定・高効率な API 中継サービスで、幅広い主要モデルを利用できます。CC Switch 利用者限定特典：このリンクから 1.99 ドルで 50 ドル相当の Trial プランを購入できます（有効期間 7 日間）！",
       "opencode_go": "OpenCode Go は、複数のコーディングモデルを利用できるサブスクリプションサービスです。このリンクからプランの詳細確認と申し込みができます。",
-      "zetaapi": "ZetaAPI はモデルを水増し・劣化させず、公式価格の 35% から利用できます。CC Switch 利用者限定特典：このリンクから登録し、初回チャージ時にプロモコード CC-SWITCH を使うと初回チャージ 10% オフ！",
       "ccsub": "CCSub は安定・低価格の AI API リレーサービスです。Claude Code の公式サブスクリプションの代替として、1つのキーで全モデルを公式比約1/3のコストで利用できます。",
       "sudocode": "SudoCode の1つのキーで、Claude Code と Claude Desktop では Claude Opus 5、Codex では GPT-5.6 を利用できます。登録後 QQ グループ 726213516 に参加し、管理者へ連絡すると CNY ¥10 のトライアルクレジットを受け取れます。",
       "teamorouter": "TeamoRouter はエンタープライズグレードの Agentic LLM ゲートウェイで、料金は最大 90% オフ。CC Switch ユーザーに特別特典を提供しています：このリンクから新規登録すると初回チャージが 10% オフ！",
@@ -1247,7 +1245,6 @@
       "ctok": "公式サイトで CTok コミュニティに参加し、プランを購読してください。",
       "ddshub": "DDSHub は CC Switch ユーザー向けに特別ボーナスを提供しています。このリンクから登録すると、初回チャージで 10% の追加クレジットがもらえます（グループ管理者に連絡して受け取り）！",
       "patewayai": "PatewayAI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録すると $3 のクレジットがもらえます。",
-      "claudeapi": "ClaudeAPI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録するとテストクレジットを受け取ることができます。",
       "claudecn": "ClaudeCN は登録企業が運営するエンタープライズグレードの AI ゲートウェイプラットフォームで、企業調達プロセスをサポートし、法人支払い、契約、コンプライアンス保証を提供します。",
       "runapi": "RunAPI は CC Switch ユーザーに特別な特典を提供しています。このリンクから登録すると、初回チャージが 10% オフになります。",
       "volcengine_agentplan": "火山方舟 Agent Plan は CC Switch ユーザーに専属特典を提供しています：このリンクから方舟 Agent Plan を購読すると、新規のお客様は最初の 2 か月が 75% オフ、さらに専用招待コード 6J6FV5N2 で 5% オフが加算され、月額 9.4 元から！",
@@ -1274,7 +1271,9 @@
       "deepseek": "DeepSeek",
       "together": "Together AI",
       "doubaoseed": "Volcengine Doubao",
-      "tuzi": "Tu-zi"
+      "tuzi": "Tu-zi",
+      "tokenfactory": "TokenFactory",
+      "yylx": "YYLX"
     },
     "parameterConfig": "パラメーター設定 - {{name}} *",
     "mainModel": "メインモデル（任意）",
@@ -1349,7 +1348,8 @@
     "categoryOfficial": "公式",
     "categoryCnOfficial": "オープンソース公式",
     "categoryAggregation": "アグリゲーター",
-    "categoryThirdParty": "サードパーティ"
+    "categoryThirdParty": "サードパーティ",
+    "categoryLocal": "ローカル"
   },
   "codex": {
     "needsRouting": "ルーティング必須",
@@ -1675,7 +1675,11 @@
     "sortAriaLabel": "プリセットの並び順を切り替え",
     "sortNameAscTooltip": "名前順 A-Z で並び替え",
     "sortOriginalTooltip": "既定のグループ順に戻す",
-    "noSearchResults": "一致するプロバイダープリセットがありません。"
+    "noSearchResults": "一致するプロバイダープリセットがありません。",
+    "family": {
+      "tencent": "Tencent Cloud",
+      "volcengine": "Volcengine"
+    }
   },
   "usage": {
     "title": "利用統計",
@@ -3864,6 +3868,11 @@
       "loading": "残量を確認中…",
       "refresh": "残量を更新",
       "refreshAria": "{{login}} の残量を更新"
+    }
+  },
+  "kimi": {
+    "oauth": {
+      "title": "Kimi Code 公式ログイン"
     }
   }
 }

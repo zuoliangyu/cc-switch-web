@@ -11,6 +11,7 @@ import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import type { OpenCodeModel } from "@/types";
 import { codexProviderPresets } from "./codexProviderPresets";
 import { hermesProviderPresets } from "./hermesProviderPresets";
+import { kimiProviderPresets } from "./kimiProviderPresets";
 import { mcodeProviderPresets } from "./mcodeProviderPresets";
 import { openclawProviderPresets } from "./openclawProviderPresets";
 import { opencodeProviderPresets } from "./opencodeProviderPresets";
@@ -101,6 +102,8 @@ function openCodeModelMetadata(model: OpenCodeModel): KnownModelMetadata {
   return {
     contextWindow: positiveInteger(model.limit?.context),
     maxOutputTokens: positiveInteger(model.limit?.output),
+    reasoning:
+      typeof model.reasoning === "boolean" ? model.reasoning : undefined,
     inputModalities: stringList(modalities?.input),
     outputModalities: stringList(modalities?.output),
   };
@@ -142,6 +145,24 @@ export const piPresetModelSources = lazy(() =>
           baseUrl: preset.settingsConfig.baseUrl,
           compat: model.compat,
         },
+      }),
+    ),
+  ),
+);
+
+export const kimiPresetModelSources = lazy(() =>
+  kimiProviderPresets.flatMap((preset) =>
+    buildSources(
+      [preset.settingsConfig.provider.base_url],
+      Object.values(preset.settingsConfig.models).map(
+        (model) => [model.model, model] as const,
+      ),
+      (model) => ({
+        contextWindow: positiveInteger(model.max_context_size),
+        reasoning: model.capabilities?.includes("thinking"),
+        inputModalities: model.capabilities?.includes("image_in")
+          ? ["text", "image"]
+          : undefined,
       }),
     ),
   ),

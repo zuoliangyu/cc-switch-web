@@ -18,6 +18,8 @@ export interface PresetFamilyInfo {
 }
 
 export const PRESET_FAMILIES = {
+  // 讯飞星辰：按量计费和 Coding Plan 的 Key、地址都不通用
+  astron: { name: "Astron" },
   "aws-bedrock": { name: "AWS Bedrock" },
   "baidu-qianfan": { name: "Baidu Qianfan" },
   compshare: { name: "Compshare", nameKey: "providerForm.presets.ucloud" },
@@ -26,10 +28,20 @@ export const PRESET_FAMILIES = {
     planOrder: ["payg", "coding"],
   },
   minimax: { name: "MiniMax" },
+  // Go 是编程订阅、Zen 是按量付费，同一个工作区 Key
+  opencode: {
+    name: "OpenCode",
+    planOrder: ["coding", "payg"],
+  },
   qianwen: { name: "千问AI平台" },
   qwencloud: { name: "QwenCloud" },
   siliconflow: { name: "SiliconFlow" },
+  soruxgpt: {
+    name: "SoruxGPT",
+    planOrder: ["payg", "codingPlan"],
+  },
   stepfun: { name: "StepFun" },
+  streamlake: { name: "StreamLake" },
   sudocode: { name: "SudoCode" },
   tencent: {
     name: "Tencent Cloud",

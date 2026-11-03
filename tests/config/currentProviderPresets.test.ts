@@ -112,20 +112,19 @@ describe("current provider presets", () => {
     ]);
   });
 
-  it("includes current Gemini Code0 and Qiniu presets", () => {
+  it("includes current Gemini Code0 and Qiniu presets without retired Code0 promotion copy", () => {
     expect(
       geminiProviderPresets.find((preset) => preset.name === "Code0"),
     ).toMatchObject({
       baseURL: "https://code0.ai",
-      model: "gemini-3.6-flash",
-      partnerPromotionKey: "code0",
+      model: "gemini-3.8-flash",
       icon: "code0",
     });
     expect(
       geminiProviderPresets.find((preset) => preset.name === "Qiniu"),
     ).toMatchObject({
       baseURL: "https://api.qnaigc.com/bypass/vertex",
-      model: "gemini-3.6-flash",
+      model: "gemini-3.8-flash",
       partnerPromotionKey: "qiniu",
       endpointCandidates: [
         "https://api.qnaigc.com/bypass/vertex",
@@ -134,7 +133,6 @@ describe("current provider presets", () => {
       icon: "qiniu",
     });
     for (const locale of [zh, en, ja]) {
-      expect(locale.providerForm.partnerPromotion.code0).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.qiniu).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.apikeyfun).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.apinebula).toBeTruthy();
@@ -154,28 +152,52 @@ describe("current provider presets", () => {
       "PackyCode",
       "APINebula",
       "AICodeMirror",
+      "PatewayAI",
+      "hao.ai",
+      "FennoAI",
+      "RunAPI",
+      "OpenModel",
+      "GrooRoute Pro",
+      "BuyToken",
+      "V-API",
       "Shengsuanyun",
       "AIGoCode",
       "Qiniu",
       "AICoding",
       "SubRouter",
+      "OspreyAI",
       "88API",
       "APIKEY.FUN",
       "9527CODE",
+      "TeamoRouter",
       "Code0",
       "A6API",
+      "Compshare",
+      "CCSub",
       "SSSAiCode",
       "SoleAPI",
+      "Micu",
       "Cubence",
       "CrazyRouter",
+      "DMXAPI",
+      "SudoCode.chat",
       "SudoCode.us",
       "XycAi",
+      "Modelflare",
+      "AllTokens",
+      "AllTokens SI",
       "Tu-zi",
       "E-FlowCode",
       "CherryIN",
       "OpenRouter",
       "TheRouter",
       "AICodeWith",
+      "SoruxGPT",
+      "IKunCode",
+      "RunToken",
+      "YYLX",
+      "TokenFlux",
+      "AIComing",
     ]);
   });
 
@@ -183,7 +205,6 @@ describe("current provider presets", () => {
     const names = opencodeProviderPresets.map((preset) => preset.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        "ZetaAPI",
         "APINebula",
         "FennoAI",
         "SubRouter",
@@ -222,7 +243,6 @@ describe("current provider presets", () => {
     for (const locale of [zh, en, ja]) {
       expect(locale.providerForm.partnerPromotion.fenno).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.opencode_go).toBeTruthy();
-      expect(locale.providerForm.partnerPromotion.zetaapi).toBeTruthy();
     }
   });
 
@@ -231,7 +251,6 @@ describe("current provider presets", () => {
     expect(names).toEqual(
       expect.arrayContaining([
         "Kimi",
-        "ZetaAPI",
         "APINebula",
         "FennoAI",
         "SubRouter",
@@ -261,7 +280,8 @@ describe("current provider presets", () => {
     }
   });
 
-  it("removes retired Unity2.ai and NekoCode presets", () => {
+  // NekoCode 在上游 v4.0.9 重新接入，只保留 Unity2.ai 的下架校验
+  it("removes the retired Unity2.ai presets", () => {
     for (const presets of [
       providerPresets,
       codexProviderPresets,
@@ -272,7 +292,6 @@ describe("current provider presets", () => {
     ]) {
       const names = presets.map((preset) => preset.name);
       expect(names).not.toContain("Unity2.ai");
-      expect(names).not.toContain("NekoCode");
     }
   });
 });

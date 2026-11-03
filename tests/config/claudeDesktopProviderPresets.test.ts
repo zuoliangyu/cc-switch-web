@@ -3,7 +3,7 @@ import { claudeDesktopProviderPresets } from "@/config/claudeDesktopProviderPres
 
 describe("Claude Desktop provider presets", () => {
   it("includes the complete upstream catalog and managed OAuth presets", () => {
-    expect(claudeDesktopProviderPresets).toHaveLength(92);
+    expect(claudeDesktopProviderPresets).toHaveLength(129);
     expect(claudeDesktopProviderPresets[0]).toMatchObject({
       name: "Claude Desktop Official",
       category: "official",
@@ -28,5 +28,15 @@ describe("Claude Desktop provider presets", () => {
         requiresOAuth: true,
       });
     }
+  });
+});
+
+describe("Claude Desktop OpenCode Go 预设", () => {
+  const preset = claudeDesktopProviderPresets.find(
+    (item) => item.name === "OpenCode Go",
+  );
+
+  it("默认走官方文档列出的 /inference/go/anthropic", () => {
+    expect(preset?.baseUrl).toBe("https://opencode.ai/inference/go/anthropic");
   });
 });

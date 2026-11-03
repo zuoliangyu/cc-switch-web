@@ -1029,6 +1029,45 @@ export async function updateWebProvidersSortOrder(
   );
 }
 
+/** Kimi「添加」：写进 config.toml，但不改默认模型 */
+export async function addWebProviderToLiveConfig(
+  appId: AppId,
+  id: string,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    `/api/providers/${appId}/live-config/${encodeURIComponent(id)}`,
+    "POST",
+  );
+}
+
+/** models.dev 的 api.json，由后端代理拉取 */
+export async function fetchWebModelsDev(): Promise<unknown> {
+  return requestJson<unknown>("/api/usage/models-dev");
+}
+
+/** Kimi Code 官方账号设备登录（`/api/auth/kimi/*`） */
+export const kimiOAuthWeb = {
+  status: <T>() => requestJson<T>("/api/auth/kimi/status"),
+  start: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/auth/kimi/start", "POST", payload),
+  poll: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/auth/kimi/poll", "POST", payload),
+  cancel: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/auth/kimi/cancel", "POST", payload),
+  remove: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/auth/kimi/remove", "POST", payload),
+  quota: <T>(accountId: string) =>
+    requestJson<T>(
+      `/api/auth/kimi/quota?accountId=${encodeURIComponent(accountId)}`,
+    ),
+  models: <T>(accountId: string) =>
+    requestJson<T>(
+      `/api/auth/kimi/models?accountId=${encodeURIComponent(accountId)}`,
+    ),
+  useAccount: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/auth/kimi/use-account", "POST", payload),
+};
+
 export async function removeWebProviderFromLiveConfig(
   appId: AppId,
   id: string,

@@ -664,31 +664,31 @@
 | `04d0ebf5` | v4.0.18 | fix(app): raise the open-file soft limit at startup on Unix | 1d 资源/设置/工具 | 1d：Unix 上服务启动时把打开文件软上限提到硬上限（封顶 10240），放在 run_web_server_with_options | 已迁移 |
 | `4aec1aec` | v4.0.18 | chore(release): v4.0.18 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `cb90a244` | v4.0.18 | docs(release): add v4.0.18 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `e4873bc8` | v4.0.19 | feat(kimi): add Kimi Code support (#8687) | 2b Kimi Code | Kimi Code 应用接入；Web 需新增 AppType::Kimi；需新建或映射：`deeplink/mcp.rs`、`deeplink/parser.rs`等 17 个 | 待迁移 |
-| `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 需新建或映射：`commands/kimi_oauth.rs`、`kimi_config.rs`等 11 个 | 待迁移 |
-| `07265bc9` | v4.0.19 | feat(kimi): support multiple official accounts in Auth Center (#8726) | 2b Kimi Code | 需新建或映射：`commands/kimi_oauth.rs`、`kimi_config.rs`等 10 个 | 待迁移 |
+| `e4873bc8` | v4.0.19 | feat(kimi): add Kimi Code support (#8687) | 2b Kimi Code | 2b：Kimi Code 应用（AppType::Kimi、kimi_config/kimi_session、MCP/Skills/提示词/会话/用量导入、供应商服务、工具生命周期）；Web schema v17→v18 增加 enabled_kimi；Kimi 不支持连通性测试；深链只在 MCP 中接受 kimi（同上游） | 已迁移 |
+| `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 2b：Kimi 官方设备登录与切换；Web 以 /api/auth/kimi/* 路由代替 Tauri 命令，管理器为进程级单例 | 已迁移 |
+| `07265bc9` | v4.0.19 | feat(kimi): support multiple official accounts in Auth Center (#8726) | 2b Kimi Code | 2b：授权中心多个 Kimi 官方账号；Web 授权中心加入 Kimi 组 | 已迁移 |
 | `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 需新建或映射：`components/usage/ChecklistMenu.tsx`、`components/usage/RequestLogColumnsMenu.tsx`等 10 个 | 待迁移 |
 | `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `ce098caf` | v4.0.19 | fix(about): detach the shell version probe from the controlling terminal | 1d 资源/设置/工具 | 1d：shell 版本探测脱离控制终端（tool_management.rs） | 已迁移 |
 | `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `e88ff540` | v4.0.19 | test(usage): scope Codex parent-cache count assertions to each test's dir | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
-| `cdd2190d` | v4.0.19 | feat(kimi): identify, remove and show quota for official accounts | 2b Kimi Code | 需新建或映射：`commands/kimi_oauth.rs`、`kimi_config.rs`等 9 个 | 待迁移 |
+| `cdd2190d` | v4.0.19 | feat(kimi): identify, remove and show quota for official accounts | 2b Kimi Code | 2b：识别、移除、显示官方账号额度；账号组支持逐行删除文案与不可删原因 | 已迁移 |
 | `e12415b5` | v4.0.19 | refactor(providers): move OpenCode/OpenClaw set-default into the more menu | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
-| `c49c2be9` | v4.0.19 | refactor(kimi): render Auth Center accounts with the shared account group | 2b Kimi Code | 需新建或映射：`components/providers/KimiAccountLogin.tsx`、`components/providers/forms/hooks/useKimiOAuth.ts` | 待迁移 |
-| `44e0fc96` | v4.0.19 | feat(kimi): name separate official accounts "Kimi 订阅 <nickname>" | 2b Kimi Code | 需新建或映射：`kimi_config.rs`、`services/kimi_oauth/mod.rs` | 待迁移 |
-| `d6a23241` | v4.0.19 | feat(kimi): give provider cards real add/remove actions | 2b Kimi Code | 需新建或映射：`kimi_config.rs`、`components/providers/presentation.ts` | 待迁移 |
+| `c49c2be9` | v4.0.19 | refactor(kimi): render Auth Center accounts with the shared account group | 2b Kimi Code | 2b：Kimi 账号用共享账号组渲染（Web 账号组新增 defaultLabel/setDefaultLabel） | 已迁移 |
+| `44e0fc96` | v4.0.19 | feat(kimi): name separate official accounts "Kimi 订阅 <nickname>" | 2b Kimi Code | 2b：独立官方账号命名为“Kimi 订阅 <昵称>”；Web 无托盘，按设置里的界面语言取文案 | 已迁移 |
+| `d6a23241` | v4.0.19 | feat(kimi): give provider cards real add/remove actions | 2b Kimi Code | 2b：卡片“添加/移除”真实动作；Web 沿用 OpenClaw 式卡片：添加只写 config.toml，设为默认走切换，仍在 Kimi 中的官方卡不能直接删除、不能复制 | 已迁移 |
 | `7cc3141c` | v4.0.19 | style(providers): mark additive default providers in blue | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
 | `f4e9211a` | v4.0.19 | fix(panel): let Escape close only the topmost full-screen panel | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `29f8bef3` | v4.0.19 | fix(usage): clamp the request log page when the total shrinks | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `c6f85464` | v4.0.19 | style(usage): restore the original trend chart and heatmap colors | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `1c52fa91` | v4.0.19 | fix(providers): reread additive client state when a removal is refused | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `93e33d11` | v4.0.19 | fix(apps): drop the redundant not-installed error line under uninstalled tools | 1d 资源/设置/工具 | 1d：未安装工具下方不再重复显示未安装错误行（tool_management.rs） | 已迁移 |
-| `b61e2767` | v4.0.19 | feat(kimi): fetch the model list and fill parameters from models.dev | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx` | 待迁移 |
+| `b61e2767` | v4.0.19 | feat(kimi): fetch the model list and fill parameters from models.dev | 2b Kimi Code | 2b：拉取模型列表并按 models.dev 补参数（fillKimiModel、useModelMetadataFill silent 选项）；上游的弹出式选择器（带参数预览）随 5a，Web 用“获取模型”按钮 + 内联勾选 | 部分迁移 |
 | `535d1283` | v4.0.19 | fix(models): match old OpenCode Zen/Go addresses to the moved models.dev entries | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `8969264b` | v4.0.19 | feat(kimi): explain the less obvious model capabilities | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx`、`config/kimiProviderPresets.ts` | 待迁移 |
-| `b96ff618` | v4.0.19 | feat(kimi): move request headers into collapsible advanced options | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx` | 待迁移 |
-| `d6db0c75` | v4.0.19 | fix(providers): stop the advanced options toggle from jumping when pressed | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx` | 待迁移 |
-| `0f768290` | v4.0.19 | feat(kimi): lay out the provider editor like Pi and OpenCode | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx` | 待迁移 |
+| `8969264b` | v4.0.19 | feat(kimi): explain the less obvious model capabilities | 2b Kimi Code | 2b：模型能力说明（表单最终版本） | 已迁移 |
+| `b96ff618` | v4.0.19 | feat(kimi): move request headers into collapsible advanced options | 2b Kimi Code | 2b：请求头收进可折叠高级选项（表单最终版本） | 已迁移 |
+| `d6db0c75` | v4.0.19 | fix(providers): stop the advanced options toggle from jumping when pressed | 2b Kimi Code | 高级选项按钮按下时的缩放跳动：Web 的 Button 无按压缩放，Kimi 表单取最终版本 | 不适用 |
+| `0f768290` | v4.0.19 | feat(kimi): lay out the provider editor like Pi and OpenCode | 2b Kimi Code | 2b：Kimi 编辑器布局同 Pi/OpenCode（表单最终版本） | 已迁移 |
 | `1e2559ef` | v4.0.19 | feat(pi): always show the provider key and flag duplicates | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `03707c40` | v4.0.19 | style(pi): use the shared required-field asterisk | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `717172bd` | v4.0.19 | chore(presets): point DIT.ai links at the ccswitch referral URL | — | DIT.ai 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
@@ -722,8 +722,8 @@
 | `d9422e7d` | v4.0.20 | fix(omp): install and update Oh My Pi without assuming Bun | 2d Oh My Pi | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
 | `d01daa0d` | v4.0.20 | fix(omp): hide the Oh My Pi choice when importing skills | 2d Oh My Pi | 需新建或映射：`components/skills/SkillImportDialog.tsx` | 待迁移 |
 | `c3e54a4e` | v4.0.20 | feat(pricing): seed Kimi K3.1 Pro and HighSpeed prices | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `62652945` | v4.0.20 | feat(kimi): edit official account models and remove them from Kimi | 2b Kimi Code | 需新建或映射：`commands/kimi_oauth.rs`、`kimi_config.rs`等 6 个 | 待迁移 |
-| `c91aa774` | v4.0.20 | feat(kimi): show "No subscription" for accounts without a Kimi Code plan | 2b Kimi Code | 需新建或映射：`components/KimiAccountQuotaFooter.tsx` | 待迁移 |
+| `62652945` | v4.0.20 | feat(kimi): edit official account models and remove them from Kimi | 2b Kimi Code | 2b：编辑官方账号模型、从 Kimi 移出官方账号（kimi_official_connection/ensure_kimi_provider_editable） | 已迁移 |
+| `c91aa774` | v4.0.20 | feat(kimi): show "No subscription" for accounts without a Kimi Code plan | 2b Kimi Code | 2b：无订阅账号显示“未订阅”（额度视图 emptyText、账号行 note 状态） | 已迁移 |
 | `cae7c375` | v4.0.20 | chore(presets): remove EveryAPI sponsor and presets | — | EveryAPI 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `1a3057dc` | v4.0.20 | fix(sessions): skip local command output when titling Claude sessions (#8799) | 1c 会话/用量导入 | 1c：Claude 会话标题跳过本地命令输出 | 已迁移 |
 | `e8ae28b6` | v4.0.20 | fix(linux): restore window dragging and resize feedback (#8092) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
@@ -739,7 +739,7 @@
 | `ba6a8a55` | v4.0.20 | fix(apps): group Claude Desktop by whether it is installed | 1d 资源/设置/工具 | 1d：Claude Desktop 状态新增 installed（按数据目录/应用包推断）；Web 应用页尚无按安装分组，界面分组随 5a | 已迁移 |
 | `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
 | `6c2fc74e` | v4.0.20 | feat(pi): pick fetched models in a dialog for Pi and omp | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `f395cd6b` | v4.0.20 | fix(kimi): import subagent usage from their own wire logs | 2b Kimi Code | 需新建或映射：`kimi_session.rs`、`services/session_usage_kimi.rs` | 待迁移 |
+| `f395cd6b` | v4.0.20 | fix(kimi): import subagent usage from their own wire logs | 2b Kimi Code | 2b：子代理用量从各自的 wire 日志导入 | 已迁移 |
 | `b9f317af` | v4.0.20 | fix(usage): stop treating an empty DeepSeek balance as an expired plan | 1c 会话/用量导入 | 1c：DeepSeek 余额为空不再判为套餐过期 | 已迁移 |
 | `442df1db` | v4.0.20 | fix(skills): send a User-Agent when downloading skill archives | 1d 资源/设置/工具 | 1d：下载 Skill 归档时带 User-Agent（CC-Switch-Web/版本） | 已迁移 |
 | `dcdcbcb4` | v4.0.20 | fix(pi): resolve $NAME references in apiKey for usage queries | 1d 资源/设置/工具 | 1d：Pi 用量查询解析 apiKey 中的 $NAME 引用，!command 与未设置变量不当 Key 发送 | 已迁移 |
@@ -752,7 +752,7 @@
 | `85ad4969` | v4.0.20 | docs(release): add v4.0.20 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `de0a235a` | v4.0.21 | fix(proxy): send Codex requests to the provider table that model_provider selects (#8849) | 1b 代理协议 | 1b：Codex 请求发往 model_provider 选中的供应商表地址 | 已迁移 |
 | `e8e1cfbf` | v4.0.21 | fix(usage): keep Codex remote-compaction usage billable across sync passes (#8879) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
-| `93a3e8ec` | v4.0.21 | feat(auth-center): always show Add account in the header | 2b Kimi Code | 需新建或映射：`components/providers/KimiAccountLogin.tsx`、`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
+| `93a3e8ec` | v4.0.21 | feat(auth-center): always show Add account in the header | 2b Kimi Code | 2b：授权中心标题行始终显示“添加账号”，空状态只留说明；Web 的 Codex 组没有登录方式选择，未引入 loginControl 用法；删除三语孤立键 | 已迁移 |
 | `ee83fd89` | v4.0.21 | refactor(auth-center): drop the header "Delete all accounts" menu | 2c Antigravity | 需新建或映射：`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
 | `882e7a6a` | v4.0.21 | fix(profile): capture "no active prompt" so applying a project disables the current prompt | 1d 资源/设置/工具 | 1d：项目快照记录“没有启用的提示词”，应用项目时停用当前启用项 | 已迁移 |
 | `56fa007f` | v4.0.21 | feat(presets): use DeepSeek Flash instead of Pro everywhere | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -795,7 +795,7 @@
 | `c2110ebb` | v4.0.21 | fix(mcp): warn when an SSE server is written to apps without SSE support | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `80640b52` | v4.0.21 | fix(proxy): read Chat completions wrapped in a data envelope | 1b 代理协议 | 1b：读取包在 data 信封里的 Chat completions（转换与用量解析） | 已迁移 |
 | `e332cfdb` | v4.0.21 | fix(omp): stop refusing models.yml values that contain &, * or ! | 2d Oh My Pi | 需新建或映射：`omp_config.rs` | 待迁移 |
-| `644f5664` | v4.0.21 | fix(kimi): date session usage by each request, not the turn commit | 2b Kimi Code | 需新建或映射：`kimi_session.rs`、`services/session_usage_kimi.rs` | 待迁移 |
+| `644f5664` | v4.0.21 | fix(kimi): date session usage by each request, not the turn commit | 2b Kimi Code | 2b：会话用量按每个请求完成时间记日期 | 已迁移 |
 | `0820ff73` | v4.0.21 | fix(codex-oauth): stop reporting transient refresh failures as an expired login | 1b 代理协议 | 1b：Codex OAuth 刷新暂时失败不再显示登录过期；Web 无托盘事件，改在切换供应商成功后重查失败的额度 | 已迁移 |
 | `fec3629a` | v4.0.21 | docs(readme): move TeamoRouter ahead of AICoding in the sponsor table | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `9f5adaac` | v4.0.21 | ci: auto-close outside PRs that change SCHEMA_VERSION (#8903) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
@@ -868,7 +868,7 @@
 | `645f8fa1` | v4.0.23 | feat(presets): add Astron MaaS pay-as-you-go preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `fcd8f3bd` | v4.0.23 | fix(claude-account): resolve mise shims when locating the claude CLI | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
 | `12078d5b` | v4.0.23 | feat(auth): add refresh-all button to the Accounts page header (#9073) | 3 官方账号 | 需新建或映射：`components/settings/auth/RefreshAllQuotaButton.tsx` | 待迁移 |
-| `6d6ee68f` | v4.0.23 | fix(providers): stop IME composition from duplicating letters in provider key inputs (#9069) | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx` | 待迁移 |
+| `6d6ee68f` | v4.0.23 | fix(providers): stop IME composition from duplicating letters in provider key inputs (#9069) | 2b Kimi Code | 2b：供应商键输入框的输入法组合不再重复字母（Kimi 与 MiniMax Code 表单） | 已迁移 |
 | `7569b27a` | v4.0.23 | fix(providers): keep fetched model list when the form re-renders (#9068) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `d8339d6a` | v4.0.23 | fix(icon-picker): keep picker clear of macOS traffic lights (#9076) | — | 图标选择器避让 macOS 红绿灯；Web 无原生窗口按钮 | 不适用 |
 | `ba3d80d8` | v4.0.23 | fix(tray): show the bound Claude account instead of the website for official cards (#9071) | — | 托盘官方卡片显示绑定账号；Web 无托盘（共享账号读取随批次 3 核对） | 不适用 |
@@ -884,7 +884,7 @@
 | `4e31203c` | v4.0.23 | refactor(usage): return bool from bounded fork validation (#9106) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 需新建或映射：`components/providers/forms/KimiProviderForm.tsx`、`components/providers/forms/helpers/kimiToml.ts`等 5 个 | 待迁移 |
+| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b：Kimi 原生 TOML 编辑框（NativeConfigEditor、useNativeConfigPath、kimiToml）；MiniMax Code / Oh My Pi 的 YAML 编辑需新增 yaml 依赖且 Web 的 MCode 表单已分叉，随 2d 处理 | 部分迁移 |
 | `5c8f4e2e` | v4.0.23 | feat(presets): add OpenAI API key presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `2122f7da` | v4.0.23 | fix(proxy): send reasoning effort to non-whitelisted models on Claude OpenAI routes | 1b 代理协议 | 1b：Claude 路由经 OpenAI Chat/Responses 时按模型能力补发思考档位（claude_reasoning），表单与 Desktop 表单新增思考档位选项（自动/原样/不发） | 已迁移 |
 | `93d0bf18` | v4.0.23 | feat(proxy): map Claude thinking settings to Gemini thinkingConfig | 1b 代理协议 | 1b：Claude thinking 设置映射到 Gemini thinkingConfig | 已迁移 |
@@ -912,7 +912,7 @@
 | `a9e607c3` | v4.0.25 | feat(codex): add sub-agent concurrency limit field to the provider form (#9056) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `9bd8fe51` | v4.0.25 | fix(terminal): prefer PowerShell 7 (pwsh) when PowerShell is the preferred Windows terminal (#8992) | 1d 资源/设置/工具 | 1d：首选终端为 PowerShell 时，PATH 上有 pwsh.exe 就用 PowerShell 7 | 已迁移 |
 | `b8112ca5` | v4.0.25 | feat(mcp): check MCP server connectivity on demand (#8348) | 1d 资源/设置/工具 | 1d：MCP 按需连通性检查（stdio/Streamable HTTP/旧版 SSE 握手，最多 3 并发、每项 30 秒，进程树回收）；Web 无 IPC 通道，改为 /api/mcp/connectivity 启动 + 轮询取结果 + 取消；页面按钮与行内测试、状态点 | 已迁移 |
-| `5c14e917` | v4.0.25 | fix: fetch models.dev through the backend proxy-aware client, fixing sync failures in proxy-only environments (#8739) | 2b Kimi Code | 合并到 Web 已改文件 | 待迁移 |
+| `5c14e917` | v4.0.25 | fix: fetch models.dev through the backend proxy-aware client, fixing sync failures in proxy-only environments (#8739) | 2b Kimi Code | 2b：models.dev 经后端代理感知客户端拉取（Web 路由 /api/usage/models-dev，浏览器不再直连 models.dev） | 已迁移 |
 | `4a0baf69` | v4.0.25 | fix(proxy): strip non-text media (file/audio) for text-only upstreams (#6274) | 1b 代理协议 | 1b：纯文本上游剥离 file/audio 等非文本媒体 | 已迁移 |
 | `153db16e` | v4.0.25 | fix(windows): prevent provider form values from flickering (#6420) | — | WebView2 自动填充覆盖受控输入；Web 运行于普通浏览器，不注入 WebView 钩子 | 不适用 |
 | `b696f890` | v4.0.25 | fix(minimax): declare M3.1-Flash native thinking levels in Pi (#8540) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -921,7 +921,7 @@
 | `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 汇率自动获取（联网），与自选货币配套；保留手动汇率回退；需新建或映射：`services/exchange_rates.rs`、`components/usage/UsageDisplaySection.tsx`等 4 个 | 待迁移 |
 | `5ba95160` | v4.0.25 | fix(proxy): send a supported tool_choice for forced web search to xAI (#8664) | 1b 代理协议 | 1b：强制 WebSearch 发往 xAI 时使用其支持的 tool_choice | 已迁移 |
 | `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `4cf15aea` | v4.0.25 | feat(session): implement Kimi session deletion and update related hints (#9157) | 2b Kimi Code | Kimi 会话删除，依赖 2b 的 Kimi 会话管理 | 待迁移 |
+| `4cf15aea` | v4.0.25 | feat(session): implement Kimi session deletion and update related hints (#9157) | 2b Kimi Code | 2b：Kimi 会话删除（后端 session_manager 最终版本；Web 会话列表原本只禁止 MiniMax Code 删除，前端无需改动） | 已迁移 |
 | `0103f4c8` | v4.0.25 | chore(presets): move Qwen pay-as-you-go and Token Plan to the new MaaS domains | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `9267ec8b` | v4.0.25 | feat(claude-desktop): describe routed models with provider and upstream model | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `e6d0bf61` | v4.0.25 | fix(proxy): reject browser-originated requests to the local router | 1b 代理协议 | 1b：本地路由拒绝带 Origin 的网页请求（/claude-desktop/* 仍靠网关令牌），回环监听只接受不可被公网 DNS 指向的 Host；同时移除 Web 遗留的宽松 CORS 层（上游 2937eb67）。监听 0.0.0.0（Docker/局域网）时不校验 Host；独立客户端地址随 f88068b9（批次 4）接入 | 已迁移 |
@@ -1000,3 +1000,12 @@
   - 前端：MCP 面板和表单加入 Pi 列（`MCP_APP_IDS` 与 `SKILLS_APP_IDS` 拆开，Skills 列顺序不变）；开关失败的 Pi 规则错误（SSE、名称、仅 `-`/`_` 不同的重名）按三语提示。深链 MCP 的 `apps` 接受 `pi`，并修正合并已有服务器时丢失 Pi 勾选的问题（批次 1d 深链迁移时 Web 尚无 Pi MCP）。
   - 测试：上游 `tests/mcp_commands.rs` 的 6 个 Pi 用例改写为 `services::mcp` 单元测试；Web 资源重同步测试中“Pi 不支持”的断言改为 Claude Desktop。
   - 验证：`cargo test --lib` 3046 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 151 个文件 1676 项通过、2 项跳过。
+- 2026-11-04：完成批次 2b（Kimi Code，21 项）。
+  - 后端：Kimi 专属模块（`kimi_config`、`kimi_session`、`mcp/kimi`、`services/kimi_oauth`、`session_usage_kimi`、`session_manager/providers/kimi`）取上游最终版本；`AppType::Kimi` 接入应用配置、MCP（先写文件后提交）、Skills（同 MiniMax Code 的部署方式）、提示词、会话浏览与删除、用量导入、供应商服务（列表合并原生节点、官方卡只可改模型、“添加”不改默认模型、切换改 default_model）。Web 无 `input_token_semantics` 列，Kimi 用量导入不写该列；无托盘，官方账号命名按设置里的界面语言。
+  - 数据库：Web 版本链 v17 → v18 为 `mcp_servers`、`skills` 增加 `enabled_kimi`（对应上游 v21 → v22）；建表阶段的桌面端快照兜底补列改为按列清单处理（`enabled_pi`、`enabled_kimi`）。
+  - 接口：Kimi 官方登录走 `/api/auth/kimi/{status,start,poll,cancel,remove,quota,models,use-account}`，管理器为进程级单例；`POST /api/providers/:app/live-config/:id` 为 Kimi 的“添加”；models.dev 改由后端代理拉取（`GET /api/usage/models-dev`，上游 5c14e917）。
+  - 前端：Kimi 表单、官方账号组、额度页脚取上游最终版本并按 Web 样式改写；Web 没有从表单跳到授权中心的入口，账号登录预设直接在表单里显示 Kimi 账号组；卡片沿用 OpenClaw 式“添加/移除 + 设为默认”，仍在 Kimi 中的官方卡不能删除和复制；模型拉取用 Web 的“获取模型”按钮与内联勾选（上游的弹出式选择器随 5a）。授权中心账号组按 93a3e8ec 始终在标题行显示“添加账号”。应用页工具列表加入 Kimi Code（安装/升级/卸载）。
+  - 提前落地：`modelMetadataFill.ts` 取上游最终版本，Hermes `supports_vision`、Codex 不关图片输入、OpenCode `reasoning` 的补全逻辑已在，对应 5a 提交只需补表单部分。
+  - 转出：`3d4a3da3` 的 MiniMax Code / Oh My Pi YAML 编辑框随 2d；`b61e2767` 的弹出式模型选择器随 5a。不适用：`d6db0c75`（Web 按钮无按压缩放）。
+  - 测试：上游 `tests/kimi_commands.rs` 8 个用例改写为 `services/provider/kimi_tests.rs`；前端 Kimi 测试按 Web 的平铺预设选择器、内联登录与 `runtime.local` 调整；`session_usage_kimi` 的速度统计断言按 Web 现状改写，5b 迁移 a0dd3b39 时恢复上游断言。
+  - 验证：`cargo test --lib` 3112 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 156 个文件 1740 项通过、2 项跳过。

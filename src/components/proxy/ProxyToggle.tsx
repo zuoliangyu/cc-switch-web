@@ -14,7 +14,7 @@ import type { AppId } from "@/lib/api";
 
 interface ProxyToggleProps {
   className?: string;
-  activeApp: Exclude<AppId, "pi" | "mcode">;
+  activeApp: Exclude<AppId, "pi" | "mcode" | "kimi">;
 }
 
 export function ProxyToggle({ className, activeApp }: ProxyToggleProps) {

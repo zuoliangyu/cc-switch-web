@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from "vitest";
 import { HermesFormFields } from "@/components/providers/forms/HermesFormFields";
 import type { HermesModel } from "@/config/hermesProviderPresets";
 import { Form } from "@/components/ui/form";
-import { MODELS_DEV_API_URL } from "@/lib/modelsDev";
 import { server } from "../msw/server";
 
 type HermesFormFieldsProps = ComponentProps<typeof HermesFormFields>;
@@ -58,7 +57,7 @@ describe("HermesFormFields", () => {
       http.post("http://runtime.local/fetch_models_for_config", () =>
         HttpResponse.json([{ id: "model-x", ownedBy: "example" }]),
       ),
-      http.get(MODELS_DEV_API_URL, () =>
+      http.post("http://runtime.local/fetch_models_dev", () =>
         HttpResponse.json({
           example: {
             api: "https://api.example.com/v1",
@@ -98,7 +97,7 @@ describe("HermesFormFields", () => {
       http.post("http://runtime.local/fetch_models_for_config", () =>
         HttpResponse.json([{ id: "model-x", ownedBy: "example" }]),
       ),
-      http.get(MODELS_DEV_API_URL, async () => {
+      http.post("http://runtime.local/fetch_models_dev", async () => {
         await modelsDevReady;
         return HttpResponse.json({
           example: {

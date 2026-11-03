@@ -69,7 +69,8 @@ impl Database {
             enabled_opencode BOOLEAN NOT NULL DEFAULT 0,
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
-            enabled_pi BOOLEAN NOT NULL DEFAULT 0
+            enabled_pi BOOLEAN NOT NULL DEFAULT 0,
+            enabled_kimi BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -100,6 +101,7 @@ impl Database {
             enabled_opencode BOOLEAN NOT NULL DEFAULT 0,
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
+            enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             installed_at INTEGER NOT NULL DEFAULT 0,
             content_hash TEXT,
             updated_at INTEGER NOT NULL DEFAULT 0
@@ -373,15 +375,17 @@ impl Database {
             Self::migrate_proxy_config_to_per_app(conn)?;
         }
 
-        // 桌面端 v17–v19 的库版本号不低于 Web v17，却还没有 enabled_pi（上游 v20 才加）；
-        // 迁入时这类快照不会再走 v16 -> v17，这里兜底补列
-        if Self::table_exists(conn, "mcp_servers")? {
-            Self::add_column_if_missing(
-                conn,
-                "mcp_servers",
-                "enabled_pi",
-                "BOOLEAN NOT NULL DEFAULT 0",
-            )?;
+        // 桌面端快照的版本号可能不低于 Web 当前版本，却缺少后加的应用列（上游与 Web 的
+        // 版本链编号不同，例如桌面端 v17–v19 没有 enabled_pi）；迁入时这类快照不会再走
+        // 对应迁移，这里按列兜底补齐
+        for (table, column) in [
+            ("mcp_servers", "enabled_pi"),
+            ("mcp_servers", "enabled_kimi"),
+            ("skills", "enabled_kimi"),
+        ] {
+            if Self::table_exists(conn, table)? {
+                Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
+            }
         }
 
         // 确保 in_failover_queue 列存在（对于已存在的 v2 数据库）
@@ -516,6 +520,11 @@ impl Database {
                         log::info!("迁移数据库从 v16 到 v17（MCP 添加 Pi 支持）");
                         Self::migrate_v16_to_v17(conn)?;
                         Self::set_user_version(conn, 17)?;
+                    }
+                    17 => {
+                        log::info!("迁移数据库从 v17 到 v18（Skills/MCP 添加 Kimi Code 支持）");
+                        Self::migrate_v17_to_v18(conn)?;
+                        Self::set_user_version(conn, 18)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1425,6 +1434,22 @@ impl Database {
                 "enabled_pi",
                 "BOOLEAN NOT NULL DEFAULT 0",
             )?;
+        }
+        Ok(())
+    }
+
+    /// v17 -> v18 迁移：为 mcp_servers 和 skills 添加 enabled_kimi 列（上游 e4873bc8，
+    /// 上游编号 v21 -> v22，Web 按自有版本链重新排号）
+    fn migrate_v17_to_v18(conn: &Connection) -> Result<(), AppError> {
+        for table in ["mcp_servers", "skills"] {
+            if Self::table_exists(conn, table)? {
+                Self::add_column_if_missing(
+                    conn,
+                    table,
+                    "enabled_kimi",
+                    "BOOLEAN NOT NULL DEFAULT 0",
+                )?;
+            }
         }
         Ok(())
     }

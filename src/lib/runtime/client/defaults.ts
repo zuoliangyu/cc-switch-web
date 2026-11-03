@@ -18,6 +18,7 @@ const visibleApps: VisibleApps = {
   hermes: true,
   pi: true,
   mcode: true,
+  kimi: true,
 };
 
 export const getDefaultSettings = (): Settings => ({

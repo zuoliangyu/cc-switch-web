@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSection";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
+import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
 import type { ManagedAuthProvider } from "@/lib/api";
 
 interface AuthCenterPanelProps {
@@ -66,6 +67,9 @@ export function AuthCenterPanel({
       </div>
       <div ref={xaiOauthSectionRef} className="scroll-mt-4">
         <XaiOAuthSection mode="manage" helpSide="top" />
+      </div>
+      <div className="scroll-mt-4">
+        <KimiAccountLogin helpSide="top" />
       </div>
     </div>
   );

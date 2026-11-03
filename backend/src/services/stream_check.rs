@@ -218,6 +218,12 @@ impl StreamCheckService {
                 "MiniMax Code providers do not support stream checks".to_string(),
             ));
         }
+        // Kimi Code 同样由原生运行时直连，上游没有为它提供连通性测试（e4873bc8）。
+        if matches!(app_type, AppType::Kimi) {
+            return Err(AppError::InvalidInput(
+                "Kimi Code providers do not support stream checks".to_string(),
+            ));
+        }
 
         if matches!(
             app_type,
@@ -306,7 +312,8 @@ impl StreamCheckService {
             | AppType::OpenClaw
             | AppType::Hermes
             | AppType::Pi
-            | AppType::Mcode => {
+            | AppType::Mcode
+            | AppType::Kimi => {
                 unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
@@ -1351,7 +1358,7 @@ impl StreamCheckService {
             AppType::Hermes => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
-            AppType::Pi | AppType::Mcode => {
+            AppType::Pi | AppType::Mcode | AppType::Kimi => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }

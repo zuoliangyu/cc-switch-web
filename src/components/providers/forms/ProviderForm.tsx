@@ -88,6 +88,7 @@ import { CodexFormFields } from "./CodexFormFields";
 import { CodexOAuthSection } from "./CodexOAuthSection";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { McodeProviderForm } from "./McodeProviderForm";
+import { KimiProviderForm } from "./KimiProviderForm";
 import { OmoFormFields } from "./OmoFormFields";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
 import { ProviderAdvancedConfig } from "./ProviderAdvancedConfig";
@@ -261,6 +262,9 @@ export interface ProviderFormProps {
   onUniversalPresetSelect?: (preset: UniversalProviderPreset) => void;
   onManageUniversalProviders?: () => void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
+  onSubmitReadyChange?: (isReady: boolean) => void;
+  /** Native account login supplies its own actions instead of the provider-save footer. */
+  onAccountLoginChange?: (accountLogin: boolean) => void;
   initialData?: {
     name?: string;
     websiteUrl?: string;
@@ -2602,6 +2606,7 @@ export type ProviderFormValues = ProviderFormData & {
 
 export function ProviderForm(props: ProviderFormProps) {
   if (props.appId === "mcode") return <McodeProviderForm {...props} />;
+  if (props.appId === "kimi") return <KimiProviderForm {...props} />;
   if (props.appId === "pi") {
     return <PiProviderForm {...props} />;
   }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   fillCodexCatalogModel,
   fillHermesModel,
+  fillKimiModel,
   fillOpenClawModel,
   fillOpenCodeModel,
   piPresetThinkingFor,
@@ -48,6 +49,19 @@ describe("fillCodexCatalogModel", () => {
     };
     expect(fillCodexCatalogModel(row, metadata, CODEX_LEVELS)).toEqual(row);
   });
+
+  it("never turns image input off for a text-only lookup", () => {
+    expect(
+      fillCodexCatalogModel(
+        { model: "deepseek-v4.1-flash-1017", contextWindow: "" },
+        { contextWindow: 1_000_000, inputModalities: ["text"] },
+        CODEX_LEVELS,
+      ),
+    ).toEqual({
+      model: "deepseek-v4.1-flash-1017",
+      contextWindow: "1000000",
+    });
+  });
 });
 
 describe("fillOpenClawModel", () => {
@@ -86,25 +100,47 @@ describe("fillOpenClawModel", () => {
 });
 
 describe("fillHermesModel", () => {
-  it("fills context_length only when blank", () => {
+  it("fills context_length and supports_vision only when blank", () => {
     expect(fillHermesModel({ id: "m" }, metadata)).toEqual({
       id: "m",
       context_length: 262144,
+      supports_vision: true,
     });
-    expect(fillHermesModel({ id: "m", context_length: 1 }, metadata)).toEqual({
-      id: "m",
-      context_length: 1,
-    });
+    expect(
+      fillHermesModel(
+        { id: "m", context_length: 1, supports_vision: true },
+        metadata,
+      ),
+    ).toEqual({ id: "m", context_length: 1, supports_vision: true });
+  });
+
+  it("only fills supports_vision towards true and keeps an explicit false", () => {
+    expect(fillHermesModel({ id: "m" }, { inputModalities: ["text"] })).toEqual(
+      { id: "m" },
+    );
+    expect(
+      fillHermesModel({ id: "m", supports_vision: false }, metadata),
+    ).toEqual({ id: "m", context_length: 262144, supports_vision: false });
   });
 });
 
 describe("fillOpenCodeModel", () => {
-  it("fills missing limits and modalities", () => {
+  it("fills missing limits, modalities and reasoning", () => {
     expect(fillOpenCodeModel({ name: "m" }, metadata)).toEqual({
       name: "m",
       limit: { context: 262144, output: 32768 },
+      reasoning: true,
       modalities: { input: ["text", "image", "video"], output: ["text"] },
     });
+  });
+
+  it("only fills reasoning towards true and keeps an explicit value", () => {
+    expect(fillOpenCodeModel({ name: "m" }, { reasoning: false })).toEqual({
+      name: "m",
+    });
+    expect(
+      fillOpenCodeModel({ name: "m", reasoning: false }, { reasoning: true }),
+    ).toEqual({ name: "m", reasoning: false });
   });
 
   it("only fills the missing half of limit", () => {
@@ -121,11 +157,43 @@ describe("fillOpenCodeModel", () => {
       name: "m",
       limit: { context: 1000, output: 32768 },
       modalities: { input: ["text"] },
+      reasoning: true,
     });
   });
 
   it("leaves the model untouched when nothing is known", () => {
     expect(fillOpenCodeModel({ name: "m" }, {})).toEqual({ name: "m" });
+  });
+});
+
+describe("fillKimiModel", () => {
+  it("replaces a placeholder window and adds supported capabilities", () => {
+    expect(
+      fillKimiModel(
+        { model: "m", max_context_size: 1, capabilities: ["tool_use"] },
+        metadata,
+        { replaceContext: true },
+      ),
+    ).toEqual({
+      model: "m",
+      max_context_size: 262144,
+      capabilities: ["tool_use", "image_in", "thinking"],
+    });
+  });
+
+  it("keeps a window the user set and never removes capabilities", () => {
+    const model = {
+      model: "m",
+      max_context_size: 1000,
+      capabilities: ["thinking", "video_in"],
+    };
+    expect(
+      fillKimiModel(
+        model,
+        { contextWindow: 9, inputModalities: ["text"], reasoning: false },
+        { replaceContext: false },
+      ),
+    ).toEqual(model);
   });
 });
 

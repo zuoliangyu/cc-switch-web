@@ -121,7 +121,7 @@ export function ProviderList({
   // 判断供应商是否已添加到配置（累加模式应用：OpenCode/OpenClaw/Hermes）
   const isProviderInConfig = useCallback(
     (providerId: string): boolean => {
-      if (appId === "mcode")
+      if (appId === "mcode" || appId === "kimi")
         return providers[providerId]?.meta?.liveConfigManaged === true;
       if (appId === "opencode") {
         return opencodeLiveIds?.includes(providerId) ?? false;
@@ -161,9 +161,13 @@ export function ProviderList({
   );
 
   // 故障转移相关
-  const supportsFailover = !["opencode", "openclaw", "hermes", "pi"].includes(
-    appId,
-  );
+  const supportsFailover = ![
+    "opencode",
+    "openclaw",
+    "hermes",
+    "pi",
+    "kimi",
+  ].includes(appId);
   const { data: isAutoFailoverEnabled } = useAutoFailoverEnabled(
     appId,
     supportsFailover,
@@ -386,7 +390,11 @@ export function ProviderList({
       <ProviderEmptyState
         appId={appId}
         onCreate={onCreate}
-        onImport={appId === "mcode" ? undefined : () => importMutation.mutate()}
+        onImport={
+          appId === "mcode" || appId === "kimi"
+            ? undefined
+            : () => importMutation.mutate()
+        }
       />
     );
   }
@@ -468,7 +476,10 @@ export function ProviderList({
             isDefaultModel={
               appId === "hermes"
                 ? isHermesCurrent
-                : isProviderDefaultModel(provider.id)
+                : appId === "kimi"
+                  ? // Kimi 的「当前默认」是 default_model 所属的那家
+                    provider.id === currentProviderId
+                  : isProviderDefaultModel(provider.id)
             }
             onSetAsDefault={
               onSetAsDefault ? () => onSetAsDefault(provider) : undefined

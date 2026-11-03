@@ -208,6 +208,11 @@ pub fn sync_all_unlocked(db: &Database) -> SessionSyncResult {
     );
     merge_sync_step(
         &mut result,
+        "Kimi Code",
+        crate::services::session_usage_kimi::sync_kimi_usage(db),
+    );
+    merge_sync_step(
+        &mut result,
         "OpenCode",
         crate::services::session_usage_opencode::sync_opencode_usage(db),
     );

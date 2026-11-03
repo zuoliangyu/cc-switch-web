@@ -25,6 +25,8 @@ pub(crate) mod grok_direct;
 pub(crate) mod grok_editor;
 mod live;
 #[cfg(test)]
+mod kimi_tests;
+#[cfg(test)]
 mod mcode_tests;
 #[cfg(test)]
 mod opencode_tests;
@@ -1831,9 +1833,18 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::list(state);
         }
-        if app_type == AppType::Mcode {
-            let native = crate::mcode_config::get_providers()?;
-            let mut saved = state.db.get_all_providers("mcode")?;
+        if matches!(app_type, AppType::Mcode | AppType::Kimi) {
+            let native = if app_type == AppType::Kimi {
+                crate::kimi_config::get_providers()?
+            } else {
+                crate::mcode_config::get_providers()?
+            };
+            let mut saved = state.db.get_all_providers(app_type.as_str())?;
+            let nicknames = if app_type == AppType::Kimi {
+                crate::services::kimi_oauth::account_nicknames()
+            } else {
+                Default::default()
+            };
             for (id, config) in &native {
                 if !saved.contains_key(id) {
                     let name = config.get("name").and_then(Value::as_str).unwrap_or(id);
@@ -1851,7 +1862,13 @@ impl ProviderService {
                     provider.settings_config = config.clone();
                 }
                 Self::set_provider_live_config_managed(provider, native.contains_key(id));
-                state.db.save_provider("mcode", provider)?;
+                if app_type == AppType::Kimi {
+                    crate::kimi_config::normalize_provider_identity(
+                        provider,
+                        nicknames.get(id).map(String::as_str),
+                    );
+                }
+                state.db.save_provider(app_type.as_str(), provider)?;
             }
             return Ok(saved);
         }
@@ -1866,6 +1883,9 @@ impl ProviderService {
     ///
     /// 对于累加模式应用（OpenCode, OpenClaw），不存在"当前供应商"概念，直接返回空字符串。
     pub fn current(state: &AppState, app_type: AppType) -> Result<String, AppError> {
+        if app_type == AppType::Kimi {
+            return crate::kimi_config::current_provider();
+        }
         if matches!(
             app_type,
             AppType::Claude
@@ -1912,6 +1932,58 @@ impl ProviderService {
             }
         }
         Ok(true)
+    }
+
+    fn save_kimi_provider(
+        state: &AppState,
+        provider: &Provider,
+        write_live: bool,
+        create: bool,
+    ) -> Result<bool, AppError> {
+        if write_live {
+            crate::kimi_config::save_and_commit(
+                &provider.id,
+                Some(provider.settings_config.clone()),
+                create,
+                || {
+                    state.db.save_provider("kimi", provider)?;
+                    Ok(true)
+                },
+            )
+        } else {
+            state.db.save_provider("kimi", provider)?;
+            Ok(true)
+        }
+    }
+
+    /// The signed-in connection node of a Kimi official card: Kimi's live node
+    /// first, else the saved card (an official card removed from Kimi's config).
+    fn kimi_official_connection(state: &AppState, id: &str) -> Result<Option<Value>, AppError> {
+        if let Some(live) = crate::kimi_config::get_providers()?.get(id) {
+            return Ok(
+                crate::kimi_config::is_official_provider(live).then(|| live["provider"].clone())
+            );
+        }
+        Ok(state
+            .db
+            .get_provider_by_id(id, "kimi")?
+            .filter(|saved| crate::kimi_config::is_official_provider(&saved.settings_config))
+            .map(|saved| saved.settings_config["provider"].clone()))
+    }
+
+    /// Deleting an official account that is still in Kimi's config goes through
+    /// the Authorization Center (it also deletes the login); remove it first.
+    fn ensure_kimi_provider_editable(id: &str) -> Result<(), AppError> {
+        let native = crate::kimi_config::get_providers()?;
+        if native
+            .get(id)
+            .is_some_and(crate::kimi_config::is_official_provider)
+        {
+            return Err(AppError::InvalidInput(
+                "Manage Kimi official accounts in the Authorization Center".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// 只把供应商存进列表，不写客户端配置、不动当前指针（切换式应用）。
@@ -2069,6 +2141,27 @@ impl ProviderService {
             return Self::save_mcode_provider(state, &provider, add_to_live, true);
         }
 
+        if app_type == AppType::Kimi {
+            if crate::kimi_config::is_official_provider(&provider.settings_config) {
+                return Err(AppError::InvalidInput(
+                    "Manage Kimi official accounts in the Authorization Center".into(),
+                ));
+            }
+            // The key is user-chosen; the per-app lock also serializes native list refreshes.
+            let _guard = futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            );
+            if state.db.get_provider_by_id(&provider.id, "kimi")?.is_some()
+                || crate::kimi_config::provider_key_exists(&provider.id)?
+            {
+                return Err(AppError::InvalidInput(format!(
+                    "kimi provider key '{}' already exists",
+                    provider.id
+                )));
+            }
+            return Self::save_kimi_provider(state, &provider, add_to_live, true);
+        }
+
         // 累加式写 live 失败（如配置文件解析不了）时要撤回这一行，先记下原来的
         let existing_row = if app_type.is_additive_mode() {
             state
@@ -2140,6 +2233,27 @@ impl ProviderService {
         original_id: Option<&str>,
         provider: Provider,
     ) -> Result<bool, AppError> {
+        let mut provider = provider;
+        if app_type == AppType::Kimi {
+            // Official cards come from signing in. Their models, name and notes are
+            // editable; the connection stays as signed in, and no edit may turn
+            // another card into an official one.
+            let id = original_id.unwrap_or(&provider.id).to_string();
+            match Self::kimi_official_connection(state, &id)? {
+                Some(_) if provider.id != id => {
+                    return Err(AppError::InvalidInput(
+                        "Kimi official account keys cannot be changed".into(),
+                    ));
+                }
+                Some(connection) => provider.settings_config["provider"] = connection,
+                None if crate::kimi_config::is_official_provider(&provider.settings_config) => {
+                    return Err(AppError::InvalidInput(
+                        "Manage Kimi official accounts in the Authorization Center".into(),
+                    ));
+                }
+                None => {}
+            }
+        }
         if app_type == AppType::ClaudeDesktop {
             if original_id.is_some_and(|id| id != provider.id) {
                 return Err(AppError::Message(
@@ -2394,6 +2508,9 @@ impl ProviderService {
             if app_type == AppType::Mcode {
                 return Self::save_mcode_provider(state, &provider, live_config_managed, false);
             }
+            if app_type == AppType::Kimi {
+                return Self::save_kimi_provider(state, &provider, live_config_managed, false);
+            }
             state.db.save_provider(app_type.as_str(), &provider)?;
             if !live_config_managed {
                 return Ok(true);
@@ -2431,6 +2548,26 @@ impl ProviderService {
     pub fn delete(state: &AppState, app_type: AppType, id: &str) -> Result<(), AppError> {
         if app_type == AppType::Pi {
             return pi::delete(state, id);
+        }
+        if app_type == AppType::Kimi {
+            let _guard = futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            );
+            Self::ensure_kimi_provider_editable(id)?;
+            let saved = state.db.get_provider_by_id(id, "kimi")?;
+            crate::kimi_config::save_and_commit(id, None, false, || {
+                state.db.delete_provider("kimi", id)
+            })?;
+            // The official node is already gone from Kimi (otherwise editing is
+            // refused above); its CC Switch-owned credential goes with the card.
+            if let Some(saved) = saved {
+                if let Err(error) =
+                    crate::services::kimi_oauth::forget_removed_profile(id, &saved.settings_config)
+                {
+                    log::warn!("[Kimi] 删除卡片后清理凭据失败: {error}");
+                }
+            }
+            return Ok(());
         }
         // Additive mode apps - no current provider concept
         if app_type.is_additive_mode() {
@@ -2497,6 +2634,32 @@ impl ProviderService {
         state.db.delete_provider(app_type.as_str(), id)
     }
 
+    /// Kimi「添加」：把卡片写进 config.toml，但不改 default_model（「切换」才改）。
+    /// 其他累加式应用的添加就是 `switch`，不走这里。
+    pub fn add_to_live_config(
+        state: &AppState,
+        app_type: AppType,
+        id: &str,
+    ) -> Result<(), AppError> {
+        if app_type != AppType::Kimi {
+            return Err(AppError::InvalidInput(format!(
+                "{} adds providers through switch",
+                app_type.as_str()
+            )));
+        }
+        let _guard =
+            futures::executor::block_on(state.proxy_service.lock_switch_for_app(app_type.as_str()));
+        let mut provider = state
+            .db
+            .get_provider_by_id(id, "kimi")?
+            .ok_or_else(|| AppError::Message(format!("供应商 {id} 不存在")))?;
+        crate::services::kimi_oauth::ensure_profile_signed_in(&provider.settings_config)?;
+        Self::set_provider_live_config_managed(&mut provider, true);
+        crate::kimi_config::add_and_commit(id, provider.settings_config.clone(), || {
+            state.db.save_provider("kimi", &provider)
+        })
+    }
+
     /// Remove provider from live config only (for additive mode apps like OpenCode, OpenClaw)
     ///
     /// Does NOT delete from database - provider remains in the list.
@@ -2509,6 +2672,20 @@ impl ProviderService {
     ) -> Result<(), AppError> {
         if app_type == AppType::Pi {
             return pi::remove(state, id);
+        }
+        if app_type == AppType::Kimi {
+            let _guard = futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            );
+            // An official account leaves Kimi's config but keeps its login and card,
+            // so「添加」can put it back.
+            return crate::kimi_config::save_and_commit(id, None, false, || {
+                if let Some(mut provider) = state.db.get_provider_by_id(id, "kimi")? {
+                    Self::set_provider_live_config_managed(&mut provider, false);
+                    state.db.save_provider("kimi", &provider)?;
+                }
+                Ok(())
+            });
         }
         match app_type {
             AppType::OpenCode => {
@@ -2606,6 +2783,24 @@ impl ProviderService {
 
         if matches!(app_type, AppType::ClaudeDesktop) {
             futures::executor::block_on(crate::mode::controller::switch_desktop(state, id))?;
+            return Ok(SwitchResult::default());
+        }
+
+        if app_type == AppType::Kimi {
+            let _guard = futures::executor::block_on(
+                state.proxy_service.lock_switch_for_app(app_type.as_str()),
+            );
+            crate::services::kimi_oauth::ensure_profile_signed_in(&_provider.settings_config)?;
+            let mut provider = _provider.clone();
+            Self::set_provider_live_config_managed(&mut provider, true);
+            crate::kimi_config::switch_and_commit(
+                id,
+                provider.settings_config.clone(),
+                |config| {
+                    provider.settings_config = config;
+                    state.db.save_provider("kimi", &provider)
+                },
+            )?;
             return Ok(SwitchResult::default());
         }
 
@@ -2965,6 +3160,7 @@ impl ProviderService {
                     AppType::OpenClaw => remove_openclaw_provider_from_live(&provider.id),
                     AppType::Hermes => remove_hermes_provider_from_live(&provider.id),
                     AppType::Mcode => crate::mcode_config::remove_provider(&provider.id),
+                    AppType::Kimi => crate::kimi_config::remove_provider(&provider.id),
                     _ => Ok(()),
                 };
 
@@ -3340,7 +3536,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi => Ok(String::new()),
         }
     }
 
@@ -3359,7 +3555,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi => Ok(String::new()),
         }
     }
 
@@ -3962,6 +4158,9 @@ impl ProviderService {
             AppType::Mcode => {
                 crate::mcode_config::validate_provider(&provider.id, &provider.settings_config)?
             }
+            AppType::Kimi => {
+                crate::kimi_config::validate_provider(&provider.id, &provider.settings_config)?
+            }
             AppType::Pi => {
                 crate::pi_config::validate_provider_node(&provider.id, &provider.settings_config)?;
             }
@@ -4222,6 +4421,20 @@ impl ProviderService {
                 };
                 Ok((field("apiKey", "apiKey"), field("baseUrl", "baseURL")))
             }
+            AppType::Kimi => Ok((
+                provider
+                    .settings_config
+                    .pointer("/provider/api_key")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .into(),
+                provider
+                    .settings_config
+                    .pointer("/provider/base_url")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .into(),
+            )),
         }
     }
 }

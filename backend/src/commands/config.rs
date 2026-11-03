@@ -85,6 +85,7 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
             .parent()
             .unwrap()
             .to_path_buf(),
+        AppType::Kimi => crate::kimi_config::data_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())
@@ -105,6 +106,7 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::Hermes => crate::hermes_config::get_default_hermes_dir(),
         AppType::Pi => config::get_home_dir().join(".pi").join("agent"),
         AppType::Mcode => config::get_home_dir().join(".minimax"),
+        AppType::Kimi => config::get_home_dir().join(".kimi-code"),
     };
 
     Ok(dir.to_string_lossy().to_string())
@@ -163,11 +165,8 @@ pub(crate) fn set_common_config_snippet_internal(
     if matches!(app_type, "claude" | "codex" | "gemini") {
         let app = AppType::from_str(app_type)
             .map_err(|e| ConfigCommandError::bad_request(e.to_string()))?;
-        crate::services::provider::ProviderService::sync_current_provider_for_app(
-            state,
-            app,
-        )
-        .map_err(|e| ConfigCommandError::internal(e.to_string()))?;
+        crate::services::provider::ProviderService::sync_current_provider_for_app(state, app)
+            .map_err(|e| ConfigCommandError::internal(e.to_string()))?;
     }
 
     if app_type == "omo"
@@ -190,11 +189,8 @@ pub(crate) fn set_common_config_snippet_internal(
             .map_err(|e| ConfigCommandError::internal(e.to_string()))?
             .is_some()
     {
-        crate::services::omo::OmoService::write_config_to_file(
-            state,
-            &crate::services::omo::SLIM,
-        )
-        .map_err(|e| ConfigCommandError::internal(e.to_string()))?;
+        crate::services::omo::OmoService::write_config_to_file(state, &crate::services::omo::SLIM)
+            .map_err(|e| ConfigCommandError::internal(e.to_string()))?;
     }
     Ok(())
 }

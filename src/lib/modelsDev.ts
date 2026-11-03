@@ -2,10 +2,9 @@
 // 用量统计的价格导入和供应商表单的模型参数补全共用这一份数据和查询缓存。
 
 import { queryOptions } from "@tanstack/react-query";
+import { invoke } from "@/lib/runtime/client/core";
 
-export const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_STALE_TIME_MS = 60 * 60 * 1000;
-const MODELS_DEV_FETCH_TIMEOUT_MS = 15_000;
 
 export interface ModelsDevCost {
   input?: number;
@@ -55,22 +54,10 @@ export interface ModelsDevProvider {
 export type ModelsDevResponse = Record<string, ModelsDevProvider>;
 
 export async function fetchModelsDev(): Promise<ModelsDevResponse> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(
-    () => controller.abort(),
-    MODELS_DEV_FETCH_TIMEOUT_MS,
-  );
-  try {
-    const response = await fetch(MODELS_DEV_API_URL, {
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return (await response.json()) as ModelsDevResponse;
-  } finally {
-    window.clearTimeout(timeout);
-  }
+  // 走后端的全局代理客户端拉取（上游 5c14e917）：浏览器不一定能直连 models.dev，
+  // 超时与响应大小上限由后端控制。后端返回 api.json 原文。
+  const raw = await invoke<string | ModelsDevResponse>("fetch_models_dev");
+  return (typeof raw === "string" ? JSON.parse(raw) : raw) as ModelsDevResponse;
 }
 
 /**

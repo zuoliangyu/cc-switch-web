@@ -43,6 +43,7 @@
     "version": "バージョン",
     "loading": "読み込み中...",
     "more": "その他",
+    "retry": "再試行",
     "notInstalled": "未インストール",
     "success": "成功",
     "error": "エラー",
@@ -916,7 +917,8 @@
     "openclaw": "OpenClaw",
     "hermes": "Hermes",
     "pi": "Pi",
-    "mcode": "MiniMax Code"
+    "mcode": "MiniMax Code",
+    "kimi": "Kimi Code"
   },
   "appSwitcher": {
     "more": "その他のアプリ"
@@ -1305,6 +1307,7 @@
     "fetchModelsSuccess": "{{count}}件のモデルを取得",
     "modelMetadataFilled": "{{model}} のコンテキスト長などのパラメータを補完しました（出典：{{source}}）。内容をご確認ください",
     "modelMetadataFilledMany": "{{count}} 件のモデルのコンテキスト長などのパラメータを補完しました（出典：{{source}}）。内容をご確認ください",
+    "gptContextWindowHint": "中継サービスの GPT は多くが ChatGPT サブスクリプション由来で、ウィンドウは 272K しかありません。大きく設定すると圧縮が遅れ、上流に拒否された時点でそのターンが失敗します。このプロバイダーが対応している場合のみ設定してください。",
     "modelMetadataSourcePreset": "プリセット",
     "modelMetadataSourceBoth": "プリセットと models.dev",
     "fetchedModelsTitle": "利用可能なモデル（{{count}}件）",
@@ -1462,11 +1465,19 @@
     "categoryCnOfficial": "オープンソース公式",
     "categoryAggregation": "アグリゲーター",
     "categoryThirdParty": "サードパーティ",
-    "categoryLocal": "ローカル"
+    "categoryLocal": "ローカル",
+    "nativeConfig": {
+      "hint": "このプロバイダーの部分をアプリ本来の形式で表示し、保存時にこのファイルへ書き込みます。デフォルトモデルなどのグローバル設定はここにはありません。ここに書いたコメントは保存されません。",
+      "invalid": "{{format}} の形式が正しくありません：{{error}}",
+      "title": "設定ファイル {{path}}（このプロバイダーのみ）"
+    }
   },
   "codex": {
     "needsRouting": "ルーティング必須",
     "nativeLogin": "Codex ログイン",
+    "accountStatusUnavailable": "アカウント情報を読み込めません",
+    "boundAccountUnavailable": "連携済みアカウントを利用できません",
+    "accountLoading": "アカウントを読み込み中…",
     "officialRouting": "公式アカウントルーティング"
   },
   "copilot": {
@@ -1621,7 +1632,6 @@
     "autoCompactLimitHint": "コンテキストトークン数がこのしきい値に達すると履歴を自動圧縮"
   },
   "codexOauth": {
-    "loginWithChatGPT": "ChatGPT でログイン",
     "authStatus": "認証状態",
     "notAuthenticated": "未認証",
     "loginRequired": "先に ChatGPT にログインしてください",
@@ -1795,6 +1805,11 @@
     "family": {
       "tencent": "Tencent Cloud",
       "volcengine": "Volcengine"
+    },
+    "group": {
+      "cloud": "クラウド事業者",
+      "local": "ローカル",
+      "thirdparty": "サードパーティ"
     }
   },
   "usage": {
@@ -3045,6 +3060,8 @@
       "modelName": "表示名",
       "modelNamePlaceholder": "Claude Opus 5",
       "contextLength": "コンテキスト長",
+      "toggleModelDetails": "モデル詳細を展開または折りたたむ",
+      "removeModel": "モデルを削除",
       "advancedOptions": "詳細オプション",
       "modelsHint": "切り替え時、最初のモデルが model.default に書き込まれます。",
       "primaryModel": "デフォルト",
@@ -4000,13 +4017,13 @@
     "loginFailed": "ログインが完了しませんでした",
     "pending": {
       "add": "{{service}} アカウントを追加 · 認可を待っています…",
-      "login": "{{service}} にログイン · 認可を待っています…",
       "reauth": "{{login}} に再ログイン · 認可を待っています…",
       "enterCode": "ブラウザでこのコードを入力：",
       "copy": "コードをコピー",
       "copied": "コードをコピーしました。",
       "open": "認可ページを開く",
-      "note": "ブラウザで認可ページを開きました。完了するとここが自動で更新されます。{{service}} の利用規約にご注意ください。"
+      "note": "ブラウザで認可ページを開きました。完了するとここが自動で更新されます。{{service}} の利用規約にご注意ください。",
+      "linkCopied": "ログインリンクをコピーしました。"
     },
     "toast": {
       "added": "{{service}} アカウントを追加しました。",
@@ -4021,7 +4038,56 @@
   },
   "kimi": {
     "oauth": {
-      "title": "Kimi Code 公式ログイン"
+      "title": "Kimi Code 公式ログイン",
+      "description": "複数の Kimi コーディングプランのアカウントを、独立した認証情報とプロバイダーとして追加できます。ここでログインを管理し、使用する公式アカウントを選択してください。",
+      "region": "ログイン地域",
+      "mainland-cn": "中国本土版",
+      "global": "グローバル版",
+      "signIn": "Kimi にログイン",
+      "removeAccount": "アカウントを削除",
+      "dismissAccount": "一覧から外す",
+      "signedOut": "未ログイン",
+      "noSubscription": "未契約",
+      "statusFailed": "ログイン状態を取得できません",
+      "expired": "認証コードの有効期限が切れました。再ログインしてください。",
+      "denied": "認証が拒否されました。再ログインしてください。",
+      "cancelled": "ログインがキャンセルされたか、別のログインに置き換えられました。再ログインしてください。",
+      "success": "Kimi Code にログインし、公式モデルを追加しました。",
+      "removeConfirm": "{{name}} を削除しますか？Kimi Code からこのアカウントのプロバイダーとモデルを削除し、ローカル認証情報とカードも削除します。他のアカウントには影響しません。",
+      "dismissConfirm": "{{name}} を一覧から外しますか？これは Kimi Code 自身のログインです。CC Switch はログアウトせず、認証情報とモデルも保持します。ログアウトする場合は Kimi Code で /logout を実行してください。再度ログインすると一覧に戻ります。",
+      "primaryHidden": "Kimi Code 自身のログインは一覧から外されています。同じアカウントで再ログインすると戻ります",
+      "removeCurrentHint": "このアカウントは使用中です。別のアカウントに切り替えてから削除してください",
+      "manageAccounts": "Kimi アカウントを管理",
+      "managedHint": "先にこの公式アカウントを「削除」で Kimi の設定から外すか、認証センターでログインごと削除してください。",
+      "connectionManaged": "接続とログインは認証センターで管理されます。ここではモデルのみ編集できます。モデルを取得すると、このアカウントで現在使える公式モデルを読み込みます。",
+      "current": "Kimi で使用中",
+      "primaryShort": "Kimi Code 自身のログイン",
+      "empty": "Kimi アカウントはまだありません。Kimi Code でログイン中のアカウントは自動的にここに表示されます。",
+      "help": "Kimi コーディングプランのアカウントを複数追加でき、それぞれ Kimi Code 内に専用のプロバイダーとモデルを持ちます。「このアカウントを使用」で Kimi Code の既定モデルをそのアカウントに切り替え、以降の新しいセッションで使われます。Kimi Code 自身がログインしているアカウントは自動的にここに表示され、Web 検索と取得には常にこれが使われます。ここで削除してもリストから外すだけで、Kimi Code はログアウトしません。",
+      "useAccount": "このアカウントを使用"
+    },
+    "modelSelectionHint": "プロバイダーカードの切り替えボタンで既定のプロバイダーを選択します。別のモデルを選ぶには、Kimi Code で /model を使用してください。",
+    "contextSize": "コンテキスト長",
+    "configTomlScope": "ここには [providers.{{key}}] とそれに属する [models.*] テーブルだけを書けます。プロバイダーキーは上の欄で変更してください。",
+    "configTomlSchema": "設定が不完全です：プロバイダーの type と、各モデルの model・max_context_size（正の整数）を確認してください。",
+    "capabilities": {
+      "image_in": "画像入力",
+      "thinking": "思考",
+      "always_thinking": "常に思考",
+      "tool_use": "ツール呼び出し",
+      "dynamically_loaded_tools": "必要に応じてツールを読み込む"
+    },
+    "capabilityHints": {
+      "always_thinking": "モデルの思考をオフにできない場合にチェック：このモデルを選ぶと思考が自動でオンになり、オフの選択肢は表示されません",
+      "dynamically_loaded_tools": "モデルがツールの説明を必要に応じて読み込み、リクエストを短くします。Kimi 自社のモデルのみ対応のため、他社モデルではチェックしないでください。KIMI_CODE_EXPERIMENTAL_TOOL_SELECT の有効化も必要です"
+    },
+    "empty": {
+      "title": "Kimi Code プロバイダーを追加",
+      "description": "URL、API キー、モデルを設定します。既存の Kimi 設定は自動的にインポートされます。"
+    },
+    "error": {
+      "defaultModelInUse": "Kimi Code がこのプロバイダーのモデルを使用中です。先に Kimi Code の /model でほかのモデルに切り替えてください。",
+      "secondaryModelInUse": "Kimi Code のサブエージェントモデルがこのプロバイダーのモデルを使用中です。先に Kimi Code の /secondary-model で変更してください。"
     }
   }
 }

@@ -22,6 +22,8 @@ interface ConfirmDialogProps {
   zIndex?: "base" | "nested" | "alert" | "top";
   checkboxLabel?: string;
   checkboxDefaultChecked?: boolean;
+  /** 确认的操作进行中：按钮禁用，也不能关掉对话框 */
+  pending?: boolean;
   onConfirm: (checkboxChecked: boolean) => void;
   onCancel: () => void;
 }
@@ -36,6 +38,7 @@ export function ConfirmDialog({
   zIndex = "alert",
   checkboxLabel,
   checkboxDefaultChecked = false,
+  pending = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -56,7 +59,7 @@ export function ConfirmDialog({
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !pending) {
           onCancel();
         }
       }}
@@ -82,12 +85,13 @@ export function ConfirmDialog({
           </label>
         ) : null}
         <DialogFooter className="flex gap-2 border-t-0 bg-transparent pt-2 sm:justify-end">
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel} disabled={pending}>
             {cancelText || t("common.cancel")}
           </Button>
           <Button
             variant={variant === "info" ? "default" : "destructive"}
             onClick={() => onConfirm(checkboxLabel ? checkboxChecked : false)}
+            disabled={pending}
           >
             {confirmText || t("common.confirm")}
           </Button>

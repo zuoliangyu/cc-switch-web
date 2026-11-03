@@ -40,6 +40,7 @@ export const MCP_LINK_APPS: readonly AppId[] = [
   "openclaw",
   "hermes",
   "pi",
+  "kimi",
   "mcode",
 ];
 

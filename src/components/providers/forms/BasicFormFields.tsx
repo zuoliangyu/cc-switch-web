@@ -23,6 +23,10 @@ import { getIconMetadata } from "@/icons/extracted/metadata";
 import type { UseFormReturn } from "react-hook-form";
 import type { ProviderFormData } from "@/lib/schemas/provider";
 
+/** 必填字段标签：在标签文字后加红色星号 */
+export const REQUIRED_LABEL =
+  "after:ms-0.5 after:text-red-500 after:content-['*']";
+
 interface BasicFormFieldsProps {
   form: UseFormReturn<ProviderFormData>;
   /** Slot to render content between icon and name fields */

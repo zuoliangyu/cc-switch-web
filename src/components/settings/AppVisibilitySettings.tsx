@@ -51,6 +51,7 @@ export function AppVisibilitySettings({
     hermes: true,
     pi: true,
     mcode: true,
+    kimi: true,
   };
 
   // Count how many apps are currently visible

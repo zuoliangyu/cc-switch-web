@@ -40,6 +40,10 @@ export interface GroupAccountRow {
   users: ManagedAccountUser[];
   /** 右侧的额度（AccountQuotaColumn）；需要重新登录的账号不传 */
   quota?: React.ReactNode;
+  /** ⋯ 里删除项的文案（Kimi Code 自己的登录是「移出列表」） */
+  removeLabel?: string;
+  /** 删除项不能点的原因（Kimi 正在用的号要先切走），照常列出、原因写在下面 */
+  removeDisabledReason?: string;
 }
 
 export interface GroupLoginFlow {
@@ -48,7 +52,10 @@ export interface GroupLoginFlow {
   /** 已拿到验证码，等用户在浏览器里授权 */
   polling: boolean;
   pollingState: "idle" | "polling" | "success" | "error";
-  deviceCode: ManagedAuthDeviceCodeResponse | null;
+  deviceCode: Pick<
+    ManagedAuthDeviceCodeResponse,
+    "user_code" | "verification_uri"
+  > | null;
   error: string | null;
   onCancel: () => void;
   onRetry: () => void;
@@ -70,19 +77,24 @@ interface ManagedAccountsGroupProps {
   /** 标题行下面的提示（Copilot 旧数据迁移失败） */
   notice?: React.ReactNode;
   emptyText: string;
-  loginLabel: string;
-  /** 「添加账号」和空状态的登录按钮（Copilot 先打开部署类型选择） */
+  /** 标题行的「添加账号」，有没有账号都在（Copilot 先打开部署类型选择） */
   onAdd: () => void;
   /** Copilot 选部署类型的那块；有它时不显示空状态那行 */
   chooser?: React.ReactNode;
+  /** 放在「添加账号」左边的控件 */
+  loginControl?: React.ReactNode;
   /** ⋯ 里有没有「重新登录」（Copilot 没有） */
   canReauth: boolean;
   onReauth: (accountId: string) => void;
   onSetDefault: (accountId: string) => void;
   settingDefault: boolean;
   onRemove: (accountId: string, login: string) => void;
-  onRemoveAll: () => void;
+  /** ⋯ 里的「删除全部账号」；不传就没有这一项（Kimi Code 自己的登录不能替它删） */
+  onRemoveAll?: () => void;
   removing: boolean;
+  /** 「默认」徽标和 ⋯ 里「设为默认」的文案（Kimi Code 是「在用」「使用这个账号」） */
+  defaultLabel?: string;
+  setDefaultLabel?: string;
   login: GroupLoginFlow;
   /** 确认框等 */
   children?: React.ReactNode;
@@ -108,15 +120,17 @@ export function ManagedAccountsGroup({
   onRetryStatus,
   notice,
   emptyText,
-  loginLabel,
   onAdd,
   chooser,
+  loginControl,
   canReauth,
   onReauth,
   onSetDefault,
   settingDefault,
   onRemove,
   onRemoveAll,
+  defaultLabel,
+  setDefaultLabel,
   removing,
   login,
   children,
@@ -168,15 +182,10 @@ export function ManagedAccountsGroup({
         defaultValue: "重新登录 {{login}} · 等待授权中…",
         login: targetAccount.login,
       })
-    : accounts.length > 0
-      ? t("authCenter.pending.add", {
-          defaultValue: "添加 {{service}} 账号 · 等待授权中…",
-          service: name,
-        })
-      : t("authCenter.pending.login", {
-          defaultValue: "登录 {{service}} · 等待授权中…",
-          service: name,
-        });
+    : t("authCenter.pending.add", {
+        defaultValue: "添加 {{service}} 账号 · 等待授权中…",
+        service: name,
+      });
 
   const copyCode = async () => {
     if (!login.deviceCode?.user_code) return;
@@ -224,7 +233,8 @@ export function ManagedAccountsGroup({
             {help}
           </HelpTip>
         </div>
-        {ready && accounts.length > 0 && (
+        {ready && loginControl}
+        {ready && (
           <Button
             type="button"
             id={`auth-add-${slug}`}
@@ -239,7 +249,7 @@ export function ManagedAccountsGroup({
             {t("authCenter.addAccount", { defaultValue: "添加账号" })}
           </Button>
         )}
-        {ready && accounts.length > 1 && (
+        {ready && accounts.length > 1 && onRemoveAll && (
           <DropdownMenu>
             <HoverTip content={t("common.more", { defaultValue: "更多" })}>
               <DropdownMenuTrigger asChild>
@@ -316,30 +326,14 @@ export function ManagedAccountsGroup({
             onReauth={reauth}
             onSetDefault={onSetDefault}
             onRemove={onRemove}
+            defaultLabel={defaultLabel}
+            setDefaultLabel={setDefaultLabel}
           />
         ))}
 
       {showEmpty && (
-        <div className="flex items-center gap-4 border-t border-border py-3.5 pe-3 ps-4">
-          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-            {emptyText}
-          </span>
-          <Button
-            type="button"
-            id={`auth-login-${slug}`}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 pe-3 ps-2.5"
-            onClick={add}
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-3.5 w-3.5 items-center justify-center"
-            >
-              <ProviderIcon icon={iconName} name={name} size={14} />
-            </span>
-            {loginLabel}
-          </Button>
+        <div className="border-t border-border py-3.5 pe-3 ps-4 text-xs text-muted-foreground">
+          {emptyText}
         </div>
       )}
 
@@ -503,6 +497,8 @@ interface AccountRowProps {
   onReauth: (accountId: string) => void;
   onSetDefault: (accountId: string) => void;
   onRemove: (accountId: string, login: string) => void;
+  defaultLabel?: string;
+  setDefaultLabel?: string;
 }
 
 function AccountRow({
@@ -515,6 +511,8 @@ function AccountRow({
   onReauth,
   onSetDefault,
   onRemove,
+  defaultLabel,
+  setDefaultLabel,
 }: AccountRowProps) {
   const { t } = useTranslation();
   const subId = useId();
@@ -536,7 +534,8 @@ function AccountRow({
             <span
               className={cn(PILL, "border border-border text-muted-foreground")}
             >
-              {t("authCenter.default", { defaultValue: "默认" })}
+              {defaultLabel ??
+                t("authCenter.default", { defaultValue: "默认" })}
             </span>
           )}
           {account.needsReauth && (
@@ -609,7 +608,8 @@ function AccountRow({
               onSelect={() => onSetDefault(account.id)}
               className="h-[30px] rounded-md px-2.5 text-sm"
             >
-              {t("authCenter.setDefault", { defaultValue: "设为默认" })}
+              {setDefaultLabel ??
+                t("authCenter.setDefault", { defaultValue: "设为默认" })}
             </DropdownMenuItem>
           )}
           {canReauth && (
@@ -631,11 +631,26 @@ function AccountRow({
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
-            disabled={removing}
+            disabled={removing || Boolean(account.removeDisabledReason)}
             onSelect={() => onRemove(account.id, account.login)}
-            className="h-[30px] rounded-md px-2.5 text-sm text-destructive focus:text-destructive"
+            className={cn(
+              "min-h-[30px] flex-col items-start justify-center gap-0 rounded-md px-2.5 text-sm text-destructive focus:text-destructive",
+              account.removeDisabledReason && "data-[disabled]:opacity-100",
+            )}
           >
-            {t("authCenter.removeAccount", { defaultValue: "删除账号…" })}
+            <span
+              className={cn(
+                account.removeDisabledReason && "text-muted-foreground",
+              )}
+            >
+              {account.removeLabel ??
+                t("authCenter.removeAccount", { defaultValue: "删除账号…" })}
+            </span>
+            {account.removeDisabledReason && (
+              <span className="text-xs text-muted-foreground">
+                {account.removeDisabledReason}
+              </span>
+            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

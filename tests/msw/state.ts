@@ -69,6 +69,7 @@ const createDefaultProviders = (): ProvidersByApp => ({
   hermes: {},
   pi: {},
   mcode: {},
+  kimi: {},
 });
 
 const createDefaultCurrent = (): CurrentProviderState => ({
@@ -82,6 +83,7 @@ const createDefaultCurrent = (): CurrentProviderState => ({
   hermes: "",
   pi: "",
   mcode: "",
+  kimi: "",
 });
 
 let providers = createDefaultProviders();

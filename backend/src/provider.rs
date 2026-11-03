@@ -212,6 +212,11 @@ impl Provider {
                 crate::pi_config::provider_base_url(settings).unwrap_or_default(),
                 crate::pi_config::resolve_usage_api_key(&str_at(settings.get("apiKey"))),
             ),
+            // Kimi Code (config.toml) keeps the provider table under `provider`.
+            AppType::Kimi => (
+                str_at(settings.pointer("/provider/base_url")),
+                str_at(settings.pointer("/provider/api_key")),
+            ),
             // OpenCode (OMO) nests credentials under `options` (the SDK options object).
             AppType::OpenCode | AppType::Mcode => {
                 let options = settings.get("options");

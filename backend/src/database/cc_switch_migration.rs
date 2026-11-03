@@ -395,7 +395,7 @@ mod tests {
     fn automatic_migration_normalizes_future_schema_without_touching_source() {
         let home = tempdir().unwrap();
         let _home = TestHome::set(home.path());
-        let source_db = create_source_database(home.path(), 18, "桌面端供应商");
+        let source_db = create_source_database(home.path(), SCHEMA_VERSION + 1, "桌面端供应商");
         fs::write(
             home.path().join(".cc-switch/settings.json"),
             b"{\"language\":\"zh\"}",
@@ -434,7 +434,7 @@ mod tests {
                 &Connection::open_with_flags(&source_db, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
             )
             .unwrap(),
-            18
+            SCHEMA_VERSION + 1
         );
     }
 

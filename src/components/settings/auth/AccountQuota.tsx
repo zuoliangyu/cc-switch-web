@@ -27,7 +27,10 @@ import {
 } from "@/components/SubscriptionQuotaFooter";
 import type { SubscriptionQuota } from "@/types/subscription";
 import { useCopilotQuota } from "@/lib/query/copilot";
-import { useXaiOauthQuotaByAccountId } from "@/lib/query/subscription";
+import {
+  useKimiAccountQuota,
+  useXaiOauthQuotaByAccountId,
+} from "@/lib/query/subscription";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 export interface AccountQuotaRow {
@@ -39,6 +42,7 @@ export interface AccountQuotaRow {
 export type AccountQuotaState =
   | { kind: "rows"; rows: AccountQuotaRow[] }
   | { kind: "failed"; reason: string }
+  | { kind: "note"; text: string }
   | { kind: "loading" }
   | null;
 
@@ -131,6 +135,12 @@ export function AccountQuotaColumn({
               {state.reason}
             </span>
           </>
+        )}
+        {state.kind === "note" && (
+          // 写在额度行数值（「剩余 91%」）那一格：右边让出倒计时格（52）和间距（8），和别的号的数值对齐
+          <span className="me-[60px] self-end text-xs text-muted-foreground">
+            {state.text}
+          </span>
         )}
         {state.kind === "loading" && (
           <span className="text-xs text-muted-foreground">
@@ -325,6 +335,37 @@ export function XaiAccountQuota({
     <AccountQuotaColumn
       login={login}
       state={subscriptionQuotaState(t, quota, loading, i18n.language)}
+      queriedAt={quota?.queriedAt ?? null}
+      loading={loading}
+      onRefresh={() => void refetch()}
+    />
+  );
+}
+
+/** Kimi 官方账号的剩余额度（kimi_oauth_quota(accountId)，不用先切号） */
+export function KimiAccountQuota({
+  accountId,
+  login,
+}: {
+  accountId: string;
+  login: string;
+}) {
+  const { t, i18n } = useTranslation();
+  const {
+    data: quota,
+    isFetching: loading,
+    refetch,
+  } = useKimiAccountQuota(accountId, { enabled: true, autoQuery: false });
+  const state = subscriptionQuotaState(t, quota, loading, i18n.language);
+  return (
+    <AccountQuotaColumn
+      login={login}
+      // 没订阅 Kimi Code 的号，额度接口返回空对象：查成功但一档都没有
+      state={
+        !state && quota?.success
+          ? { kind: "note", text: t("kimi.oauth.noSubscription") }
+          : state
+      }
       queriedAt={quota?.queriedAt ?? null}
       loading={loading}
       onRefresh={() => void refetch()}

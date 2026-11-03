@@ -101,10 +101,23 @@ fn make_error(message: String) -> SubscriptionQuota {
 }
 
 async fn query_kimi(api_key: &str) -> SubscriptionQuota {
+    query_kimi_with_base("https://api.kimi.com/coding/v1", api_key).await
+}
+
+/// `base_url` is the Kimi Code API root (`https://api.kimi.ai/coding/v1` for
+/// global accounts); `token` is an API key or an official OAuth access token.
+pub(crate) async fn query_kimi_at(
+    base_url: &str,
+    token: &str,
+) -> Result<SubscriptionQuota, String> {
+    Ok(query_kimi_with_base(base_url, token).await)
+}
+
+async fn query_kimi_with_base(base_url: &str, api_key: &str) -> SubscriptionQuota {
     let client = crate::proxy::http_client::get();
 
     let resp = client
-        .get("https://api.kimi.com/coding/v1/usages")
+        .get(format!("{}/usages", base_url.trim_end_matches('/')))
         .header("Authorization", format!("Bearer {api_key}"))
         .header("Accept", "application/json")
         .timeout(std::time::Duration::from_secs(10))

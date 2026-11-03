@@ -63,6 +63,21 @@ export const translatePiProviderMutationError = (
   return "";
 };
 
+/** Kimi Code 拒绝的供应商修改（默认模型 / 子代理模型还指着这一家）映射为 i18n 文案 */
+export const translateKimiProviderMutationError = (
+  message: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
+  if (!message) return "";
+  if (message.includes("Select another default model in Kimi Code")) {
+    return t("kimi.error.defaultModelInUse");
+  }
+  if (message.includes("Update the secondary model selection in Kimi Code")) {
+    return t("kimi.error.secondaryModelInUse");
+  }
+  return "";
+};
+
 /**
  * 将已知的 MCP 相关后端错误（通常为中文硬编码）映射为 i18n 文案
  * 采用包含式匹配，尽量稳健地覆盖不同上下文的相似消息。

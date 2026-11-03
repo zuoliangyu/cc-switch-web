@@ -26,6 +26,7 @@ export const APP_IDS: AppId[] = [
   "hermes",
   "pi",
   "mcode",
+  "kimi",
 ];
 
 /** Claude Desktop、OpenClaw 不由 CC Switch 管理 MCP；Pi 1.0 起内置 MCP（`~/.pi/agent/mcp.json`） */
@@ -38,6 +39,7 @@ export const MCP_APP_IDS = [
   "hermes",
   "pi",
   "mcode",
+  "kimi",
 ] as const satisfies readonly AppId[];
 export type McpAppId = (typeof MCP_APP_IDS)[number];
 
@@ -49,6 +51,7 @@ export const SKILLS_APP_IDS = [
   "opencode",
   "hermes",
   "mcode",
+  "kimi",
   "pi",
 ] as const satisfies readonly AppId[];
 
@@ -131,6 +134,12 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
   },
+  kimi: {
+    label: "Kimi Code",
+    icon: <ProviderIcon icon="kimi" name="Kimi Code" size={14} />,
+    activeClass: "theme-chip-primary",
+    badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true };

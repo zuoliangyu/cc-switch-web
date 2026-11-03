@@ -33,7 +33,6 @@ impl AuthInfo {
             access_token: Some(access_token),
         }
     }
-
 }
 
 /// 认证策略

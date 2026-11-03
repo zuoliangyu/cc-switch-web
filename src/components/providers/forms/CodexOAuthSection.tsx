@@ -463,7 +463,6 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
         defaultValue: "还没有登录 {{service}} 账号。",
         service: "ChatGPT",
       })}
-      loginLabel={t("codexOauth.loginWithChatGPT", "使用 ChatGPT 登录")}
       onAdd={addAccount}
       canReauth
       onReauth={reauthAccount}

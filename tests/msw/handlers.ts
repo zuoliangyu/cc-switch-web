@@ -1,5 +1,4 @@
 import { http, HttpResponse } from "msw";
-import { MODELS_DEV_API_URL } from "@/lib/modelsDev";
 import type { AppId } from "@/lib/api/types";
 import type { Provider, Settings } from "@/types";
 import {
@@ -122,7 +121,9 @@ export const handlers = [
     else updateProvider("claude", provider);
     return success(true);
   }),
-  http.get(MODELS_DEV_API_URL, () => HttpResponse.json({})),
+  http.post(`${RUNTIME_ENDPOINT}/fetch_models_dev`, () =>
+    HttpResponse.json({}),
+  ),
   http.post(`${RUNTIME_ENDPOINT}/get_providers`, async ({ request }) => {
     const { app } = await withJson<{ app: AppId }>(request);
     return success(getProviders(app));

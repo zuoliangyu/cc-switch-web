@@ -13,6 +13,20 @@ import { resolveManagedAccountId } from "@/lib/authBinding";
 
 export const GROKBUILD_OFFICIAL_PROVIDER_ID = "grokbuild-official";
 export const CODEX_OFFICIAL_PROVIDER_ID = "codex-official";
+export const KIMI_OFFICIAL_PROVIDER_ID = "managed:kimi-code";
+
+/** Kimi 官方账号卡：config.toml 里 type = "kimi" 且带 OAuth 引用（与后端 is_official_provider 一致） */
+export function isKimiOfficialAccount(
+  provider: Pick<Provider, "settingsConfig">,
+): boolean {
+  const config = provider.settingsConfig?.provider as
+    | { type?: string; oauth?: { key?: unknown } }
+    | undefined;
+  const key = config?.oauth?.key;
+  return (
+    config?.type === "kimi" && typeof key === "string" && key.trim().length > 0
+  );
+}
 
 export type CodexOfficialIdentity =
   | "native_login"

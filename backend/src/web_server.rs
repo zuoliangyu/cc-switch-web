@@ -1098,6 +1098,122 @@ async fn remove_provider_from_live_config(
     Ok(Json(removed))
 }
 
+/// models.dev 数据（api.json）：走后端的全局代理客户端拉取，浏览器不用自己能连上 models.dev
+async fn fetch_models_dev() -> Result<String, ApiError> {
+    crate::services::model_pricing::fetch_models_dev()
+        .await
+        .map_err(ApiError::internal)
+}
+
+/// Kimi Code 官方账号登录：与桌面端一样全进程只有一个管理器（设备流状态与身份缓存）。
+static KIMI_OAUTH: once_cell::sync::Lazy<crate::services::kimi_oauth::KimiOAuthManager> =
+    once_cell::sync::Lazy::new(Default::default);
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct KimiOAuthStartRequest {
+    region: crate::services::kimi_oauth::KimiRegion,
+    account_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct KimiOAuthFlowRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct KimiOAuthAccountRequest {
+    account_id: String,
+}
+
+async fn kimi_oauth_status() -> Result<Json<crate::services::kimi_oauth::KimiOAuthStatus>, ApiError> {
+    crate::commands::kimi_oauth_status_internal(&KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn kimi_oauth_start(
+    Json(payload): Json<KimiOAuthStartRequest>,
+) -> Result<Json<crate::services::kimi_oauth::KimiLoginStart>, ApiError> {
+    crate::commands::kimi_oauth_start_internal(payload.region, payload.account_id, &KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
+async fn kimi_oauth_poll(
+    Json(payload): Json<KimiOAuthFlowRequest>,
+) -> Result<Json<crate::services::kimi_oauth::KimiLoginPoll>, ApiError> {
+    crate::commands::kimi_oauth_poll_internal(&payload.flow_id, &KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
+async fn kimi_oauth_cancel(Json(payload): Json<KimiOAuthFlowRequest>) -> Json<bool> {
+    Json(crate::commands::kimi_oauth_cancel_internal(&payload.flow_id, &KIMI_OAUTH).await)
+}
+
+async fn kimi_oauth_remove(
+    State(state): State<WebApiState>,
+    Json(payload): Json<KimiOAuthAccountRequest>,
+) -> Result<Json<()>, ApiError> {
+    crate::commands::kimi_oauth_remove_internal(
+        &payload.account_id,
+        &KIMI_OAUTH,
+        state.app_state.as_ref(),
+    )
+    .await
+    .map(Json)
+    .map_err(ApiError::bad_request)
+}
+
+async fn kimi_oauth_quota(
+    Query(query): Query<KimiOAuthAccountRequest>,
+) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
+    crate::commands::kimi_oauth_quota_internal(&query.account_id, &KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn kimi_oauth_models(
+    Query(query): Query<KimiOAuthAccountRequest>,
+) -> Result<Json<serde_json::Map<String, Value>>, ApiError> {
+    crate::commands::kimi_oauth_models_internal(&query.account_id, &KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn kimi_oauth_use_account(
+    Json(payload): Json<KimiOAuthAccountRequest>,
+) -> Result<Json<()>, ApiError> {
+    crate::commands::kimi_oauth_use_account_internal(&payload.account_id, &KIMI_OAUTH)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
+/// Kimi「添加」：写进 config.toml 但不改默认模型（「切换」才改），见 `ProviderService::add_to_live_config`。
+async fn add_provider_to_live_config(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    let app_state = state.app_state.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::services::provider::ProviderService::add_to_live_config(app_state.as_ref(), app_type, &id)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("供应商添加到应用任务失败: {e}")))?
+    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    Ok(Json(true))
+}
+
 async fn import_default_provider_config(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -4547,6 +4663,15 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/auth/logout", post(auth_logout))
         .route("/api/auth/xai_oauth/models", get(fetch_xai_oauth_models))
+        .route("/api/usage/models-dev", get(fetch_models_dev))
+        .route("/api/auth/kimi/status", get(kimi_oauth_status))
+        .route("/api/auth/kimi/start", post(kimi_oauth_start))
+        .route("/api/auth/kimi/poll", post(kimi_oauth_poll))
+        .route("/api/auth/kimi/cancel", post(kimi_oauth_cancel))
+        .route("/api/auth/kimi/remove", post(kimi_oauth_remove))
+        .route("/api/auth/kimi/quota", get(kimi_oauth_quota))
+        .route("/api/auth/kimi/models", get(kimi_oauth_models))
+        .route("/api/auth/kimi/use-account", post(kimi_oauth_use_account))
         .route(
             "/api/auth/codex_oauth/models",
             get(fetch_codex_oauth_models),
@@ -4675,7 +4800,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route(
             "/api/providers/:app/live-config/:id",
-            axum::routing::delete(remove_provider_from_live_config),
+            axum::routing::delete(remove_provider_from_live_config).post(add_provider_to_live_config),
         )
         .route(
             "/api/universal-providers",

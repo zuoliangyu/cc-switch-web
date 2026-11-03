@@ -162,7 +162,8 @@ export type AppTypeFilter =
   | "gemini"
   | "grokbuild"
   | "pi"
-  | "mcode";
+  | "mcode"
+  | "kimi";
 
 export interface StatsFilters {
   timeRange: UsageRangePreset;

@@ -44,7 +44,8 @@ interface ProviderActionsProps {
   isOmo?: boolean;
   onSwitch: () => void;
   onEdit: () => void;
-  onDuplicate: () => void;
+  /** 不传就没有「复制」（Kimi 官方账号卡：复制出来的卡没有登录） */
+  onDuplicate?: () => void;
   onTest?: () => void;
   onConfigureUsage?: () => void;
   onDelete: () => void;
@@ -95,7 +96,8 @@ export function ProviderActions({
     (appId === "opencode" && !isOmo) ||
     appId === "openclaw" ||
     appId === "hermes" ||
-    appId === "pi";
+    appId === "pi" ||
+    appId === "kimi";
 
   // 故障转移模式下的按钮逻辑（累加模式和 OMO 应用不支持故障转移）
   const isFailoverMode =
@@ -247,7 +249,7 @@ export function ProviderActions({
           {t("failover.officialUnavailable")}
         </span>
       )}
-      {(appId === "openclaw" || appId === "hermes") &&
+      {(appId === "openclaw" || appId === "hermes" || appId === "kimi") &&
         isInConfig &&
         onSetAsDefault && (
           <Button
@@ -319,15 +321,17 @@ export function ProviderActions({
           <Edit className="h-4 w-4" />
         </Button>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onDuplicate}
-          title={t("provider.duplicate")}
-          className={iconButtonClass}
-        >
-          <Copy className="h-4 w-4" />
-        </Button>
+        {onDuplicate && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onDuplicate}
+            title={t("provider.duplicate")}
+            className={iconButtonClass}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        )}
 
         <Button
           size="icon"

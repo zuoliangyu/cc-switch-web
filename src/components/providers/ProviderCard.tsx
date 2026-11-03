@@ -11,6 +11,7 @@ import UsageFooter from "@/components/UsageFooter";
 import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
+import KimiAccountQuotaFooter from "@/components/KimiAccountQuotaFooter";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
@@ -18,6 +19,7 @@ import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
 import {
+  isKimiOfficialAccount,
   providerNeedsRouting,
   resolveCodexOfficialIdentity,
   supportsOfficialProxyTakeover,
@@ -91,6 +93,7 @@ const extractApiUrl = (provider: Provider, fallbackText: string) => {
 };
 
 function isOfficialProvider(provider: Provider, appId: AppId): boolean {
+  if (appId === "kimi") return isKimiOfficialAccount(provider);
   if (provider.category === "official") return true;
 
   const config = provider.settingsConfig as Record<string, any>;
@@ -155,7 +158,10 @@ export function ProviderCard({
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
   const isAdditiveMode =
-    (appId === "opencode" && !isAnyOmo) || appId === "pi" || appId === "mcode";
+    (appId === "opencode" && !isAnyOmo) ||
+    appId === "pi" ||
+    appId === "mcode" ||
+    appId === "kimi";
 
   const { data: health } = useProviderHealth(
     provider.id,
@@ -431,6 +437,14 @@ export function ProviderCard({
                   inline={true}
                   isCurrent={isCurrent}
                 />
+              ) : appId === "kimi" && isOfficial ? (
+                // 每张 Kimi 官方卡就是授权中心里的一个账号，额度按卡上那个号查
+                <KimiAccountQuotaFooter
+                  accountId={provider.id}
+                  name={provider.name}
+                  inline={true}
+                  isCurrent={isCurrent}
+                />
               ) : isOfficial ? (
                 <SubscriptionQuotaFooter
                   appId={appId}
@@ -487,7 +501,11 @@ export function ProviderCard({
                 appId === "codex" &&
                 resolveCodexOfficialIdentity(appId, provider) !== null
               }
-              deleteDisabled={deleteDisabled}
+              deleteDisabled={
+                deleteDisabled ||
+                // 仍在 Kimi 里的官方卡不能直接删：删号在授权中心（连登录一起删）
+                (appId === "kimi" && isOfficial && isInConfig)
+              }
               appId={appId}
               isCurrent={isCurrent}
               isInConfig={isInConfig}
@@ -497,10 +515,15 @@ export function ProviderCard({
               isOmo={isAnyOmo}
               onSwitch={() => onSwitch(provider)}
               onEdit={() => onEdit(provider)}
-              onDuplicate={() => onDuplicate(provider)}
+              onDuplicate={
+                appId === "kimi" && isOfficial
+                  ? undefined
+                  : () => onDuplicate(provider)
+              }
               onTest={
                 onTest &&
                 appId !== "mcode" &&
+                appId !== "kimi" &&
                 !isOfficial &&
                 !isCopilot &&
                 !isCodexOauth &&

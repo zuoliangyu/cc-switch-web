@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import { CodexFormFields } from "@/components/providers/forms/CodexFormFields";
 import { http, HttpResponse } from "msw";
 import { server } from "../msw/server";
-import { MODELS_DEV_API_URL } from "@/lib/modelsDev";
 
 const fetchXaiOauthModelsMock = vi.hoisted(() => vi.fn());
 const fetchModelsForConfigMock = vi.hoisted(() => vi.fn());
@@ -178,7 +177,7 @@ describe("CodexFormFields", () => {
   it("默认模型合并目录与远端建议，并可加入模型映射", async () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
     server.use(
-      http.get(MODELS_DEV_API_URL, () =>
+      http.post("http://runtime.local/fetch_models_dev", () =>
         HttpResponse.json({
           example: {
             api: "https://example.com/v1",

@@ -182,7 +182,7 @@ export function PiModelsEditor({
         commit(nextRows);
         return true;
       },
-      text(current.baseUrl) || protocol.baseUrl,
+      { baseUrl: text(current.baseUrl) || protocol.baseUrl },
     );
   };
   const fetch = async () => {

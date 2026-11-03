@@ -43,6 +43,7 @@
     "version": "Version",
     "loading": "Loading...",
     "more": "More",
+    "retry": "Retry",
     "notInstalled": "Not installed",
     "success": "Success",
     "error": "Error",
@@ -916,7 +917,8 @@
     "openclaw": "OpenClaw",
     "hermes": "Hermes",
     "pi": "Pi",
-    "mcode": "MiniMax Code"
+    "mcode": "MiniMax Code",
+    "kimi": "Kimi Code"
   },
   "appSwitcher": {
     "more": "More apps"
@@ -1305,6 +1307,7 @@
     "fetchModelsSuccess": "Found {{count}} models",
     "modelMetadataFilled": "Filled in context window and other parameters for {{model}} (source: {{source}}). Please double-check.",
     "modelMetadataFilledMany": "Filled in context window and other parameters for {{count}} models (source: {{source}}). Please double-check.",
+    "gptContextWindowHint": "GPT on relays usually comes from ChatGPT subscriptions, whose window is only 272K. A larger window delays compaction until the upstream rejects the request and the turn fails; only use it if this provider supports it.",
     "modelMetadataSourcePreset": "preset",
     "modelMetadataSourceBoth": "preset and models.dev",
     "fetchedModelsTitle": "Available models ({{count}})",
@@ -1462,11 +1465,19 @@
     "categoryCnOfficial": "Opensource Official",
     "categoryAggregation": "Aggregation",
     "categoryThirdParty": "Third Party",
-    "categoryLocal": "Local"
+    "categoryLocal": "Local",
+    "nativeConfig": {
+      "hint": "Shows this provider's part of the file in the app's own format and writes it there on save. Global settings such as the default model are not here. Comments typed here are not saved.",
+      "invalid": "Invalid {{format}}: {{error}}",
+      "title": "Config file {{path}} (this provider only)"
+    }
   },
   "codex": {
     "needsRouting": "Needs routing",
     "nativeLogin": "Codex login",
+    "accountStatusUnavailable": "Unable to load account details",
+    "boundAccountUnavailable": "The linked account is unavailable",
+    "accountLoading": "Loading account…",
     "officialRouting": "Official account routing"
   },
   "copilot": {
@@ -1621,7 +1632,6 @@
     "autoCompactLimitHint": "Auto-compacts history when context reaches this token limit"
   },
   "codexOauth": {
-    "loginWithChatGPT": "Sign in with ChatGPT",
     "authStatus": "Auth status",
     "notAuthenticated": "Not authenticated",
     "loginRequired": "Please sign in to ChatGPT first",
@@ -1795,6 +1805,11 @@
     "family": {
       "tencent": "Tencent Cloud",
       "volcengine": "Volcengine"
+    },
+    "group": {
+      "cloud": "Cloud providers",
+      "local": "Local",
+      "thirdparty": "Third-party platforms"
     }
   },
   "usage": {
@@ -3045,6 +3060,8 @@
       "modelName": "Display name",
       "modelNamePlaceholder": "Claude Opus 5",
       "contextLength": "Context length",
+      "toggleModelDetails": "Expand or collapse model details",
+      "removeModel": "Remove model",
       "advancedOptions": "Advanced options",
       "modelsHint": "On switch, the first model is written to top-level model.default.",
       "primaryModel": "Default",
@@ -4000,13 +4017,13 @@
     "loginFailed": "Sign-in didn't finish",
     "pending": {
       "add": "Adding a {{service}} account · Waiting for authorization…",
-      "login": "Signing in to {{service}} · Waiting for authorization…",
       "reauth": "Signing in again as {{login}} · Waiting for authorization…",
       "enterCode": "Enter this code in the browser:",
       "copy": "Copy code",
       "copied": "Code copied.",
       "open": "Open the authorization page",
-      "note": "The authorization page is open in your browser; this updates on its own when you finish. Mind {{service}}'s terms of use."
+      "note": "The authorization page is open in your browser; this updates on its own when you finish. Mind {{service}}'s terms of use.",
+      "linkCopied": "Sign-in link copied."
     },
     "toast": {
       "added": "{{service}} account added.",
@@ -4021,7 +4038,56 @@
   },
   "kimi": {
     "oauth": {
-      "title": "Kimi Code official sign-in"
+      "title": "Kimi Code official sign-in",
+      "description": "Add Kimi coding plan accounts with separate credentials and providers. Manage sign-in here, then select an account to use its official models.",
+      "region": "Sign-in region",
+      "mainland-cn": "Mainland China",
+      "global": "Global",
+      "signIn": "Sign in to Kimi",
+      "removeAccount": "Remove account",
+      "dismissAccount": "Hide from list",
+      "signedOut": "Signed out",
+      "noSubscription": "No subscription",
+      "statusFailed": "Cannot read sign-in status",
+      "expired": "The authorization code expired. Please sign in again.",
+      "denied": "Authorization was denied. Please sign in again.",
+      "cancelled": "This sign-in was cancelled or replaced. Please sign in again.",
+      "success": "Signed in to Kimi Code and added the official models.",
+      "removeConfirm": "Remove {{name}}? Its provider and models are removed from Kimi Code, along with its local credentials and card. Other accounts are not affected.",
+      "dismissConfirm": "Hide {{name}} from the list? This is Kimi Code's own login; CC Switch will not sign it out and keeps its credentials and models. To sign out, run /logout in Kimi Code. Signing in again brings it back to the list.",
+      "primaryHidden": "Kimi Code's own login was removed from the list; sign in to the same account to bring it back",
+      "removeCurrentHint": "This account is in use. Switch to another account before removing it.",
+      "manageAccounts": "Manage Kimi accounts",
+      "managedHint": "Remove this official account first, or delete it (with its login) in the Authorization Center.",
+      "connectionManaged": "The connection and login are managed in the Authorization Center; edit only the models here. Fetching models reads the official models currently available to this account.",
+      "current": "In use by Kimi",
+      "primaryShort": "Kimi Code's own login",
+      "empty": "No Kimi accounts yet. The account signed in to Kimi Code shows up here automatically.",
+      "help": "Add several Kimi coding plan accounts; each gets its own provider and models in Kimi Code. \"Use this account\" switches Kimi Code's default model to that account, and new sessions use it from then on. The account Kimi Code itself is signed in with shows up here automatically and is always used for web search and fetch; removing it here only hides it from the list and never signs Kimi Code out.",
+      "useAccount": "Use this account"
+    },
+    "modelSelectionHint": "Use the switch button on a provider card to select it. To choose another model, use /model in Kimi Code.",
+    "contextSize": "Context size",
+    "configTomlScope": "Only [providers.{{key}}] and its own [models.*] tables belong here. Change the Provider Key in the field above.",
+    "configTomlSchema": "Incomplete config: check the provider's type, and each model's model and max_context_size (a positive integer).",
+    "capabilities": {
+      "image_in": "Image input",
+      "thinking": "Thinking",
+      "always_thinking": "Always thinking",
+      "tool_use": "Tool use",
+      "dynamically_loaded_tools": "Load tools on demand"
+    },
+    "capabilityHints": {
+      "always_thinking": "Check when the model's thinking can't be turned off: Kimi turns thinking on when this model is selected and hides the off option",
+      "dynamically_loaded_tools": "Lets the model load tool descriptions on demand to keep requests short. Only Kimi's own models support it; leave it off for third-party models. Also requires KIMI_CODE_EXPERIMENTAL_TOOL_SELECT"
+    },
+    "empty": {
+      "title": "Add a Kimi Code provider",
+      "description": "Configure an endpoint, API key and models. Existing Kimi configuration is imported automatically."
+    },
+    "error": {
+      "defaultModelInUse": "Kimi Code is using a model from this provider. Switch to another model with /model in Kimi Code first.",
+      "secondaryModelInUse": "Kimi Code's subagent model uses a model from this provider. Change it with /secondary-model in Kimi Code first."
     }
   }
 }

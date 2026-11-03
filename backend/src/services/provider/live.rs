@@ -29,6 +29,9 @@ pub(crate) fn provider_exists_in_live_config(
             .map(|providers| providers.contains_key(provider_id)),
         AppType::Mcode => crate::mcode_config::get_providers()
             .map(|providers| providers.contains_key(provider_id)),
+        AppType::Kimi => {
+            crate::kimi_config::get_providers().map(|providers| providers.contains_key(provider_id))
+        }
         _ => Ok(false),
     }
 }
@@ -369,7 +372,8 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
         | AppType::OpenClaw
         | AppType::Hermes
         | AppType::Pi
-        | AppType::Mcode => false,
+        | AppType::Mcode
+        | AppType::Kimi => false,
     }
 }
 
@@ -444,7 +448,8 @@ pub(crate) fn remove_common_config_from_settings(
         | AppType::OpenClaw
         | AppType::Hermes
         | AppType::Pi
-        | AppType::Mcode => Ok(settings.clone()),
+        | AppType::Mcode
+        | AppType::Kimi => Ok(settings.clone()),
     }
 }
 
@@ -504,7 +509,8 @@ fn apply_common_config_to_settings(
         | AppType::OpenClaw
         | AppType::Hermes
         | AppType::Pi
-        | AppType::Mcode => Ok(settings.clone()),
+        | AppType::Mcode
+        | AppType::Kimi => Ok(settings.clone()),
     }
 }
 
@@ -931,6 +937,9 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
         AppType::Mcode => {
             crate::mcode_config::set_provider(&provider.id, provider.settings_config.clone())?
         }
+        AppType::Kimi => {
+            crate::kimi_config::set_provider(&provider.id, provider.settings_config.clone())?
+        }
         AppType::Pi => {
             return Err(AppError::InvalidInput(
                 "Pi providers must use the native models.json adapter".to_string(),
@@ -1015,8 +1024,8 @@ pub(crate) fn sync_current_provider_for_app_to_live(
 pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
     // Sync providers based on mode
     for app_type in AppType::all() {
-        // MiniMax Code 的原生配置由 MCode 自身维护，不做全量回写（上游 06082e18）。
-        if matches!(app_type, AppType::Mcode) {
+        // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）。
+        if matches!(app_type, AppType::Mcode | AppType::Kimi) {
             continue;
         }
         if app_type.is_additive_mode() {
@@ -1156,6 +1165,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
         AppType::Pi => serde_json::to_value(crate::pi_config::read_pi_native_providers()?)
             .map_err(|source| AppError::JsonSerialize { source }),
         AppType::Mcode => Ok(json!(crate::mcode_config::get_providers()?)),
+        AppType::Kimi => Ok(json!(crate::kimi_config::get_providers()?)),
     }
 }
 
@@ -1257,7 +1267,12 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             settings
         }
         // Additive mode apps are handled by the early return above.
-        AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi | AppType::Mcode => {
+        AppType::OpenCode
+        | AppType::OpenClaw
+        | AppType::Hermes
+        | AppType::Pi
+        | AppType::Mcode
+        | AppType::Kimi => {
             unreachable!("additive mode apps are handled by early return")
         }
     };

@@ -39,6 +39,12 @@ vi.mock("@/lib/modelsDevAutoSync", () => ({
   syncModelsDevPricing,
 }));
 
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/runtime/client/core", () => ({
+  invoke: invokeMock,
+}));
+
 import { ModelsDevAutoSyncPanel } from "@/components/usage/ModelsDevAutoSyncPanel";
 
 const state = {
@@ -77,34 +83,33 @@ describe("ModelsDevAutoSyncPanel", () => {
       changed: 1,
       syncedAt: Date.now(),
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          openai: {
-            name: "OpenAI",
-            models: {
-              "gpt-5": {
-                name: "GPT-5",
-                release_date: "2025-08-01",
-                cost: { input: 1, output: 2 },
-              },
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command !== "fetch_models_dev") {
+        throw new Error(`Unexpected command: ${command}`);
+      }
+      return JSON.stringify({
+        openai: {
+          name: "OpenAI",
+          models: {
+            "gpt-5": {
+              name: "GPT-5",
+              release_date: "2025-08-01",
+              cost: { input: 1, output: 2 },
             },
           },
-          deepseek: {
-            name: "DeepSeek",
-            models: {
-              "deepseek-chat": {
-                name: "DeepSeek Chat",
-                release_date: "2025-12-01",
-                cost: { input: 0.3, output: 1.2 },
-              },
+        },
+        deepseek: {
+          name: "DeepSeek",
+          models: {
+            "deepseek-chat": {
+              name: "DeepSeek Chat",
+              release_date: "2025-12-01",
+              cost: { input: 0.3, output: 1.2 },
             },
           },
-        }),
-      }),
-    );
+        },
+      });
+    });
   });
 
   it("loads automatic sync as disabled by default", async () => {

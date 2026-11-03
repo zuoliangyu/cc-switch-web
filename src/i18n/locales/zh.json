@@ -43,6 +43,7 @@
     "version": "版本",
     "loading": "加载中...",
     "more": "更多",
+    "retry": "重试",
     "notInstalled": "未安装",
     "success": "成功",
     "error": "错误",
@@ -916,7 +917,8 @@
     "openclaw": "OpenClaw",
     "hermes": "Hermes",
     "pi": "Pi",
-    "mcode": "MiniMax Code"
+    "mcode": "MiniMax Code",
+    "kimi": "Kimi Code"
   },
   "appSwitcher": {
     "more": "更多应用"
@@ -1305,6 +1307,7 @@
     "fetchModelsSuccess": "获取到 {{count}} 个模型",
     "modelMetadataFilled": "已补全 {{model}} 的上下文等参数（来源：{{source}}），请核对",
     "modelMetadataFilledMany": "已补全 {{count}} 个模型的上下文等参数（来源：{{source}}），请核对",
+    "gptContextWindowHint": "中转站的 GPT 多来自 ChatGPT 订阅，窗口只有 272K。窗口写大了不会提前压缩，等上游拒收时这一轮会失败；确认这家支持更大窗口再这样填。",
     "modelMetadataSourcePreset": "预设",
     "modelMetadataSourceBoth": "预设和 models.dev",
     "fetchedModelsTitle": "可用模型（{{count}}）",
@@ -1462,11 +1465,19 @@
     "categoryCnOfficial": "开源官方",
     "categoryAggregation": "聚合服务",
     "categoryThirdParty": "第三方",
-    "categoryLocal": "本地"
+    "categoryLocal": "本地",
+    "nativeConfig": {
+      "hint": "按应用自己的格式显示这一家在文件里的部分，保存后写进这个文件；默认模型等全局设置不在这里。在这里写的注释不会保存。",
+      "invalid": "{{format}} 格式错误：{{error}}",
+      "title": "配置文件 {{path}}（只显示这一家）"
+    }
   },
   "codex": {
     "needsRouting": "需要路由",
     "nativeLogin": "Codex 登录",
+    "accountStatusUnavailable": "无法读取账号信息",
+    "boundAccountUnavailable": "绑定的账号不可用",
+    "accountLoading": "正在加载账号…",
     "officialRouting": "官方账号路由"
   },
   "copilot": {
@@ -1621,7 +1632,6 @@
     "autoCompactLimitHint": "上下文 token 数达到此阈值时自动压缩历史"
   },
   "codexOauth": {
-    "loginWithChatGPT": "使用 ChatGPT 登录",
     "authStatus": "认证状态",
     "notAuthenticated": "未认证",
     "loginRequired": "请先登录 ChatGPT 账号",
@@ -1795,6 +1805,11 @@
     "family": {
       "tencent": "腾讯云",
       "volcengine": "火山引擎"
+    },
+    "group": {
+      "cloud": "云服务商",
+      "local": "本地",
+      "thirdparty": "第三方平台"
     }
   },
   "usage": {
@@ -3045,6 +3060,8 @@
       "modelName": "显示名称",
       "modelNamePlaceholder": "Claude Opus 5",
       "contextLength": "上下文长度",
+      "toggleModelDetails": "展开或收起模型详情",
+      "removeModel": "移除模型",
       "advancedOptions": "高级选项",
       "modelsHint": "切换到此供应商时，第一个模型会写入顶层 model.default。",
       "primaryModel": "默认模型",
@@ -4000,13 +4017,13 @@
     "loginFailed": "登录没有完成",
     "pending": {
       "add": "添加 {{service}} 账号 · 等待授权中…",
-      "login": "登录 {{service}} · 等待授权中…",
       "reauth": "重新登录 {{login}} · 等待授权中…",
       "enterCode": "在浏览器中输入验证码：",
       "copy": "复制验证码",
       "copied": "验证码已复制。",
       "open": "打开授权页面",
-      "note": "已在浏览器打开授权页面，完成后这里会自动更新。注意 {{service}} 的使用条款。"
+      "note": "已在浏览器打开授权页面，完成后这里会自动更新。注意 {{service}} 的使用条款。",
+      "linkCopied": "登录链接已复制。"
     },
     "toast": {
       "added": "已添加 {{service}} 账号。",
@@ -4021,7 +4038,56 @@
   },
   "kimi": {
     "oauth": {
-      "title": "Kimi Code 官方登录"
+      "title": "Kimi Code 官方登录",
+      "description": "可添加多个 Kimi 编程套餐账号，各自保存凭据和供应商。在此管理登录，再选择账号使用其官方模型。",
+      "region": "登录区域",
+      "mainland-cn": "国内版",
+      "global": "海外版",
+      "signIn": "登录 Kimi",
+      "removeAccount": "删除账号",
+      "dismissAccount": "移出列表",
+      "signedOut": "未登录",
+      "noSubscription": "未订阅",
+      "statusFailed": "无法读取登录状态",
+      "expired": "授权码已过期，请重新登录。",
+      "denied": "授权已被拒绝，请重新登录。",
+      "cancelled": "登录已取消或被其他登录替代，请重新登录。",
+      "success": "Kimi Code 登录成功，已添加官方模型。",
+      "removeConfirm": "删除 {{name}}？会从 Kimi Code 里删掉这个账号的供应商和模型，并删除它的本机登录凭据和卡片。其他账号不受影响。",
+      "dismissConfirm": "把 {{name}} 移出列表？这是 Kimi Code 自己的登录，CC Switch 不会替它退出登录，凭据和模型都会保留；如需退出，请在 Kimi Code 里运行 /logout。之后重新登录会让它回到列表。",
+      "primaryHidden": "Kimi Code 自己的登录已移出列表，重新登录同一账号即可找回",
+      "removeCurrentHint": "这个账号正在使用，请先切换到其他账号再删除",
+      "manageAccounts": "管理 Kimi 账号",
+      "managedHint": "先移除这个官方账号，或到授权中心删除它（连登录一起删）。",
+      "connectionManaged": "连接和登录由授权中心管理，这里只编辑模型。拉取模型会读取这个账号当前可用的官方模型。",
+      "current": "Kimi 在用",
+      "primaryShort": "Kimi Code 自己的登录",
+      "empty": "还没有 Kimi 账号。Kimi Code 里已登录的号会自动出现在这里。",
+      "help": "可添加多个 Kimi 编程套餐账号，每个号在 Kimi Code 里有自己的供应商和模型。「使用此账号」会把 Kimi Code 的默认模型换成这个号的，之后新开的会话都用它。Kimi Code 自己登着的号会自动出现在这里，联网搜索和网页抓取始终用它；在这里删掉它只会移出列表，不会让 Kimi Code 退出登录。",
+      "useAccount": "使用此账号"
+    },
+    "modelSelectionHint": "点击供应商卡片的切换按钮选择默认供应商；需要指定其他模型时，在 Kimi Code 中使用 /model。",
+    "contextSize": "上下文长度",
+    "configTomlScope": "这里只能写 [providers.{{key}}] 和属于它的 [models.*] 表；供应商标识请在上方修改。",
+    "configTomlSchema": "配置不完整：请检查供应商的 type，以及每个模型的 model 和 max_context_size（正整数）。",
+    "capabilities": {
+      "image_in": "图片输入",
+      "thinking": "思考",
+      "always_thinking": "始终思考",
+      "tool_use": "工具调用",
+      "dynamically_loaded_tools": "按需加载工具"
+    },
+    "capabilityHints": {
+      "always_thinking": "模型的思考无法关闭时勾选：选中该模型时自动开启思考，且不提供关闭选项",
+      "dynamically_loaded_tools": "让模型按需加载工具说明，缩短请求。仅 Kimi 自家模型支持，第三方模型请勿勾选；还需开启 KIMI_CODE_EXPERIMENTAL_TOOL_SELECT"
+    },
+    "empty": {
+      "title": "添加 Kimi Code 供应商",
+      "description": "配置请求地址、API Key 和模型；已有 Kimi 配置会自动导入。"
+    },
+    "error": {
+      "defaultModelInUse": "Kimi Code 正在使用该供应商的模型，请先在 Kimi Code 中用 /model 切换到其他模型",
+      "secondaryModelInUse": "Kimi Code 的子代理模型正在使用该供应商的模型，请先在 Kimi Code 中用 /secondary-model 更换"
     }
   }
 }

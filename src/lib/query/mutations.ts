@@ -10,6 +10,7 @@ import type { Provider, SessionMeta, Settings } from "@/types";
 import type { SubscriptionQuota } from "@/types/subscription";
 import {
   extractErrorMessage,
+  translateKimiProviderMutationError,
   translatePiProviderMutationError,
 } from "@/utils/errorUtils";
 import { generateUUID } from "@/utils/uuid";
@@ -70,7 +71,8 @@ export const useAddProviderMutation = (appId: AppId) => {
         appId === "openclaw" ||
         appId === "hermes" ||
         appId === "pi" ||
-        appId === "mcode"
+        appId === "mcode" ||
+        appId === "kimi"
       ) {
         if (
           providerInput.category === "omo" ||
@@ -148,7 +150,9 @@ export const useAddProviderMutation = (appId: AppId) => {
       const detail =
         (appId === "pi"
           ? translatePiProviderMutationError(rawDetail, t)
-          : "") ||
+          : appId === "kimi"
+            ? translateKimiProviderMutationError(rawDetail, t)
+            : "") ||
         rawDetail ||
         t("common.unknown");
       toast.error(
@@ -208,7 +212,9 @@ export const useUpdateProviderMutation = (appId: AppId) => {
       const detail =
         (appId === "pi"
           ? translatePiProviderMutationError(rawDetail, t)
-          : "") ||
+          : appId === "kimi"
+            ? translateKimiProviderMutationError(rawDetail, t)
+            : "") ||
         rawDetail ||
         t("common.unknown");
       toast.error(
@@ -275,7 +281,9 @@ export const useDeleteProviderMutation = (appId: AppId) => {
       const detail =
         (appId === "pi"
           ? translatePiProviderMutationError(rawDetail, t)
-          : "") ||
+          : appId === "kimi"
+            ? translateKimiProviderMutationError(rawDetail, t)
+            : "") ||
         rawDetail ||
         t("common.unknown");
       toast.error(

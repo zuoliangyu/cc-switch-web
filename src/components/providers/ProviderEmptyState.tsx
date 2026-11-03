@@ -16,7 +16,8 @@ export function ProviderEmptyState({
 }: ProviderEmptyStateProps) {
   const { t } = useTranslation();
   // MiniMax Code 自动合并原生自定义供应商，不提供手动导入入口。
-  const isMcode = appId === "mcode";
+  // Kimi 的列表同样直接读原生 config.toml，没有可导入的“当前配置”
+  const emptyCopyNs = appId === "mcode" || appId === "kimi" ? appId : null;
   const showSnippetHint =
     appId === "claude" || appId === "codex" || appId === "gemini";
 
@@ -31,12 +32,12 @@ export function ProviderEmptyState({
         })}
       </div>
       <h3 className="mt-3 text-xl font-semibold tracking-tight">
-        {t(isMcode ? "mcode.empty.title" : "provider.noProviders")}
+        {t(emptyCopyNs ? `${emptyCopyNs}.empty.title` : "provider.noProviders")}
       </h3>
       <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
         {t(
-          isMcode
-            ? "mcode.empty.description"
+          emptyCopyNs
+            ? `${emptyCopyNs}.empty.description`
             : "provider.noProvidersDescription",
         )}
       </p>

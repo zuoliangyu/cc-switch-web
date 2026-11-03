@@ -1,7 +1,7 @@
 import { useProviderEditorConflict } from "@/hooks/useProviderEditorConflict";
 import { useProviderEditorView } from "@/hooks/useProviderEditorView";
 import type { ProviderEditorSave } from "@/lib/api/providers";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -79,6 +79,7 @@ export function AddProviderDialog({
     appId !== "openclaw" &&
     appId !== "hermes" &&
     appId !== "mcode" &&
+    appId !== "kimi" &&
     appId !== "grokbuild";
   const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
     "app-specific",
@@ -87,6 +88,11 @@ export function AddProviderDialog({
   const [selectedUniversalPreset, setSelectedUniversalPreset] =
     useState<UniversalProviderPreset | null>(null);
   const [isFormSubmitting, setIsFormSubmitting] = useState(false);
+  // Kimi 的官方账号预设在表单里直接登录，没有「添加」这一步，底栏只留取消
+  const [accountLogin, setAccountLogin] = useState(false);
+  useEffect(() => {
+    if (open) setAccountLogin(false);
+  }, [open, appId]);
 
   const handleUniversalProviderSave = useCallback(
     async (provider: UniversalProvider) => {
@@ -168,7 +174,8 @@ export function AddProviderDialog({
           appId === "openclaw" ||
           appId === "hermes" ||
           appId === "pi" ||
-          appId === "mcode") &&
+          appId === "mcode" ||
+          appId === "kimi") &&
         values.providerKey
       ) {
         providerData.providerKey = values.providerKey;
@@ -344,15 +351,17 @@ export function AddProviderDialog({
         >
           {t("common.cancel")}
         </Button>
-        <Button
-          type="submit"
-          form="provider-form"
-          disabled={isFormSubmitting || !editorReady}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          {t("common.add")}
-        </Button>
+        {!accountLogin && (
+          <Button
+            type="submit"
+            form="provider-form"
+            disabled={isFormSubmitting || !editorReady}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {t("common.add")}
+          </Button>
+        )}
       </>
     ) : (
       <>
@@ -419,6 +428,7 @@ export function AddProviderDialog({
                   onSubmit={handleSubmit}
                   onCancel={() => onOpenChange(false)}
                   onSubmittingChange={setIsFormSubmitting}
+                  onAccountLoginChange={setAccountLogin}
                   showButtons={false}
                 />
               )}
@@ -447,6 +457,7 @@ export function AddProviderDialog({
             onSubmit={handleSubmit}
             onCancel={() => onOpenChange(false)}
             onSubmittingChange={setIsFormSubmitting}
+            onAccountLoginChange={setAccountLogin}
             showButtons={false}
           />
         )}

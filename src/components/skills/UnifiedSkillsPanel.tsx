@@ -199,6 +199,7 @@ const UnifiedSkillsPanel = React.forwardRef<
       hermes: 0,
       pi: 0,
       mcode: 0,
+      kimi: 0,
     };
 
     filteredSkills.forEach((skill) => {

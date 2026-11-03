@@ -209,6 +209,9 @@ import {
   removeWebSkillRepo,
   removeWebCustomEndpoint,
   removeWebProviderFromLiveConfig,
+  addWebProviderToLiveConfig,
+  kimiOAuthWeb,
+  fetchWebModelsDev,
   saveWebDailyMemoryFile,
   setWebHermesMemory,
   setWebHermesMemoryEnabled,
@@ -552,6 +555,27 @@ export async function invoke<T>(
       return (await importWebProvidersFromLive("pi")) as T;
     case "import_default_config":
       return (await importWebDefaultProviderConfig(args?.app as AppId)) as T;
+    case "add_provider_to_live_config":
+      return (await addWebProviderToLiveConfig(
+        args?.app as AppId,
+        args?.id as string,
+      )) as T;
+    case "kimi_oauth_status":
+      return kimiOAuthWeb.status<T>();
+    case "kimi_oauth_start":
+      return kimiOAuthWeb.start<T>(args ?? {});
+    case "kimi_oauth_poll":
+      return kimiOAuthWeb.poll<T>(args ?? {});
+    case "kimi_oauth_cancel":
+      return kimiOAuthWeb.cancel<T>(args ?? {});
+    case "kimi_oauth_remove":
+      return kimiOAuthWeb.remove<T>(args ?? {});
+    case "kimi_oauth_quota":
+      return kimiOAuthWeb.quota<T>(args?.accountId as string);
+    case "kimi_oauth_models":
+      return kimiOAuthWeb.models<T>(args?.accountId as string);
+    case "kimi_oauth_use_account":
+      return kimiOAuthWeb.useAccount<T>(args ?? {});
     case "remove_provider_from_live_config":
       return (await removeWebProviderFromLiveConfig(
         args?.app as AppId,
@@ -965,6 +989,8 @@ export async function invoke<T>(
       )) as T;
     case "update_model_pricing_batch":
       return (await updateWebModelPricingBatch(args?.entries as any)) as T;
+    case "fetch_models_dev":
+      return (await fetchWebModelsDev()) as T;
     case "get_models_dev_sync_config":
       return (await getWebModelsDevSyncConfig()) as T;
     case "save_models_dev_sync_config":

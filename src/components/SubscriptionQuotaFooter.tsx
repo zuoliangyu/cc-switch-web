@@ -29,6 +29,8 @@ interface SubscriptionQuotaViewProps {
   /** 用于 `subscription.expiredHint` 的 {tool} 插值；解耦了 hook 的 appId */
   appIdForExpiredHint: string;
   inline?: boolean;
+  /** 查询成功但一档都没有时写的一句（Kimi 没订阅的号返回空对象）；不给时不显示 */
+  emptyText?: string;
 }
 
 /** 已知 tier 名称的显示映射（官方订阅 + Token Plan 共用） */
@@ -129,6 +131,7 @@ export const SubscriptionQuotaView: React.FC<SubscriptionQuotaViewProps> = ({
   refetch,
   appIdForExpiredHint,
   inline = false,
+  emptyText,
 }) => {
   const { t, i18n } = useTranslation();
   useNow(Boolean(quota?.resetCredits?.expiresAt.length));
@@ -178,7 +181,32 @@ export const SubscriptionQuotaView: React.FC<SubscriptionQuotaViewProps> = ({
   }
 
   const rows = quotaRows(t, quota, i18n.language, { inline });
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    if (!emptyText) return null;
+    if (inline) {
+      return (
+        <QuotaLines
+          lines={[
+            { key: "empty", left: Infinity, tone: "muted", text: emptyText },
+          ]}
+          queriedAt={quota.queriedAt}
+          loading={loading}
+          onRefresh={refetch}
+        />
+      );
+    }
+    return (
+      <QuotaBars
+        className="mt-3"
+        title={t("subscription.title")}
+        rows={[]}
+        queriedAt={quota.queriedAt}
+        loading={loading}
+        onRefresh={refetch}
+        footer={<p className="text-xs text-muted-foreground">{emptyText}</p>}
+      />
+    );
+  }
 
   if (inline) {
     return (

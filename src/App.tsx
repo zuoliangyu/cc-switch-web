@@ -252,6 +252,7 @@ function App() {
     hermes: true,
     pi: true,
     mcode: true,
+    kimi: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -395,6 +396,7 @@ function App() {
   const isCurrentAppTakeoverActive =
     activeApp !== "pi" &&
     activeApp !== "mcode" &&
+    activeApp !== "kimi" &&
     (takeoverStatus?.[activeApp] || false);
   const activeProviderId = useMemo(() => {
     const target = proxyStatus?.active_targets?.find(
@@ -446,6 +448,19 @@ function App() {
     isProxyRunning,
     isProxyRunning && isCurrentAppTakeoverActive,
   );
+
+  // Kimi「添加」：写进 config.toml 但不改默认模型；改默认模型走「设为默认」（切换）
+  const addKimiProviderToConfig = async (provider: Provider) => {
+    try {
+      await providersApi.addToLiveConfig(provider.id, "kimi");
+      await queryClient.invalidateQueries({ queryKey: ["providers", "kimi"] });
+      toast.success(
+        t("notifications.addToConfigSuccess", { defaultValue: "已添加到配置" }),
+      );
+    } catch (error) {
+      toast.error(extractErrorMessage(error));
+    }
+  };
 
   const disableOmoMutation = useDisableCurrentOmo();
   const handleDisableOmo = () => {
@@ -589,10 +604,10 @@ function App() {
           queryKey: ["piLiveProviderIds"],
         });
         await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
-      } else if (activeApp === "mcode") {
-        // MiniMax Code 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
+      } else if (activeApp === "mcode" || activeApp === "kimi") {
+        // MiniMax Code / Kimi Code 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
         await queryClient.invalidateQueries({
-          queryKey: ["providers", "mcode"],
+          queryKey: ["providers", activeApp],
         });
       }
       toast.success(
@@ -718,12 +733,26 @@ function App() {
         existingKeys,
       );
       duplicatedProvider.addToLive = false;
-    } else if (activeApp === "mcode") {
+    } else if (activeApp === "mcode" || activeApp === "kimi") {
       // The list includes live custom nodes; the backend also guards native account keys.
       duplicatedProvider.providerKey = generateUniqueProviderCopyKey(
         provider.id,
         Object.keys(providers),
       );
+      if (activeApp === "kimi") {
+        // Kimi 的模型键以供应商键为前缀，复制出来的卡要改成新键，也先不写进 config.toml
+        const models = duplicatedProvider.settingsConfig.models ?? {};
+        duplicatedProvider.settingsConfig.models = Object.fromEntries(
+          Object.entries(models).map(([key, value]) => [
+            `${duplicatedProvider.providerKey}/${key.startsWith(`${provider.id}/`) ? key.slice(provider.id.length + 1) : key}`,
+            {
+              ...(value as Record<string, unknown>),
+              provider: duplicatedProvider.providerKey,
+            },
+          ]),
+        );
+        duplicatedProvider.addToLive = false;
+      }
     }
 
     await addProvider(duplicatedProvider);
@@ -888,7 +917,11 @@ function App() {
                         isProxyRunning && isCurrentAppTakeoverActive
                       }
                       activeProviderId={activeProviderId}
-                      onSwitch={switchProvider}
+                      onSwitch={
+                        activeApp === "kimi"
+                          ? addKimiProviderToConfig
+                          : switchProvider
+                      }
                       onEdit={(provider) => {
                         setEditingProvider(provider);
                       }}
@@ -900,7 +933,8 @@ function App() {
                         activeApp === "openclaw" ||
                         activeApp === "hermes" ||
                         activeApp === "pi" ||
-                        activeApp === "mcode"
+                        activeApp === "mcode" ||
+                        activeApp === "kimi"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined
@@ -923,7 +957,7 @@ function App() {
                       onSetAsDefault={
                         activeApp === "openclaw"
                           ? setAsDefaultModel
-                          : activeApp === "hermes"
+                          : activeApp === "hermes" || activeApp === "kimi"
                             ? switchProvider
                             : undefined
                       }

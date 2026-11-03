@@ -113,9 +113,9 @@ describe("deeplink 解析阶段的检查", () => {
     ).toBe("pi");
     expect(() =>
       parseDeepLinkUrl(
-        `ccswitch://v1/import?resource=mcp&apps=kimi&config=${config}`,
+        `ccswitch://v1/import?resource=mcp&apps=unknown-app&config=${config}`,
       ),
-    ).toThrow("kimi");
+    ).toThrow("unknown-app");
   });
 
   it("合并已有 MCP 时保留 Pi 的勾选", async () => {

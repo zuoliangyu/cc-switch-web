@@ -179,9 +179,44 @@ fn dedup_app_type_match_sql(left: &str, right: &str) -> String {
 /// cache_creation_tokens, model[case-insensitive], created_at[±窗口])`
 /// + 仅 2xx 状态。`cache_creation_tokens` 在 codex/gemini session 上不暴露，
 /// 这两个 app 的 session 行只要其它字段都对得上就放过 proxy 任意值。
+/// 跨来源去重的模型匹配条件。
+///
+/// 常规路径按上游回显模型匹配。仅 Codex 会话允许再匹配代理记录的请求模型：
+/// Codex rollout 保留客户端别名，而代理 `model` 可能已被映射为实际上游模型。
+/// 空白或 `unknown` 请求模型不能放宽匹配，避免无有效别名时扩大启发式去重范围。
+fn session_proxy_model_match_sql(
+    proxy_model: &str,
+    proxy_request_model: &str,
+    session_model: &str,
+    session_app_type: &str,
+    session_data_source: &str,
+) -> String {
+    format!(
+        "(
+            LOWER({proxy_model}) = LOWER({session_model})
+            OR LOWER({proxy_model}) = 'unknown'
+            OR LOWER({session_model}) = 'unknown'
+            OR (
+                {session_app_type} = 'codex'
+                AND {session_data_source} = 'codex_session'
+                AND NULLIF(TRIM({proxy_request_model}), '') IS NOT NULL
+                AND LOWER(TRIM({proxy_request_model})) <> 'unknown'
+                AND LOWER(TRIM({proxy_request_model})) = LOWER(TRIM({session_model}))
+            )
+        )"
+    )
+}
+
 pub(crate) fn effective_usage_log_filter(log_alias: &str) -> String {
     let app_type_match =
         dedup_app_type_match_sql("proxy_dedup.app_type", &format!("{log_alias}.app_type"));
+    let model_match = session_proxy_model_match_sql(
+        "proxy_dedup.model",
+        "proxy_dedup.request_model",
+        &format!("{log_alias}.model"),
+        &format!("{log_alias}.app_type"),
+        &format!("{log_alias}.data_source"),
+    );
     format!(
         "NOT (
             {log_alias}.data_source IN ('session_log', 'codex_session', 'gemini_session')
@@ -201,15 +236,15 @@ pub(crate) fn effective_usage_log_filter(log_alias: &str) -> String {
                           {log_alias}.cache_creation_tokens = 0
                           AND {log_alias}.data_source IN ('codex_session', 'gemini_session')
                       )
+                      OR (
+                          proxy_dedup.cache_creation_tokens = 0
+                          AND {log_alias}.data_source = 'codex_session'
+                      )
                   )
                   AND proxy_dedup.created_at BETWEEN
                       {log_alias}.created_at - {SESSION_PROXY_DEDUP_WINDOW_SECONDS}
                       AND {log_alias}.created_at + {SESSION_PROXY_DEDUP_WINDOW_SECONDS}
-                  AND (
-                      LOWER(proxy_dedup.model) = LOWER({log_alias}.model)
-                      OR LOWER(proxy_dedup.model) = 'unknown'
-                      OR LOWER({log_alias}.model) = 'unknown'
-                  )
+                  AND {model_match}
             )
         )"
     )
@@ -263,6 +298,13 @@ pub(crate) fn effective_usage_log_filter_for_range(
 
     let dp_source = "dedup_p.data_source";
     let ds_source = "dedup_s.data_source";
+    let model_match = session_proxy_model_match_sql(
+        "dedup_p.model",
+        "dedup_p.request_model",
+        "dedup_s.model",
+        "dedup_s.app_type",
+        ds_source,
+    );
     Ok(format!(
         "{log_alias}.rowid NOT IN (
             SELECT dedup_s.rowid
@@ -285,12 +327,12 @@ pub(crate) fn effective_usage_log_filter_for_range(
                      dedup_s.cache_creation_tokens = 0
                      AND {ds_source} IN ('codex_session', 'gemini_session')
                  )
+                 OR (
+                     dedup_p.cache_creation_tokens = 0
+                     AND {ds_source} = 'codex_session'
+                 )
              )
-             AND (
-                 LOWER(dedup_p.model) = LOWER(dedup_s.model)
-                 OR LOWER(dedup_p.model) = 'unknown'
-                 OR LOWER(dedup_s.model) = 'unknown'
-             )
+             AND {model_match}
             WHERE {dp_source} = 'proxy'
               AND dedup_p.status_code >= 200
               AND dedup_p.status_code < 300
@@ -362,11 +404,14 @@ fn cached_log_count(
 
 /// 跨源去重指纹键。
 ///
-/// `cache_creation_tokens`：Codex / Gemini session 日志不暴露该字段，调用方传 0
-/// 表示"未知"，匹配器会放行 proxy 侧任意 `cache_creation_tokens` 值。
+/// `cache_creation_tokens`：Gemini 会话日志和旧版 Codex rollout 不暴露该字段，调用方传 0
+/// 表示"未知"，匹配器会放行 proxy 侧任意 `cache_creation_tokens` 值。反过来，早期代理
+/// 不记录 Codex 缓存写入，写入量为 0 的 Codex 代理行也放行任意 session 写入量。
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DedupKey<'a> {
     pub app_type: &'a str,
+    /// 会话记录的实际来源；别名匹配只对 `app_type = codex` 且 `data_source = codex_session` 生效。
+    pub data_source: &'a str,
     pub model: &'a str,
     pub input_tokens: u32,
     pub output_tokens: u32,
@@ -407,8 +452,12 @@ pub(crate) fn has_matching_proxy_usage_log(
 ) -> Result<bool, AppError> {
     let allow_missing_cache_creation =
         matches!(key.app_type, "codex" | "gemini") && key.cache_creation_tokens == 0;
+    // 早期代理不记录 Codex 缓存写入：写入量为 0 的 Codex 代理行放行任意 session 写入量
+    let allow_legacy_proxy_cache_creation = key.app_type == "codex";
 
     let app_type_match = dedup_app_type_match_sql("l.app_type", "?1");
+    let model_match =
+        session_proxy_model_match_sql("l.model", "l.request_model", "?2", "?1", "?11");
 
     conn.query_row(
         &format!(
@@ -422,13 +471,16 @@ pub(crate) fn has_matching_proxy_usage_log(
               AND l.input_tokens = ?3
               AND l.output_tokens = ?4
               AND l.cache_read_tokens = ?5
-              AND (l.cache_creation_tokens = ?6 OR ?9 = 1)
-              AND l.created_at BETWEEN ?7 - ?8 AND ?7 + ?8
               AND (
-                  LOWER(l.model) = LOWER(?2)
-                  OR LOWER(l.model) = 'unknown'
-                  OR LOWER(?2) = 'unknown'
+                  l.cache_creation_tokens = ?6
+                  OR ?9 = 1
+                  OR (
+                      ?10 = 1
+                      AND l.cache_creation_tokens = 0
+                  )
               )
+              AND l.created_at BETWEEN ?7 - ?8 AND ?7 + ?8
+              AND {model_match}
         )"
         ),
         params![
@@ -441,6 +493,8 @@ pub(crate) fn has_matching_proxy_usage_log(
             key.created_at,
             SESSION_PROXY_DEDUP_WINDOW_SECONDS,
             allow_missing_cache_creation as i64,
+            allow_legacy_proxy_cache_creation as i64,
+            key.data_source,
         ],
         |row| row.get::<_, bool>(0),
     )
@@ -501,7 +555,11 @@ pub(crate) fn has_suspected_codex_session_duplicate(
 impl Database {
     /// 获取使用量汇总
     /// 会话页仅汇总客户端会话导入行，避免与代理记录重复。
-    pub fn get_session_usage_summary(&self, app_type: &str, session_id: &str) -> Result<UsageSummary, AppError> {
+    pub fn get_session_usage_summary(
+        &self,
+        app_type: &str,
+        session_id: &str,
+    ) -> Result<UsageSummary, AppError> {
         let conn = lock_conn!(self.conn);
         let source = "COALESCE(l.data_source, 'proxy')";
         let app = "CASE WHEN l.app_type = 'claude-desktop' THEN 'claude' ELSE l.app_type END";
@@ -1630,7 +1688,7 @@ pub(crate) fn find_model_pricing_row(
             "SELECT input_cost_per_million, output_cost_per_million,
                     cache_read_cost_per_million, cache_creation_cost_per_million
              FROM model_pricing
-             WHERE model_id = ?1",
+             WHERE model_id = ?1 COLLATE NOCASE",
             [&cleaned],
             |row| {
                 Ok((
@@ -1718,7 +1776,13 @@ mod tests {
 
         let summary = db.get_session_usage_summary("claude", "sess-a")?;
         assert_eq!(summary.total_requests, 2);
-        assert_eq!(summary.total_input_tokens + summary.total_output_tokens + summary.total_cache_read_tokens + summary.total_cache_creation_tokens, 10 + 200 + 5000 + 20 + 300 + 7000);
+        assert_eq!(
+            summary.total_input_tokens
+                + summary.total_output_tokens
+                + summary.total_cache_read_tokens
+                + summary.total_cache_creation_tokens,
+            10 + 200 + 5000 + 20 + 300 + 7000
+        );
         assert_eq!(summary.total_cost, "0.300000");
 
         let empty = db.get_session_usage_summary("claude", "missing")?;
@@ -1743,6 +1807,7 @@ mod tests {
         )?;
         let key = DedupKey {
             app_type: "claude",
+            data_source: "session_log",
             model: "claude-sonnet-4-5",
             input_tokens: 100,
             output_tokens: 20,
@@ -1782,6 +1847,109 @@ mod tests {
         let summary = db.get_usage_summary(None, None, None)?;
         assert_eq!(summary.total_requests, 2);
         assert_eq!(summary.success_rate, 100.0);
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
+    fn insert_usage_log(
+        conn: &Connection,
+        request_id: &str,
+        app_type: &str,
+        provider_id: &str,
+        model: &str,
+        data_source: &str,
+        created_at: i64,
+        input_tokens: i64,
+        output_tokens: i64,
+        cache_read_tokens: i64,
+        cache_creation_tokens: i64,
+        status_code: i64,
+        total_cost_usd: &str,
+    ) -> Result<(), AppError> {
+        conn.execute(
+            "INSERT INTO proxy_request_logs (
+                request_id, provider_id, app_type, model, request_model,
+                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd,
+                total_cost_usd, latency_ms, status_code, created_at, data_source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0', '0', '0', '0', ?, 100, ?, ?, ?)",
+            params![
+                request_id,
+                provider_id,
+                app_type,
+                model,
+                model,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+                total_cost_usd,
+                status_code,
+                created_at,
+                data_source
+            ],
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_effective_usage_dedup_matches_legacy_codex_proxy_without_cache_writes(
+    ) -> Result<(), AppError> {
+        // v3.17.0 之前的代理不记录 Codex 缓存写入；新语义代理行仍要求写入量一致。
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            for (request_id, provider_id, data_source, created_at, cache_creation) in [
+                ("legacy-proxy", "openai", "proxy", 10_000, 0),
+                (
+                    "session-vs-legacy",
+                    "_codex_session",
+                    "codex_session",
+                    10_060,
+                    600,
+                ),
+                ("total-proxy", "openai", "proxy", 20_000, 0),
+                (
+                    "session-vs-total",
+                    "_codex_session",
+                    "codex_session",
+                    20_060,
+                    600,
+                ),
+            ] {
+                insert_usage_log(
+                    &conn,
+                    request_id,
+                    "codex",
+                    provider_id,
+                    "gpt-5.6",
+                    data_source,
+                    created_at,
+                    1000,
+                    50,
+                    300,
+                    cache_creation,
+                    200,
+                    "0.01",
+                )?;
+            }
+        }
+
+        // 逐行 EXISTS 和按窗口的 rowid NOT IN 两种写法都要去掉 session-vs-legacy。
+        let conn = lock_conn!(db.conn);
+        let ranged = effective_usage_log_filter_for_range(&conn, "l", None, None)?;
+        assert!(ranged.contains("NOT IN"));
+        for filter in [effective_usage_log_filter("l"), ranged] {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT request_id FROM proxy_request_logs l WHERE {filter} ORDER BY request_id"
+            ))?;
+            let request_ids = stmt
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            assert_eq!(request_ids, ["legacy-proxy", "total-proxy"]);
+        }
 
         Ok(())
     }
@@ -2215,6 +2383,7 @@ mod tests {
         let conn = lock_conn!(db.conn);
         let key = DedupKey {
             app_type: "codex",
+            data_source: "codex_session",
             model: "gpt-5.4",
             input_tokens: 100,
             output_tokens: 20,
@@ -2423,6 +2592,352 @@ mod tests {
         assert_eq!(cached_log_count(&cache, &conn, &filters)?, Some(7));
         filters.model = Some("different".to_string());
         assert_eq!(cached_log_count(&cache, &conn, &filters)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_matching_proxy_log_matches_codex_request_model_alias() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let conn = lock_conn!(db.conn);
+        insert_usage_log(
+            &conn,
+            "codex-proxy-alias",
+            "codex",
+            "provider-1",
+            "gpt-5.6-sol",
+            "proxy",
+            1_000,
+            100,
+            20,
+            10,
+            0,
+            200,
+            "0.10",
+        )?;
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+            params!["gpt-5.6-sol-joybuilder", "codex-proxy-alias"],
+        )?;
+
+        let key = DedupKey {
+            app_type: "codex",
+            data_source: "codex_session",
+            model: "GPT-5.6-Sol-JoyBuilder",
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_tokens: 10,
+            cache_creation_tokens: 0,
+            created_at: 1_060,
+        };
+        assert!(has_matching_proxy_usage_log(&conn, &key)?);
+        assert!(should_skip_session_insert(
+            &conn,
+            "codex-session-alias",
+            &key
+        )?);
+
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+            params![" gpt-5.6-sol-joybuilder ", "codex-proxy-alias"],
+        )?;
+        assert!(has_matching_proxy_usage_log(&conn, &key)?);
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+            params!["gpt-5.6-sol-joybuilder", "codex-proxy-alias"],
+        )?;
+
+        let mut outside_window = key;
+        outside_window.created_at = 1_601;
+        assert!(!has_matching_proxy_usage_log(&conn, &outside_window)?);
+
+        let mut different_tokens = key;
+        different_tokens.input_tokens += 1;
+        assert!(!has_matching_proxy_usage_log(&conn, &different_tokens)?);
+
+        let mut different_app = key;
+        different_app.app_type = "gemini";
+        assert!(!has_matching_proxy_usage_log(&conn, &different_app)?);
+
+        let mut mismatched_codex_source = key;
+        mismatched_codex_source.app_type = "gemini";
+        mismatched_codex_source.data_source = "codex_session";
+        assert!(!has_matching_proxy_usage_log(
+            &conn,
+            &mismatched_codex_source
+        )?);
+
+        let mut non_codex_session = key;
+        non_codex_session.data_source = "session_log";
+        assert!(!has_matching_proxy_usage_log(&conn, &non_codex_session)?);
+
+        for invalid_request_model in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("unknown"),
+            Some(" UNKNOWN "),
+        ] {
+            conn.execute(
+                "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+                params![invalid_request_model, "codex-proxy-alias"],
+            )?;
+            assert!(!has_matching_proxy_usage_log(&conn, &key)?);
+        }
+
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1, status_code = 400 WHERE request_id = ?2",
+            params!["gpt-5.6-sol-joybuilder", "codex-proxy-alias"],
+        )?;
+        assert!(!has_matching_proxy_usage_log(&conn, &key)?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_effective_filter_dedups_only_codex_request_model_alias() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let conn = lock_conn!(db.conn);
+        insert_usage_log(
+            &conn,
+            "codex-proxy-alias",
+            "codex",
+            "provider-1",
+            "gpt-5.6-sol",
+            "proxy",
+            1_000,
+            100,
+            20,
+            10,
+            0,
+            200,
+            "0.10",
+        )?;
+        insert_usage_log(
+            &conn,
+            "codex-session-alias",
+            "codex",
+            "_codex_session",
+            "gpt-5.6-sol-joybuilder",
+            "codex_session",
+            1_060,
+            100,
+            20,
+            10,
+            0,
+            200,
+            "0.10",
+        )?;
+        insert_usage_log(
+            &conn,
+            "gemini-proxy-alias",
+            "gemini",
+            "provider-2",
+            "gemini-2.5-pro",
+            "proxy",
+            2_000,
+            200,
+            40,
+            30,
+            0,
+            200,
+            "0.20",
+        )?;
+        insert_usage_log(
+            &conn,
+            "gemini-session-alias",
+            "gemini",
+            "_gemini_session",
+            "gemini-logical-alias",
+            "gemini_session",
+            2_060,
+            200,
+            40,
+            30,
+            0,
+            200,
+            "0.20",
+        )?;
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+            params![" gpt-5.6-sol-joybuilder ", "codex-proxy-alias"],
+        )?;
+        conn.execute(
+            "UPDATE proxy_request_logs SET request_model = ?1 WHERE request_id = ?2",
+            params!["gemini-logical-alias", "gemini-proxy-alias"],
+        )?;
+
+        let filter = effective_usage_log_filter("l");
+        let sql = format!(
+            "SELECT request_id FROM proxy_request_logs l WHERE {filter} ORDER BY request_id"
+        );
+        let request_ids = conn
+            .prepare(&sql)?
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(
+            request_ids,
+            vec![
+                "codex-proxy-alias".to_string(),
+                "gemini-proxy-alias".to_string(),
+                "gemini-session-alias".to_string(),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_scoped_backfill_matches_raw_alias_rows() -> Result<(), AppError> {
+        let db = Database::memory()?;
+
+        {
+            let conn = lock_conn!(db.conn);
+            // 代理日志按上游原文落库：带路由前缀和 :free 后缀的别名形式。
+            // 精准回填的筛选必须归一化后匹配，否则这类行要等全量回填才更新。
+            insert_usage_log(
+                &conn,
+                "openrouter-alias-zero-cost",
+                "claude",
+                "provider-1",
+                "openrouter/moonshot/kimi-k2-novel:free",
+                "proxy",
+                1000,
+                1_000_000,
+                0,
+                0,
+                0,
+                200,
+                "0",
+            )?;
+        }
+
+        // 定价缺失时不应回填
+        assert_eq!(db.backfill_missing_usage_costs()?, 0);
+
+        {
+            let conn = lock_conn!(db.conn);
+            conn.execute(
+                "INSERT INTO model_pricing (model_id, display_name, input_cost_per_million, output_cost_per_million)
+                 VALUES ('kimi-k2-novel', 'Kimi K2 Novel', '0.6', '2.5')",
+                [],
+            )?;
+        }
+
+        // 按归一化 ID 精准回填，应命中以原始别名落库的行
+        assert_eq!(
+            db.backfill_missing_usage_costs_for_model("kimi-k2-novel")?,
+            1
+        );
+
+        let conn = lock_conn!(db.conn);
+        let total_cost: String = conn.query_row(
+            "SELECT total_cost_usd
+             FROM proxy_request_logs WHERE request_id = 'openrouter-alias-zero-cost'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(total_cost, "0.600000");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_range_filter_dedups_codex_request_model_alias() -> Result<(), AppError> {
+        // 会话行不少于代理行时走 JOIN 写法，同样要认 Codex 的请求模型别名。
+        let db = Database::memory()?;
+        {
+            let conn = lock_conn!(db.conn);
+            insert_usage_log(
+                &conn,
+                "proxy",
+                "codex",
+                "provider-1",
+                "glm-5.3",
+                "proxy",
+                10_000,
+                19_472,
+                165,
+                16_704,
+                0,
+                200,
+                "0.10",
+            )?;
+            conn.execute(
+                "UPDATE proxy_request_logs SET request_model = 'ccswitch-live-alpha'
+                 WHERE request_id = 'proxy'",
+                [],
+            )?;
+            insert_usage_log(
+                &conn,
+                "session-alias",
+                "codex",
+                "_codex_session",
+                "ccswitch-live-alpha",
+                "codex_session",
+                10_001,
+                19_472,
+                165,
+                16_704,
+                0,
+                200,
+                "0.10",
+            )?;
+            insert_usage_log(
+                &conn,
+                "session-other-alias",
+                "codex",
+                "_codex_session",
+                "other-alias",
+                "codex_session",
+                10_002,
+                19_472,
+                165,
+                16_704,
+                0,
+                200,
+                "0.10",
+            )?;
+
+            let filter = effective_usage_log_filter_for_range(&conn, "l", None, None)?;
+            assert!(filter.contains("rowid NOT IN"), "应走 JOIN 写法: {filter}");
+            let kept: Vec<String> = conn
+                .prepare(&format!(
+                    "SELECT request_id FROM proxy_request_logs l WHERE {filter} ORDER BY request_id"
+                ))?
+                .query_map([], |row| row.get(0))?
+                .collect::<Result<_, _>>()?;
+            assert_eq!(kept, ["proxy", "session-other-alias"]);
+        }
+        assert_eq!(
+            db.get_usage_summary(None, None, Some("codex"))?
+                .total_requests,
+            2
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pricing_lookup_matches_custom_rows_with_uppercase_model_id() -> Result<(), AppError> {
+        // 回归 #8413：自定义定价常按界面显示名原样入库（如 GLM-5.3-Flash-EXL3），
+        // 而查价候选会被 clean_model_id_for_pricing 小写归一化；若精确匹配大小写
+        // 敏感，这类行永远命中不了，成本恒为 0。查价必须大小写不敏感。
+        let db = Database::memory()?;
+        let conn = lock_conn!(db.conn);
+
+        conn.execute(
+            "INSERT OR REPLACE INTO model_pricing (
+                model_id, display_name, input_cost_per_million, output_cost_per_million,
+                cache_read_cost_per_million, cache_creation_cost_per_million
+            ) VALUES ('GLM-5.3-Flash-EXL3', 'GLM-5.3-Flash-EXL3', '1.4', '4.4', '0.26', '0')",
+            [],
+        )?;
+
+        let row = find_model_pricing_row(&conn, "GLM-5.3-Flash-EXL3")?;
+        assert!(row.is_some(), "小写候选应能命中按大写入库的自定义定价行");
+        let (input, output, ..) = row.unwrap();
+        assert_eq!(input, "1.4");
+        assert_eq!(output, "4.4");
+
         Ok(())
     }
 }

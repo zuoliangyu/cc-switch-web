@@ -438,20 +438,29 @@ fn optional_string(
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     pub(crate) struct TestAgentDir {
-        _dir: tempfile::TempDir,
+        _dir: Option<tempfile::TempDir>,
         previous: Option<PathBuf>,
     }
 
     impl TestAgentDir {
         pub(crate) fn new() -> Self {
             let dir = tempfile::tempdir().expect("create Pi test directory");
+            let agent_dir = dir.path().join("agent");
+            Self::set(agent_dir, Some(dir))
+        }
+
+        pub(crate) fn at(agent_dir: &Path) -> Self {
+            Self::set(agent_dir.to_path_buf(), None)
+        }
+
+        fn set(agent_dir: PathBuf, dir: Option<tempfile::TempDir>) -> Self {
             let previous = super::TEST_AGENT_DIR
                 .lock()
                 .expect("lock Pi test directory")
-                .replace(dir.path().join("agent"));
+                .replace(agent_dir);
             Self {
                 _dir: dir,
                 previous,

@@ -401,7 +401,7 @@
 | `db29caef` | v4.0.10 | chore(release): v4.0.10 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `90fb37ff` | v4.0.10 | docs(release): add v4.0.10 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `d9a62313` | v4.0.11 | fix(ui): panel flicker (#8201) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `dbb81ea2` | v4.0.11 | feat(apps): add tool uninstall with a confirmed plan and manual commands (#8165) | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs`、`components/DeepLinkImportDialog.tsx`等 5 个 | 待迁移 |
+| `dbb81ea2` | v4.0.11 | feat(apps): add tool uninstall with a confirmed plan and manual commands (#8165) | 1d 资源/设置/工具 | 1d：工具卸载（确认计划 + 手动命令）；后端 tool_uninstall 子模块与 /api/tools/uninstall-plan，生命周期 action 支持 uninstall；前端确认框/手动卸载框按 Web 现有样式改写；手动命令的宿主平台取服务端探测结果而非浏览器 UA；DeepLinkImportDialog 的激活开关初始化部分 Web 无对应状态，不适用 | 已迁移 |
 | `479964f2` | v4.0.11 | fix(windows): restore user PATH for CLI lifecycle commands (#8173) | 1d 资源/设置/工具 | 1d：Windows 工具生命周期命令恢复用户 PATH（Web 位于 tool_management.rs） | 已迁移 |
 | `9719b7b3` | v4.0.11 | fix(usage): skip unchanged deferred Codex rollouts (#8218) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `1ef555df` | v4.0.11 | fix(skills): show error and warning toasts for bulk failures (#8137) | 5a 供应商与全局 UI | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
@@ -423,11 +423,11 @@
 | `c11c7cf1` | v4.0.12 | fix(proxy): say so when the upstream error body is empty (#6910) | 1b 代理协议 | 1b：上游错误体为空时明确说明 | 已迁移 |
 | `b1941307` | v4.0.12 | fix(wsl): skip syscalls 9P rejects when piConfigDir targets WSL (#8249) | 1d 资源/设置/工具 | 1d：piConfigDir 指向 WSL 时跳过 9P 不支持的系统调用；config.rs 新增 is_wsl_path | 已迁移 |
 | `4958863a` | v4.0.12 | fix(usage): restore speed estimates for Pi session history (#8278) | 1c 会话/用量导入 | 1c：Pi 会话历史恢复速度估算（按时间戳估算耗时）；上游请求日志表组件测试 Web 无对应文件 | 已迁移 |
-| `74b98ca9` | v4.0.12 | fix(apps): follow up uninstall feedback and Windows CLI PATH (#8262) | 1d 资源/设置/工具 | 需新建或映射：`components/apps/ToolUninstallConfirmDialog.tsx` | 待迁移 |
+| `74b98ca9` | v4.0.12 | fix(apps): follow up uninstall feedback and Windows CLI PATH (#8262) | 1d 资源/设置/工具 | 1d：卸载反馈跟进与 Windows CLI PATH（canonical 批处理路径）；Web 的 run_detected_tool_command_with_timeout 换成上游实现（补 WSL 运行与批处理路径处理） | 已迁移 |
 | `c21106ff` | v4.0.12 | feat(i18n): add Turkish interface and tray localization (#8208) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `30fcd90a` | v4.0.12 | fix(apps): keep columns aligned when upgrade actions disappear (#8293) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `6a232cab` | v4.0.12 | feat(apps): choose which installation to uninstall and support current Grok layout | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs`、`components/apps/ToolUninstallConfirmDialog.tsx` | 待迁移 |
-| `ae778b4f` | v4.0.12 | feat(apps): check the Node version before updating npm tools | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_node_requirement.rs` | 待迁移 |
+| `6a232cab` | v4.0.12 | feat(apps): choose which installation to uninstall and support current Grok layout | 1d 资源/设置/工具 | 1d：卸载时选择具体安装位置、Grok 新布局；Hermes Windows 残留提示按服务端卸载路径判断平台 | 已迁移 |
+| `ae778b4f` | v4.0.12 | feat(apps): check the Node version before updating npm tools | 1d 资源/设置/工具 | 1d：升级 npm 工具前检查 Node 版本（tool_node_requirement 子模块 + 行内提示，阻止的工具不进“全部升级”） | 已迁移 |
 | `31c6f574` | v4.0.12 | feat(providers): place provider search at the end of the first list row | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeTabs.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `dea297ce` | v4.0.12 | fix(i18n): use English for unsupported system languages | 1d 资源/设置/工具 | 1d：浏览器语言不在 zh/en/ja 中时使用英文 | 已迁移 |
 | `d1592fb1` | v4.0.12 | feat(presets): add StreamLake for Codex and use the public KAT-Coder endpoint | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -449,7 +449,7 @@
 | `d6d46c35` | v4.0.12 | chore(presets): drop ClaudeAPI and Code0 partner flags and promotion copy | 1a 预设/定价/图标 | 1a：移除 ClaudeAPI/Code0 合作标记，同步删除三语 code0/claudeapi 推广文案 | 已迁移 |
 | `c83cd728` | v4.0.12 | fix(presets): drop OpenCode presets for providers OpenCode ships built in | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位；上游 presetRows 金样测试依赖桌面分组布局，不迁移 | 已迁移 |
-| `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
+| `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 1d：卸载测试放宽 Windows 路径解析超时（随测试最终版本） | 已迁移 |
 | `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsagePage.tsx`、`hooks/useUsageAutoRefresh.ts`等 3 个 | 待迁移 |
 | `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `f7696fa8` | v4.0.12 | feat(apps): move uninstall into a per-row overflow menu | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -470,7 +470,7 @@
 | `c1051f8e` | v4.0.13 | fix(codex): match quoted provider table headers when writing base_url (#8276) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `f318e65e` | v4.0.13 | fix(proxy): stop Chat stream converters at the DONE boundary (#8281) | 1b 代理协议 | 1b：Chat 流转换在 [DONE] 边界停止 | 已迁移 |
 | `81bc1bce` | v4.0.13 | fix(usage): derive opencode session request latency from message times (#8309) | 1c 会话/用量导入 | 1c：OpenCode 会话请求耗时按消息时间推算 | 已迁移 |
-| `76f99d41` | v4.0.13 | fix(cli): avoid quadratic search path deduplication (#8322) | 1d 资源/设置/工具 | 上游修的是搜索路径去重的二次复杂度；Web 两处路径收集只有数十项，未改为 IndexSet（改动面大于收益） | 不适用 |
+| `76f99d41` | v4.0.13 | fix(cli): avoid quadratic search path deduplication (#8322) | 1d 资源/设置/工具 | 1d：工具搜索路径改用 IndexSet 去重（随 tool_management 同步到上游最终版本） | 已迁移 |
 | `67d63e3e` | v4.0.13 | fix(usage): resolve paginated continuation pages for forked branch threads (#8290) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `16537fd3` | v4.0.13 | fix(codex): preserve compaction preferences in proxy config (#8339) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `09237ebd` | v4.0.13 | fix(windows): avoid native CSS drag regions (#8327) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
@@ -486,7 +486,7 @@
 | `58354f91` | v4.0.13 | fix(claude-desktop): split a legacy mapping card into route and official direct | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `78d2517a` | v4.0.13 | fix(mode): preview the old default's models and fill in Desktop's app name | 4 模式/路由 | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `7c763cf3` | v4.0.13 | fix(claude-desktop): give the back-to-direct confirmation Desktop's own notes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeDialog.tsx` | 待迁移 |
-| `35423712` | v4.0.13 | test(uninstall): borrow single paths as slices for clippy | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
+| `35423712` | v4.0.13 | test(uninstall): borrow single paths as slices for clippy | 1d 资源/设置/工具 | 1d：卸载测试 clippy 修正（随测试最终版本） | 已迁移 |
 | `eb2b0d36` | v4.0.13 | test(apps): wait for re-probed rows before Update all after a remount | 1d 资源/设置/工具 | 1d：应用页测试等待重新探测后再全部更新 | 已迁移 |
 | `4214ac40` | v4.0.13 | test(usage): skip Codex parse-cache counts where files have no identity | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `ae8646c6` | v4.0.13 | test(windows): run the lifecycle failure test outside the WSL temp dir | — | WSL2 夜间 CI 的 9P 共享兼容调整；Web 不运行该任务 | 不适用 |
@@ -537,7 +537,7 @@
 | `caf70b52` | v4.0.15 | fix(i18n): translate new Turkish uninstall strings (#8291) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `6fcbb054` | v4.0.15 | fix(sidebar): show only the numbers in the usage Today badge | — | 侧栏今日用量徽标改动已被上游撤销，净效果为空 | 不适用 |
 | `24d87028` | v4.0.15 | fix(skills): stop branch fallback from masking non-404 download errors | 1d 资源/设置/工具 | 1d：Skill 下载只在 404 时换分支，其他错误直接返回并补上仓库坐标 | 已迁移 |
-| `2bcf953b` | v4.0.15 | fix(tools): only reinstall Codex when --version actually exits with an error | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
+| `2bcf953b` | v4.0.15 | fix(tools): only reinstall Codex when --version actually exits with an error | 1d 资源/设置/工具 | 1d：仅在 --version 真正以错误退出时重装 Codex（ToolInstallation.exited_with_error） | 已迁移 |
 | `8a06838d` | v4.0.15 | fix(settings): never overwrite settings.json with defaults after a failed load | 1d 资源/设置/工具 | 1d：设置文件读取失败时不再用默认值覆盖：重试读取、去 BOM、逐字段保留有效项、先备份原文件，备份失败拒绝保存；保存改为原子写 | 已迁移 |
 | `dd24b1ed` | v4.0.15 | fix(icons): give the macOS app icon a white rounded-square background | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `a94b592a` | v4.0.15 | fix(usage): hide empty DeepSeek wallets when another currency has funds | 1c 会话/用量导入 | 1c：DeepSeek 有币种有余额时隐藏空钱包 | 已迁移 |
@@ -546,7 +546,7 @@
 | `c696c68f` | v4.0.15 | fix(sync): stop cutting off slow WebDAV/S3 transfers at a fixed 300s | 1d 资源/设置/工具 | 1d：WebDAV 大文件传输超时按体积放宽并增加空闲超时；Web 无 S3 传输与 sync_protocol，辅助函数放在 webdav_sync.rs | 已迁移 |
 | `97daccb6` | v4.0.15 | fix(settings): keep settings when an old save left a trailing tail | 1d 资源/设置/工具 | 1d：旧版保存残留尾巴时只取开头完整对象（随 8a06838d 的最终实现一并移植） | 已迁移 |
 | `ecb449f4` | v4.0.15 | fix(terminal): give Windows provider terminals the restored user PATH | 1d 资源/设置/工具 | 1d：Windows 供应商终端使用补全后的用户 PATH | 已迁移 |
-| `eb09fbb1` | v4.0.15 | fix(tools): add missing exited_with_error to the Windows WSL uninstall candidate | 1d 资源/设置/工具 | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
+| `eb09fbb1` | v4.0.15 | fix(tools): add missing exited_with_error to the Windows WSL uninstall candidate | 1d 资源/设置/工具 | 1d：Windows WSL 卸载候选补 exited_with_error（随最终版本） | 已迁移 |
 | `415e8994` | v4.0.15 | fix(failover): refresh the routing marker after the proxy fails over | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `ff3e33a8` | v4.0.15 | feat(hermes): declare image input per model | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `93f1688a` | v4.0.15 | chore(providers): follow up on panel transition cleanup (#8260) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -786,8 +786,8 @@
 | `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx`、`components/providers/ProviderCardActions.tsx` | 待迁移 |
 | `5f0fc253` | v4.0.21 | fix(apps): count Hermes's leftover hermes.cmd beside hermes.exe as one install | 1d 资源/设置/工具 | 1d：Hermes 的 hermes.exe 旁残留 hermes.cmd 按一处安装计（tool_management.rs） | 已迁移 |
 | `cfc64971` | v4.0.21 | fix(mcp): drop timeout/autoApprove from Codex MCP entries | 1d 资源/设置/工具 | 1d：写入 Codex MCP 条目时去掉 timeout/autoApprove（Web 只有单服务器写入路径） | 已迁移 |
-| `618af9d9` | v4.0.21 | fix(apps): allow OpenCode's postinstall under npm 12 | 1d 资源/设置/工具 | 合并到 Web 已改文件 | 待迁移 |
-| `ff31d840` | v4.0.21 | fix(apps): allow Grok Build's postinstall under npm 12 | 1d 资源/设置/工具 | 合并到 Web 已改文件 | 待迁移 |
+| `618af9d9` | v4.0.21 | fix(apps): allow OpenCode's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 OpenCode postinstall（后端安装命令与前端一键命令） | 已迁移 |
+| `ff31d840` | v4.0.21 | fix(apps): allow Grok Build's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 Grok Build postinstall | 已迁移 |
 | `d564adc3` | v4.0.21 | feat(presets): add Kimi K3.1 Pro and HighSpeed to the official Kimi presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `05034a4e` | v4.0.21 | feat(codex): drag to reorder rows in the provider model list | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `71524045` | v4.0.21 | fix(stack): keep the aggregation member order in step with drag sorting | 4 模式/路由 | 需新建或映射：`hooks/useDragSort.ts` | 待迁移 |
@@ -823,7 +823,7 @@
 | `cd9c7210` | v4.0.22 | fix(proxy): reject upstream URLs that loop back to the proxy itself (#8598) | 1b 代理协议 | 1b：拒绝回环到代理自身监听地址的上游 URL | 已迁移 |
 | `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
 | `67cce7ad` | v4.0.22 | fix(usage): show bound Claude official account quota in tray and usage settings | 3 官方账号 | 用量设置显示绑定 Claude 账号额度；托盘部分不适用；需新建或映射：`commands/claude_account.rs`、`services/usage_cache.rs` | 待迁移 |
-| `e78f641c` | v4.0.22 | fix(apps): report a CLI that is present but yields no version as not runnable | 1d 资源/设置/工具 | 合并到 Web 已改文件 | 待迁移 |
+| `e78f641c` | v4.0.22 | fix(apps): report a CLI that is present but yields no version as not runnable | 1d 资源/设置/工具 | 1d：存在但不输出版本的 CLI 报告为不可运行 | 已迁移 |
 | `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `7f82b85b` | v4.0.22 | fix(sidebar): inset today's usage text to align with mode badge text | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
@@ -852,7 +852,7 @@
 | `f19b3898` | v4.0.22 | fix(usage): cap stored proxy_request_logs.error_message on write (#9010) | 1c 会话/用量导入 | 1c：写入 proxy_request_logs.error_message 时截断到 4096 字符 | 已迁移 |
 | `c2aa4e0b` | v4.0.22 | docs(sponsors): update PatewayAI promotion copy | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
 | `3e75b96e` | v4.0.22 | docs(sponsors): refresh AIGoCode copy and add theme-aware banner | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
-| `da263511` | v4.0.22 | fix(apps): rerun the Kimi installer when the installed CLI predates upgrade --yes | 1d 资源/设置/工具 | 合并到 Web 已改文件 | 待迁移 |
+| `da263511` | v4.0.22 | fix(apps): rerun the Kimi installer when the installed CLI predates upgrade --yes | 1d 资源/设置/工具 | 1d：已安装 Kimi 早于 upgrade --yes 时重跑官方安装器（生命周期后端已含 Kimi，应用层接入随 2b） | 已迁移 |
 | `12e9fe53` | v4.0.22 | feat(presets): add Astron Coding Plan preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `33aaf8e7` | v4.0.22 | fix(claude-account): pass the global proxy to Claude Code subprocesses | 3 官方账号 | 需新建或映射：`services/claude_account/login.rs`、`services/claude_account/usage.rs` | 待迁移 |
 | `0b8a53e3` | v4.0.22 | feat(skills): open a discovered skill's docs from the Discover list | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -875,7 +875,7 @@
 | `258c367f` | v4.0.23 | fix(grokbuild): stream large session logs and support byte offset cursor (#9026) | 1c 会话/用量导入 | 1c：Grok Build 会话日志逐行流式读取并按字节游标续读；导入器整体同步到上游最终版本（去掉 input_token_semantics），补 grok-4.6/4.7 Build 定价 | 已迁移 |
 | `300453be` | v4.0.23 | fix(codex): handle text-only DeepSeek V4 Flash 0731 on OpenRouter (#6194) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `3817c2b2` | v4.0.23 | fix(provider-form): prevent config editors from overwriting each other (#6777) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `e49d12a5` | v4.0.23 | fix(settings): avoid launching OpenCode Desktop during env check (#7027) | 1d 资源/设置/工具 | 合并到 Web 已改文件 | 待迁移 |
+| `e49d12a5` | v4.0.23 | fix(settings): avoid launching OpenCode Desktop during env check (#7027) | 1d 资源/设置/工具 | 1d：环境检查不再拉起 OpenCode Desktop（桌面版无 CLI sidecar 时跳过） | 已迁移 |
 | `c7188667` | v4.0.23 | fix(usage): recover bounded Codex forks after parent idle gaps (#9093) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `91a76cfd` | v4.0.23 | fix(startup): keep database lock waits off the UI thread (#9098) | 1d 资源/设置/工具 | 解决 Tauri 命令在 UI 线程上等数据库锁；Web 没有 UI 线程，HTTP 处理不会冻结界面。MiniMax Code/Kimi/DSH 列表刷新与供应商改动串行化随 2b/2e 的对应应用一并评估 | 不适用 |
 | `a77417da` | v4.0.23 | fix(proxy): return JSON for non-streaming Claude model validation (#9097) | 1b 代理协议 | 1b：非流式 Claude 请求遇 Chat/Responses SSE 时聚合为 JSON（模型验证要求）；补齐 Web 缺失的 Responses/Chat SSE 聚合器与嗅探，Codex OAuth 非流不再强制流式 | 已迁移 |
@@ -980,3 +980,9 @@
   - 其他：Claude Desktop 状态新增 installed；删除检查不再单看 DB 的 is_current；项目快照记录“没有启用的提示词”；/apps/anthropic 地址追加 compatible-mode 模型端点；smol-toml 升级到 1.9.1。
   - 转出：供应商页头搜索、卡片设 OpenCode 默认模型、应用排序、Skills 增量发现、终端对话框选项（3 项）、应用页开关配色测试转入 5a；切换/模式日志、终端剔除代理设置转入 4。不适用：土耳其语 6 项、测试 HOME 覆盖、Skill 测试 HOME 隔离、搜索路径去重复杂度、UI 线程等锁。
   - 验证：`cargo test --lib` 2893 项通过、6 项忽略；前端全量 Vitest 149 个文件 1606 项通过；`tsc --noEmit` 通过。
+- 2026-11-03：批次 1d 第二部分（工具生命周期与卸载）。
+  - 应用方式：`commands/tool_management.rs` 的同名函数、结构、常量整体同步到上游最终 `misc.rs`，补齐缺失条目；卸载与 Node 版本要求拆为 `tool_uninstall.rs`、`tool_node_requirement.rs` 子模块（与上游同源）。上游 misc 测试模块中与工具生命周期相关的部分整体并入（终端启动类测试留在 Web 的 `misc.rs` 范围外），测试中的子进程模块路径改为 `commands::tool_management`。
+  - 卸载：新增 `/api/tools/uninstall-plan` 返回每处安装的卸载计划或需手动卸载的原因，`/api/tools/action` 支持 `uninstall` 并在生命周期锁内重新生成计划比对；应用页增加卸载按钮、选择安装位置的确认框与手动卸载命令框。Web 浏览器与服务端可能不在同一平台：手动命令的宿主平台取服务端探测结果，Hermes Windows 残留提示按卸载路径判断，均不读浏览器 UA。新组件按 Web 现有样式改写（上游新设计令牌随 5a）。
+  - 其他：升级 npm 工具前检查 Node 版本；npm 12 下允许 OpenCode/Grok Build 的 postinstall；只在 `--version` 真正报错时重装 Codex；存在但不输出版本的 CLI 报告为不可运行；环境检查不拉起 OpenCode Desktop；搜索路径改用 IndexSet 去重（`76f99d41` 由不适用改为已迁移）。Web 的 `run_detected_tool_command_with_timeout` 换成上游实现，补上 WSL 内执行与批处理 canonical 路径处理。
+  - 生命周期后端随最终版本已包含 Kimi/Antigravity/Oh My Pi/DeepSeek Harness，前端工具列表在 2b–2e 接入。
+  - 验证：`cargo test --lib` 3031 项通过、6 项忽略（`omp_search_paths_include_the_bun_global_bin` 在 PATH 含 `~/.bun/bin` 的机器上属环境性失败，去掉该 PATH 项后通过）；前端全量 Vitest 149 个文件 1631 项通过、2 项跳过；`tsc --noEmit` 通过。

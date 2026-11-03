@@ -494,6 +494,8 @@ struct ToolManagementRequest {
     action: Option<String>,
     wsl_shell_by_tool:
         Option<HashMap<String, crate::commands::tool_management::WslShellPreferenceInput>>,
+    /// 卸载时用户在确认框里核对过的计划（只对 uninstall 生效）
+    uninstall_plan: Option<crate::commands::tool_management::ToolUninstallPlan>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2863,6 +2865,27 @@ async fn probe_tool_installations(
         .map_err(ApiError::bad_request)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolUninstallPlanRequest {
+    tool: String,
+    wsl_shell_by_tool:
+        Option<HashMap<String, crate::commands::tool_management::WslShellPreferenceInput>>,
+}
+
+/// 列出某个工具可卸载的安装位置：每处给出待执行的计划，或需要手动卸载的原因。
+async fn prepare_tool_uninstall(
+    Json(payload): Json<ToolUninstallPlanRequest>,
+) -> Result<Json<Vec<crate::commands::tool_management::ToolUninstallCandidate>>, ApiError> {
+    crate::commands::tool_management::prepare_tool_uninstall(
+        payload.tool,
+        payload.wsl_shell_by_tool,
+    )
+    .await
+    .map(Json)
+    .map_err(ApiError::bad_request)
+}
+
 async fn run_tool_lifecycle_action(
     Json(payload): Json<ToolManagementRequest>,
 ) -> Result<Json<bool>, ApiError> {
@@ -2870,6 +2893,7 @@ async fn run_tool_lifecycle_action(
         payload.tools.unwrap_or_default(),
         payload.action.unwrap_or_default(),
         payload.wsl_shell_by_tool,
+        payload.uninstall_plan,
     )
     .await
     .map_err(ApiError::bad_request)?;
@@ -4482,6 +4506,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/tools/versions", post(get_managed_tool_versions))
         .route("/api/tools/installations", post(probe_tool_installations))
         .route("/api/tools/action", post(run_tool_lifecycle_action))
+        .route("/api/tools/uninstall-plan", post(prepare_tool_uninstall))
         .route(
             "/api/settings/windows-env-paths",
             get(get_windows_env_paths),

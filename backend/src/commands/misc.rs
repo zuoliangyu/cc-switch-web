@@ -2034,6 +2034,7 @@ fn macos_otty_cli_candidates() -> Vec<std::path::PathBuf> {
     candidates
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn is_executable_file(path: &Path) -> bool {
     let Ok(metadata) = path.metadata() else {
         return false;
@@ -2710,114 +2711,7 @@ mod tests {
     }
 }
 
-/// 在服务端已探测的 CLI 上执行固定参数命令；复用路径探测和进程树超时清理。
-/// 不经过登录 shell，也不枚举运行所有候选工具。
-pub(crate) fn run_detected_tool_command_with_timeout(
-    tool: &str,
-    args: &[&str],
-    timeout: Option<std::time::Duration>,
-    extra_env: &[(&str, String)],
-    working_dir: &Path,
-) -> Result<std::process::Output, String> {
-    use std::process::{Command, Stdio};
-    if !VALID_TOOLS.contains(&tool) {
-        return Err(format!("Unsupported tool: {tool}"));
-    }
-    if args.iter().any(|arg| {
-        arg.is_empty()
-            || !arg
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-    }) {
-        return Err("Invalid tool command arguments".to_string());
-    }
-    let started = std::time::Instant::now();
-    #[cfg(target_os = "windows")]
-    let default_path = resolve_windows_path_default(tool)?;
-    #[cfg(not(target_os = "windows"))]
-    let default_path = effective_path_os().and_then(|paths| {
-        std::env::split_paths(&paths)
-            .map(|dir| dir.join(tool))
-            .find(|path| is_executable_file(path))
-    });
-    let tool_path = default_path
-        .or_else(|| {
-            build_tool_search_paths(tool)
-                .iter()
-                .flat_map(|dir| tool_executable_candidates(tool, dir))
-                .find(|path| is_executable_file(path))
-        })
-        .ok_or_else(|| format!("{tool} is not installed or not executable"))?;
-    let dir = tool_path
-        .parent()
-        .ok_or_else(|| format!("Invalid {tool} executable path"))?;
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let new_path = format!("{};{}", dir.display(), effective_path_string());
-        let mut command = if tool_path
-            .extension()
-            .and_then(|s| s.to_str())
-            .is_some_and(|s| s.eq_ignore_ascii_case("cmd") || s.eq_ignore_ascii_case("bat"))
-        {
-            let shell_path = windows_shell_compatible_path(&tool_path);
-            let escaped = shell_path.to_string_lossy().replace('%', "%%%%");
-            let mut command = Command::new(windows_system_executable("cmd.exe"));
-            command
-                .args(["/D", "/S", "/C"])
-                .raw_arg(format!("call \"{escaped}\" {}", args.join(" ")));
-            command
-        } else {
-            let mut command = Command::new(&tool_path);
-            command.args(args);
-            command
-        };
-        command
-            .env("PATH", new_path)
-            .creation_flags(CREATE_NO_WINDOW);
-        command
-    };
-    // 从 launchd / 服务管理器启动时继承的是窄 PATH。npm 装的 CLI 是 `#!/usr/bin/env node`
-    // 脚本，node 常不在工具自己的目录里，只补工具目录会 exit 127（#8653）；与安装/升级
-    // 同样补上登录 shell 的 PATH。
-    #[cfg(not(target_os = "windows"))]
-    let mut command = {
-        let inherited = effective_path_os()
-            .map(|value| value.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let current_path = match super::tool_management::login_shell_path(None) {
-            Some(login_path) => {
-                super::tool_management::merge_path_segments(&login_path, &inherited)
-            }
-            None => inherited,
-        };
-        let mut command = Command::new(&tool_path);
-        command.args(args).env(
-            "PATH",
-            prepend_search_dir_to_path(dir, std::ffi::OsStr::new(&current_path)),
-        );
-        isolate_child_process_group(&mut command);
-        command
-    };
-    let remaining = timeout
-        .map(|limit| {
-            limit
-                .checked_sub(started.elapsed())
-                .ok_or_else(|| "Tool lookup timed out".to_string())
-        })
-        .transpose()?;
-    command
-        .current_dir(working_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    for (key, value) in extra_env {
-        command.env(key, value);
-    }
-    let child = command
-        .spawn()
-        .map_err(|error| format!("Failed to run {tool}: {error}"))?;
-    wait_child_output(child, remaining)
-}
+pub(crate) use super::tool_management::run_detected_tool_command_with_timeout;
 
 pub(crate) fn local_tool_version(tool: &str) -> Option<String> {
     let output = run_detected_tool_command_with_timeout(

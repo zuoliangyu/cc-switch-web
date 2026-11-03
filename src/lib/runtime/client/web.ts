@@ -2580,7 +2580,7 @@ export async function restartWebProxyService(
   return requestWithBody<void>("/api/proxy/restart", "POST", config);
 }
 
-export const manageWebTools = <T>(path: "versions" | "installations" | "action", payload: Record<string, unknown>): Promise<T> => requestWithBody<T>(`/api/tools/${path}`, "POST", payload);
+export const manageWebTools = <T>(path: "versions" | "installations" | "action" | "uninstall-plan", payload: Record<string, unknown>): Promise<T> => requestWithBody<T>(`/api/tools/${path}`, "POST", payload);
 
 /** Stream and image bytes bypass debug body logging. */
 export async function streamWebSession(providerId: string, sourcePath: string, onChunk: (chunk: import("@/types").TranscriptChunk) => void): Promise<void> {

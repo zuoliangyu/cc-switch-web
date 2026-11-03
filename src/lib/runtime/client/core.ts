@@ -369,6 +369,8 @@ export async function invoke<T>(
       return manageWebTools<T>("installations", args ?? {});
     case "run_tool_lifecycle_action":
       return manageWebTools<T>("action", args ?? {});
+    case "prepare_tool_uninstall":
+      return manageWebTools<T>("uninstall-plan", args ?? {});
     case "fetch_models_for_config":
       return (await fetchWebProviderModels(
         args?.baseUrl as string,

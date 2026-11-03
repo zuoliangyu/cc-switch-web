@@ -1,19 +1,28 @@
 import {
   extractCodexBaseUrl,
-  extractCodexModelName,
+  extractCodexExperimentalBearerToken,
 } from "@/utils/providerConfigUtils";
-import { decodeBase64Utf8, encodeBase64Utf8 } from "@/lib/utils/base64";
+import { decodeBase64Utf8 } from "@/lib/utils/base64";
 import { parse as parseToml } from "smol-toml";
 import type { AppId } from "@/lib/api";
-import type { DeepLinkImportRequest, DeepLinkResource } from "./types";
-
-const VALID_APPS = new Set<AppId>([
-  "claude",
-  "codex",
-  "gemini",
-  "opencode",
-  "openclaw",
-]);
+import type {
+  DeepLinkApiFormat,
+  DeepLinkImportRequest,
+  DeepLinkResource,
+} from "./types";
+import {
+  MCP_LINK_APPS,
+  PROMPT_LINK_APPS,
+  PROVIDER_LINK_APPS,
+  checkApiFormat,
+  checkLinkValues,
+} from "./linkRules";
+import {
+  codexLinkConfigText,
+  grokLinkConfigText,
+  parseCodexLinkConfig,
+  parseGrokLinkProfile,
+} from "./tomlLink";
 
 const VALID_RESOURCES = new Set<DeepLinkResource>([
   "provider",
@@ -24,6 +33,10 @@ const VALID_RESOURCES = new Set<DeepLinkResource>([
 
 type DeepLinkConfigFormat = "json" | "toml";
 
+/** 只给了 env_key：Key 在本机环境变量里，不能从不可信的链接导入 */
+const ENV_KEY_ONLY_ERROR =
+  "这条链接只通过 env_key 间接提供 API Key，不能从不可信的链接导入；请手动添加供应商并自行填写 Key";
+
 const parseBoolean = (value: string | null): boolean | undefined => {
   if (value === null) return undefined;
   if (value === "true") return true;
@@ -31,14 +44,14 @@ const parseBoolean = (value: string | null): boolean | undefined => {
   return undefined;
 };
 
-const parseOptionalApp = (
-  value: string | null,
+const ensureLinkApp = (
+  value: string | undefined,
+  allowed: readonly AppId[],
   fieldName: string,
-): AppId | undefined => {
-  if (!value) return undefined;
-  if (!VALID_APPS.has(value as AppId)) {
+): AppId => {
+  if (!value || !allowed.includes(value as AppId)) {
     throw new Error(
-      `${fieldName} 必须是 claude、codex、gemini、opencode 或 openclaw，当前为 ${value}`,
+      `${fieldName} 必须是 ${allowed.join("、")} 之一，当前为 ${value || "空"}`,
     );
   }
   return value as AppId;
@@ -76,13 +89,15 @@ const ensureValidSkillRepoRef = (repo: string, branch: string) => {
     !branch.includes("//") &&
     !branch.includes("@{") &&
     !/[\u0000-\u0020\u007f~^:?*\[\\#%]/.test(branch) &&
-    branch.split("/").every(
-      (segment) =>
-        segment.length > 0 &&
-        !segment.startsWith(".") &&
-        !segment.endsWith(".") &&
-        !segment.endsWith(".lock"),
-    );
+    branch
+      .split("/")
+      .every(
+        (segment) =>
+          segment.length > 0 &&
+          !segment.startsWith(".") &&
+          !segment.endsWith(".") &&
+          !segment.endsWith(".lock"),
+      );
   if (!validOwner || !validName || !validBranch) {
     throw new Error(`skill 仓库坐标不合法：${repo}@${branch || "main"}`);
   }
@@ -140,17 +155,45 @@ const parseConfigObject = (
   return parsed as Record<string, unknown>;
 };
 
-export const parseDeepLinkConfigObject = (
+/** 链接 `config` 参数解码后的原文、格式和解析出的对象；没带时返回 null */
+export interface DeepLinkConfigPayload {
+  text: string;
+  format: DeepLinkConfigFormat;
+  value: Record<string, unknown>;
+}
+
+export const decodeDeepLinkConfig = (
   request: Pick<DeepLinkImportRequest, "config" | "configFormat">,
-): Record<string, unknown> | null => {
+): DeepLinkConfigPayload | null => {
   if (!request.config) {
     return null;
   }
 
-  const decoded = safeDecodeBase64Utf8("config", request.config);
+  const text = safeDecodeBase64Utf8("config", request.config);
   const format = normalizeConfigFormat(request.configFormat);
-  return parseConfigObject(decoded, format);
+  return { text, format, value: parseConfigObject(text, format) };
 };
+
+export const parseDeepLinkConfigObject = (
+  request: Pick<DeepLinkImportRequest, "config" | "configFormat">,
+): Record<string, unknown> | null =>
+  decodeDeepLinkConfig(request)?.value ?? null;
+
+/** Codex 链接附带的 config.toml 文本（整份 TOML 时用原文，保留数值类型） */
+export const codexConfigTextOf = (
+  payload: DeepLinkConfigPayload,
+): string | null =>
+  codexLinkConfigText(
+    payload.value,
+    payload.format === "toml" ? payload.text : undefined,
+  );
+
+/** Grok Build 链接附带的 config.toml 文本（整份 TOML 时用原文，保留数值类型） */
+export const grokConfigTextOf = (payload: DeepLinkConfigPayload): string =>
+  grokLinkConfigText(
+    payload.value,
+    payload.format === "toml" ? payload.text : undefined,
+  );
 
 const mergeClaudeConfig = (
   request: DeepLinkImportRequest,
@@ -188,18 +231,31 @@ const mergeClaudeConfig = (
 
 const mergeCodexConfig = (
   request: DeepLinkImportRequest,
-  config: Record<string, unknown>,
+  payload: DeepLinkConfigPayload,
 ) => {
-  const auth = (config.auth ?? {}) as Record<string, unknown>;
-  if (!request.apiKey && typeof auth.OPENAI_API_KEY === "string") {
-    request.apiKey = auth.OPENAI_API_KEY;
+  const configText = codexConfigTextOf(payload);
+  // 先过白名单：拒绝的键在确认框打开时就报出来，而不是点了导入才失败
+  const link = configText !== null ? parseCodexLinkConfig(configText) : null;
+
+  if (!request.apiKey) {
+    const auth = (payload.value.auth ?? {}) as Record<string, unknown>;
+    const authKey =
+      typeof auth.OPENAI_API_KEY === "string" && auth.OPENAI_API_KEY.trim()
+        ? auth.OPENAI_API_KEY
+        : undefined;
+    request.apiKey =
+      authKey ?? extractCodexExperimentalBearerToken(configText) ?? undefined;
   }
-  const configText = typeof config.config === "string" ? config.config : "";
+  if (!request.apiKey && link?.declaresEnvKey) {
+    throw new Error(ENV_KEY_ONLY_ERROR);
+  }
   if (!request.endpoint) {
-    request.endpoint = extractCodexBaseUrl(configText);
+    request.endpoint =
+      link?.baseUrl() ??
+      (configText ? extractCodexBaseUrl(configText) : undefined);
   }
   if (!request.model) {
-    request.model = extractCodexModelName(configText);
+    request.model = link?.model();
   }
 };
 
@@ -219,6 +275,29 @@ const mergeGeminiConfig = (
   }
   if (!request.model && typeof config.GEMINI_MODEL === "string") {
     request.model = config.GEMINI_MODEL;
+  }
+};
+
+const mergeGrokbuildConfig = (
+  request: DeepLinkImportRequest,
+  payload: DeepLinkConfigPayload,
+) => {
+  // 先过白名单：拒绝的键在确认框打开时就报出来，而不是点了导入才失败
+  const profile = parseGrokLinkProfile(grokConfigTextOf(payload));
+
+  if (!request.apiKey) {
+    // 只收显式声明的 api_key；env_key 是间接引用，不能解析成明文，也不能原样带进来：
+    // 转发和用量查询都会在请求时解析它，等于把本机的环境变量密钥发到链接给的地址
+    request.apiKey = profile.apiKey;
+    if (!request.apiKey && profile.declaresEnvKey) {
+      throw new Error(ENV_KEY_ONLY_ERROR);
+    }
+  }
+  if (!request.endpoint) {
+    request.endpoint = profile.baseUrl;
+  }
+  if (!request.model) {
+    request.model = profile.model;
   }
 };
 
@@ -247,24 +326,31 @@ const mergeAdditiveConfig = (
   }
 };
 
-const mergeProviderConfigFromObject = (
+const mergeProviderConfig = (
   request: DeepLinkImportRequest,
-  config: Record<string, unknown>,
+  payload: DeepLinkConfigPayload,
 ): DeepLinkImportRequest => {
   const merged = { ...request };
   switch (merged.app) {
     case "claude":
-      mergeClaudeConfig(merged, config);
+      mergeClaudeConfig(merged, payload.value);
       break;
     case "codex":
-      mergeCodexConfig(merged, config);
+      mergeCodexConfig(merged, payload);
       break;
     case "gemini":
-      mergeGeminiConfig(merged, config);
+      mergeGeminiConfig(merged, payload.value);
+      break;
+    case "grokbuild":
+      mergeGrokbuildConfig(merged, payload);
       break;
     case "opencode":
     case "openclaw":
-      mergeAdditiveConfig(merged, config);
+    case "hermes":
+    case "pi":
+      mergeAdditiveConfig(merged, payload.value);
+      // 从 config 里补来的地址和 Key 同样要查，让确认框当场报错
+      checkLinkValues(merged);
       break;
     default:
       break;
@@ -277,65 +363,25 @@ const mergeProviderConfigFromObject = (
   return merged;
 };
 
-const fetchRemoteConfigText = async (
-  configUrl: string,
-  format: DeepLinkConfigFormat,
-): Promise<string> => {
-  ensureHttpUrl(configUrl, "configUrl");
-
-  let response: Response;
-  try {
-    response = await fetch(configUrl, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept:
-          format === "toml"
-            ? "application/toml,text/plain,*/*"
-            : "application/json,text/plain,*/*",
-      },
-    });
-  } catch (error) {
-    throw new Error(
-      `拉取远程配置失败：${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `拉取远程配置失败：HTTP ${response.status} ${response.statusText || ""}`.trim(),
-    );
-  }
-
-  const content = await response.text();
-  if (!content.trim()) {
-    throw new Error("拉取远程配置失败：返回内容为空");
-  }
-
-  return content;
-};
-
 export const mergeDeepLinkConfig = async (
   request: DeepLinkImportRequest,
 ): Promise<DeepLinkImportRequest> => {
-  if (
-    request.resource !== "provider" ||
-    (!request.config && !request.configUrl)
-  ) {
+  if (request.resource !== "provider") {
+    return request;
+  }
+  // 远程配置没有实现：解析阶段已经拒绝，这里兜底，防止直接构造的请求绕过
+  if (request.configUrl) {
+    throw new Error("暂不支持 configUrl，请用 config 参数内联配置（Base64）");
+  }
+
+  const payload = decodeDeepLinkConfig(request);
+  if (!payload) {
     return request;
   }
 
-  const format = normalizeConfigFormat(request.configFormat);
-  const configText = request.config
-    ? safeDecodeBase64Utf8("config", request.config)
-    : await fetchRemoteConfigText(request.configUrl ?? "", format);
-  const config = parseConfigObject(configText, format);
-  const merged = mergeProviderConfigFromObject(request, config);
-
   return {
-    ...merged,
-    config: request.config ?? encodeBase64Utf8(configText),
-    configFormat: format,
+    ...mergeProviderConfig(request, payload),
+    configFormat: payload.format,
   };
 };
 
@@ -367,10 +413,10 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
   }
 
   const usageAutoIntervalRaw = url.searchParams.get("usageAutoInterval");
+  const appRaw = url.searchParams.get("app") || undefined;
   const request: DeepLinkImportRequest = {
     version: url.hostname,
     resource: resourceRaw as DeepLinkResource,
-    app: parseOptionalApp(url.searchParams.get("app"), "app"),
     name: url.searchParams.get("name") ?? undefined,
     enabled: parseBoolean(url.searchParams.get("enabled")),
     homepage: url.searchParams.get("homepage") ?? undefined,
@@ -390,7 +436,6 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
     branch: url.searchParams.get("branch") ?? undefined,
     config: url.searchParams.get("config") ?? undefined,
     configFormat: url.searchParams.get("configFormat") ?? undefined,
-    configUrl: url.searchParams.get("configUrl") ?? undefined,
     usageEnabled: parseBoolean(url.searchParams.get("usageEnabled")),
     usageScript: url.searchParams.get("usageScript") ?? undefined,
     usageApiKey: url.searchParams.get("usageApiKey") ?? undefined,
@@ -405,9 +450,16 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
   };
 
   switch (request.resource) {
-    case "provider":
-      if (!request.app) throw new Error("provider deeplink 缺少 app 参数");
+    case "provider": {
+      if (!appRaw) throw new Error("provider deeplink 缺少 app 参数");
+      request.app = ensureLinkApp(appRaw, PROVIDER_LINK_APPS, "app");
       if (!request.name) throw new Error("provider deeplink 缺少 name 参数");
+      // 远程配置没有实现。在解析阶段就拒绝，用户当场看到原因，而不是确认导入之后才失败
+      if (url.searchParams.has("configUrl")) {
+        throw new Error(
+          "暂不支持 configUrl，请用 config 参数内联配置（Base64）",
+        );
+      }
       if (request.homepage) ensureHttpUrl(request.homepage, "homepage");
       if (request.endpoint) {
         request.endpoint
@@ -416,9 +468,25 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
           .filter(Boolean)
           .forEach((item, index) => ensureHttpUrl(item, `endpoint[${index}]`));
       }
+      // Pi 的节点没有模型就选不到任何模型
+      if (request.app === "pi" && !request.model?.trim()) {
+        throw new Error("Pi 供应商需要模型，请在链接里加上 model 参数");
+      }
+      // 在解析阶段就核对，用户当场看到「这个应用不支持这种接口」，而不是确认导入之后才失败
+      const apiFormatRaw = url.searchParams.get("apiFormat");
+      if (apiFormatRaw !== null) {
+        request.apiFormat = checkApiFormat(
+          request.app,
+          apiFormatRaw,
+        ) as DeepLinkApiFormat;
+      }
+      // 累加式应用会把某些写法当成命令、环境变量或文件引用，解析阶段就拒绝
+      checkLinkValues(request);
       break;
+    }
     case "prompt":
-      if (!request.app) throw new Error("prompt deeplink 缺少 app 参数");
+      if (!appRaw) throw new Error("prompt deeplink 缺少 app 参数");
+      request.app = ensureLinkApp(appRaw, PROMPT_LINK_APPS, "app");
       if (!request.name) throw new Error("prompt deeplink 缺少 name 参数");
       if (!request.content)
         throw new Error("prompt deeplink 缺少 content 参数");
@@ -431,7 +499,7 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
         .map((item) => item.trim())
         .filter(Boolean)
         .forEach((app) => {
-          if (!VALID_APPS.has(app as AppId)) {
+          if (!MCP_LINK_APPS.includes(app as AppId)) {
             throw new Error(`mcp deeplink apps 中包含无效应用：${app}`);
           }
         });

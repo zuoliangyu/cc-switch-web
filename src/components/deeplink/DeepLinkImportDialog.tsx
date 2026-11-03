@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Link2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import {
   Dialog,
@@ -26,19 +27,54 @@ import {
   type RiskKind,
 } from "@/utils/deeplinkRisk";
 import {
+  decodeDeepLinkConfig,
   extractDeepLinkFromLocation,
   mergeDeepLinkConfig,
-  parseDeepLinkConfigObject,
   parseDeepLinkUrl,
 } from "@/lib/deeplink/parser";
-import { importFromDeepLink } from "@/lib/deeplink/importer";
-import type { DeepLinkImportRequest } from "@/lib/deeplink/types";
+import {
+  importFromDeepLink,
+  linkCodingPlanProvider,
+  usageWillBeEnabled,
+} from "@/lib/deeplink/importer";
+import { isAdditiveLinkApp } from "@/lib/deeplink/linkRules";
+import type {
+  DeepLinkApiFormat,
+  DeepLinkImportRequest,
+} from "@/lib/deeplink/types";
+import { getAppLabel } from "@/config/appConfig";
+import { CODING_PLAN_PROVIDERS } from "@/config/codingPlanProviders";
 
 const OPEN_EVENT = "cc-switch-open-deeplink-import";
 
+const API_FORMAT_LABELS: Record<DeepLinkApiFormat, string> = {
+  anthropic: "Anthropic Messages",
+  openai_chat: "OpenAI Chat Completions",
+  openai_responses: "OpenAI Responses",
+  gemini_native: "Gemini",
+};
+
+/**
+ * 「导入后立即生效」开关的初始值：链接里的 `enabled` 只是建议，导入时以开关为准。
+ *
+ * 累加式应用（OpenCode、OpenClaw、Hermes、Pi）的开关决定写不写进应用配置，旧链接没写时
+ * 一直是写进去的，初始值保持打开；切换式应用和提示词默认关闭。
+ */
+const initialActivation = (request: DeepLinkImportRequest): boolean => {
+  if (request.resource === "provider" && isAdditiveLinkApp(request.app)) {
+    return request.enabled ?? true;
+  }
+  return request.enabled === true;
+};
+
 type ProviderConfigPreview =
   | { kind: "claude"; env: Record<string, unknown> }
-  | { kind: "codex"; auth: Record<string, unknown>; tomlConfig: string }
+  | {
+      kind: "toml";
+      app: "codex" | "grokbuild";
+      auth: Record<string, unknown>;
+      tomlConfig: string;
+    }
   | { kind: "gemini"; env: Record<string, unknown> }
   | { kind: "generic"; raw: Record<string, unknown> };
 
@@ -62,6 +98,7 @@ const formatPreviewValue = (value: unknown) => {
 const buildProviderConfigPreview = (
   request: DeepLinkImportRequest | null,
   parsedConfig: Record<string, unknown> | null,
+  rawConfigText: string | null,
 ): ProviderConfigPreview | null => {
   if (!request || request.resource !== "provider" || !parsedConfig) {
     return null;
@@ -79,17 +116,23 @@ const buildProviderConfigPreview = (
         ? { kind: "claude", env }
         : { kind: "generic", raw: parsedConfig };
     }
-    case "codex": {
+    case "codex":
+    case "grokbuild": {
       const auth =
         parsedConfig.auth &&
         typeof parsedConfig.auth === "object" &&
         !Array.isArray(parsedConfig.auth)
           ? (parsedConfig.auth as Record<string, unknown>)
           : {};
+      // 整份就是 config.toml 时直接展示原文
       const tomlConfig =
-        typeof parsedConfig.config === "string" ? parsedConfig.config : "";
+        typeof parsedConfig.config === "string"
+          ? parsedConfig.config
+          : request.configFormat === "toml"
+            ? (rawConfigText ?? "")
+            : "";
       return Object.keys(auth).length > 0 || tomlConfig
-        ? { kind: "codex", auth, tomlConfig }
+        ? { kind: "toml", app: request.app, auth, tomlConfig }
         : { kind: "generic", raw: parsedConfig };
     }
     case "gemini":
@@ -136,11 +179,25 @@ export function DeepLinkImportDialog() {
   const [rawValue, setRawValue] = useState("");
   const [request, setRequest] = useState<DeepLinkImportRequest | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  // 「导入后立即切换 / 添加到应用 / 启用」开关：链接里的 enabled 只是初始值
+  const [activateAfterImport, setActivateAfterImport] = useState(false);
+  // 当前显示的请求：导入是异步的，期间可能来了新链接把确认框换掉，
+  // 导入结束时只在确认框仍显示这条请求时才关闭，否则新链接的确认框会被一起关掉
+  const shownRequestRef = useRef<DeepLinkImportRequest | null>(null);
+  // 每次解析递增：合并配置完成时如果已经来了更新的链接，旧结果不能把新的换掉
+  const parseSeqRef = useRef(0);
+
+  const showRequest = (next: DeepLinkImportRequest | null) => {
+    shownRequestRef.current = next;
+    setRequest(next);
+  };
 
   const resetState = () => {
+    parseSeqRef.current += 1;
     setRawValue("");
-    setRequest(null);
+    showRequest(null);
     setParseError(null);
+    setActivateAfterImport(false);
     setIsImporting(false);
     setIsParsing(false);
   };
@@ -152,27 +209,32 @@ export function DeepLinkImportDialog() {
       return;
     }
 
+    const seq = ++parseSeqRef.current;
     setIsParsing(true);
     try {
       const parsed = parseDeepLinkUrl(trimmed);
       setRawValue(trimmed);
       setParseError(null);
-      setRequest(parsed);
+      // 与请求一起初始化，避免弹窗先显示旧开关状态
+      setActivateAfterImport(initialActivation(parsed));
+      showRequest(parsed);
       setOpen(true);
 
       try {
         const merged = await mergeDeepLinkConfig(parsed);
-        setRequest(merged);
+        if (seq === parseSeqRef.current) showRequest(merged);
       } catch (error) {
-        toast.error(t("deeplink.configMergeError"), {
-          description: extractErrorMessage(error),
-          closeButton: true,
-        });
+        if (seq === parseSeqRef.current) {
+          toast.error(t("deeplink.configMergeError"), {
+            description: extractErrorMessage(error),
+            closeButton: true,
+          });
+        }
       }
     } catch (error) {
       const message = extractErrorMessage(error);
       setRawValue(trimmed);
-      setRequest(null);
+      showRequest(null);
       setParseError(message);
       setOpen(true);
       toast.error(t("deeplink.parseError"), {
@@ -180,7 +242,7 @@ export function DeepLinkImportDialog() {
         closeButton: true,
       });
     } finally {
-      setIsParsing(false);
+      if (seq === parseSeqRef.current) setIsParsing(false);
     }
   };
 
@@ -211,17 +273,18 @@ export function DeepLinkImportDialog() {
       window.removeEventListener(OPEN_EVENT, handler as EventListener);
   }, []);
 
-  const parsedConfig = useMemo(() => {
+  const configPayload = useMemo(() => {
     if (!request) {
       return null;
     }
 
     try {
-      return parseDeepLinkConfigObject(request);
+      return decodeDeepLinkConfig(request);
     } catch {
       return null;
     }
   }, [request]);
+  const parsedConfig = configPayload?.value ?? null;
 
   const decodedPromptContent = useMemo(() => {
     return decodeDeeplinkPayload(request?.content, decodeBase64Utf8);
@@ -271,9 +334,25 @@ export function DeepLinkImportDialog() {
   }, [request?.apps, request?.resource]);
 
   const providerConfigPreview = useMemo(
-    () => buildProviderConfigPreview(request, parsedConfig),
-    [parsedConfig, request],
+    () =>
+      buildProviderConfigPreview(
+        request,
+        parsedConfig,
+        configPayload?.text ?? null,
+      ),
+    [configPayload, parsedConfig, request],
   );
+
+  // 主地址是套餐地址且链接没带脚本时，按套餐额度查询（与导入逻辑同一条规则）
+  const codingPlan = useMemo(() => {
+    if (request?.resource !== "provider" || request.usageScript) {
+      return undefined;
+    }
+    const id = linkCodingPlanProvider(request);
+    return id ? CODING_PLAN_PROVIDERS.find((cp) => cp.id === id) : undefined;
+  }, [request]);
+  const usageEnabledAfterImport = request ? usageWillBeEnabled(request) : false;
+  const additiveApp = isAdditiveLinkApp(request?.app);
 
   const handleParse = () => {
     void parseAndOpen(rawValue);
@@ -286,13 +365,31 @@ export function DeepLinkImportDialog() {
 
     setIsImporting(true);
     try {
-      const result = await importFromDeepLink(request);
+      // 供应商和提示词的「立即生效」由用户在确认框里决定，覆盖链接里的值
+      const payload =
+        request.resource === "provider" || request.resource === "prompt"
+          ? { ...request, enabled: activateAfterImport }
+          : request;
+      const result = await importFromDeepLink(payload);
 
       if (result.type === "provider") {
         await queryClient.invalidateQueries({
           queryKey: ["providers"],
           refetchType: "all",
         });
+        // 累加式应用导入后会写进应用配置，「已添加」状态和运行时模型列表都要重新读
+        if (request.app === "opencode") {
+          await queryClient.invalidateQueries({
+            queryKey: ["opencodeLiveProviderIds"],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["opencode", "runtime-models"],
+          });
+        } else if (request.app === "pi") {
+          await queryClient.invalidateQueries({
+            queryKey: ["piLiveProviderIds"],
+          });
+        }
         toast.success(t("deeplink.importSuccess"), {
           description: t("deeplink.importSuccessDescription", {
             name: request.name,
@@ -345,8 +442,11 @@ export function DeepLinkImportDialog() {
         });
       }
 
-      setOpen(false);
-      resetState();
+      // 导入期间来了新链接把确认框换掉时，不能把新链接的确认框一起关掉
+      if (shownRequestRef.current === request) {
+        setOpen(false);
+        resetState();
+      }
     } catch (error) {
       toast.error(t("deeplink.importError"), {
         description: extractErrorMessage(error),
@@ -446,7 +546,9 @@ export function DeepLinkImportDialog() {
                           <div
                             key={`${endpoint}-${index}`}
                             className={`${
-                              index === 0 ? "font-medium" : "text-muted-foreground"
+                              index === 0
+                                ? "font-medium"
+                                : "text-muted-foreground"
                             } ${
                               classifyEndpoint(endpoint)
                                 ? "text-yellow-700 dark:text-yellow-400"
@@ -506,6 +608,15 @@ export function DeepLinkImportDialog() {
                       mono
                     />
                   )}
+                  {request.apiFormat && (
+                    <InfoRow
+                      label={t("deeplink.apiFormat")}
+                      value={
+                        API_FORMAT_LABELS[request.apiFormat] ??
+                        request.apiFormat
+                      }
+                    />
+                  )}
                   {request.notes && (
                     <InfoRow
                       label={t("deeplink.notes")}
@@ -531,15 +642,18 @@ export function DeepLinkImportDialog() {
                   )}
                   {providerConfigPreview && (
                     <PreviewCard title={t("deeplink.configDetails")}>
-                      {providerConfigPreview.kind === "codex" ? (
+                      {providerConfigPreview.kind === "toml" ? (
                         <div className="space-y-3">
-                          {Object.keys(providerConfigPreview.auth).length > 0 && (
+                          {Object.keys(providerConfigPreview.auth).length >
+                            0 && (
                             <div className="space-y-2">
                               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                 {t("deeplink.configAuth")}
                               </div>
                               <ConfigEntryList
-                                entries={Object.entries(providerConfigPreview.auth)}
+                                entries={Object.entries(
+                                  providerConfigPreview.auth,
+                                )}
                               />
                             </div>
                           )}
@@ -554,6 +668,12 @@ export function DeepLinkImportDialog() {
                                   ? "..."
                                   : ""}
                               </pre>
+                              {/* 导入时按白名单收（lib/deeplink/tomlLink.ts），原文不会整份导入 */}
+                              <p className="text-xs text-muted-foreground">
+                                {providerConfigPreview.app === "codex"
+                                  ? t("deeplink.codexConfigScopeHint")
+                                  : t("deeplink.grokConfigScopeHint")}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -564,15 +684,17 @@ export function DeepLinkImportDialog() {
                         />
                       ) : (
                         <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
-                          {JSON.stringify(providerConfigPreview.raw, null, 2).slice(
-                            0,
-                            1200,
-                          )}
+                          {JSON.stringify(
+                            providerConfigPreview.raw,
+                            null,
+                            2,
+                          ).slice(0, 1200)}
                         </pre>
                       )}
                     </PreviewCard>
                   )}
                   {(request.usageScript ||
+                    codingPlan ||
                     request.usageEnabled !== undefined ||
                     request.usageApiKey ||
                     request.usageBaseUrl ||
@@ -581,13 +703,23 @@ export function DeepLinkImportDialog() {
                     request.usageAutoInterval !== undefined) && (
                     <PreviewCard title={t("deeplink.usageScript")}>
                       <div className="space-y-3">
+                        {/*
+                          与导入逻辑 `usageWillBeEnabled` 严格对齐：链接写了就照办，
+                          没写时带脚本或是套餐地址即启用。徽章必须显示实际会发生的事。
+                        */}
                         <InfoRow
                           label={t("deeplink.usageScript")}
-                          value={
-                            request.usageEnabled === true
+                          value={`${
+                            usageEnabledAfterImport
                               ? t("deeplink.usageScriptEnabled")
                               : t("deeplink.usageScriptDisabled")
-                          }
+                          }${
+                            codingPlan
+                              ? ` · ${t("deeplink.usageCodingPlan", {
+                                  name: codingPlan.label,
+                                })}`
+                              : ""
+                          }`}
                         />
                         {request.usageScript && (
                           <div className="space-y-1">
@@ -654,6 +786,29 @@ export function DeepLinkImportDialog() {
                       </div>
                     </PreviewCard>
                   )}
+                  {/*
+                    导入后是否立即生效由用户决定，链接里的 enabled 只是初始值。切换式应用打开后
+                    会立即切到这家，客户端流量随之改走链接里的地址，所以打开时要给出提示。
+                  */}
+                  <ActivationSwitch
+                    id="deeplink-activate-after-import"
+                    label={
+                      additiveApp && request.app
+                        ? request.app === "pi"
+                          ? t("deeplink.enableInPiAfterImport")
+                          : t("deeplink.addToAppAfterImport", {
+                              app: getAppLabel(request.app),
+                            })
+                        : t("deeplink.switchAfterImport")
+                    }
+                    checked={activateAfterImport}
+                    onCheckedChange={setActivateAfterImport}
+                  />
+                  {activateAfterImport && !additiveApp && (
+                    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300">
+                      {t("deeplink.providerEnabledWarning")}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -682,7 +837,13 @@ export function DeepLinkImportDialog() {
                       {decodedPromptContent.length > 1200 ? "..." : ""}
                     </pre>
                   </PreviewCard>
-                  {request.enabled && (
+                  <ActivationSwitch
+                    id="deeplink-prompt-enable-after-import"
+                    label={t("deeplink.prompt.enableAfterImport")}
+                    checked={activateAfterImport}
+                    onCheckedChange={setActivateAfterImport}
+                  />
+                  {activateAfterImport && (
                     <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300">
                       {t("deeplink.prompt.enabledWarning")}
                     </div>
@@ -745,7 +906,9 @@ export function DeepLinkImportDialog() {
                               key={id}
                               className="rounded-lg border border-border bg-background/70 p-3"
                             >
-                              <div className="mb-1 text-sm font-medium">{id}</div>
+                              <div className="mb-1 text-sm font-medium">
+                                {id}
+                              </div>
                               <div className="space-y-1">
                                 {server?.command !== undefined && (
                                   <McpRow
@@ -771,19 +934,26 @@ export function DeepLinkImportDialog() {
                                     risk={classifyEndpoint(server.url)}
                                   />
                                 )}
-                                {Object.entries(env).map(([key, value], index) => (
-                                  <McpRow
-                                    key={key}
-                                    label={index === 0 ? t("deeplink.mcp.env") : ""}
-                                    value={`${key}=${maskValue(
-                                      key,
-                                      formatPreviewValue(value),
-                                    )}`}
-                                    risk={classifyEnvKey(key)}
-                                  />
-                                ))}
+                                {Object.entries(env).map(
+                                  ([key, value], index) => (
+                                    <McpRow
+                                      key={key}
+                                      label={
+                                        index === 0 ? t("deeplink.mcp.env") : ""
+                                      }
+                                      value={`${key}=${maskValue(
+                                        key,
+                                        formatPreviewValue(value),
+                                      )}`}
+                                      risk={classifyEnvKey(key)}
+                                    />
+                                  ),
+                                )}
                                 {!server && (
-                                  <McpRow value={formatPreviewValue(spec)} label="" />
+                                  <McpRow
+                                    value={formatPreviewValue(spec)}
+                                    label=""
+                                  />
                                 )}
                               </div>
                             </div>
@@ -909,6 +1079,27 @@ function InfoRow({
   );
 }
 
+function ActivationSwitch({
+  id,
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </label>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
 function PreviewCard({
   title,
   children,
@@ -948,11 +1139,7 @@ function McpRow({
   );
 }
 
-function ConfigEntryList({
-  entries,
-}: {
-  entries: Array<[string, unknown]>;
-}) {
+function ConfigEntryList({ entries }: { entries: Array<[string, unknown]> }) {
   return (
     <div className="space-y-1.5">
       {entries.map(([key, value]) => (

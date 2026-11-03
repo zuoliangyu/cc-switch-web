@@ -238,4 +238,55 @@ describe("OpenCode built-in provider editing", () => {
       );
     },
   );
+
+  describe("旧版深链接导入的 Unicode ID", () => {
+    const providerId = "中文供应商-123";
+    const config = {
+      npm: "@ai-sdk/openai-compatible",
+      options: {
+        baseURL: "https://example.com/v1",
+        apiKey: "public-test-key",
+      },
+      models: { model: { name: "Model" } },
+    };
+
+    it.each([true, false])("原样保存已有 ID（live: %s）", async (live) => {
+      server.use(
+        http.post("http://runtime.local/get_opencode_live_provider_ids", () =>
+          HttpResponse.json(live ? [providerId] : []),
+        ),
+      );
+      const onSubmit = renderOverride(config, providerId);
+      await screen.findByDisplayValue(providerId);
+      expect(
+        screen.queryByText("opencode.providerKeyInvalid"),
+      ).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "save-provider" }),
+        ).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "save-provider" }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      expect(onSubmit.mock.calls[0][0].providerKey).toBe(providerId);
+      expect(JSON.parse(onSubmit.mock.calls[0][0].settingsConfig)).toEqual(
+        config,
+      );
+    });
+
+    it("改成另一个不合法的 ID 仍然拒绝", async () => {
+      const onSubmit = renderOverride(config, providerId);
+      await waitFor(() =>
+        expect(screen.getByDisplayValue(providerId)).toBeEnabled(),
+      );
+      fireEvent.change(document.getElementById("opencode-key")!, {
+        target: { value: "another--invalid-id" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "save-provider" }));
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith("opencode.providerKeyInvalid"),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
 });

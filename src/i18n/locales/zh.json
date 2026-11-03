@@ -3508,6 +3508,7 @@
     "haikuModel": "Haiku 模型",
     "sonnetModel": "Sonnet 模型",
     "opusModel": "Opus 模型",
+    "apiFormat": "接口格式",
     "notes": "备注",
     "configSource": "配置来源",
     "configEmbedded": "内嵌配置",
@@ -3517,9 +3518,12 @@
     "configDetails": "配置预览",
     "configAuth": "认证配置",
     "configToml": "TOML 配置",
+    "codexConfigScopeHint": "只导入其中属于这个供应商的设置（地址、鉴权、模型、推理强度等）；[features]、MCP、权限这类全局设置不会导入。",
+    "grokConfigScopeHint": "只导入 [models] default 指向的那张模型表（显示名、说明、接口类型、窗口等）；地址和 Key 用链接参数，其他模型表不导入。",
     "usageScript": "用量查询",
     "usageScriptEnabled": "已启用",
     "usageScriptDisabled": "未启用",
+    "usageCodingPlan": "套餐额度：{{name}}",
     "usageScriptCode": "脚本代码",
     "usageScriptWarning": "这是一段 JavaScript 代码，启用后会在查询用量时执行。请确认来源可信后再导入。",
     "usageApiKey": "用量 API Key",
@@ -3529,6 +3533,10 @@
     "usageAutoInterval": "自动查询",
     "usageAutoIntervalValue": "每 {{minutes}} 分钟",
     "warning": "导入后会立即写入本地配置，请先确认链接来源可信。",
+    "providerEnabledWarning": "导入后将立即切换到此供应商，客户端请求会改发到上面的地址",
+    "switchAfterImport": "导入后立即切换到这个供应商",
+    "addToAppAfterImport": "导入后立即添加到 {{app}} 配置",
+    "enableInPiAfterImport": "导入后立即在 Pi 中启用",
     "import": "导入",
     "importing": "导入中...",
     "importSuccess": "供应商导入成功",
@@ -3553,7 +3561,8 @@
       "name": "提示词名称",
       "description": "描述",
       "contentPreview": "内容预览",
-      "enabledWarning": "导入后将立即启用此提示词，其他提示词将被禁用"
+      "enabledWarning": "导入后将立即启用此提示词，其他提示词将被禁用",
+      "enableAfterImport": "导入后立即启用"
     },
     "mcp": {
       "title": "MCP Server 配置",
@@ -3711,7 +3720,7 @@
     "balance": "余额 {{value}}",
     "balanceUsedUp": "余额已用完",
     "planExpired": "套餐已过期",
-    "failed": "额度没查到",
+    "failed": "额度查询失败",
     "reason": {
       "loginExpired": "登录已过期",
       "tokenRefreshPending": "令牌待刷新"

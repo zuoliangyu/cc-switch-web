@@ -494,6 +494,13 @@ export async function invoke<T>(
         args?.provider as any,
         args?.addToLive as boolean | undefined,
       )) as T;
+    case "add_provider_without_switching":
+      return (await addWebProvider(
+        args?.app as AppId,
+        args?.provider as any,
+        undefined,
+        true,
+      )) as T;
     case "update_provider":
       return (await updateWebProvider(
         args?.app as AppId,

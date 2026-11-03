@@ -373,18 +373,18 @@
 | `96d636ca` | v4.0.10 | fix(usage): stop treating empty OpenRouter credits as expired (#8175) | 1c 会话/用量导入 | 1c：OpenRouter 余额为空不再判为过期；解析拆为 parse_openrouter_balance 并校验金额 | 已迁移 |
 | `99277921` | v4.0.10 | fix(settings): use confirmed directories for unrelated autosaves (#8023) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `fac8bfd8` | v4.0.10 | fix(installer): don't recreate a deleted desktop shortcut on MSI upgrade | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `98222d19` | v4.0.10 | fix(deeplink): stop losing links on cold start and tighten import checks | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`commands/deeplink.rs`、`deeplink/mod.rs`等 6 个 | 待迁移 |
-| `450bc039` | v4.0.10 | feat(deeplink): enable imported usage scripts by default | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/mod.rs`、`deeplink/provider.rs`等 4 个 | 待迁移 |
-| `11e1326b` | v4.0.10 | fix(deeplink): keep a Codex link's provider config instead of rebuilding a fixed template | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/codex_link.rs`、`deeplink/mod.rs`等 5 个 | 待迁移 |
+| `98222d19` | v4.0.10 | fix(deeplink): stop losing links on cold start and tighten import checks | 1d 资源/设置/工具 | 1d：深链导入检查收紧（解析阶段拒绝 configUrl，Web 不再拉取远程配置；提示词接受 mcode；MCP apps 接受 grokbuild/hermes/mcode，Web 的 McpApps 无 pi 未加；立即切换时提示供应商启用；按解析序号丢弃过期合并结果）；冷启动暂存、系统协议投递、托盘刷新不适用 | 部分迁移 |
+| `450bc039` | v4.0.10 | feat(deeplink): enable imported usage scripts by default | 1d 资源/设置/工具 | 1d：深链带用量脚本时默认启用用量查询，usageEnabled=false 仍生效 | 已迁移 |
+| `11e1326b` | v4.0.10 | fix(deeplink): keep a Codex link's provider config instead of rebuilding a fixed template | 1d 资源/设置/工具 | 1d：Codex 深链配置按白名单保留（tomlLink.ts），路由统一为 custom，model_catalog_url 须与 endpoint 同源，拒绝 auth/aws/gateway_oauth/env_http_headers | 已迁移 |
 | `c63c702c` | v4.0.10 | fix(proxy): bump the Claude Code haiku alias to claude-haiku-5-5 | 1b 代理协议 | 1b：Claude Code haiku 别名升级为 claude-haiku-5-5 | 已迁移 |
-| `db93ac20` | v4.0.10 | fix(grokbuild): point session_summary at the active provider and keep a link's model profile | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/grok_link.rs`、`deeplink/mod.rs`等 5 个 | 待迁移 |
+| `db93ac20` | v4.0.10 | fix(grokbuild): point session_summary at the active provider and keep a link's model profile | 1d 资源/设置/工具 | 1d：Grok Build 深链只保留默认模型表并拒绝敏感字段；live/project/grok.rs 的 session_summary 跟随目标表 | 已迁移 |
 | `e0a03184` | v4.0.10 | chore(presets): point OpenModel sign-up links at the cc-switch referral URL | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `85e574b4` | v4.0.10 | chore(presets): show YYLX as 鱼鱼连线 in Chinese | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `16e7ff1c` | v4.0.10 | feat(deeplink): let links declare the API format, import Pi providers, and leave activation to the user | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/mod.rs`、`deeplink/parser.rs`等 7 个 | 待迁移 |
+| `16e7ff1c` | v4.0.10 | feat(deeplink): let links declare the API format, import Pi providers, and leave activation to the user | 1d 资源/设置/工具 | 1d：深链供应商支持 grokbuild/hermes/pi，apiFormat 按应用换算，拒绝累加式应用的展开写法；确认框三个开关；新增 add_without_switching 与 POST /api/providers/:app 的 withoutSwitching | 已迁移 |
 | `6af00ecb` | v4.0.10 | docs(deeplink): add a Chinese integration guide for site owners | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `21203803` | v4.0.10 | feat(providers): upload a custom provider icon | 5a 供应商与全局 UI | 自定义供应商图标上传与“我的图标”库；浏览器上传，存储走 Web 数据目录与备份；需新建或映射：`deeplink/mod.rs`、`deeplink/parser.rs`等 6 个 | 待迁移 |
 | `23c0a63f` | v4.0.10 | fix(usage): stop treating an empty Novita balance as an expired plan | 1c 会话/用量导入 | 1c：Novita 余额为空不再判为套餐过期 | 已迁移 |
-| `bee47fdf` | v4.0.10 | feat(deeplink): let provider links bring their own icon via iconUrl | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`commands/deeplink.rs`、`deeplink/icon_fetch.rs`等 8 个 | 待迁移 |
+| `bee47fdf` | v4.0.10 | feat(deeplink): let provider links bring their own icon via iconUrl | 1d 资源/设置/工具 | 依赖上游 21203803 自定义图标上传（data URI 渲染/校验/备份清洗），Web 无此功能；服务端代下载另增 SSRF 面，Web 忽略 iconUrl 退回内置图标 | 不适用 |
 | `7577ca95` | v4.0.10 | docs(deeplink): rework the link generator and document iconUrl | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `382c0e96` | v4.0.10 | feat(usage): add a Sub2API usage query template | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `fb719d99` | v4.0.10 | docs(usage): document the Sub2API template and add it to the link generator | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
@@ -408,7 +408,7 @@
 | `84464e7e` | v4.0.11 | feat(presets): add StreamLake China (Vanchin) presets and fix the intl OpenAI endpoint | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3c918cd0` | v4.0.11 | feat(presets): add AIComing presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c859026d` | v4.0.11 | feat(usage): enable coding-plan usage by default for every app | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `b13797e3` | v4.0.11 | feat(deeplink): enable coding-plan usage by default on import | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/provider.rs`、`deeplink/tests.rs`等 3 个 | 待迁移 |
+| `b13797e3` | v4.0.11 | feat(deeplink): enable coding-plan usage by default on import | 1d 资源/设置/工具 | 1d：套餐地址且无脚本时默认启用 token_plan 额度查询；适用范围沿用 Web 新建供应商规则（detectCodingPlanProviderForApp），不采用上游“所有应用”规则 | 部分迁移 |
 | `3700af35` | v4.0.11 | feat(presets): add SoruxGPT Coding Plan for Claude Code and Codex | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `e48b84d6` | v4.0.11 | chore(presets): move AIGoCode to the .net site and .dev API host | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `6b4c09ac` | v4.0.11 | fix(mcp): show error and warning toasts for bulk failures | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -507,11 +507,11 @@
 | `e97fc33d` | v4.0.14 | fix(misc): only treat shell command-missing output as not installed in WSL probe (#8167) | 1d 资源/设置/工具 | 1d：WSL 探测只把 shell 的命令缺失输出视为未安装（tool_management.rs） | 已迁移 |
 | `09bce301` | v4.0.14 | feat(pricing): seed Gemini 4 Argon (#8356) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `e1864ac1` | v4.0.14 | fix(usage): make exact model pricing lookup case-insensitive (#8414) | 1c 会话/用量导入 | 1c：精确定价查询大小写不敏感 | 已迁移 |
-| `8d643bde` | v4.0.14 | fix(deeplink): refresh OpenCode live state after provider import (#8382) | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`components/DeepLinkImportDialog.tsx` | 待迁移 |
+| `8d643bde` | v4.0.14 | fix(deeplink): refresh OpenCode live state after provider import (#8382) | 1d 资源/设置/工具 | 1d：OpenCode 导入后刷新 live 供应商 ID 与 runtime-models 缓存（Pi 同步刷新） | 已迁移 |
 | `c8dc9206` | v4.0.14 | fix(usage): prefer opencode streamed time for session latency (#8410) | 1c 会话/用量导入 | 1c：OpenCode 会话耗时优先用流式时间 | 已迁移 |
 | `b542627c` | v4.0.14 | fix(usage): skip malformed UTF-8 parent records without hiding read errors (#8360) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `e8880e6f` | v4.0.14 | fix(version): stop false "update available" for dev-build local versions (#8398) | 5a 供应商与全局 UI | 开发版本误报更新；Web 更新提示同样基于版本比较；需新建或映射：`lib/version.test.ts` | 待迁移 |
-| `daf442e5` | v4.0.14 | fix(opencode): keep Unicode-named deep-link imports editable (#8381) | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/provider.rs` | 待迁移 |
+| `daf442e5` | v4.0.14 | fix(opencode): keep Unicode-named deep-link imports editable (#8381) | 1d 资源/设置/工具 | 1d：OpenCode 导入生成 ASCII slug + 随机后缀 ID；编辑时保留旧 ID 不报不合法 | 已迁移 |
 | `85ae0c7b` | v4.0.14 | refactor(usage): route usage amounts through one money formatter | 5b 用量/额度 UI | 需新建或映射：`components/shell/Sidebar.tsx`、`components/usage/UsageHero.tsx`等 3 个 | 待迁移 |
 | `4e20fad5` | v4.0.14 | feat(usage): show usage amounts in a chosen currency | 5b 用量/额度 UI | 需新建或映射：`components/shell/Sidebar.tsx`、`components/usage/UsageDisplaySection.tsx`等 5 个 | 待迁移 |
 | `8f3337d9` | v4.0.14 | feat(usage): choose what the sidebar Today label shows | 5b 用量/额度 UI | 需新建或映射：`components/shell/Sidebar.tsx`、`components/usage/UsageDisplaySection.tsx`等 3 个 | 待迁移 |
@@ -593,7 +593,7 @@
 | `2c2d6c43` | v4.0.16 | fix(codex): show the on-disk login in the official card's auth.json editor | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `8e51101e` | v4.0.16 | fix(claude-desktop): publish catalog ids for 5.5 targets in route mode | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `6c36d68a` | v4.0.16 | fix(codex): keep the ChatGPT login when CC Switch detaches from routing | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `8b09732a` | v4.0.16 | fix(usage): don't auto-enable Volcengine plan quota without AccessKey | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`deeplink/provider.rs`、`deeplink/tests.rs`等 3 个 | 待迁移 |
+| `8b09732a` | v4.0.16 | fix(usage): don't auto-enable Volcengine plan quota without AccessKey | 1d 资源/设置/工具 | Web 套餐列表无 Volcengine/ZenMux，codingPlanEnabledByDefault 无需排除对象 | 不适用 |
 | `5fa00079` | v4.0.16 | fix(icons): soften the macOS app icon tile to light grey | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `f3d9e8c6` | v4.0.16 | fix(settings): render the About card logo from the vector mark | 5a 供应商与全局 UI | 关于页 logo 改矢量；上游删除 app-icon.png，Web 仍引用 | 待迁移 |
 | `3b1f11b6` | v4.0.16 | fix(detect): find fnm-managed Node CLIs on Windows | 1d 资源/设置/工具 | 1d：Windows 有效 PATH 末尾追加 fnm 默认 Node 别名目录（misc.rs 与 tool_management.rs 两处） | 已迁移 |
@@ -704,7 +704,7 @@
 | `b5aa7fbb` | v4.0.19 | fix(agy): show Gemini quota when querying Google directly | 2c Antigravity | 需新建或映射：`services/agy_account/quota.rs` | 待迁移 |
 | `2fbd9c70` | v4.0.19 | fix(hermes): launch the dashboard inside WSL when Hermes lives there | 1d 资源/设置/工具 | 1d：Hermes 位于 WSL 时在对应发行版的登录 shell 里启动 dashboard | 已迁移 |
 | `7ecce7c7` | v4.0.19 | fix(proxy): carry encrypted-only reasoning as empty thinking for Claude clients | 1b 代理协议 | 1b：只有密文的推理以空 thinking 交给 Claude 客户端 | 已迁移 |
-| `10e0aa23` | v4.0.19 | fix(deeplink): don't let a finished import close a newer link's confirmation | 1d 资源/设置/工具 | 深链导入：Web 由前端 deeplink 解析/导入器处理，按 TS 实现适配；协议唤起与冷启动不适用；需新建或映射：`components/DeepLinkImportDialog.tsx` | 待迁移 |
+| `10e0aa23` | v4.0.19 | fix(deeplink): don't let a finished import close a newer link's confirmation | 1d 资源/设置/工具 | 1d：导入完成只关闭仍在显示的请求，不误关新到链接的确认框 | 已迁移 |
 | `9cb6b6d7` | v4.0.19 | fix(agy): run background agy commands without a console window on Windows | 2c Antigravity | 需新建或映射：`agy_config.rs`、`services/subscription_agy.rs` | 待迁移 |
 | `50e091b0` | v4.0.19 | fix(usage): step 7/14/30-day presets back by calendar days across DST | 5b 用量/额度 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `e53ca7e8` | v4.0.19 | fix(usage): tighten request log column spacing | 5b 用量/额度 UI | 需新建或映射：`components/usage/usageTable.ts` | 待迁移 |
@@ -734,7 +734,7 @@
 | `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 需新建或映射：`services/session_usage_agy.rs`、`services/session_usage_agy/native_models.rs` | 待迁移 |
 | `5bc562ce` | v4.0.20 | feat(apps): group the apps page into installed and not installed sections | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `72b056f6` | v4.0.20 | fix(usage): show the balance amount even when it is used up | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 需新建或映射：`deeplink/provider.rs` | 待迁移 |
+| `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 1d：额度失败文案改为“额度查询失败”；托盘部分不适用 | 已迁移 |
 | `b71141a8` | v4.0.20 | feat(apps): drag to reorder installed apps, sidebar follows the order | 5a 供应商与全局 UI | 应用排序依赖 Sidebar 与 appConfig 的 orderAppIds，随 5a 处理 | 待迁移 |
 | `ba6a8a55` | v4.0.20 | fix(apps): group Claude Desktop by whether it is installed | 1d 资源/设置/工具 | 1d：Claude Desktop 状态新增 installed（按数据目录/应用包推断）；Web 应用页尚无按安装分组，界面分组随 5a | 已迁移 |
 | `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
@@ -986,3 +986,11 @@
   - 其他：升级 npm 工具前检查 Node 版本；npm 12 下允许 OpenCode/Grok Build 的 postinstall；只在 `--version` 真正报错时重装 Codex；存在但不输出版本的 CLI 报告为不可运行；环境检查不拉起 OpenCode Desktop；搜索路径改用 IndexSet 去重（`76f99d41` 由不适用改为已迁移）。Web 的 `run_detected_tool_command_with_timeout` 换成上游实现，补上 WSL 内执行与批处理 canonical 路径处理。
   - 生命周期后端随最终版本已包含 Kimi/Antigravity/Oh My Pi/DeepSeek Harness，前端工具列表在 2b–2e 接入。
   - 验证：`cargo test --lib` 3031 项通过、6 项忽略（`omp_search_paths_include_the_bun_global_bin` 在 PATH 含 `~/.bun/bin` 的机器上属环境性失败，去掉该 PATH 项后通过）；前端全量 Vitest 149 个文件 1631 项通过、2 项跳过；`tsc --noEmit` 通过。
+- 2026-11-04：批次 1d 第三部分（深链导入，12 项）。
+  - 解析阶段直接拒绝 `configUrl`：Web 不再在浏览器内拉取远程配置，与上游收紧后的行为一致（Web 原有行为变化）。
+  - Codex/Grok Build 链接配置按白名单保留（新增 `src/lib/deeplink/tomlLink.ts`、`linkRules.ts`），拒绝鉴权/网关/环境头等敏感字段；供应商链接新增 grokbuild/hermes/pi，`apiFormat` 按应用换算，拒绝累加式应用的环境/文件展开写法。
+  - 确认框新增“导入后立即切换 / 添加到应用 / 启用提示词”；后端新增 `ProviderService::add_without_switching`，`POST /api/providers/:app` 支持 `withoutSwitching`。
+  - 用量：带脚本时默认启用用量查询；套餐地址无脚本时默认启用 token_plan 额度（适用范围沿用 Web 新建供应商规则）；额度失败文案统一为“额度查询失败”。
+  - OpenCode：导入 ID 改为 ASCII slug + 随机后缀，编辑时保留旧 ID（与 1d 第一部分的 V2 原生 ID 豁免合并为上游最终条件）；导入后刷新 live ID 与运行时模型缓存。
+  - 不适用：`bee47fdf`（依赖自定义图标上传，且服务端代下载增加 SSRF 面）、`8b09732a`（Web 套餐列表无对应项）。
+  - 验证：`cargo test --lib` 3033 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 150 个文件中 1673 项通过、2 项跳过，1 项失败为 `SessionManagerPage` “今天”分组在 0–2 点运行时的既有时间相关问题（夹具用 `now - 1h`），与本次改动无关。

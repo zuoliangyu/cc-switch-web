@@ -1914,6 +1914,49 @@ impl ProviderService {
         Ok(true)
     }
 
+    /// 只把供应商存进列表，不写客户端配置、不动当前指针（切换式应用）。
+    ///
+    /// `add` 在还没有当前供应商时会让新的这家直接生效；深链接导入时用户关掉了「导入后立即
+    /// 切换」，就不能这样，交给用户之后自己切换。累加式应用没有「切换」，等同于不写进应用配置的
+    /// `add`。
+    pub fn add_without_switching(
+        state: &AppState,
+        app_type: AppType,
+        provider: Provider,
+    ) -> Result<bool, AppError> {
+        if app_type.is_additive_mode() {
+            return Self::add(state, app_type, provider, false);
+        }
+        if !matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+        ) {
+            return Self::add(state, app_type, provider, true);
+        }
+        // 和切换、编辑器保存互斥：等着的切换不能看到只存了一半的行
+        let _service = futures::executor::block_on(crate::mode::controller::lock_service());
+        let _guard =
+            futures::executor::block_on(state.proxy_service.lock_switch_for_app(app_type.as_str()));
+        crate::mode::operation::settle(state.db.as_ref(), app_type.as_str())?;
+        if state
+            .db
+            .get_provider_by_id(&provider.id, app_type.as_str())?
+            .is_some()
+        {
+            return Err(AppError::Message(format!("供应商 {} 已存在", provider.id)));
+        }
+        let mut provider = provider;
+        // 与 save_claude / save_codex / save_gemini / save_grok 新增时的规范化和校验一致
+        Self::normalize_provider_if_claude(&app_type, &mut provider);
+        Self::validate_provider_settings(&app_type, &provider)?;
+        provider
+            .meta
+            .get_or_insert_with(Default::default)
+            .common_config_enabled = Some(true);
+        state.db.save_provider(app_type.as_str(), &provider)?;
+        Ok(true)
+    }
+
     /// Add a new provider
     pub fn add(
         state: &AppState,

@@ -35,7 +35,7 @@ export interface AccountQuotaRow {
   line: QuotaLine;
 }
 
-/** 额度列要画的东西：成功按档画条；查询失败写「额度没查到」+ 原因；null 表示不显示 */
+/** 额度列要画的东西：成功按档画条；查询失败写「额度查询失败」+ 原因；null 表示不显示 */
 export type AccountQuotaState =
   | { kind: "rows"; rows: AccountQuotaRow[] }
   | { kind: "failed"; reason: string }
@@ -122,7 +122,7 @@ export function AccountQuotaColumn({
         {state.kind === "failed" && (
           <>
             <span className="h-[18px] text-xs font-medium text-destructive">
-              {t("quota.failed", { defaultValue: "额度没查到" })}
+              {t("quota.failed", { defaultValue: "额度查询失败" })}
             </span>
             <span
               className="truncate text-xs text-muted-foreground"

@@ -105,6 +105,9 @@ struct ValueRequest {
 struct AddProviderRequest {
     provider: Provider,
     add_to_live: Option<bool>,
+    /// 只保存行、不切换（切换式应用没有当前供应商时 `add` 会让新的这家直接生效）
+    #[serde(default)]
+    without_switching: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3538,6 +3541,13 @@ async fn add_provider(
     Json(payload): Json<AddProviderRequest>,
 ) -> Result<Json<bool>, ApiError> {
     blocking_json(move || {
+        if payload.without_switching {
+            return crate::commands::add_provider_without_switching_internal(
+                state.app_state.as_ref(),
+                app,
+                payload.provider,
+            );
+        }
         crate::commands::add_provider_internal(
             state.app_state.as_ref(),
             app,

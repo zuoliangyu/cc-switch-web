@@ -97,12 +97,34 @@ export function extractBaseUrlForUsageDetection(
 }
 
 /**
+ * 按 app 判断某个 base_url 命中的 Coding Plan 套餐能否自动启用额度查询；不能时返回 null。
+ *
+ * - Claude app 命中任意 Coding Plan 供应商都可以；其余 app
+ *   仅 OpenCode Go 可以，Codex 额外支持 Command Code
+ * - 新建供应商（`injectCodingPlanUsageScript`）和深链接导入共用这条规则
+ */
+export function detectCodingPlanProviderForApp(
+  appId: string,
+  baseUrl: string | null | undefined,
+): CodingPlanProviderEntry["id"] | null {
+  const codingPlanProvider = detectCodingPlanProvider(baseUrl);
+  if (!codingPlanProvider) return null;
+  if (
+    appId !== "claude" &&
+    codingPlanProvider !== "opencode_go" &&
+    !(appId === "codex" && codingPlanProvider === "command_code")
+  ) {
+    return null;
+  }
+  return codingPlanProvider;
+}
+
+/**
  * 新建供应商时，若 base_url 命中 Coding Plan 路由表，自动把
  * `meta.usage_script` 标记为 token_plan 并启用。
  *
  * - 仅在 `meta.usage_script` 完全缺失时注入，不覆盖已有配置
- * - Claude app 命中任意 Coding Plan 供应商都注入；其余 app
- *   仅对 OpenCode Go 注入，Codex 额外支持 Command Code
+ * - 按 app 的适用范围见 `detectCodingPlanProviderForApp`
  * - code 置空：后端走专用 `coding_plan::get_coding_plan_quota`，不执行 JS 脚本
  */
 export function injectCodingPlanUsageScript<
@@ -117,15 +139,8 @@ export function injectCodingPlanUsageScript<
     appId,
     provider.settingsConfig,
   );
-  const codingPlanProvider = detectCodingPlanProvider(baseUrl);
+  const codingPlanProvider = detectCodingPlanProviderForApp(appId, baseUrl);
   if (!codingPlanProvider) return provider;
-  if (
-    appId !== "claude" &&
-    codingPlanProvider !== "opencode_go" &&
-    !(appId === "codex" && codingPlanProvider === "command_code")
-  ) {
-    return provider;
-  }
 
   const usageScript: UsageScript = {
     enabled: true,

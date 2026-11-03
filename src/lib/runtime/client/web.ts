@@ -1656,10 +1656,13 @@ export async function addWebProvider(
   appId: AppId,
   provider: Provider,
   addToLive?: boolean,
+  withoutSwitching?: boolean,
 ): Promise<boolean> {
   return requestWithBody<boolean>(`/api/providers/${appId}`, "POST", {
     provider,
     addToLive,
+    // 只保存行、不切换（深链接导入关掉「导入后立即切换」时）
+    ...(withoutSwitching ? { withoutSwitching: true } : {}),
   });
 }
 

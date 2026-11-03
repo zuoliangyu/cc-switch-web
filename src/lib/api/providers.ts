@@ -96,6 +96,20 @@ export const providersApi = {
     return await invoke("add_provider", { provider, app: appId, addToLive });
   },
 
+  /**
+   * 只保存供应商行、不切换（切换式应用）。`add` 在还没有当前供应商时会让新的这家直接生效，
+   * 深链接导入时用户关掉了「导入后立即切换」就走这里。
+   */
+  async addWithoutSwitching(
+    provider: Provider,
+    appId: AppId,
+  ): Promise<boolean> {
+    return await invoke("add_provider_without_switching", {
+      provider,
+      app: appId,
+    });
+  },
+
   async update(
     provider: Provider,
     appId: AppId,

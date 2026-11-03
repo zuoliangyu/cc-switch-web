@@ -39,6 +39,16 @@ pub(crate) fn add_provider_internal(
         .map_err(|e| e.to_string())
 }
 
+/// 只保存供应商行、不切换（深链接导入时关掉「导入后立即切换」）
+pub(crate) fn add_provider_without_switching_internal(
+    state: &AppState,
+    app: String,
+    provider: Provider,
+) -> Result<bool, String> {
+    let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
+    ProviderService::add_without_switching(state, app_type, provider).map_err(|e| e.to_string())
+}
+
 pub(crate) fn update_provider_internal(
     state: &AppState,
     app: String,

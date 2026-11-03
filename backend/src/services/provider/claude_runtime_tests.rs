@@ -80,6 +80,35 @@ fn save(
 
 #[test]
 #[serial]
+fn add_without_switching_keeps_the_first_provider_inactive() {
+    // 深链接导入时关掉「导入后立即切换」：首个供应商也只存进列表，不写 live、不设当前
+    let fixture = Fixture::new();
+    let state = &fixture.state;
+    write_live(&json!({"env":{"DEBUG":"1"}}));
+    let row = provider(
+        "link",
+        json!({"env":{"ANTHROPIC_AUTH_TOKEN":"link-key","ANTHROPIC_BASE_URL":"https://api.example.com"}}),
+    );
+    ProviderService::add_without_switching(state, AppType::Claude, row.clone()).unwrap();
+
+    assert!(state
+        .db
+        .get_provider_by_id("link", "claude")
+        .unwrap()
+        .is_some());
+    assert!(state.db.get_current_provider("claude").unwrap().is_none());
+    assert_eq!(read_live(), json!({"env":{"DEBUG":"1"}}));
+    // 同一个 ID 不能被覆盖
+    assert!(ProviderService::add_without_switching(state, AppType::Claude, row).is_err());
+
+    // 对照：普通的 add 会让首个供应商直接生效
+    let other = provider("other", json!({"env":{"ANTHROPIC_AUTH_TOKEN":"other-key"}}));
+    ProviderService::add(state, AppType::Claude, other, true).unwrap();
+    assert_eq!(read_live()["env"]["ANTHROPIC_AUTH_TOKEN"], "other-key");
+}
+
+#[test]
+#[serial]
 fn switching_preserves_globals_and_removes_only_owned_exclusive_values() {
     let fixture = Fixture::new();
     let state = &fixture.state;

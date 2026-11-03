@@ -23,11 +23,15 @@ import { Edit3, Trash2, ExternalLink } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
-import { MCP_SKILLS_APP_IDS, type McpAppId } from "@/config/appConfig";
+import { MCP_APP_IDS, type McpAppId } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
 import { ManagementListSearch } from "@/components/common/ManagementListSearch";
+import {
+  extractErrorMessage,
+  translateMcpBackendError,
+} from "@/utils/errorUtils";
 
 interface UnifiedMcpPanelProps {
   visibleApps?: VisibleApps;
@@ -43,7 +47,7 @@ const UnifiedMcpPanel = React.forwardRef<
   UnifiedMcpPanelHandle,
   UnifiedMcpPanelProps
 >(({ onOpenChange: _onOpenChange, visibleApps }, ref) => {
-  const visibleAppIds = MCP_SKILLS_APP_IDS.filter(
+  const visibleAppIds = MCP_APP_IDS.filter(
     (app) => visibleApps?.[app] !== false,
   );
   const { t } = useTranslation();
@@ -108,10 +112,11 @@ const UnifiedMcpPanel = React.forwardRef<
       opencode: 0,
       openclaw: 0,
       hermes: 0,
+      pi: 0,
       mcode: 0,
     };
     filteredServerEntries.forEach(([_, server]) => {
-      for (const app of MCP_SKILLS_APP_IDS) {
+      for (const app of MCP_APP_IDS) {
         if (server.apps[app]) counts[app]++;
       }
     });
@@ -127,7 +132,11 @@ const UnifiedMcpPanel = React.forwardRef<
     try {
       await toggleAppMutation.mutateAsync({ serverId, app, enabled });
     } catch (error) {
-      toast.error(t("common.error"), { description: String(error) });
+      // Pi 拒绝的写入（SSE、名称规则）给出本地化原因
+      const detail = extractErrorMessage(error);
+      toast.error(t("common.error"), {
+        description: translateMcpBackendError(detail, t) || detail,
+      });
     }
   };
 
@@ -306,7 +315,7 @@ const UnifiedMcpPanel = React.forwardRef<
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     connection={
-                      MCP_SKILLS_APP_IDS.some((app) => server.apps[app])
+                      MCP_APP_IDS.some((app) => server.apps[app])
                         ? (connectivity.states[id] ?? "unchecked")
                         : "disabled"
                     }

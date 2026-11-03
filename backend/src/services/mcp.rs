@@ -64,7 +64,7 @@ impl McpService {
             .filter(|app| {
                 !matches!(
                     app,
-                    AppType::OpenClaw | AppType::Hermes | AppType::ClaudeDesktop | AppType::Pi
+                    AppType::OpenClaw | AppType::Hermes | AppType::ClaudeDesktop
                 )
             })
             .collect()
@@ -85,14 +85,27 @@ impl McpService {
             .map(|s| s.apps.clone())
             .unwrap_or_default();
 
+        // MCode / Pi 的文件和数据库一起提交：任一步失败都恢复原样
+        let save_with_pi = || {
+            if server.apps.pi || prev_apps.pi {
+                mcp::pi::sync_and_commit(
+                    &state.db,
+                    &server.id,
+                    mcp::pi::PiChange::from_enabled(server.apps.pi.then_some(&server.server)),
+                    || state.db.save_mcp_server(&server),
+                )
+            } else {
+                state.db.save_mcp_server(&server)
+            }
+        };
         if server.apps.mcode || prev_apps.mcode {
             mcp::mcode::sync_and_commit(
                 &server.id,
                 server.apps.mcode.then_some(&server.server),
-                || state.db.save_mcp_server(&server),
+                save_with_pi,
             )?;
         } else {
-            state.db.save_mcp_server(&server)?;
+            save_with_pi()?;
         }
 
         // 处理禁用：若旧版本启用但新版本取消，则需要从该应用的 live 配置移除
@@ -123,10 +136,25 @@ impl McpService {
         let server = state.db.get_all_mcp_servers()?.shift_remove(id);
 
         if let Some(server) = server {
+            let delete_with_pi = || {
+                if server.apps.pi {
+                    mcp::pi::sync_and_commit(&state.db, id, mcp::pi::PiChange::Remove, || {
+                        state.db.delete_mcp_server(id)
+                    })
+                } else {
+                    state.db.delete_mcp_server(id)
+                }
+            };
             if server.apps.mcode {
-                mcp::mcode::sync_and_commit(id, None, || state.db.delete_mcp_server(id))?;
+                mcp::mcode::sync_and_commit(id, None, delete_with_pi)?;
             } else {
-                state.db.delete_mcp_server(id)?;
+                delete_with_pi()?;
+            }
+            if !server.apps.pi {
+                // 取消勾选只在 Pi 里禁用、条目还留着：服务器删了就一并清掉（尽力而为）
+                if let Err(err) = mcp::pi::remove_disabled_if_managed(id, &server.server) {
+                    log::warn!("清理 Pi 中已禁用的 MCP 条目 '{id}' 失败: {err}");
+                }
             }
 
             // 从所有应用的 live 配置中移除
@@ -159,13 +187,24 @@ impl McpService {
         app: AppType,
         enabled: bool,
     ) -> Result<(), AppError> {
-        if app == AppType::Mcode {
+        if matches!(app, AppType::Mcode | AppType::Pi) {
             if let Some(server) = state.db.get_all_mcp_servers()?.get(server_id) {
-                mcp::mcode::sync_and_commit(server_id, enabled.then_some(&server.server), || {
+                let spec = enabled.then_some(&server.server);
+                let commit = || {
                     state
                         .db
                         .update_mcp_server_app_enabled(server_id, &app, enabled)
-                })?;
+                };
+                if app == AppType::Mcode {
+                    mcp::mcode::sync_and_commit(server_id, spec, commit)?;
+                } else {
+                    mcp::pi::sync_and_commit(
+                        &state.db,
+                        server_id,
+                        mcp::pi::PiChange::from_enabled(spec),
+                        commit,
+                    )?;
+                }
             }
             return Ok(());
         }
@@ -187,7 +226,7 @@ impl McpService {
     /// 将 MCP 服务器同步到所有启用的应用
     fn sync_server_to_apps(_state: &AppState, server: &McpServer) -> Result<(), AppError> {
         for app in server.apps.enabled_apps() {
-            if app == AppType::Mcode {
+            if matches!(app, AppType::Mcode | AppType::Pi) {
                 continue; // Already written before saving the managed state.
             }
             Self::sync_server_to_app_no_config(server, &app)?;
@@ -232,7 +271,7 @@ impl McpService {
                 log::debug!("Hermes MCP sync is not available in the Web backend yet, skipping");
             }
             AppType::Mcode => mcp::mcode::sync(&server.id, Some(&server.server))?,
-            AppType::Pi => {}
+            AppType::Pi => mcp::pi::sync(&server.id, Some(&server.server))?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 同步
                 log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过同步");
@@ -249,7 +288,7 @@ impl McpService {
     ) -> Result<(), AppError> {
         // 从所有曾启用的应用中移除
         for app in server.apps.enabled_apps() {
-            if app == AppType::Mcode {
+            if matches!(app, AppType::Mcode | AppType::Pi) {
                 continue; // Already removed before deleting the managed record.
             }
             Self::remove_server_from_app(state, id, &app)?;
@@ -276,7 +315,7 @@ impl McpService {
                 log::debug!("Hermes MCP removal is not available in the Web backend yet, skipping");
             }
             AppType::Mcode => mcp::mcode::sync(id, None)?,
-            AppType::Pi => {}
+            AppType::Pi => mcp::pi::sync(id, None)?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 移除
                 log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过移除");
@@ -320,7 +359,7 @@ impl McpService {
     ) -> Result<(), AppError> {
         if matches!(
             app,
-            AppType::OpenClaw | AppType::Hermes | AppType::ClaudeDesktop | AppType::Pi
+            AppType::OpenClaw | AppType::Hermes | AppType::ClaudeDesktop
         ) {
             return Ok(());
         }
@@ -332,10 +371,10 @@ impl McpService {
         for server in servers.values() {
             let result = if server.apps.is_enabled_for(app) {
                 Self::sync_server_to_app(state, server, app)
-            } else if !matches!(app, AppType::Mcode) {
+            } else if !matches!(app, AppType::Mcode | AppType::Pi) {
                 Self::remove_server_from_app(state, &server.id, app)
             } else {
-                // MCode's false flag also covers pre-existing, unmanaged servers.
+                // MCode / Pi's false flag also covers pre-existing, unmanaged servers.
                 // Only explicit disable/delete operations may remove those entries.
                 Ok(())
             };
@@ -437,6 +476,7 @@ impl McpService {
             ("grokbuild", Self::import_from_grokbuild(state)),
             ("opencode", Self::import_from_opencode(state)),
             ("mcode", mcp::mcode::import(state)),
+            ("pi", mcp::pi::import(state)),
         ];
         let mut total = 0;
         let mut failures = Vec::new();
@@ -754,5 +794,262 @@ mod tests {
             "disabled servers after the failed one must still be removed"
         );
         assert!(v.pointer("/mcpServers/a-broken").is_none());
+    }
+
+    /// 上游 tests/mcp_commands.rs 的 Pi MCP 用例（d455dd85、1cc2c732），改为 Web 的单元测试
+    mod pi_mcp {
+        use super::*;
+        use serde_json::json;
+        use std::fs;
+
+        fn pi_test_state() -> (TestHome, AppState) {
+            std::env::remove_var("PI_CODING_AGENT_DIR");
+            let home = TestHome::new();
+            let state = AppState::new(Arc::new(
+                crate::database::Database::memory().expect("database"),
+            ));
+            (home, state)
+        }
+
+        #[test]
+        #[serial]
+        fn pi_toggle_writes_its_mcp_json_and_keeps_pi_fields() {
+            let (_home, state) = pi_test_state();
+            let path = crate::config::get_home_dir().join(".pi/agent/mcp.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(
+                &path,
+                json!({"mcpServers":{"docs":{"command":"old","exposure":"direct","timeout":30}}})
+                    .to_string(),
+            )
+            .unwrap();
+            let read = || -> serde_json::Value {
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap()
+            };
+            let server: McpServer = serde_json::from_value(json!({
+                "id":"docs", "name":"Docs", "server":{"type":"stdio","command":"node","args":["s.js"]}, "apps":{}
+            }))
+            .unwrap();
+            state.db.save_mcp_server(&server).unwrap();
+
+            McpService::toggle_app(&state, "docs", AppType::Pi, true).unwrap();
+            let docs = &read()["mcpServers"]["docs"];
+            assert_eq!(docs["command"], "node");
+            assert_eq!(docs["args"], json!(["s.js"]));
+            assert_eq!(docs["exposure"], "direct");
+            assert_eq!(docs["timeout"], 30);
+            assert!(state.db.get_all_mcp_servers().unwrap()["docs"].apps.pi);
+
+            // 取消勾选只在 Pi 里禁用，保留条目和 Pi 自己的设置
+            McpService::toggle_app(&state, "docs", AppType::Pi, false).unwrap();
+            let disabled = &read()["mcpServers"]["docs"];
+            assert_eq!(disabled["enabled"], false);
+            assert_eq!(disabled["exposure"], "direct");
+            assert!(!state.db.get_all_mcp_servers().unwrap()["docs"].apps.pi);
+
+            // 在 CC Switch 里删除服务器才删掉条目
+            McpService::delete_server(&state, "docs").unwrap();
+            assert!(read()["mcpServers"].get("docs").is_none());
+
+            // Pi 不支持 SSE：拒绝写入，数据库也不勾选
+            let sse: McpServer = serde_json::from_value(json!({
+                "id":"remote", "name":"Remote", "server":{"type":"sse","url":"https://example.com/sse"}, "apps":{}
+            }))
+            .unwrap();
+            state.db.save_mcp_server(&sse).unwrap();
+            assert!(McpService::toggle_app(&state, "remote", AppType::Pi, true).is_err());
+            assert!(!state.db.get_all_mcp_servers().unwrap()["remote"].apps.pi);
+            assert!(read()["mcpServers"].get("remote").is_none());
+        }
+
+        /// 审查 #7862：导入 → 取消勾选 → 重新勾选（含批量禁用后撤销：前端逐个 toggle）
+        /// 不能丢掉 timeout、toolExposure、oauth 等 Pi 自己的设置
+        #[test]
+        #[serial]
+        fn pi_disable_then_enable_round_trip_keeps_pi_settings() {
+            let (_home, state) = pi_test_state();
+            let path = crate::config::get_home_dir().join(".pi/agent/mcp.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let pi_settings = json!({
+                "timeout": 30000,
+                "exposure": "direct",
+                "toolExposure": {"delete_*": "hidden"},
+                "oauth": {"clientName": "custom-client"}
+            });
+            let mut servers = serde_json::Map::new();
+            for id in ["a", "b"] {
+                let mut entry = pi_settings.clone();
+                entry["command"] = json!("node");
+                entry["args"] = json!([format!("{id}.js")]);
+                servers.insert(id.into(), entry);
+            }
+            fs::write(&path, json!({"mcpServers": servers}).to_string()).unwrap();
+            McpService::import_from_all_apps(&state).unwrap();
+            let read = || -> serde_json::Value {
+                serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap()
+            };
+
+            for id in ["a", "b"] {
+                McpService::toggle_app(&state, id, AppType::Pi, false).unwrap();
+            }
+            for id in ["a", "b"] {
+                McpService::toggle_app(&state, id, AppType::Pi, true).unwrap();
+            }
+            let written = read();
+            for id in ["a", "b"] {
+                let entry = &written["mcpServers"][id];
+                assert_eq!(entry["enabled"], true, "{id}");
+                assert_eq!(entry["args"], json!([format!("{id}.js")]), "{id}");
+                for field in ["timeout", "exposure", "toolExposure", "oauth"] {
+                    assert_eq!(entry[field], pi_settings[field], "{id}.{field}");
+                }
+            }
+
+            // 条目在 Pi 里被删掉后再勾选：从导入时保存的 Pi 字段重建
+            fs::write(&path, json!({"mcpServers": {}}).to_string()).unwrap();
+            McpService::toggle_app(&state, "a", AppType::Pi, false).unwrap();
+            McpService::toggle_app(&state, "a", AppType::Pi, true).unwrap();
+            let rebuilt = &read()["mcpServers"]["a"];
+            for field in ["timeout", "exposure", "toolExposure", "oauth"] {
+                assert_eq!(rebuilt[field], pi_settings[field], "a.{field}");
+            }
+        }
+
+        #[test]
+        #[serial]
+        fn pi_import_keeps_disabled_entries_unchecked() {
+            let (_home, state) = pi_test_state();
+            let path = crate::config::get_home_dir().join(".pi/agent/mcp.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(
+                &path,
+                json!({"mcpServers":{
+                    "on":{"url":"https://example.com/mcp"},
+                    "off":{"command":"node","enabled":false,"exposure":"deferred"}
+                }})
+                .to_string(),
+            )
+            .unwrap();
+            McpService::import_from_all_apps(&state).unwrap();
+            let servers = state.db.get_all_mcp_servers().unwrap();
+            assert!(servers["on"].apps.pi);
+            assert_eq!(servers["on"].server["type"], "http");
+            assert!(!servers["off"].apps.pi);
+            assert_eq!(servers["off"].server["exposure"], "deferred");
+        }
+
+        /// 导入按 Pi 的规则校验：SSE、非法名、只差 - 和 _ 的条目不导入，免得之后每次同步报错
+        #[test]
+        #[serial]
+        fn pi_import_skips_entries_pi_rejects() {
+            let (_home, state) = pi_test_state();
+            // 数据库里已勾选 Pi 的 api_server（比如 Pi 没装时勾上的）：文件里的 api-server 不能再导入勾上
+            let ticked: McpServer = serde_json::from_value(json!({
+                "id":"api_server", "name":"api_server", "server":{"type":"stdio","command":"x"},
+                "apps":{"pi":true}
+            }))
+            .unwrap();
+            state.db.save_mcp_server(&ticked).unwrap();
+            let path = crate::config::get_home_dir().join(".pi/agent/mcp.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(
+                &path,
+                json!({"mcpServers":{
+                    "ok":{"command":"node"},
+                    "remote":{"type":"sse","url":"https://example.com/sse"},
+                    "bad name":{"command":"node"},
+                    "dev-tools":{"command":"a"},
+                    "dev_tools":{"command":"b"},
+                    "api-server":{"command":"y"}
+                }})
+                .to_string(),
+            )
+            .unwrap();
+            assert!(McpService::import_from_all_apps(&state).is_err());
+            let servers = state.db.get_all_mcp_servers().unwrap();
+            assert!(servers["ok"].apps.pi);
+            for id in ["remote", "bad name", "dev-tools", "dev_tools", "api-server"] {
+                assert!(!servers.contains_key(id), "{id}");
+            }
+        }
+
+        /// Pi 没装（没有 Pi 配置目录）时勾选只入库，不新建 mcp.json；Pi 不接受的仍然拒绝
+        #[test]
+        #[serial]
+        fn pi_toggle_without_pi_dir_skips_the_file() {
+            let (_home, state) = pi_test_state();
+            let dir = crate::config::get_home_dir().join(".pi/agent");
+            let _ = fs::remove_dir_all(&dir);
+            for (id, spec) in [
+                ("docs", json!({"type":"stdio","command":"node"})),
+                (
+                    "remote",
+                    json!({"type":"sse","url":"https://example.com/sse"}),
+                ),
+                ("dev-tools", json!({"type":"stdio","command":"a"})),
+                ("dev_tools", json!({"type":"stdio","command":"b"})),
+            ] {
+                let server: McpServer = serde_json::from_value(json!({
+                    "id": id, "name": id, "server": spec, "apps": {}
+                }))
+                .unwrap();
+                state.db.save_mcp_server(&server).unwrap();
+            }
+
+            McpService::toggle_app(&state, "docs", AppType::Pi, true).unwrap();
+            assert!(state.db.get_all_mcp_servers().unwrap()["docs"].apps.pi);
+            McpService::sync_enabled_for_app(&state, &AppType::Pi).unwrap();
+            McpService::toggle_app(&state, "docs", AppType::Pi, false).unwrap();
+            McpService::delete_server(&state, "docs").unwrap();
+            assert!(McpService::toggle_app(&state, "remote", AppType::Pi, true).is_err());
+            assert!(!state.db.get_all_mcp_servers().unwrap()["remote"].apps.pi);
+
+            // 没有文件可对照时，只差 - 和 _ 的名字对照数据库里已勾选 Pi 的服务器拒绝
+            McpService::toggle_app(&state, "dev-tools", AppType::Pi, true).unwrap();
+            assert!(McpService::toggle_app(&state, "dev_tools", AppType::Pi, true).is_err());
+            let mut edited = state.db.get_all_mcp_servers().unwrap()["dev_tools"].clone();
+            edited.apps.pi = true;
+            assert!(McpService::upsert_server(&state, edited).is_err());
+            assert!(!state.db.get_all_mcp_servers().unwrap()["dev_tools"].apps.pi);
+            assert!(!dir.exists());
+        }
+
+        /// 审查 #7888：Pi 没装时两个请求并发勾选 dev-tools 和 dev_tools，最多只能成功一个。
+        /// 重名检查要和提交在同一把写锁里读数据库，锁外读的快照会让两个都通过
+        #[test]
+        #[serial]
+        fn pi_concurrent_toggles_of_colliding_names_enable_at_most_one() {
+            let (_home, state) = pi_test_state();
+            for round in 0..20 {
+                for (id, enable) in [("dev-tools", "toggle"), ("dev_tools", "upsert")] {
+                    let server: McpServer = serde_json::from_value(json!({
+                        "id": id, "name": id, "server": {"type":"stdio","command": enable}, "apps": {}
+                    }))
+                    .unwrap();
+                    state.db.save_mcp_server(&server).unwrap();
+                }
+                let barrier = std::sync::Barrier::new(2);
+                std::thread::scope(|scope| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        let _ = McpService::toggle_app(&state, "dev-tools", AppType::Pi, true);
+                    });
+                    scope.spawn(|| {
+                        let mut server =
+                            state.db.get_all_mcp_servers().unwrap()["dev_tools"].clone();
+                        server.apps.pi = true;
+                        barrier.wait();
+                        let _ = McpService::upsert_server(&state, server);
+                    });
+                });
+                let servers = state.db.get_all_mcp_servers().unwrap();
+                let enabled = ["dev-tools", "dev_tools"]
+                    .iter()
+                    .filter(|id| servers[**id].apps.pi)
+                    .count();
+                assert_eq!(enabled, 1, "round {round}");
+            }
+            assert!(!crate::config::get_home_dir().join(".pi").exists());
+        }
     }
 }

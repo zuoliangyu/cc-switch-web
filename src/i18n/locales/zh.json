@@ -2220,6 +2220,9 @@
       "tomlInvalid": "TOML 格式错误，请检查",
       "commandRequired": "请填写命令",
       "singleServerObjectRequired": "此处只需单个服务器对象，请不要粘贴包含 mcpServers 的整份配置",
+      "piSseUnsupported": "Pi 不支持 SSE 连接方式的 MCP 服务器，请改用 HTTP（streamable HTTP）",
+      "piInvalidName": "Pi 的 MCP 服务器名只能包含字母、数字、_ 和 -：{{id}}",
+      "piNameConflict": "Pi 把只差 - 和 _ 的服务器名视为同一个：{{id}} 与已有的 {{other}} 冲突",
       "saveFailed": "保存失败",
       "deleteFailed": "删除失败"
     },
@@ -3746,7 +3749,7 @@
     "noun": "MCP",
     "listSeparator": "、",
     "helpTitle": "MCP 怎么同步",
-    "help": "以这里为准：写进你勾选的应用的配置文件，切换供应商时按这里重写。Claude Desktop、OpenClaw、Pi 不支持，所以表格里没有这三列。",
+    "help": "以这里为准：写进你勾选的应用的配置文件，切换供应商时按这里重写。Claude Desktop、OpenClaw 不支持，所以表格里没有这两列；Pi 需要 1.0 及以上，且不支持 SSE。",
     "importFromApps": "从应用导入",
     "add": "添加 MCP",
     "moreActions": "MCP 的更多操作",

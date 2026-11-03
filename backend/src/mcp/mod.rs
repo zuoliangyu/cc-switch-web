@@ -51,6 +51,7 @@ pub(crate) fn merge_imported_server(
                 opencode: matches!(app, AppType::OpenCode),
                 hermes: false,
                 mcode: false,
+                pi: false,
             },
             description: None,
             homepage: None,
@@ -79,3 +80,4 @@ pub(crate) use opencode::{
 };
 
 pub(crate) mod mcode;
+pub(crate) mod pi;

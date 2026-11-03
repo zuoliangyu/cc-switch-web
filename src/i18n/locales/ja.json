@@ -2220,6 +2220,9 @@
       "tomlInvalid": "TOML 形式が無効です",
       "commandRequired": "コマンドを入力してください",
       "singleServerObjectRequired": "単一の MCP サーバーオブジェクトを貼り付けてください（トップレベルの mcpServers は不要）",
+      "piSseUnsupported": "Pi は SSE 接続の MCP サーバーに対応していません。HTTP（streamable HTTP）を使用してください",
+      "piInvalidName": "Pi の MCP サーバー名に使えるのは英数字、_、- のみです：{{id}}",
+      "piNameConflict": "Pi は - と _ だけが異なるサーバー名を同一とみなします：{{id}} は既存の {{other}} と競合しています",
       "saveFailed": "保存に失敗しました",
       "deleteFailed": "削除に失敗しました"
     },
@@ -3746,7 +3749,7 @@
     "noun": "MCP",
     "listSeparator": "、",
     "helpTitle": "MCP の同期のしくみ",
-    "help": "ここが正です。チェックしたアプリの設定ファイルに書き込み、プロバイダー切り替え時にここから書き直します。Claude Desktop・OpenClaw・Pi は非対応のため列がありません。",
+    "help": "ここが正です。チェックしたアプリの設定ファイルに書き込み、プロバイダー切り替え時にここから書き直します。Claude Desktop・OpenClaw は非対応のため列がありません。Pi は 1.0 以降が必要で、SSE には対応していません。",
     "importFromApps": "アプリから取り込む",
     "add": "MCP を追加",
     "moreActions": "MCP のその他の操作",

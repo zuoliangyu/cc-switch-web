@@ -24,6 +24,8 @@ pub struct McpApps {
     pub opencode: bool,
     #[serde(default)]
     pub hermes: bool,
+    #[serde(default)]
+    pub pi: bool,
 }
 
 impl McpApps {
@@ -38,7 +40,8 @@ impl McpApps {
             AppType::OpenClaw => false, // OpenClaw doesn't support MCP
             AppType::Hermes => self.hermes,
             AppType::Mcode => self.mcode,
-            AppType::ClaudeDesktop | AppType::Pi => false,
+            AppType::Pi => self.pi,
+            AppType::ClaudeDesktop => false,
         }
     }
 
@@ -53,7 +56,8 @@ impl McpApps {
             AppType::OpenClaw => {} // OpenClaw doesn't support MCP, ignore
             AppType::Hermes => self.hermes = enabled,
             AppType::Mcode => self.mcode = enabled,
-            AppType::ClaudeDesktop | AppType::Pi => {}
+            AppType::Pi => self.pi = enabled,
+            AppType::ClaudeDesktop => {}
         }
     }
 
@@ -80,6 +84,9 @@ impl McpApps {
         }
         if self.hermes {
             apps.push(AppType::Hermes);
+        }
+        if self.pi {
+            apps.push(AppType::Pi);
         }
         apps
     }

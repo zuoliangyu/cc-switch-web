@@ -68,7 +68,8 @@ impl Database {
             enabled_gemini BOOLEAN NOT NULL DEFAULT 0, enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0,
             enabled_opencode BOOLEAN NOT NULL DEFAULT 0,
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
-            enabled_hermes BOOLEAN NOT NULL DEFAULT 0
+            enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
+            enabled_pi BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -372,6 +373,17 @@ impl Database {
             Self::migrate_proxy_config_to_per_app(conn)?;
         }
 
+        // 桌面端 v17–v19 的库版本号不低于 Web v17，却还没有 enabled_pi（上游 v20 才加）；
+        // 迁入时这类快照不会再走 v16 -> v17，这里兜底补列
+        if Self::table_exists(conn, "mcp_servers")? {
+            Self::add_column_if_missing(
+                conn,
+                "mcp_servers",
+                "enabled_pi",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
+        }
+
         // 确保 in_failover_queue 列存在（对于已存在的 v2 数据库）
         Self::add_column_if_missing(
             conn,
@@ -499,6 +511,11 @@ impl Database {
                         log::info!("迁移数据库从 v15 到 v16（Skills/MCP 添加 MiniMax Code 支持）");
                         Self::migrate_v15_to_v16(conn)?;
                         Self::set_user_version(conn, 16)?;
+                    }
+                    16 => {
+                        log::info!("迁移数据库从 v16 到 v17（MCP 添加 Pi 支持）");
+                        Self::migrate_v16_to_v17(conn)?;
+                        Self::set_user_version(conn, 17)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1394,6 +1411,20 @@ impl Database {
                     "BOOLEAN NOT NULL DEFAULT 0",
                 )?;
             }
+        }
+        Ok(())
+    }
+
+    /// v16 -> v17 迁移：为 mcp_servers 添加 enabled_pi 列（上游 d455dd85，
+    /// 上游编号 v19 -> v20，Web 按自有版本链重新排号）
+    fn migrate_v16_to_v17(conn: &Connection) -> Result<(), AppError> {
+        if Self::table_exists(conn, "mcp_servers")? {
+            Self::add_column_if_missing(
+                conn,
+                "mcp_servers",
+                "enabled_pi",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
         }
         Ok(())
     }

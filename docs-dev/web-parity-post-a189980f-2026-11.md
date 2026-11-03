@@ -204,7 +204,7 @@
 | `c2c24b8c` | v4.0.2 | fix(usage): drop the gray border inside the active range field and space the picker below the presets (#7864) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `7f3fbd06` | v4.0.2 | test(pi): pin image input on official DeepSeek V4.1 Flash preset (#7865) | 1d 资源/设置/工具 | 1d：Pi DeepSeek V4.1 Flash 图片输入断言已随 1a 的预设测试同步 | 已迁移 |
 | `5c573f19` | v4.0.2 | fix(proxy): whitelist fields carried by reasoning replay envelopes (#7876) | 1b 代理协议 | 1b：推理回放信封字段白名单 | 已迁移 |
-| `d455dd85` | v4.0.2 | feat(mcp): sync MCP servers to Pi 1.0's built-in MCP (#7862) | 2a Pi MCP/迁移基线 | Pi 1.0 内置 MCP 同步；Web 需新增 enabled_pi 列（自有 schema v17）及 Pi MCP 适配；需新建或映射：`deeplink/mcp.rs`、`mcp/hermes.rs`等 3 个 | 待迁移 |
+| `d455dd85` | v4.0.2 | feat(mcp): sync MCP servers to Pi 1.0's built-in MCP (#7862) | 2a Pi MCP/迁移基线 | 2a：Pi 1.0 内置 MCP 同步（mcp/pi.rs，只替换连接字段、取消勾选改为 enabled:false、拒绝 SSE/非法名/仅 -_ 差异的重名，先写文件后提交数据库）；Web 自有 schema v16→v17 增加 mcp_servers.enabled_pi，并在建表阶段为版本号不低于 v17 却缺该列的桌面端 v17–v19 快照补列；MCP 面板与表单加入 Pi 列（Skills 列顺序不变）；Hermes MCP 在 Web 仍不可用，相关改动不适用 | 已迁移 |
 | `2fdcebf1` | v4.0.2 | fix(codex): let users switch back to CC Switch's model catalog when aggregation is blocked | 4 模式/路由 | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `cad592e0` | v4.0.2 | fix(codex): treat model_catalog_json as a plain key field | 4 模式/路由 | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `165622b8` | v4.0.2 | feat: show a short summary of what changed after updating | — | 更新后 whats-new 摘要弹窗依赖桌面更新流程；Web 以 CHANGELOG/Release 说明版本 | 不适用 |
@@ -916,7 +916,7 @@
 | `4a0baf69` | v4.0.25 | fix(proxy): strip non-text media (file/audio) for text-only upstreams (#6274) | 1b 代理协议 | 1b：纯文本上游剥离 file/audio 等非文本媒体 | 已迁移 |
 | `153db16e` | v4.0.25 | fix(windows): prevent provider form values from flickering (#6420) | — | WebView2 自动填充覆盖受控输入；Web 运行于普通浏览器，不注入 WebView 钩子 | 不适用 |
 | `b696f890` | v4.0.25 | fix(minimax): declare M3.1-Flash native thinking levels in Pi (#8540) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `1cc2c732` | v4.0.25 | fix(mcp): follow up on Pi MCP sync review notes (#7888) | 2a Pi MCP/迁移基线 | Pi 1.0 内置 MCP 同步；Web 需新增 enabled_pi 列（自有 schema v17）及 Pi MCP 适配；需新建或映射：`deeplink/parser.rs`、`deeplink/tests.rs`等 3 个 | 待迁移 |
+| `1cc2c732` | v4.0.25 | fix(mcp): follow up on Pi MCP sync review notes (#7888) | 2a Pi MCP/迁移基线 | 2a：Pi MCP 审查跟进（重名检查与提交同锁、导入按 Pi 规则校验、未装 Pi 时只入库）；Pi 拒绝原因本地化；深链 MCP 的 apps 接受 pi，合并已有服务器时保留 Pi 勾选；上游集成测试改写为 services::mcp 单元测试；用户手册不适用 | 已迁移 |
 | `69b41cdb` | v4.0.25 | fix(usage): import Pi official subagent usage (#8386) | 2d Oh My Pi | 需新建或映射：`services/session_usage_omp.rs` | 待迁移 |
 | `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 汇率自动获取（联网），与自选货币配套；保留手动汇率回退；需新建或映射：`services/exchange_rates.rs`、`components/usage/UsageDisplaySection.tsx`等 4 个 | 待迁移 |
 | `5ba95160` | v4.0.25 | fix(proxy): send a supported tool_choice for forced web search to xAI (#8664) | 1b 代理协议 | 1b：强制 WebSearch 发往 xAI 时使用其支持的 tool_choice | 已迁移 |
@@ -994,3 +994,9 @@
   - OpenCode：导入 ID 改为 ASCII slug + 随机后缀，编辑时保留旧 ID（与 1d 第一部分的 V2 原生 ID 豁免合并为上游最终条件）；导入后刷新 live ID 与运行时模型缓存。
   - 不适用：`bee47fdf`（依赖自定义图标上传，且服务端代下载增加 SSRF 面）、`8b09732a`（Web 套餐列表无对应项）。
   - 验证：`cargo test --lib` 3033 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 150 个文件中 1673 项通过、2 项跳过，1 项失败为 `SessionManagerPage` “今天”分组在 0–2 点运行时的既有时间相关问题（夹具用 `now - 1h`），与本次改动无关。
+- 2026-11-04：完成批次 2a（Pi 内置 MCP）。
+  - 后端：新增 `mcp/pi.rs`（与上游同源），`McpApps.pi` 与 DAO 的 `enabled_pi` 列；同步、删除、开关、全量导入接入 Pi，Pi 与 MiniMax Code 一样先写 `~/.pi/agent/mcp.json` 再提交数据库，失败时恢复文件。
+  - 数据库：Web 自有版本链 v16 → v17 增加 `mcp_servers.enabled_pi`（对应上游 v19 → v20）。从桌面端迁入时，v17–v19 的库版本号不低于 Web 当前版本、不会再跑这条迁移，但还缺该列，因此在建表阶段兜底补列，并补了对应回归；“未来版本”迁入用例改用 v18。
+  - 前端：MCP 面板和表单加入 Pi 列（`MCP_APP_IDS` 与 `SKILLS_APP_IDS` 拆开，Skills 列顺序不变）；开关失败的 Pi 规则错误（SSE、名称、仅 `-`/`_` 不同的重名）按三语提示。深链 MCP 的 `apps` 接受 `pi`，并修正合并已有服务器时丢失 Pi 勾选的问题（批次 1d 深链迁移时 Web 尚无 Pi MCP）。
+  - 测试：上游 `tests/mcp_commands.rs` 的 6 个 Pi 用例改写为 `services::mcp` 单元测试；Web 资源重同步测试中“Pi 不支持”的断言改为 Claude Desktop。
+  - 验证：`cargo test --lib` 3046 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 151 个文件 1676 项通过、2 项跳过。

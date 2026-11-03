@@ -280,6 +280,34 @@ fn schema_v16_adds_mcode_skill_and_mcp_flags() {
     }
 }
 
+/// 上游 d455dd85 的 v19 -> v20 在 Web 版本链中对应 v16 -> v17。
+#[test]
+fn schema_v17_adds_pi_mcp_flag_and_keeps_existing_flags() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE mcp_servers (
+            id TEXT PRIMARY KEY,
+            enabled_codex BOOLEAN NOT NULL DEFAULT 0,
+            enabled_mcode BOOLEAN NOT NULL DEFAULT 0
+        );
+        INSERT INTO mcp_servers (id, enabled_codex, enabled_mcode) VALUES ('mcp-1', 1, 1);",
+    )
+    .expect("create v16 tables");
+    Database::set_user_version(&conn, 16).expect("set v16");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate to v17");
+
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    let values: (i64, i64, i64) = conn
+        .query_row(
+            "SELECT enabled_codex, enabled_mcode, enabled_pi FROM mcp_servers WHERE id = 'mcp-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(values, (1, 1, 0));
+}
+
 #[test]
 fn schema_v13_adds_grokbuild_proxy_row_and_preserves_existing_values() {
     let conn = Connection::open_in_memory().expect("open memory db");

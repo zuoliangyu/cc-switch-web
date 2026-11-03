@@ -30,7 +30,7 @@ export const PROMPT_LINK_APPS: readonly AppId[] = [
   "mcode",
 ];
 
-/** MCP 链接 `apps` 里可以出现的应用（Web 端 Pi 不支持 MCP 投影） */
+/** MCP 链接 `apps` 里可以出现的应用 */
 export const MCP_LINK_APPS: readonly AppId[] = [
   "claude",
   "codex",
@@ -39,6 +39,7 @@ export const MCP_LINK_APPS: readonly AppId[] = [
   "opencode",
   "openclaw",
   "hermes",
+  "pi",
   "mcode",
 ];
 

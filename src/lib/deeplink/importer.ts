@@ -473,6 +473,7 @@ const mergeMcpApps = (apps: string | undefined) => {
     opencode: targets.includes("opencode"),
     openclaw: targets.includes("openclaw"),
     hermes: targets.includes("hermes"),
+    pi: targets.includes("pi"),
   };
 };
 
@@ -515,6 +516,7 @@ const importMcp = async (
               opencode: current.apps.opencode || targetApps.opencode,
               openclaw: current.apps.openclaw || targetApps.openclaw,
               hermes: current.apps.hermes || targetApps.hermes,
+              pi: Boolean(current.apps.pi) || targetApps.pi,
             },
           }
         : {

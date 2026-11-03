@@ -395,7 +395,7 @@ mod tests {
     fn automatic_migration_normalizes_future_schema_without_touching_source() {
         let home = tempdir().unwrap();
         let _home = TestHome::set(home.path());
-        let source_db = create_source_database(home.path(), 17, "桌面端供应商");
+        let source_db = create_source_database(home.path(), 18, "桌面端供应商");
         fs::write(
             home.path().join(".cc-switch/settings.json"),
             b"{\"language\":\"zh\"}",
@@ -434,8 +434,27 @@ mod tests {
                 &Connection::open_with_flags(&source_db, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
             )
             .unwrap(),
-            17
+            18
         );
+    }
+
+    /// 桌面端 v17–v19 版本号不低于 Web，却还没有 enabled_pi（上游 v20 才加）
+    #[test]
+    #[serial]
+    fn automatic_migration_adds_pi_mcp_flag_missing_from_desktop_snapshot() {
+        let home = tempdir().unwrap();
+        let _home = TestHome::set(home.path());
+        let source_db = create_source_database(home.path(), 19, "桌面端供应商");
+        Connection::open(&source_db)
+            .unwrap()
+            .execute("ALTER TABLE mcp_servers DROP COLUMN enabled_pi", [])
+            .unwrap();
+
+        assert!(migrate_default_data_dir_if_needed().unwrap());
+
+        let conn =
+            Connection::open(home.path().join(".cc-switch-web").join(DATABASE_FILE)).unwrap();
+        assert!(Database::has_column(&conn, "mcp_servers", "enabled_pi").unwrap());
     }
 
     #[test]

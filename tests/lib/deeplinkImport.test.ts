@@ -9,6 +9,10 @@ const providersApiMock = vi.hoisted(() => ({
   addWithoutSwitching: vi.fn(async () => true),
   switch: vi.fn(async () => ({ warnings: [] })),
 }));
+const mcpApiMock = vi.hoisted(() => ({
+  getAllServers: vi.fn(async () => ({}) as Record<string, unknown>),
+  upsertUnifiedServer: vi.fn(async (_server: unknown) => undefined),
+}));
 const promptsApiMock = vi.hoisted(() => ({
   upsertPrompt: vi.fn(async () => undefined),
   enablePrompt: vi.fn(async () => undefined),
@@ -20,6 +24,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     providersApi: providersApiMock,
     promptsApi: promptsApiMock,
+    mcpApi: mcpApiMock,
   };
 });
 vi.mock("@/lib/api/providerRuntime", () => ({
@@ -88,7 +93,7 @@ describe("deeplink 解析阶段的检查", () => {
     ).toThrow("configUrl");
   });
 
-  it("提示词接受 mcode，MCP 接受 mcode、拒绝 Pi", () => {
+  it("提示词接受 mcode，MCP 接受 mcode 与 Pi、拒绝未知应用", () => {
     const content = encodeBase64Utf8("# hi");
     expect(
       parseDeepLinkUrl(
@@ -101,11 +106,47 @@ describe("deeplink 解析阶段的检查", () => {
         `ccswitch://v1/import?resource=mcp&apps=claude,mcode,hermes&config=${config}`,
       ).apps,
     ).toBe("claude,mcode,hermes");
-    expect(() =>
+    expect(
       parseDeepLinkUrl(
         `ccswitch://v1/import?resource=mcp&apps=pi&config=${config}`,
+      ).apps,
+    ).toBe("pi");
+    expect(() =>
+      parseDeepLinkUrl(
+        `ccswitch://v1/import?resource=mcp&apps=kimi&config=${config}`,
       ),
-    ).toThrow("pi");
+    ).toThrow("kimi");
+  });
+
+  it("合并已有 MCP 时保留 Pi 的勾选", async () => {
+    mcpApiMock.getAllServers.mockResolvedValueOnce({
+      a: {
+        id: "a",
+        name: "a",
+        server: { command: "old" },
+        apps: {
+          claude: false,
+          "claude-desktop": false,
+          codex: false,
+          gemini: false,
+          grokbuild: false,
+          opencode: false,
+          openclaw: false,
+          hermes: false,
+          pi: true,
+        },
+      },
+    });
+    const config = encodeBase64Utf8('{"mcpServers":{"a":{"command":"x"}}}');
+    await importFromDeepLink(
+      parseDeepLinkUrl(
+        `ccswitch://v1/import?resource=mcp&apps=claude&config=${config}`,
+      ),
+    );
+    const saved = mcpApiMock.upsertUnifiedServer.mock.calls.at(-1)?.[0] as {
+      apps: Record<string, boolean>;
+    };
+    expect(saved.apps).toMatchObject({ claude: true, pi: true });
   });
 
   it("Pi 链接没有模型时当场拒绝", () => {

@@ -28,7 +28,7 @@ async fn resource_resync_http_reports_failures_and_preserves_unmanaged_files() {
         axum::serve(listener, app).await.unwrap();
     });
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
-    for app in ["unknown", "openclaw", "pi"] {
+    for app in ["unknown", "openclaw", "claude-desktop"] {
         let response = client
             .post(format!("{url}/mcp"))
             .json(&json!({"apps":[app]}))

@@ -2220,6 +2220,9 @@
       "tomlInvalid": "Invalid TOML format",
       "commandRequired": "Please enter command",
       "singleServerObjectRequired": "Please paste a single MCP server object (do not include top-level mcpServers)",
+      "piSseUnsupported": "Pi does not support SSE MCP servers. Use HTTP (streamable HTTP) instead",
+      "piInvalidName": "Pi MCP server names may only contain letters, digits, _ and -: {{id}}",
+      "piNameConflict": "Pi treats server names that differ only by - and _ as the same server: {{id}} conflicts with existing {{other}}",
       "saveFailed": "Save failed",
       "deleteFailed": "Delete failed"
     },
@@ -3746,7 +3749,7 @@
     "noun": "MCP servers",
     "listSeparator": ", ",
     "helpTitle": "How MCP syncs",
-    "help": "This list is the source of truth: it is written into the config files of the apps you tick, and rewritten from here when you switch providers. Claude Desktop, OpenClaw and Pi are not supported, so they have no column.",
+    "help": "This list is the source of truth: it is written into the config files of the apps you tick, and rewritten from here when you switch providers. Claude Desktop and OpenClaw are not supported, so they have no column; Pi needs 1.0 or later and does not support SSE.",
     "importFromApps": "Import from apps",
     "add": "Add MCP",
     "moreActions": "More MCP actions",

@@ -28,8 +28,20 @@ export const APP_IDS: AppId[] = [
   "mcode",
 ];
 
-/** App IDs shown in MCP panel (Pi 不支持 MCP 投影) */
-export const MCP_SKILLS_APP_IDS = [
+/** Claude Desktop、OpenClaw 不由 CC Switch 管理 MCP；Pi 1.0 起内置 MCP（`~/.pi/agent/mcp.json`） */
+export const MCP_APP_IDS = [
+  "claude",
+  "codex",
+  "gemini",
+  "grokbuild",
+  "opencode",
+  "hermes",
+  "pi",
+  "mcode",
+] as const satisfies readonly AppId[];
+export type McpAppId = (typeof MCP_APP_IDS)[number];
+
+export const SKILLS_APP_IDS = [
   "claude",
   "codex",
   "gemini",
@@ -37,15 +49,8 @@ export const MCP_SKILLS_APP_IDS = [
   "opencode",
   "hermes",
   "mcode",
-] as const satisfies readonly AppId[];
-
-export const SKILLS_APP_IDS = [
-  ...MCP_SKILLS_APP_IDS,
   "pi",
 ] as const satisfies readonly AppId[];
-
-export const MCP_APP_IDS = MCP_SKILLS_APP_IDS;
-export type McpAppId = (typeof MCP_APP_IDS)[number];
 
 export function getAppLabel(appId: string): string {
   return APP_ICON_MAP[appId as AppId]?.label ?? appId;

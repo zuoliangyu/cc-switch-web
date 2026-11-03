@@ -306,6 +306,25 @@ describe("McodeProviderForm", () => {
     },
   );
 
+  it("keeps the JSON editor for DeepSeek Harness", () => {
+    render(
+      <McodeProviderForm
+        appId="dsh"
+        providerId="existing"
+        initialData={{ name: "Existing", settingsConfig: original }}
+        submitLabel="Save"
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+      />,
+    );
+    expect(
+      JSON.parse(
+        (screen.getByLabelText("provider.configJson") as HTMLTextAreaElement)
+          .value,
+      ),
+    ).toEqual(original);
+  });
+
   it("borrows the MiniMax preset without changing Pi or copying Pi compatibility fields", () => {
     const pi = piProviderPresets.find((preset) => preset.name === "MiniMax")!;
     const mcode = mcodeProviderPresets.find(

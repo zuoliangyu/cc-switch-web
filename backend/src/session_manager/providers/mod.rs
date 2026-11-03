@@ -1,8 +1,9 @@
-mod blocks;
 pub mod agy;
+mod blocks;
 pub mod claude;
 pub mod codex;
 mod codex_items;
+pub mod dsh;
 pub mod gemini;
 pub mod grokbuild;
 pub mod hermes;

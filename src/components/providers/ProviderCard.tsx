@@ -203,7 +203,8 @@ export function ProviderCard({
     appId === "pi" ||
     appId === "omp" ||
     appId === "mcode" ||
-    appId === "kimi";
+    appId === "kimi" ||
+    appId === "dsh";
 
   const { data: health } = useProviderHealth(
     provider.id,
@@ -320,7 +321,7 @@ export function ProviderCard({
     ? isCurrent
     : appId === "openclaw"
       ? Boolean(isDefaultModel)
-      : appId === "opencode" || appId === "mcode"
+      : appId === "opencode" || appId === "mcode" || appId === "dsh"
         ? false
         : appId === "pi" || appId === "omp"
           ? false
@@ -586,6 +587,7 @@ export function ProviderCard({
                 onTest &&
                 appId !== "mcode" &&
                 appId !== "kimi" &&
+                appId !== "dsh" &&
                 !isOfficial &&
                 !isCopilot &&
                 !isCodexOauth &&

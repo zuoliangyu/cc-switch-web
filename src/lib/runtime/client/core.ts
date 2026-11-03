@@ -212,6 +212,7 @@ import {
   addWebProviderToLiveConfig,
   kimiOAuthWeb,
   agyWeb,
+  dshWeb,
   fetchWebModelsDev,
   saveWebDailyMemoryFile,
   setWebHermesMemory,
@@ -572,6 +573,16 @@ export async function invoke<T>(
       return agyWeb.supported<T>();
     case "get_agy_models":
       return agyWeb.models<T>(args ?? {});
+    case "dsh_account_status":
+      return dshWeb.status<T>();
+    case "dsh_account_sign_out":
+      return dshWeb.signOut<T>();
+    case "dsh_account_login_start":
+      return dshWeb.loginStart<T>();
+    case "dsh_account_login_poll":
+      return dshWeb.loginPoll<T>(args?.flowId as string);
+    case "dsh_account_login_cancel":
+      return dshWeb.loginCancel<T>(args?.flowId as string);
     case "kimi_oauth_status":
       return kimiOAuthWeb.status<T>();
     case "kimi_oauth_start":

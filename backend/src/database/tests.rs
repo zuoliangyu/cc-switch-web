@@ -1671,3 +1671,43 @@ fn migration_v19_to_v20_adds_enabled_omp_to_mcp_servers_only() {
         .expect("read mcp row");
     assert_eq!((pi, omp), (1, 0));
 }
+
+/// Web v20 -> v21（上游 v23 -> v24）：mcp_servers、skills 补上 `enabled_dsh`，session_log_sync 补上
+/// `parser_state`，已有的会话游标原样保留，Oh My Pi 的开关不受影响。
+#[test]
+fn migration_v20_to_v21_adds_dsh_flags_and_parser_state_preserving_cursors() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    conn.execute_batch(
+        "ALTER TABLE mcp_servers DROP COLUMN enabled_dsh;
+         ALTER TABLE skills DROP COLUMN enabled_dsh;
+         ALTER TABLE session_log_sync DROP COLUMN parser_state;
+         INSERT INTO mcp_servers (id, name, server_config, enabled_omp) VALUES ('shared', 'm', '{}', 1);
+         INSERT INTO session_log_sync (file_path, last_modified, last_line_offset, last_synced_at, last_byte_offset)
+         VALUES ('dsh:test', 11, 123, 12, 123);",
+    )
+    .expect("rewind to v20 shape");
+    Database::set_user_version(&conn, 20).expect("set user_version=20");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+    Database::apply_schema_migrations_on_conn(&conn).expect("re-apply migrations");
+
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    assert!(Database::has_column(&conn, "skills", "enabled_dsh").unwrap());
+    let (omp, dsh): (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_omp, enabled_dsh FROM mcp_servers WHERE id = 'shared'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("read mcp row");
+    assert_eq!((omp, dsh), (1, 0));
+    let cursor: (i64, i64, Option<String>) = conn
+        .query_row(
+            "SELECT last_modified, last_byte_offset, parser_state FROM session_log_sync",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("read cursor");
+    assert_eq!(cursor, (11, 123, None));
+}

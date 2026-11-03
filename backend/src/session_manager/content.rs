@@ -304,23 +304,45 @@ fn read_jsonl_line(path: &Path, offset: u64, len: u32) -> Result<Vec<u8>, String
     if u64::from(len) > MAX_TEXT_BYTES {
         return Err(TOO_LARGE_TEXT.to_string());
     }
-    let mut file = File::open(path).map_err(|_| "无法读取会话文件".to_string())?;
-    let file_len = file
-        .metadata()
-        .map_err(|_| "无法读取会话文件".to_string())?
-        .len();
-    let end = offset
-        .checked_add(u64::from(len))
-        .filter(|end| *end <= file_len)
-        .ok_or_else(|| STALE.to_string())?;
+    // DeepSeek Harness 的会话是 zstd 压缩的帧流：整段解压后按解压后的偏移取行
+    let (buf, start, end, file_len) = if path
+        .extension()
+        .is_some_and(|extension| extension == "zstd")
+    {
+        let bytes = super::providers::dsh::read_session(path)?;
+        let file_len = bytes.len() as u64;
+        let end = offset
+            .checked_add(u64::from(len))
+            .filter(|end| *end <= file_len)
+            .ok_or_else(|| STALE.to_string())?;
+        let start = offset.saturating_sub(1);
+        let read_end = (end + 1).min(file_len);
+        (
+            bytes[start as usize..read_end as usize].to_vec(),
+            start,
+            end,
+            file_len,
+        )
+    } else {
+        let mut file = File::open(path).map_err(|_| "无法读取会话文件".to_string())?;
+        let file_len = file
+            .metadata()
+            .map_err(|_| "无法读取会话文件".to_string())?
+            .len();
+        let end = offset
+            .checked_add(u64::from(len))
+            .filter(|end| *end <= file_len)
+            .ok_or_else(|| STALE.to_string())?;
 
-    // 多读前后各一个字节，用来判断行边界
-    let start = offset.saturating_sub(1);
-    let read_end = (end + 1).min(file_len);
-    let mut buf = vec![0u8; (read_end - start) as usize];
-    file.seek(SeekFrom::Start(start))
-        .and_then(|_| file.read_exact(&mut buf))
-        .map_err(|_| STALE.to_string())?;
+        // 多读前后各一个字节，用来判断行边界
+        let start = offset.saturating_sub(1);
+        let read_end = (end + 1).min(file_len);
+        let mut buf = vec![0u8; (read_end - start) as usize];
+        file.seek(SeekFrom::Start(start))
+            .and_then(|_| file.read_exact(&mut buf))
+            .map_err(|_| STALE.to_string())?;
+        (buf, start, end, file_len)
+    };
 
     let line_start = (offset - start) as usize;
     if offset > 0 && buf[0] != b'\n' {
@@ -597,7 +619,8 @@ fn project_dir_for(source: &ValidatedSource) -> Option<PathBuf> {
     }
 
     use super::providers::{
-        agy, claude, codex, gemini, grokbuild, hermes, kimi, mcode, omp, openclaw, opencode, pi,
+        agy, claude, codex, dsh, gemini, grokbuild, hermes, kimi, mcode, omp, openclaw, opencode,
+        pi,
     };
     let sessions = match source.provider_id.as_str() {
         "codex" => codex::scan_sessions(),
@@ -612,6 +635,7 @@ fn project_dir_for(source: &ValidatedSource) -> Option<PathBuf> {
         "kimi" => kimi::scan_sessions(),
         "agy" => agy::scan_sessions(),
         "omp" => omp::scan_sessions(),
+        "dsh" => dsh::scan_sessions(),
         _ => return None,
     };
     let project = sessions

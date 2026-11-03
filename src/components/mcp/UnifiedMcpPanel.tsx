@@ -116,6 +116,7 @@ const UnifiedMcpPanel = React.forwardRef<
       pi: 0,
       mcode: 0,
       kimi: 0,
+      dsh: 0,
       agy: 0,
       omp: 0,
     };

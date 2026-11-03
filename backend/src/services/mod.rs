@@ -1,4 +1,5 @@
 pub(crate) mod agy_account;
+pub(crate) mod dsh_account;
 pub(crate) mod backup_storage;
 pub(crate) mod balance;
 pub(crate) mod coding_plan;
@@ -21,6 +22,7 @@ pub(crate) mod session_usage_codex;
 pub(crate) mod session_usage_gemini;
 pub(crate) mod session_usage_grokbuild;
 pub mod session_usage_agy;
+pub mod session_usage_dsh;
 pub mod session_usage_omp;
 pub mod session_usage_kimi;
 pub mod session_usage_mcode;

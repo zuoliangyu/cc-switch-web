@@ -809,7 +809,7 @@
 | `0133facc` | v4.0.22 | fix(claude): say Claude accounts aren't supported when the config dir is in WSL | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/snapshot/mod.rs`等 3 个 | 待迁移 |
 | `d288057f` | v4.0.22 | docs(guides): add a guide to switching Claude subscription accounts | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `dd81bc95` | v4.0.22 | docs(release): link the Claude accounts guide from v4.0.21 notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `3fc8794c` | v4.0.22 | feat(apps): integrate DeepSeek Harness (#8795) | 2e DeepSeek Harness | DeepSeek Harness 应用接入；Web 需新增 AppType::Dsh；需新建或映射：`commands/tool_uninstall.rs`、`deeplink/mcp.rs`等 14 个 | 待迁移 |
+| `3fc8794c` | v4.0.22 | feat(apps): integrate DeepSeek Harness (#8795) | 2e DeepSeek Harness | 2e：DeepSeek Harness 应用（dsh_config、AppType::Dsh 累加式、原生 profile 的 cordis.patch.yml 与数据库一起提交、MCP/Skills 开关、提示词 $DSH_HOME/AGENTS.md、会话浏览（不可删除）、工具安装卸载、表单走 McodeProviderForm）；Web schema v21 enabled_dsh；不做连通检测（上游同样无适配器）；托盘与 docs/ 文档不适用 | 已迁移 |
 | `03e19fe7` | v4.0.22 | docs(sponsors): update DIT.ai promotion copy and welcome offer | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
 | `ee8ee25e` | v4.0.22 | docs(readme): move DIT.ai ahead of OpenModel in the sponsor table | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `33833a6a` | v4.0.22 | fix(proxy): accept x-api-key in Claude Desktop gateway auth (#5123) | 1b 代理协议 | 1b：Claude Desktop 网关认证接受 x-api-key | 已迁移 |
@@ -829,7 +829,7 @@
 | `7f82b85b` | v4.0.22 | fix(sidebar): inset today's usage text to align with mode badge text | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
 | `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | Copilot 原生 /v1/messages 透传依赖 Web 尚无的 Copilot supported_endpoints 解析与按格式响应转换，转入 3 官方账号与 Copilot 一并处理 | 待迁移 |
 | `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerConfigUtils.test.ts` | 待迁移 |
-| `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 需新建或映射：`commands/dsh.rs`、`deeplink/mcp.rs`等 11 个 | 待迁移 |
+| `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 2e：Web 与 Desktop 共用管理、DeepSeek 账号登录（/api/dsh/account*，回调落在服务端本机，仅浏览器与服务端同机时可完成）、用量导入（session_log_sync.parser_state、zstd 会话按解压后偏移读取）；Web 请求日志无 pricing_model/input_token_semantics 列：前缀模型仍按裸名计价，但导入时无定价、之后补价的前缀模型无法回填（对应上游用例未迁移）；用量页 providerLabel 与筛选随 5b | 部分迁移 |
 | `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
 | `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `115677a1` | v4.0.22 | fix(agy): let a transcript win over another root's index-only entry | 2c Antigravity | 2c：会话 transcript 优先于其他根目录仅有索引的条目 | 已迁移 |
@@ -844,8 +844,8 @@
 | `df753b5e` | v4.0.22 | fix(proxy): fall back to Gemini's skip signature on the Gemini Native path | 1b 代理协议 | 1b：Gemini Native 路径缺签名时回退 skip 签名 | 已迁移 |
 | `8355f1f1` | v4.0.22 | fix(proxy): filter unsupported xAI Responses include marker (#8997) | 1b 代理协议 | 1b：过滤 xAI Responses 不支持的 include 标记 | 已迁移 |
 | `accc4489` | v4.0.22 | feat(usage): import Oh My Pi session usage (#9046) | 2d Oh My Pi | 2d：导入 Oh My Pi 会话用量（session_usage_omp、Pi 用量导入取上游最终版本；Web 无 input_token_semantics/pricing_model 列，插入时去掉）；providerLabel 与用量页筛选随 5b | 部分迁移 |
-| `efb955bd` | v4.0.22 | fix(dsh): drop the account banner and note the shared list in the section title | 2e DeepSeek Harness | 需新建或映射：`components/providers/DshAccount.tsx`、`components/providers/presentation.ts` | 待迁移 |
-| `2baa6862` | v4.0.22 | feat(dsh): add DeepSeek official account sign-in like Kimi Code | 2e DeepSeek Harness | 需新建或映射：`components/providers/DshAccount.tsx`、`components/providers/presentation.ts`等 3 个 | 待迁移 |
+| `efb955bd` | v4.0.22 | fix(dsh): drop the account banner and note the shared list in the section title | 2e DeepSeek Harness | 2e：去掉账号横幅；Web 无分区标题，列表上方写明 Web 与 Desktop 共用 | 已迁移 |
+| `2baa6862` | v4.0.22 | feat(dsh): add DeepSeek official account sign-in like Kimi Code | 2e DeepSeek Harness | 2e：DeepSeek 官方登录预设、官方账号卡与授权中心分组；Web 无从表单跳到授权中心的入口，选中预设时账号组直接显示在表单里（同 Kimi） | 已迁移 |
 | `dfa29123` | v4.0.22 | feat(providers): align the shared model editor with Pi and Kimi | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `f283a55f` | v4.0.22 | fix(shell): show DeepSeek Harness by its full name in the sidebar | 5a 供应商与全局 UI | 需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
 | `4ed07150` | v4.0.22 | test(agy): compare transcript paths as Path so Windows separators match | 2c Antigravity | 2c：测试按 Path 比较 transcript 路径，兼容 Windows 分隔符 | 已迁移 |
@@ -879,12 +879,12 @@
 | `c7188667` | v4.0.23 | fix(usage): recover bounded Codex forks after parent idle gaps (#9093) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `91a76cfd` | v4.0.23 | fix(startup): keep database lock waits off the UI thread (#9098) | 1d 资源/设置/工具 | 解决 Tauri 命令在 UI 线程上等数据库锁；Web 没有 UI 线程，HTTP 处理不会冻结界面。MiniMax Code/Kimi/DSH 列表刷新与供应商改动串行化随 2b/2e 的对应应用一并评估 | 不适用 |
 | `a77417da` | v4.0.23 | fix(proxy): return JSON for non-streaming Claude model validation (#9097) | 1b 代理协议 | 1b：非流式 Claude 请求遇 Chat/Responses SSE 时聚合为 JSON（模型验证要求）；补齐 Web 缺失的 Responses/Chat SSE 聚合器与嗅探，Codex OAuth 非流不再强制流式 | 已迁移 |
-| `c3adab30` | v4.0.23 | fix(dsh): dedupe profile paths that alias the same file (#9101) | 2e DeepSeek Harness | 需新建或映射：`dsh_config.rs` | 待迁移 |
+| `c3adab30` | v4.0.23 | fix(dsh): dedupe profile paths that alias the same file (#9101) | 2e DeepSeek Harness | 2e：别名到同一文件的 profile 路径去重（dsh_config 最终版本） | 已迁移 |
 | `e35eef5d` | v4.0.23 | test(usage): assert bounded fork token totals (#9105) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `4e31203c` | v4.0.23 | refactor(usage): return bool from bounded fork validation (#9106) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b/2d：Kimi 原生 TOML 编辑框（2b）；MiniMax Code custom_provider 与 Oh My Pi models.yml 的 YAML 编辑框（2d，新增依赖 yaml 2.8.1 与 helpers/yamlNode.ts）；DSH 部分随 2e | 部分迁移 |
+| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b/2d/2e：Kimi 原生 TOML 编辑框（2b）；MiniMax Code 与 Oh My Pi 的 YAML 编辑框（2d，依赖 yaml 2.8.1）；DSH 保留 JSON 编辑框（2e，与上游一致），其模型方言（reasoningEfforts/compat）专用控件依赖 5a 的表单部件，暂作普通额外字段显示 | 部分迁移 |
 | `5c8f4e2e` | v4.0.23 | feat(presets): add OpenAI API key presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `2122f7da` | v4.0.23 | fix(proxy): send reasoning effort to non-whitelisted models on Claude OpenAI routes | 1b 代理协议 | 1b：Claude 路由经 OpenAI Chat/Responses 时按模型能力补发思考档位（claude_reasoning），表单与 Desktop 表单新增思考档位选项（自动/原样/不发） | 已迁移 |
 | `93d0bf18` | v4.0.23 | feat(proxy): map Claude thinking settings to Gemini thinkingConfig | 1b 代理协议 | 1b：Claude thinking 设置映射到 Gemini thinkingConfig | 已迁移 |
@@ -896,12 +896,12 @@
 | `57169e4b` | v4.0.23 | chore(release): v4.0.23 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `66d530d6` | v4.0.23 | docs(release): add v4.0.23 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `8be84055` | v4.0.23 | ci(release): move macOS builds to macos-15 | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
-| `1f21c289` | v4.0.24 | fix(dsh): show DeepSeek account in official sign-in subtitle (#9058) | 2e DeepSeek Harness | 需新建或映射：`components/providers/forms/presetGroups.ts` | 待迁移 |
+| `1f21c289` | v4.0.24 | fix(dsh): show DeepSeek account in official sign-in subtitle (#9058) | 2e DeepSeek Harness | 2e：官方登录副标题显示 DeepSeek 账号已迁移；预设副行“用 DeepSeek 账号登录”依赖 presetGroups（loginWith），随 5a | 部分迁移 |
 | `7e02e494` | v4.0.24 | fix(codex): restore reasoning effort after re-enabling (#8998) | 1b 代理协议 | 1b：重新启用 Codex Chat 思考等级时恢复默认参数名，后端修复已启用但参数为 none 的旧配置；组件交互测试依赖 Web 不同的测试夹具未迁移 | 已迁移 |
 | `c1fb9eec` | v4.0.24 | fix(tray): store Linux tray icons in app cache directory (#9021) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `734ed4a1` | v4.0.24 | feat(auth): let sign-in copy the login link instead of opening the browser | 3 官方账号 | 登录只复制链接不打开浏览器；Web 远程访问场景尤其适用；需新建或映射：`services/claude_account/layout.rs`、`services/claude_account/login.rs`等 6 个 | 待迁移 |
 | `832fbe65` | v4.0.24 | test(codex-oauth): retry the stale keep-alive request in the replacement test | 3 官方账号 | 浏览器登录模块测试，随 c72c82cf（3 官方账号）一并处理 | 待迁移 |
-| `14ddd7b5` | v4.0.24 | fix(dsh): keep only text/image in exported model input | 2e DeepSeek Harness | 需新建或映射：`dsh_config.rs` | 待迁移 |
+| `14ddd7b5` | v4.0.24 | fix(dsh): keep only text/image in exported model input | 2e DeepSeek Harness | 2e：导出的模型输入只保留 text/image（dsh_config 最终版本） | 已迁移 |
 | `39183b59` | v4.0.24 | fix(proxy): keep max effort for every GPT 5.6+ Sol/Terra/Luna/Astra model | 1b 代理协议 | 1b：GPT 5.6+ Sol/Terra/Luna/Astra 全系保留 max 档 | 已迁移 |
 | `6532c5a9` | v4.0.24 | chore(release): v4.0.24 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `1f12a3d4` | v4.0.24 | docs(release): add v4.0.24 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -1025,3 +1025,12 @@
   - 测试：上游 `tests/mcp_commands.rs` 3 个、`tests/provider_service.rs` 1 个、`tests/prompt_live_sync.rs` 1 个 omp 用例改写为 Web 单元测试，另补 v19 → v20 迁移用例。
   - 转出：`providerLabel` 与用量页筛选随 5b（accc4489）；`3d4a3da3` 的 DSH 部分随 2e。上游 AddProvider/EditProvider 的“可提交”用例因 Web 无 `onSubmitReadyChange` 未迁移。
   - 验证：`cargo test --lib` 3205 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 163 个文件 1776 项通过、2 项跳过（中途一次全量运行中 `modelsDevAutoSync` 偶发超时，单独与再次全量运行均通过）；改动的 Rust 文件逐个 rustfmt 检查通过。
+- 2026-11-04：完成批次 2e（DeepSeek Harness，7 项，另含 `3d4a3da3` 的 DSH 部分）。
+  - 后端：DSH 专属模块（`dsh_config`、`mcp/dsh`、`services/dsh_account`、`session_usage_dsh`、`session_manager/providers/dsh`）取上游最终版本；`AppType::Dsh`（累加式，同 Kimi / MiniMax Code 的原生节点：供应商与 MCP 写各 profile 的 `cordis.patch.yml` 并与数据库一起提交；列表读取与全量同步时给新出现的 profile 补上已管理的供应商与 MCP）接入应用配置、MCP、Skills（`$DSH_HOME/skills`，存开关）、提示词（`$DSH_HOME/AGENTS.md`）、会话浏览（不可删除；zstd 会话的内容块按解压后的偏移读取）、用量导入。DSH 没有代理适配器，连通检测直接拒绝（上游同样）。DSH 的增删改与列表只给 DSH 加按应用的锁，不改动 Kimi 既有的锁。`proxy/http_client` 增加不跟随重定向的 `no_redirect`（带自定义凭据头的账号请求用），`mcp::validation` 改为 crate 内可见。
+  - 数据库：Web 版本链 v20 → v21 为 `mcp_servers`、`skills` 增加 `enabled_dsh`，为 `session_log_sync` 增加 `parser_state`（对应上游 v23 → v24）；`SyncCursor` 带上 `parser_state`。Web 请求日志没有 `pricing_model`、`input_token_semantics` 列：DSH 的 `<路由>:<模型>` 仍按裸名计价，但导入时没有定价、之后才补价的前缀模型无法回填费用，对应上游用例未迁移。
+  - 接口：DeepSeek 账号 `GET/DELETE /api/dsh/account`、`POST /api/dsh/account/login`、`GET/DELETE /api/dsh/account/login/:flowId`。浏览器登录的回调监听在服务端本机回环地址，只有浏览器与服务端在同一台机器时才能完成。
+  - 前端：dsh 接入各处应用清单，表单走 McodeProviderForm（保留 JSON 编辑框，与上游一致），DeepSeek 官方登录预设与账号组（余额、浏览器登录轮询）、授权中心分组；`App.tsx` 恢复上次应用时按 `APP_IDS` 校验（此前清单漏了 kimi/agy/omp，刷新后不会恢复到这三个应用）；用量脚本弹窗对 mcode/dsh 读 `options.{baseURL, apiKey}`（同上游）。
+  - 格式：发现此前各批次用 stdin 管道跑的 `rustfmt --check` 即使有差异也返回 0，此前记录的“rustfmt 检查通过”不成立；本批改为按输出判断，重新检查迁移开始以来改动的全部 Rust 文件，格式化了 11 个此前未格式化的文件（各批次遗留，非本批内容）。
+  - 测试：上游 `tests/dsh_commands.rs` 3 个用例改写为 `services/provider/dsh_tests.rs`，另补 v20 → v21 迁移用例。
+  - 转出：用量页 `providerLabel` 与筛选随 5b（6fa328f3）；预设副行“用 DeepSeek 账号登录”随 5a（1f21c289）；DSH 模型方言专用控件随 5a（3d4a3da3）。
+  - 验证：`cargo test --lib` 3269 项通过、6 项忽略（一次全量运行中 `services::proxy::tests::codex_takeover_without_provider_selects_a_local_authenticated_route` 偶发失败，单独运行 3 次与再次全量运行 2 次均通过；该用例读全局设置且未串行化）；`tsc --noEmit` 通过；前端全量 Vitest 166 个文件 1788 项通过、2 项跳过。

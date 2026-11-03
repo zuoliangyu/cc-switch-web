@@ -1021,6 +1021,10 @@ impl Database {
                         "Pi (Session)".to_string()
                     } else if provider_id == "_omp_session" {
                         "Oh My Pi (Session)".to_string()
+                    } else if provider_id == "_dsh_session" {
+                        "DeepSeek Harness (Session)".to_string()
+                    } else if provider_id == "_dsh_account_session" {
+                        "DeepSeek Harness (OAuth)".to_string()
                     } else if provider_id == "_mcode_session" {
                         "MiniMax Code (Session)".to_string()
                     } else if provider_id == "_opencode_session" {

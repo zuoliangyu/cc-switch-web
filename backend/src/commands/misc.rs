@@ -1401,10 +1401,9 @@ fn agy_launch_command(
         let mut content = String::new();
         for (key, value) in env {
             match value {
-                Some(value) => content.push_str(&format!(
-                    "export {key}={}\n",
-                    shell_single_quote(value)
-                )),
+                Some(value) => {
+                    content.push_str(&format!("export {key}={}\n", shell_single_quote(value)))
+                }
                 None => content.push_str(&format!("unset {key}\n")),
             }
         }

@@ -98,7 +98,8 @@ export function ProviderActions({
     appId === "hermes" ||
     appId === "pi" ||
     appId === "omp" ||
-    appId === "kimi";
+    appId === "kimi" ||
+    appId === "dsh";
 
   // 故障转移模式下的按钮逻辑（累加模式和 OMO 应用不支持故障转移）
   const isFailoverMode =

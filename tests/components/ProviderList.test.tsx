@@ -79,6 +79,18 @@ vi.mock("@/components/providers/ProviderCard", () => ({
   },
 }));
 
+const dshAccountStatusMock = vi.fn();
+
+vi.mock("@/components/providers/DshAccount", () => ({
+  useDshAccountStatus: (enabled: boolean) =>
+    enabled ? dshAccountStatusMock() : { data: undefined },
+  accountName: (status: any, fallback: string) =>
+    status.profile?.name ?? fallback,
+  DshAccountCard: ({ status }: any) => (
+    <div data-testid="dsh-account-card">{status.profile?.name}</div>
+  ),
+}));
+
 vi.mock("@/components/UsageFooter", () => ({
   default: () => <div data-testid="usage-footer" />,
 }));
@@ -385,5 +397,48 @@ describe("ProviderList Component", () => {
     expect(
       screen.getByText("claudeDesktop.statusBaseUrlMismatch"),
     ).toBeInTheDocument();
+  });
+
+  it("shows the signed-in DeepSeek account as an official card", async () => {
+    dshAccountStatusMock.mockReturnValue({
+      data: { signedIn: true, expired: false, profile: { name: "Jason" } },
+    });
+    renderWithQueryClient(
+      <ProviderList
+        providers={{}}
+        currentProviderId=""
+        appId="dsh"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId("dsh-account-card")).toHaveTextContent(
+      "Jason",
+    );
+  });
+
+  it("keeps the empty state and no account card while signed out of DeepSeek", async () => {
+    dshAccountStatusMock.mockReturnValue({
+      data: { signedIn: false, expired: false, profile: null },
+    });
+    renderWithQueryClient(
+      <ProviderList
+        providers={{}}
+        currentProviderId=""
+        appId="dsh"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("dsh.empty.title")).toBeInTheDocument();
+    expect(screen.queryByTestId("dsh-account-card")).not.toBeInTheDocument();
   });
 });

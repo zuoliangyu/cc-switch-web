@@ -165,6 +165,7 @@ export type AppTypeFilter =
   | "omp"
   | "mcode"
   | "kimi"
+  | "dsh"
   | "agy";
 
 export interface StatsFilters {

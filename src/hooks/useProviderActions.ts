@@ -337,7 +337,8 @@ export function useProviderActions(
             activeApp === "pi" ||
             activeApp === "omp" ||
             activeApp === "mcode" ||
-            activeApp === "kimi";
+            activeApp === "kimi" ||
+            activeApp === "dsh";
           const messageKey = isMultiProviderApp
             ? "notifications.addToConfigSuccess"
             : "notifications.switchSuccess";

@@ -4,6 +4,7 @@ import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSect
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
+import { DshAccountLogin } from "@/components/providers/DshAccount";
 import {
   AgyOAuthSection,
   useAgyAccountSupported,
@@ -75,6 +76,10 @@ export function AuthCenterPanel({
       </div>
       <div className="scroll-mt-4">
         <KimiAccountLogin helpSide="top" />
+      </div>
+      {/* DeepSeek 账号的登录回调也落在服务端本机：浏览器要和服务端在同一台机器上 */}
+      <div className="scroll-mt-4">
+        <DshAccountLogin helpSide="top" />
       </div>
       {/* Antigravity 切号只实现了 macOS 钥匙串，登录回调也只监听服务端本机：服务端支持时才显示 */}
       {showAgy && (

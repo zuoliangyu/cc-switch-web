@@ -23,6 +23,11 @@ import { useStreamCheck } from "@/hooks/useStreamCheck";
 import { ProviderCard } from "@/components/providers/ProviderCard";
 import { ProviderEmptyState } from "@/components/providers/ProviderEmptyState";
 import {
+  DshAccountCard,
+  accountName as dshAccountName,
+  useDshAccountStatus,
+} from "@/components/providers/DshAccount";
+import {
   useAutoFailoverEnabled,
   useFailoverQueue,
   useAddToFailoverQueue,
@@ -129,7 +134,7 @@ export function ProviderList({
   // 判断供应商是否已添加到配置（累加模式应用：OpenCode/OpenClaw/Hermes）
   const isProviderInConfig = useCallback(
     (providerId: string): boolean => {
-      if (appId === "mcode" || appId === "kimi")
+      if (appId === "mcode" || appId === "kimi" || appId === "dsh")
         return providers[providerId]?.meta?.liveConfigManaged === true;
       if (appId === "opencode") {
         return opencodeLiveIds?.includes(providerId) ?? false;
@@ -179,6 +184,7 @@ export function ProviderList({
     "hermes",
     "pi",
     "kimi",
+    "dsh",
     "agy",
     "omp",
   ].includes(appId);
@@ -359,6 +365,19 @@ export function ProviderList({
     });
   }, [searchTerm, sortedProviders]);
 
+  // DSH 登录了 DeepSeek 账号时，列表最前面画一张官方账号卡（不是供应商行，见 DshAccountCard）
+  const { data: dshAccount } = useDshAccountStatus(appId === "dsh");
+  const dshAccountCard =
+    appId === "dsh" && dshAccount?.signedIn ? dshAccount : null;
+  const searchKeyword = searchTerm.trim().toLowerCase();
+  const showDshAccountCard = Boolean(
+    dshAccountCard &&
+      (!searchKeyword ||
+        ["deepseek", dshAccountName(dshAccountCard, "")].some((value) =>
+          value.toLowerCase().includes(searchKeyword),
+        )),
+  );
+
   const claudeDesktopStatusMessages = useMemo(() => {
     if (appId !== "claude-desktop" || !claudeDesktopStatus) return [];
 
@@ -404,21 +423,38 @@ export function ProviderList({
   }
 
   if (sortedProviders.length === 0) {
-    return (
+    const emptyState = (
       <ProviderEmptyState
         appId={appId}
         onCreate={onCreate}
         onImport={
-          appId === "mcode" || appId === "kimi"
+          appId === "mcode" || appId === "kimi" || appId === "dsh"
             ? undefined
             : () => importMutation.mutate()
         }
       />
     );
+    return dshAccountCard ? (
+      <div className="space-y-4">
+        <DshAccountCard status={dshAccountCard} />
+        {emptyState}
+      </div>
+    ) : (
+      emptyState
+    );
   }
 
   const renderProviderList = () => (
     <div className="space-y-4">
+      {appId === "dsh" && (
+        // DSH 的供应商一起写进 Web 和 Desktop 两份配置，在这里说明
+        <p className="m-0 text-xs text-muted-foreground">
+          {t("dsh.sharedProviders")}
+        </p>
+      )}
+      {showDshAccountCard && dshAccountCard && (
+        <DshAccountCard status={dshAccountCard} />
+      )}
       {filteredProviders.map((provider) => {
         const isOmo = provider.category === "omo";
         const isOmoSlim = provider.category === "omo-slim";

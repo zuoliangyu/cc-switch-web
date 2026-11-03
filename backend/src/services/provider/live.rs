@@ -32,6 +32,9 @@ pub(crate) fn provider_exists_in_live_config(
         AppType::Kimi => {
             crate::kimi_config::get_providers().map(|providers| providers.contains_key(provider_id))
         }
+        AppType::Dsh => {
+            crate::dsh_config::get_providers().map(|providers| providers.contains_key(provider_id))
+        }
         AppType::Omp => Ok(crate::omp_config::get_providers()?.contains_key(provider_id)),
         _ => Ok(false),
     }
@@ -375,6 +378,7 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
+        | AppType::Dsh
         | AppType::Agy
         | AppType::Omp => false,
     }
@@ -453,6 +457,7 @@ pub(crate) fn remove_common_config_from_settings(
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
+        | AppType::Dsh
         | AppType::Agy
         | AppType::Omp => Ok(settings.clone()),
     }
@@ -516,6 +521,7 @@ fn apply_common_config_to_settings(
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
+        | AppType::Dsh
         | AppType::Agy
         | AppType::Omp => Ok(settings.clone()),
     }
@@ -947,6 +953,9 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
         AppType::Kimi => {
             crate::kimi_config::set_provider(&provider.id, provider.settings_config.clone())?
         }
+        AppType::Dsh => {
+            crate::dsh_config::set_provider(&provider.id, provider.settings_config.clone())?
+        }
         AppType::Agy => {
             // 卡片只作用于它打开的终端，真实的 settings.json 不写（见 agy_config 模块说明）
             return Err(AppError::Config(
@@ -1039,7 +1048,36 @@ pub(crate) fn sync_current_provider_for_app_to_live(
 /// 这确保了配置导入后无效 ID 会自动 fallback 到数据库。
 ///
 /// For additive mode apps (OpenCode), all providers are synced instead of just the current one.
+/// Populate newly encountered DSH profiles with managed providers and enabled MCP servers.
+/// The native writer records completion locally so later native deletions remain intentional.
+pub(crate) fn initialize_dsh_profiles(state: &AppState) -> Result<(), AppError> {
+    let providers = state
+        .db
+        .get_all_providers("dsh")?
+        .into_iter()
+        .filter(|(_, provider)| {
+            provider
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.live_config_managed)
+                == Some(true)
+        })
+        .map(|(id, provider)| (id, provider.settings_config))
+        .collect();
+    let servers = state
+        .db
+        .get_all_mcp_servers()?
+        .into_iter()
+        .filter(|(_, server)| server.apps.dsh)
+        .map(|(id, server)| (id, server.server))
+        .collect();
+    crate::dsh_config::initialize_profiles(&providers, &servers)
+}
+
 pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
+    // DSH 的 profile 由它自己的配置文件维护：全量同步只给新出现的 profile 补上
+    // 已管理的供应商与 MCP，失败不阻断其余应用，最后一并上报（同上游）。
+    let dsh_result = initialize_dsh_profiles(state);
     // Sync providers based on mode
     for app_type in AppType::all() {
         // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）；
@@ -1047,7 +1085,7 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
         // Oh My Pi 的 models.yml 只经它自己的供应商服务改动（上游同样跳过）。
         if matches!(
             app_type,
-            AppType::Mcode | AppType::Kimi | AppType::Agy | AppType::Omp
+            AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Agy | AppType::Omp
         ) {
             continue;
         }
@@ -1069,6 +1107,11 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
             // Note: get_effective_current_provider already validates existence,
             // so providers.get() should always succeed here
         }
+    }
+
+    if let Err(error) = dsh_result {
+        log::warn!("初始化 DeepSeek Harness profile 失败: {error}");
+        return Err(AppError::Message(format!("provider/dsh: {error}")));
     }
 
     // MCP 逐应用同步失败不应跳过后续 Skill 同步，但最终仍需上报结果不完整。
@@ -1191,6 +1234,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
         AppType::Kimi => Ok(json!(crate::kimi_config::get_providers()?)),
         AppType::Agy => crate::agy_config::read_live_settings(),
         AppType::Omp => Ok(json!(crate::omp_config::get_providers()?)),
+        AppType::Dsh => Ok(json!(crate::dsh_config::get_providers()?)),
     }
 }
 
@@ -1307,6 +1351,7 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
+        | AppType::Dsh
         | AppType::Omp => {
             unreachable!("additive mode apps are handled by early return")
         }

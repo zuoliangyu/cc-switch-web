@@ -232,6 +232,13 @@ impl StreamCheckService {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
 
+        // DeepSeek Harness 没有代理适配器，上游同样不做连通检测。
+        if matches!(app_type, AppType::Dsh) {
+            return Err(AppError::InvalidInput(
+                "dsh does not support proxy adapters".to_string(),
+            ));
+        }
+
         // Antigravity 的官方登录卡走 agy 自己的登录，没有可检测的端点（上游同样拒绝）。
         if matches!(app_type, AppType::Agy)
             && crate::services::provider::agy_direct::is_official(provider)
@@ -331,6 +338,9 @@ impl StreamCheckService {
             | AppType::Kimi
             | AppType::Omp => {
                 unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
+            }
+            AppType::Dsh => {
+                unreachable!("DeepSeek Harness 在入口处已拒绝")
             }
         };
 
@@ -1375,7 +1385,7 @@ impl StreamCheckService {
             AppType::Hermes => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
-            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => {
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Omp => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }

@@ -555,7 +555,19 @@ mod tests {
         assert_eq!(import_records(&db, "fixture", &rows, None).unwrap(), (1, 0));
         let conn = db.conn.lock().unwrap();
         // Web 尚无 input_token_semantics 列（随批次 5b 的 bc4d1a50 评估），只核对 token 数
-        let got=conn.query_row("SELECT input_tokens,output_tokens,cache_read_tokens FROM proxy_request_logs",[],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?))).unwrap();
+        let got = conn
+            .query_row(
+                "SELECT input_tokens,output_tokens,cache_read_tokens FROM proxy_request_logs",
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
         assert_eq!(got, (80, 12, 20));
     }
 

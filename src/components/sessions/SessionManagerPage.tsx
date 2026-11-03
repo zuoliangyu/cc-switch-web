@@ -1204,6 +1204,15 @@ export function SessionManagerPage({
             </p>
           )}
 
+          {appFilter === "dsh" && (
+            <p className="m-0 mx-6 mt-2 shrink-0 text-xs text-muted-foreground">
+              {t("sessionManager.dshMergedNote", {
+                defaultValue:
+                  "DeepSeek Harness 的 Web 和 Desktop 共用同一份会话记录，这里合并显示。",
+              })}
+            </p>
+          )}
+
           {appFilter === "pi" && piStatus === "requires_project_context" && (
             <div role="status" className="mx-6 mt-3 shrink-0">
               <Notice

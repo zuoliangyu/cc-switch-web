@@ -213,8 +213,12 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           apiKey: root.apiKey,
           baseUrl: firstModel?.baseUrl || root.baseUrl,
         };
-      } else if (appId === "opencode") {
-        // OpenCode: 凭据嵌在 options（SDK options 对象）
+      } else if (
+        appId === "opencode" ||
+        appId === "dsh" ||
+        appId === "mcode"
+      ) {
+        // OpenCode / DeepSeek Harness / MiniMax Code: 凭据嵌在 options.{baseURL, apiKey}
         const options = (config as any).options || {};
         return {
           apiKey: options.apiKey,

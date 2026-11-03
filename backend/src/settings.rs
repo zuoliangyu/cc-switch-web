@@ -52,6 +52,8 @@ pub struct VisibleApps {
     pub agy: bool,
     #[serde(default = "default_true")]
     pub omp: bool,
+    #[serde(default = "default_true")]
+    pub dsh: bool,
 }
 
 impl Default for VisibleApps {
@@ -69,6 +71,7 @@ impl Default for VisibleApps {
             kimi: true,
             agy: true,
             omp: true,
+            dsh: true,
         }
     }
 }
@@ -953,7 +956,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
         AppType::Agy => settings.current_provider_agy.clone(),
         AppType::Hermes => None,
-        AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => None,
+        AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Omp => None,
     }
 }
 
@@ -975,7 +978,12 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
         AppType::Agy => settings.current_provider_agy = id.map(|s| s.to_string()),
-        AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => {}
+        AppType::Hermes
+        | AppType::Pi
+        | AppType::Mcode
+        | AppType::Kimi
+        | AppType::Dsh
+        | AppType::Omp => {}
     }
 
     update_settings(settings)

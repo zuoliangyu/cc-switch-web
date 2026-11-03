@@ -72,7 +72,8 @@ impl Database {
             enabled_pi BOOLEAN NOT NULL DEFAULT 0,
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_agy BOOLEAN NOT NULL DEFAULT 0,
-            enabled_omp BOOLEAN NOT NULL DEFAULT 0
+            enabled_omp BOOLEAN NOT NULL DEFAULT 0,
+            enabled_dsh BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -105,6 +106,7 @@ impl Database {
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_agy BOOLEAN NOT NULL DEFAULT 0,
+            enabled_dsh BOOLEAN NOT NULL DEFAULT 0,
             installed_at INTEGER NOT NULL DEFAULT 0,
             content_hash TEXT,
             updated_at INTEGER NOT NULL DEFAULT 0
@@ -299,7 +301,8 @@ impl Database {
                 last_line_offset INTEGER NOT NULL DEFAULT 0,
                 last_synced_at INTEGER NOT NULL,
                 last_byte_offset INTEGER,
-                last_tail_fingerprint INTEGER
+                last_tail_fingerprint INTEGER,
+                parser_state TEXT
             )",
             [],
         )
@@ -388,6 +391,8 @@ impl Database {
             ("mcp_servers", "enabled_agy"),
             ("skills", "enabled_agy"),
             ("mcp_servers", "enabled_omp"),
+            ("mcp_servers", "enabled_dsh"),
+            ("skills", "enabled_dsh"),
         ] {
             if Self::table_exists(conn, table)? {
                 Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
@@ -541,6 +546,13 @@ impl Database {
                         log::info!("迁移数据库从 v19 到 v20（MCP 添加 Oh My Pi 支持）");
                         Self::migrate_v19_to_v20(conn)?;
                         Self::set_user_version(conn, 20)?;
+                    }
+                    20 => {
+                        log::info!(
+                            "迁移数据库从 v20 到 v21（Skills/MCP 添加 DeepSeek Harness 支持）"
+                        );
+                        Self::migrate_v20_to_v21(conn)?;
+                        Self::set_user_version(conn, 21)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1496,6 +1508,25 @@ impl Database {
                 "enabled_omp",
                 "BOOLEAN NOT NULL DEFAULT 0",
             )?;
+        }
+        Ok(())
+    }
+
+    /// v20 -> v21 迁移：为 mcp_servers、skills 添加 enabled_dsh 列，为 session_log_sync 添加
+    /// parser_state 列（DSH 用量导入：游标处未完成请求的解析上下文）。上游 6fa328f3，上游编号 v23 -> v24
+    fn migrate_v20_to_v21(conn: &Connection) -> Result<(), AppError> {
+        for table in ["mcp_servers", "skills"] {
+            if Self::table_exists(conn, table)? {
+                Self::add_column_if_missing(
+                    conn,
+                    table,
+                    "enabled_dsh",
+                    "BOOLEAN NOT NULL DEFAULT 0",
+                )?;
+            }
+        }
+        if Self::table_exists(conn, "session_log_sync")? {
+            Self::add_column_if_missing(conn, "session_log_sync", "parser_state", "TEXT")?;
         }
         Ok(())
     }

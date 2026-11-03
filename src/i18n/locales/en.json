@@ -935,7 +935,8 @@
     "mcode": "MiniMax Code",
     "agy": "Antigravity",
     "omp": "Oh My Pi",
-    "kimi": "Kimi Code"
+    "kimi": "Kimi Code",
+    "dsh": "DeepSeek Harness"
   },
   "appSwitcher": {
     "more": "More apps"
@@ -1046,6 +1047,7 @@
     "groupByTime": "By time",
     "groupByProject": "By project",
     "desktopNote": "Claude Desktop has no session records of its own. Showing Claude Code sessions.",
+    "dshMergedNote": "DeepSeek Harness Web and Desktop share one set of session records, shown together here.",
     "matchCount": "{{count}} matching sessions",
     "totalCount": "{{count}} sessions",
     "selectAllMatches": "Select all matches",
@@ -4175,6 +4177,38 @@
       "providerMissing": "This Oh My Pi provider is no longer saved.",
       "legacyModelsJson": "Oh My Pi still has a legacy models.json, which omp migrates to models.yml on its next start. Run omp once, then add the provider again."
     }
+  },
+  "dsh": {
+    "empty": {
+      "title": "Add a DeepSeek Harness provider",
+      "description": "Configure an endpoint, API key and models. Existing custom providers appear here automatically."
+    },
+    "sharedProviders": "Added providers are written into both the Web and Desktop configs of DeepSeek Harness (plus any initialized headless or acp profile); pick the model inside DeepSeek Harness.",
+    "sharedProvidersNote": "Shared by Web and Desktop",
+    "account": {
+      "help": "The DeepSeek account signs in through the browser (OAuth), here or in DeepSeek Harness. The sign-in is stored in $DSH_HOME/.credentials.yaml (default ~/.dsh/.credentials.yaml) and shared by DeepSeek Harness Web and Desktop: signing in or out anywhere applies to both, and a running DeepSeek Harness reloads it automatically. Usage of the account's models appears separately on the Usage page as \"DeepSeek account (OAuth)\".",
+      "statusFailed": "Couldn't read the DeepSeek account sign-in",
+      "empty": "Not signed in to a DeepSeek account",
+      "unnamed": "DeepSeek account",
+      "expired": "Sign-in expired. Sign in again",
+      "shared": "Shared by Web and Desktop",
+      "signOut": "Sign out",
+      "signOutConfirm": "Sign out of the DeepSeek account \"{{name}}\"? DeepSeek Harness Web and Desktop will both be signed out. API key providers aren't affected.",
+      "signOutFailed": "Couldn't sign out of the DeepSeek account",
+      "balance": "Balance {{amount}}",
+      "bonus": "Bonus {{amount}}",
+      "balanceFailed": "Balance unavailable right now",
+      "signedIn": "Signed in to the DeepSeek account for both Web and Desktop",
+      "signInFailed": "Couldn't sign in to the DeepSeek account",
+      "presetName": "DeepSeek official sign-in",
+      "presetDescription": "After you sign in to your DeepSeek account in the browser, DeepSeek Harness serves the account's models directly; no provider needs to be added. Web and Desktop share this sign-in. Sign in and out in the Auth Center; once signed in, the account appears under Added.",
+      "manageAccounts": "Manage DeepSeek account",
+      "cardSubtitle": "Official account · shared by Web and Desktop",
+      "expiredChip": "Sign-in expired",
+      "editDisabled": "DeepSeek Harness provides this account's models itself; there is nothing to edit.",
+      "managedHint": "This account is managed in the Auth Center; the card disappears after you sign out."
+    },
+    "deleteSessionHint": "Delete this session in DeepSeek Harness to keep its history consistent."
   },
   "appMatrix": {
     "ompDiscovery": {

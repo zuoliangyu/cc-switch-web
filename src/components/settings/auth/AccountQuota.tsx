@@ -73,7 +73,6 @@ export function AccountQuotaColumn({
     Boolean(queriedAt) ||
       (state?.kind === "rows" && state.rows.some(({ line }) => line.resetsAt)),
   );
-  const agoId = useId();
   if (!state) return null;
   // 有一档带重置时间，每行数值后面都留出倒计时那一格（各行对齐），整列加宽
   const showReset =
@@ -83,11 +82,6 @@ export function AccountQuotaColumn({
     showReset ? (
       <ResetSlot countdown={countdownStr(line.resetsAt, now)} className="" />
     ) : null;
-
-  const ago = queriedAt ? formatRelativeTime(queriedAt, now, t) : "";
-  const agoText = loading
-    ? t("authCenter.quota.updating", { defaultValue: "更新中…" })
-    : ago;
 
   return (
     <>
@@ -149,37 +143,69 @@ export function AccountQuotaColumn({
           </span>
         )}
       </div>
-      <div className="flex w-[84px] shrink-0 items-center justify-end gap-0.5 whitespace-nowrap text-xs text-muted-foreground">
-        <span id={agoId} className="truncate">
-          {agoText}
-        </span>
-        <HoverTip
-          content={t("authCenter.quota.refresh", { defaultValue: "刷新额度" })}
-        >
-          <button
-            type="button"
-            aria-label={t("authCenter.quota.refreshAria", {
-              defaultValue: "刷新 {{login}} 的额度",
-              login,
-            })}
-            aria-disabled={loading}
-            aria-describedby={loading ? agoId : undefined}
-            onClick={() => {
-              if (!loading) onRefresh();
-            }}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-disabled:opacity-45 aria-disabled:hover:bg-transparent"
-          >
-            <RefreshCw
-              className={cn(
-                "h-[13px] w-[13px]",
-                loading && "motion-safe:animate-spin",
-              )}
-              strokeWidth={1.5}
-            />
-          </button>
-        </HoverTip>
-      </div>
+      <QuotaRefreshCell
+        login={login}
+        queriedAt={queriedAt}
+        loading={loading}
+        onRefresh={onRefresh}
+      />
     </>
+  );
+}
+
+interface QuotaRefreshCellProps {
+  login: string;
+  queriedAt?: number | null;
+  loading: boolean;
+  onRefresh: () => void;
+}
+
+/** 额度列右边 84 宽的「x 分钟前 ↻」；各服务的额度列和 DeepSeek 账号的余额列共用 */
+export function QuotaRefreshCell({
+  login,
+  queriedAt,
+  loading,
+  onRefresh,
+}: QuotaRefreshCellProps) {
+  const { t } = useTranslation();
+  const now = useNow(Boolean(queriedAt));
+  const agoId = useId();
+  const ago = queriedAt ? formatRelativeTime(queriedAt, now, t) : "";
+  const agoText = loading
+    ? t("authCenter.quota.updating", { defaultValue: "更新中…" })
+    : ago;
+
+  return (
+    <div className="flex w-[84px] shrink-0 items-center justify-end gap-0.5 whitespace-nowrap text-xs text-muted-foreground">
+      <span id={agoId} className="truncate">
+        {agoText}
+      </span>
+      <HoverTip
+        content={t("authCenter.quota.refresh", { defaultValue: "刷新额度" })}
+      >
+        <button
+          type="button"
+          aria-label={t("authCenter.quota.refreshAria", {
+            defaultValue: "刷新 {{login}} 的额度",
+            login,
+          })}
+          aria-disabled={loading}
+          aria-describedby={loading ? agoId : undefined}
+          onClick={() => {
+            if (!loading) onRefresh();
+          }}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-disabled:opacity-45 aria-disabled:hover:bg-transparent"
+        >
+          <RefreshCw
+            className={cn(
+              "h-[13px] w-[13px]",
+              loading && "motion-safe:animate-spin",
+            )}
+            strokeWidth={1.5}
+          />
+        </button>
+      </HoverTip>
+    </div>
   );
 }
 

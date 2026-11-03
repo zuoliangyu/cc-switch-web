@@ -39,6 +39,7 @@ import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { piApi } from "@/lib/api/pi";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
+import { APP_IDS } from "@/config/appConfig";
 import {
   hermesKeys,
   useHermesHealth,
@@ -171,22 +172,9 @@ type View =
 const DRAG_BAR_HEIGHT = 0; // px
 const HEADER_HEIGHT = 64; // px
 const STORAGE_KEY = "cc-switch-last-app";
-const VALID_APPS: AppId[] = [
-  "claude",
-  "claude-desktop",
-  "codex",
-  "gemini",
-  "grokbuild",
-  "opencode",
-  "openclaw",
-  "hermes",
-  "pi",
-  "mcode",
-];
-
 const getInitialApp = (): AppId => {
   const saved = localStorage.getItem(STORAGE_KEY) as AppId | null;
-  if (saved && VALID_APPS.includes(saved)) {
+  if (saved && APP_IDS.includes(saved)) {
     return saved;
   }
   return "claude";
@@ -254,6 +242,7 @@ function App() {
     pi: true,
     mcode: true,
     kimi: true,
+    dsh: true,
     agy: true,
     omp: true,
   };
@@ -313,7 +302,7 @@ function App() {
 
     const checkEnvOnSwitch = async () => {
       try {
-        if (activeApp === "mcode") return;
+        if (activeApp === "mcode" || activeApp === "dsh") return;
         const conflicts = await checkEnvConflicts(activeApp);
         if (conflicts.length === 0) {
           return;
@@ -400,6 +389,7 @@ function App() {
     activeApp !== "pi" &&
     activeApp !== "mcode" &&
     activeApp !== "kimi" &&
+    activeApp !== "dsh" &&
     activeApp !== "agy" &&
     activeApp !== "omp" &&
     (takeoverStatus?.[activeApp] || false);
@@ -440,7 +430,8 @@ function App() {
     activeApp === "gemini" ||
     activeApp === "pi" ||
     activeApp === "omp" ||
-    activeApp === "mcode";
+    activeApp === "mcode" ||
+    activeApp === "dsh";
 
   const {
     addProvider,
@@ -612,8 +603,12 @@ function App() {
         await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
       } else if (activeApp === "omp") {
         await queryClient.invalidateQueries({ queryKey: ["omp", "state"] });
-      } else if (activeApp === "mcode" || activeApp === "kimi") {
-        // MiniMax Code / Kimi Code 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
+      } else if (
+        activeApp === "mcode" ||
+        activeApp === "kimi" ||
+        activeApp === "dsh"
+      ) {
+        // MiniMax Code / Kimi Code / DeepSeek Harness 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
         await queryClient.invalidateQueries({
           queryKey: ["providers", activeApp],
         });
@@ -749,7 +744,11 @@ function App() {
         existingKeys,
       );
       duplicatedProvider.addToLive = false;
-    } else if (activeApp === "mcode" || activeApp === "kimi") {
+    } else if (
+      activeApp === "mcode" ||
+      activeApp === "dsh" ||
+      activeApp === "kimi"
+    ) {
       // The list includes live custom nodes; the backend also guards native account keys.
       duplicatedProvider.providerKey = generateUniqueProviderCopyKey(
         provider.id,
@@ -951,7 +950,8 @@ function App() {
                         activeApp === "pi" ||
                         activeApp === "omp" ||
                         activeApp === "mcode" ||
-                        activeApp === "kimi"
+                        activeApp === "kimi" ||
+                        activeApp === "dsh"
                           ? (provider) =>
                               setConfirmAction({ provider, action: "remove" })
                           : undefined
@@ -1153,7 +1153,8 @@ function App() {
               activeApp !== "hermes" &&
               activeApp !== "pi" &&
               activeApp !== "omp" &&
-              activeApp !== "mcode" && (
+              activeApp !== "mcode" &&
+              activeApp !== "dsh" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableFailoverToggle &&
                     appMode.data?.mode === "routing" && (
@@ -1163,6 +1164,7 @@ function App() {
               )}
             {currentView === "providers" &&
               activeApp !== "mcode" &&
+              activeApp !== "dsh" &&
               (settingsData?.showProfileSwitcher ?? false) && (
                 <div className="flex shrink-0 items-center">
                   <ProfileSwitcher activeApp={activeApp} />

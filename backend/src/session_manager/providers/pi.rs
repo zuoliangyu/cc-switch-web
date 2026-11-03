@@ -10,10 +10,10 @@ use crate::session_manager::{SessionMessage, SessionMeta};
 
 use super::pi_blocks::PiTranscript;
 use super::utils::for_each_jsonl_value;
+use super::utils::shell_escape;
 use super::utils::{
     extract_text, parse_timestamp_to_ms, path_basename, truncate_summary, TITLE_MAX_CHARS,
 };
-use super::utils::shell_escape;
 
 const PROVIDER_ID: &str = "pi";
 pub(crate) const MAX_TREE_ENTRIES: usize = 500_000;

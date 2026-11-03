@@ -1057,6 +1057,20 @@ export const agyWeb = {
     requestWithBody<T>("/api/providers/agy/models", "POST", payload),
 };
 
+/** DeepSeek Harness 的 DeepSeek 账号（`/api/dsh/account*`）：浏览器登录，Web 与 Desktop 共用 */
+export const dshWeb = {
+  status: <T>() => requestJson<T>("/api/dsh/account"),
+  signOut: <T>() => requestWithBody<T>("/api/dsh/account", "DELETE"),
+  loginStart: <T>() => requestWithBody<T>("/api/dsh/account/login", "POST"),
+  loginPoll: <T>(flowId: string) =>
+    requestJson<T>(`/api/dsh/account/login/${encodeURIComponent(flowId)}`),
+  loginCancel: <T>(flowId: string) =>
+    requestWithBody<T>(
+      `/api/dsh/account/login/${encodeURIComponent(flowId)}`,
+      "DELETE",
+    ),
+};
+
 /** Kimi Code 官方账号设备登录（`/api/auth/kimi/*`） */
 export const kimiOAuthWeb = {
   status: <T>() => requestJson<T>("/api/auth/kimi/status"),

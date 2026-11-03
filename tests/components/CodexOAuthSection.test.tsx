@@ -43,6 +43,10 @@ vi.mock("@/components/providers/forms/AgyOAuthSection", () => ({
   useAgyAccountSupported: () => false,
 }));
 
+vi.mock("@/components/providers/DshAccount", () => ({
+  DshAccountLogin: () => <div />,
+}));
+
 describe("CodexOAuthSection", () => {
   let scrollIntoViewDescriptor: PropertyDescriptor | undefined;
 

@@ -966,6 +966,40 @@ async fn get_pi_state() -> Result<Json<crate::services::pi_state::PiCurrentState
         .map_err(|error| ApiError::internal(format!("failed to load Pi state: {error}")))
 }
 
+async fn get_dsh_account_status(
+) -> Result<Json<crate::services::dsh_account::DshAccountStatus>, ApiError> {
+    crate::commands::dsh_account_status_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn sign_out_dsh_account() -> Result<Json<()>, ApiError> {
+    crate::commands::dsh_account_sign_out_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn start_dsh_account_login(
+) -> Result<Json<crate::services::dsh_account::DshLoginStart>, ApiError> {
+    crate::commands::dsh_account_login_start_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn poll_dsh_account_login(Path(flow_id): Path<String>) -> Result<Json<bool>, ApiError> {
+    crate::commands::dsh_account_login_poll_internal(&flow_id)
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
+async fn cancel_dsh_account_login(Path(flow_id): Path<String>) -> Json<()> {
+    crate::commands::dsh_account_login_cancel_internal(&flow_id);
+    Json(())
+}
+
 async fn get_omp_state(
     State(state): State<WebApiState>,
 ) -> Result<Json<crate::services::pi_state::PiCurrentState>, ApiError> {
@@ -1182,7 +1216,8 @@ struct KimiOAuthAccountRequest {
     account_id: String,
 }
 
-async fn kimi_oauth_status() -> Result<Json<crate::services::kimi_oauth::KimiOAuthStatus>, ApiError> {
+async fn kimi_oauth_status() -> Result<Json<crate::services::kimi_oauth::KimiOAuthStatus>, ApiError>
+{
     crate::commands::kimi_oauth_status_internal(&KIMI_OAUTH)
         .await
         .map(Json)
@@ -1260,7 +1295,11 @@ async fn add_provider_to_live_config(
     let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
     let app_state = state.app_state.clone();
     tokio::task::spawn_blocking(move || {
-        crate::services::provider::ProviderService::add_to_live_config(app_state.as_ref(), app_type, &id)
+        crate::services::provider::ProviderService::add_to_live_config(
+            app_state.as_ref(),
+            app_type,
+            &id,
+        )
     })
     .await
     .map_err(|e| ApiError::internal(format!("供应商添加到应用任务失败: {e}")))?
@@ -4887,7 +4926,8 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route(
             "/api/providers/:app/live-config/:id",
-            axum::routing::delete(remove_provider_from_live_config).post(add_provider_to_live_config),
+            axum::routing::delete(remove_provider_from_live_config)
+                .post(add_provider_to_live_config),
         )
         .route(
             "/api/universal-providers",
@@ -5062,6 +5102,15 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/prompts/:app/:id/enable", post(enable_prompt))
         .route("/api/pi/state", get(get_pi_state))
         .route("/api/omp/state", get(get_omp_state))
+        .route(
+            "/api/dsh/account",
+            get(get_dsh_account_status).delete(sign_out_dsh_account),
+        )
+        .route("/api/dsh/account/login", post(start_dsh_account_login))
+        .route(
+            "/api/dsh/account/login/:flow_id",
+            get(poll_dsh_account_login).delete(cancel_dsh_account_login),
+        )
         .route(
             "/api/pi/prompt-files/:kind",
             get(get_pi_prompt_file)

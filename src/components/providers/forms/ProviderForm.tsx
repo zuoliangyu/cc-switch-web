@@ -2634,7 +2634,8 @@ export type ProviderFormValues = ProviderFormData & {
 };
 
 export function ProviderForm(props: ProviderFormProps) {
-  if (props.appId === "mcode") return <McodeProviderForm {...props} />;
+  if (props.appId === "mcode" || props.appId === "dsh")
+    return <McodeProviderForm {...props} />;
   if (props.appId === "kimi") return <KimiProviderForm {...props} />;
   if (props.appId === "pi" || props.appId === "omp") {
     return <PiProviderForm {...props} />;

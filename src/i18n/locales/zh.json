@@ -935,7 +935,8 @@
     "mcode": "MiniMax Code",
     "agy": "Antigravity",
     "omp": "Oh My Pi",
-    "kimi": "Kimi Code"
+    "kimi": "Kimi Code",
+    "dsh": "DeepSeek Harness"
   },
   "appSwitcher": {
     "more": "更多应用"
@@ -1046,6 +1047,7 @@
     "groupByTime": "按时间",
     "groupByProject": "按项目",
     "desktopNote": "Claude Desktop 没有单独的会话记录，这里显示 Claude Code 的会话。",
+    "dshMergedNote": "DeepSeek Harness 的 Web 和 Desktop 共用同一份会话记录，这里合并显示。",
     "matchCount": "匹配 {{count}} 个会话",
     "totalCount": "共 {{count}} 个会话",
     "selectAllMatches": "全选匹配结果",
@@ -4175,6 +4177,38 @@
       "providerMissing": "此 Oh My Pi 供应商已不在保存的列表中。",
       "legacyModelsJson": "Oh My Pi 目录里还是旧的 models.json，omp 会在下次启动时把它迁移成 models.yml。请先运行一次 omp，再回来添加供应商。"
     }
+  },
+  "dsh": {
+    "empty": {
+      "title": "添加 DeepSeek Harness 供应商",
+      "description": "配置请求地址、API Key 和模型。已有的自定义供应商会自动显示在这里。"
+    },
+    "sharedProviders": "已添加的供应商会一起写进 DeepSeek Harness 的 Web 和 Desktop 配置（以及已初始化的 headless、acp），在 DeepSeek Harness 里选模型即可。",
+    "sharedProvidersNote": "Web 和 Desktop 共用这份列表",
+    "account": {
+      "help": "DeepSeek 账号用浏览器登录（OAuth），可以在这里登录，也可以在 DeepSeek Harness 里登录。登录信息保存在 $DSH_HOME/.credentials.yaml（默认 ~/.dsh/.credentials.yaml），DeepSeek Harness 的 Web 和 Desktop 共用：任一处登录或退出，两端同时生效，运行中的 DeepSeek Harness 会自动重新读取。账号路由的模型用量在用量页单独显示为「DeepSeek 账号（OAuth）」。",
+      "statusFailed": "无法读取 DeepSeek 账号的登录状态",
+      "empty": "未登录 DeepSeek 账号",
+      "unnamed": "DeepSeek 账号",
+      "expired": "登录已失效，请重新登录",
+      "shared": "Web 与 Desktop 共用",
+      "signOut": "退出登录",
+      "signOutConfirm": "退出 DeepSeek 账号「{{name}}」？DeepSeek Harness 的 Web 和 Desktop 会同时退出，API Key 供应商不受影响。",
+      "signOutFailed": "退出 DeepSeek 账号失败",
+      "balance": "余额 {{amount}}",
+      "bonus": "赠金 {{amount}}",
+      "balanceFailed": "余额暂时查不到",
+      "signedIn": "DeepSeek 账号已登录，Web 和 Desktop 都可以使用",
+      "signInFailed": "DeepSeek 账号登录失败",
+      "presetName": "DeepSeek 官方登录",
+      "presetDescription": "用浏览器登录 DeepSeek 账号后，DeepSeek Harness 会直接提供账号下的模型，不用再添加供应商；Web 和 Desktop 共用这份登录。登录和退出在授权中心管理，登录后账号会出现在「已添加」里。",
+      "manageAccounts": "管理 DeepSeek 账号",
+      "cardSubtitle": "官方账号 · Web 和 Desktop 共用",
+      "expiredChip": "登录已失效",
+      "editDisabled": "账号下的模型由 DeepSeek Harness 自动提供，无需编辑。",
+      "managedHint": "账号在授权中心管理：退出登录后这张卡会自动消失。"
+    },
+    "deleteSessionHint": "请在 DeepSeek Harness 中删除此会话，以保持原生历史记录一致。"
   },
   "appMatrix": {
     "ompDiscovery": {

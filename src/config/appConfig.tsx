@@ -27,6 +27,7 @@ export const APP_IDS: AppId[] = [
   "pi",
   "mcode",
   "kimi",
+  "dsh",
   "agy",
   "omp",
 ];
@@ -42,6 +43,7 @@ export const MCP_APP_IDS = [
   "pi",
   "mcode",
   "kimi",
+  "dsh",
   "agy",
   "omp",
 ] as const satisfies readonly AppId[];
@@ -56,6 +58,7 @@ export const SKILLS_APP_IDS = [
   "hermes",
   "mcode",
   "kimi",
+  "dsh",
   "agy",
   "pi",
   "omp",
@@ -146,6 +149,12 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
   },
+  dsh: {
+    label: "DeepSeek Harness",
+    icon: <ProviderIcon icon="deepseek" name="DeepSeek Harness" size={14} />,
+    activeClass: "theme-chip-primary",
+    badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
   kimi: {
     label: "Kimi Code",
     icon: <ProviderIcon icon="kimi" name="Kimi Code" size={14} />,
@@ -162,7 +171,7 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, agy: true, omp: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, dsh: true, agy: true, omp: true };
 
 /** Oh My Pi 是 Pi 的分支：供应商表单、启用状态和用量脚本命令与 Pi 共用。 */
 export type PiFamilyAppId = Extract<AppId, "pi" | "omp">;

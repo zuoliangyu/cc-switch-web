@@ -36,6 +36,7 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
     pi: "AGENTS.md",
     mcode: "~/.minimax/AGENTS.md",
     kimi: "~/.kimi-code/AGENTS.md",
+    dsh: "~/.dsh/AGENTS.md",
     agy: "~/.gemini/config/AGENTS.md",
     omp: "~/.omp/agent/AGENTS.md",
   };

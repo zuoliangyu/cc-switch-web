@@ -15,7 +15,7 @@ mod codex;
 mod gemini;
 mod grokbuild;
 mod opencode;
-mod validation;
+pub(crate) mod validation;
 
 use std::collections::HashMap;
 
@@ -55,6 +55,7 @@ pub(crate) fn merge_imported_server(
                 kimi: false,
                 agy: false,
                 omp: false,
+                dsh: false,
             },
             description: None,
             homepage: None,
@@ -83,6 +84,7 @@ pub(crate) use opencode::{
 };
 
 pub(crate) mod agy;
+pub(crate) mod dsh;
 pub(crate) mod kimi;
 pub(crate) mod mcode;
 pub(crate) mod omp;

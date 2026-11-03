@@ -123,7 +123,7 @@ async fn run_background_sync_round(db: std::sync::Arc<Database>) {
 /// 逐文件的单行查询（文件数随历史只增不减，逐文件查询意味着每轮上千次
 /// 取锁）。`last_synced_at` 对 Pi 路径是编码后的 revision，其余路径是
 /// 真实同步时间戳。
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct SyncCursor {
     pub last_modified: i64,
     pub last_line_offset: i64,
@@ -132,6 +132,8 @@ pub(crate) struct SyncCursor {
     /// 外部重写；NULL 表示无指纹可校验。
     pub last_tail_fingerprint: Option<i64>,
     pub last_synced_at: i64,
+    /// Parser context at the byte offset (DSH's unfinished steps). Committed with the cursor.
+    pub parser_state: Option<String>,
 }
 
 /// 一次性预取 session_log_sync 全表游标。
@@ -145,7 +147,7 @@ pub(crate) fn load_sync_cursors(db: &Database) -> Result<HashMap<String, SyncCur
     let mut stmt = conn
         .prepare(
             "SELECT file_path, last_modified, last_line_offset, last_synced_at, last_byte_offset,
-                    last_tail_fingerprint
+                    last_tail_fingerprint, parser_state
              FROM session_log_sync",
         )
         .map_err(|e| AppError::Database(format!("预取同步游标失败: {e}")))?;
@@ -158,6 +160,7 @@ pub(crate) fn load_sync_cursors(db: &Database) -> Result<HashMap<String, SyncCur
                 last_synced_at: row.get(3)?,
                 last_byte_offset: row.get(4)?,
                 last_tail_fingerprint: row.get(5)?,
+                parser_state: row.get(6)?,
             },
         ))
     });
@@ -205,6 +208,12 @@ pub fn sync_all_unlocked(db: &Database) -> SessionSyncResult {
         &mut result,
         "Oh My Pi",
         crate::services::session_usage_omp::sync_omp_usage(db),
+    );
+    // Web 与 Desktop 共用 `$DSH_HOME/sessions`，一次扫描覆盖两端
+    merge_sync_step(
+        &mut result,
+        "DeepSeek Harness",
+        crate::services::session_usage_dsh::sync_dsh_usage(db),
     );
     merge_sync_step(
         &mut result,
@@ -1804,7 +1813,7 @@ mod tests {
 
     fn sync_with_cursor(db: &Database, path: &Path) -> Result<ClaudeFileSync, AppError> {
         let cursors = load_sync_cursors(db)?;
-        let cursor = cursors.get(path.to_string_lossy().as_ref()).copied();
+        let cursor = cursors.get(path.to_string_lossy().as_ref()).cloned();
         sync_single_file(db, path, cursor.as_ref())
     }
 

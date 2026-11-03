@@ -52,6 +52,7 @@ export function AppVisibilitySettings({
     pi: true,
     mcode: true,
     kimi: true,
+    dsh: true,
     agy: true,
     omp: true,
   };

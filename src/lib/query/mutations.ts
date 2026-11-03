@@ -7,6 +7,7 @@ import { providersApi, sessionsApi, settingsApi, type AppId } from "@/lib/api";
 import type { DeleteSessionOptions } from "@/lib/api/sessions";
 import type { SwitchResult } from "@/lib/api/providers";
 import type { Provider, SessionMeta, Settings } from "@/types";
+import type { SubscriptionQuota } from "@/types/subscription";
 import {
   extractErrorMessage,
   translatePiProviderMutationError,
@@ -327,6 +328,16 @@ export const useSwitchProviderMutation = (appId: AppId) => {
       if (appId === "pi") {
         await invalidatePiProviderCaches(queryClient);
       }
+      // 切换会顺带刷新托管 ChatGPT 账号的令牌：重查停在失败上的账号额度，
+      // 免得主界面一直显示旧的「登录过期」
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey[0] === "codex_oauth" &&
+          query.queryKey[1] === "quota" &&
+          (query.state.status === "error" ||
+            (query.state.data as SubscriptionQuota | undefined)?.success ===
+              false),
+      });
     },
     onError: (error: Error) => {
       const detail = extractErrorMessage(error) || t("common.unknown");

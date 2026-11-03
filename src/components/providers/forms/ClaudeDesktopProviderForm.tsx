@@ -54,6 +54,11 @@ import {
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
 import type { ClaudeDesktopDefaultRoute } from "@/types/claudeDesktop";
 import { resolveManagedAccountId } from "@/lib/authBinding";
+import {
+  ClaudeReasoningEffortField,
+  toClaudeReasoningEffortChoice,
+  type ClaudeReasoningEffortChoice,
+} from "./ClaudeReasoningEffortField";
 import { useManagedAuth } from "./hooks";
 import { isOAuthProviderType } from "@/config/constants";
 
@@ -251,6 +256,10 @@ export function ClaudeDesktopProviderForm({
   const [apiFormat, setApiFormat] = useState<ClaudeApiFormat>(
     initialData?.meta?.apiFormat ?? "anthropic",
   );
+  const [reasoningEffort, setReasoningEffort] =
+    useState<ClaudeReasoningEffortChoice>(() =>
+      toClaudeReasoningEffortChoice(initialData?.meta?.claudeReasoningEffort),
+    );
   const [baseUrl, setBaseUrl] = useState(
     envString(initialData?.settingsConfig, "ANTHROPIC_BASE_URL"),
   );
@@ -373,6 +382,11 @@ export function ClaudeDesktopProviderForm({
   );
   const activeProviderType =
     activePreset?.providerType ?? initialData?.meta?.providerType;
+  const usesAutomaticCopilotFormat =
+    activeProviderType === "github_copilot" ||
+    (activeProviderType !== "codex_oauth" &&
+      activeProviderType !== "xai_oauth" &&
+      baseUrl.includes("githubcopilot.com"));
   const { isAuthenticated: isCopilotAuthenticated, accounts: copilotAccounts } =
     useManagedAuth("github_copilot");
   const {
@@ -420,6 +434,7 @@ export function ClaudeDesktopProviderForm({
     setApiKey("");
     setApiKeyField(preset.apiKeyField ?? "ANTHROPIC_AUTH_TOKEN");
     setApiFormat(preset.apiFormat ?? "anthropic");
+    setReasoningEffort("auto");
 
     const presetMode =
       preset.requiresOAuth === true || isOAuthProviderType(preset.providerType)
@@ -468,6 +483,7 @@ export function ClaudeDesktopProviderForm({
       setApiKey("");
       setApiKeyField("ANTHROPIC_AUTH_TOKEN");
       setApiFormat("anthropic");
+      setReasoningEffort("auto");
       didSeedDefaultProxyRoutes.current = false;
       setMode("direct");
       setDirectRoutes([]);
@@ -581,6 +597,7 @@ export function ClaudeDesktopProviderForm({
       delete meta.claudeDesktopMode;
       delete meta.claudeDesktopModelRoutes;
       delete meta.apiFormat;
+      delete meta.claudeReasoningEffort;
       delete meta.endpointAutoSelect;
       delete meta.isFullUrl;
       await onSubmit({
@@ -758,6 +775,18 @@ export function ClaudeDesktopProviderForm({
     };
 
     meta.claudeDesktopModelRoutes = routeMap;
+    if (
+      effectiveMode === "proxy" &&
+      (meta.apiFormat === "openai_chat" ||
+        meta.apiFormat === "openai_responses") &&
+      !isOAuthProviderType(activeProviderType) &&
+      !usesAutomaticCopilotFormat &&
+      reasoningEffort !== "auto"
+    ) {
+      meta.claudeReasoningEffort = reasoningEffort;
+    } else {
+      delete meta.claudeReasoningEffort;
+    }
     meta.providerType = activeProviderType;
     meta.authBinding =
       activeProviderType === "github_copilot"
@@ -907,6 +936,17 @@ export function ClaudeDesktopProviderForm({
               }
               showManageButton={false}
             />
+
+            {!isOAuthProviderType(activeProviderType) &&
+              !usesAutomaticCopilotFormat &&
+              (apiFormat === "openai_chat" ||
+                apiFormat === "openai_responses") && (
+                <ClaudeReasoningEffortField
+                  id="claudeDesktopReasoningEffort"
+                  value={reasoningEffort}
+                  onChange={setReasoningEffort}
+                />
+              )}
 
             <div className="space-y-4 border-l border-border-default pl-3">
               <div className="flex items-stretch justify-between gap-4">

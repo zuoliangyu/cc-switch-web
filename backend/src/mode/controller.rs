@@ -179,7 +179,17 @@ async fn write_proxy_with_edits(
                         name: &model.name,
                     }),
             );
-            with_stack_models(&mut projection, &stack::claude_published(&members));
+            let published = stack::claude_published(&members);
+            with_stack_models(&mut projection, &published);
+            if !published.is_empty() {
+                // 其余发布模型成员的兼容开关按性质并进契约，见 [`with_member_switches`]
+                let others: Vec<_> = members
+                    .iter()
+                    .filter(|member| !member.route)
+                    .map(|member| ClaudeProjection::of(&member.provider.settings_config).exclusive)
+                    .collect();
+                with_member_switches(&mut projection.exclusive, &others);
+            }
             after.contract = Some(contract::claude(&projection));
             if edits.is_none() && before.attached && before.contract == after.contract {
                 return operation::commit_target(
@@ -534,6 +544,81 @@ pub async fn exit(state: &AppState, app: &AppType) -> Result<(), AppError> {
             .map_err(AppError::Message)?;
     }
     Ok(())
+}
+
+/// 关掉某个功能的兼容开关：任何一家要关，契约就关（值取第一个要关的那家的）。上游不支持的
+/// 功能开着会让那家每个请求都报错，关掉对别家只是少一个功能。
+const CLAUDE_STACK_ANY_MEMBER_SWITCHES: &[&str] = &[
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+    "CLAUDE_CODE_DISABLE_ARTIFACT",
+    "CLAUDE_CODE_AUTO_MODE_SERVER",
+];
+
+/// 打开某个功能的兼容开关：每一家都开了才开，有一家没开就去掉。
+const CLAUDE_STACK_ALL_MEMBER_SWITCHES: &[&str] = &[
+    "ENABLE_TOOL_SEARCH",
+    "CLAUDE_CODE_ALWAYS_ENABLE_EFFORT",
+    "CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING",
+];
+
+/// 环境变量当开关读：`1` / `true` / `yes` / `on` 为开，`0` / `false` / `no` / `off` / 空为关。
+fn env_switch_on(value: &serde_json::Value) -> Option<bool> {
+    match value {
+        serde_json::Value::Bool(on) => Some(*on),
+        serde_json::Value::Number(number) => number.as_f64().map(|n| n != 0.0),
+        serde_json::Value::String(text) => match text.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" | "" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// 这一家要的是关掉功能的那一边：`CLAUDE_CODE_AUTO_MODE_SERVER` 设成关，其余开关设成开。
+fn asks_to_turn_off(key: &str, value: &serde_json::Value) -> bool {
+    let on = env_switch_on(value);
+    if key == "CLAUDE_CODE_AUTO_MODE_SERVER" {
+        on == Some(false)
+    } else {
+        on == Some(true)
+    }
+}
+
+/// Stack 模式下其余成员的兼容开关。Claude Code 只有一份 `settings.json`，这些开关在客户端发
+/// 请求时生效、代理补不上，只写默认那家的话，选中别家的模型就带着那家不支持的功能出去。按
+/// 开关的性质合并（[`CLAUDE_STACK_ANY_MEMBER_SWITCHES`]、[`CLAUDE_STACK_ALL_MEMBER_SWITCHES`]）；
+/// `CLAUDE_CODE_EXTRA_BODY`、关思考这类和窗口类的仍只跟默认那家（窗口由 Stack 模型决定）。
+fn with_member_switches(
+    exclusive: &mut serde_json::Map<String, serde_json::Value>,
+    others: &[serde_json::Map<String, serde_json::Value>],
+) {
+    if others.is_empty() {
+        return;
+    }
+    for key in CLAUDE_STACK_ANY_MEMBER_SWITCHES {
+        if exclusive
+            .get(*key)
+            .is_some_and(|value| asks_to_turn_off(key, value))
+        {
+            continue;
+        }
+        if let Some(value) = others
+            .iter()
+            .filter_map(|member| member.get(*key))
+            .find(|value| asks_to_turn_off(key, value))
+        {
+            exclusive.insert(key.to_string(), value.clone());
+        }
+    }
+    for key in CLAUDE_STACK_ALL_MEMBER_SWITCHES {
+        let everyone_on = others
+            .iter()
+            .all(|member| member.get(*key).and_then(env_switch_on).unwrap_or(false));
+        if !everyone_on {
+            exclusive.shift_remove(*key);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1179,4 +1264,63 @@ pub async fn switch_desktop(state: &AppState, id: &str) -> Result<(), AppError> 
     let row = provider(state, &AppType::ClaudeDesktop, id)?;
     let was_mapping = desktop_uses_mapping(state)?;
     apply_desktop_locked(state, &row, was_mapping).await
+}
+
+#[cfg(test)]
+mod member_switch_tests {
+    use super::with_member_switches;
+    use serde_json::{json, Map, Value};
+
+    fn env(value: Value) -> Map<String, Value> {
+        value.as_object().cloned().unwrap()
+    }
+
+    #[test]
+    fn stack_turns_off_a_feature_when_any_member_needs_it_off() {
+        let mut exclusive = Map::new();
+        let atlas = env(json!({
+            "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+            "CLAUDE_CODE_AUTO_MODE_SERVER": "0",
+            "CLAUDE_CODE_EXTRA_BODY": "{\"x\":1}",
+            "CLAUDE_CODE_DISABLE_THINKING": "1"
+        }));
+        with_member_switches(&mut exclusive, &[atlas]);
+        assert_eq!(exclusive["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"], "1");
+        assert_eq!(exclusive["CLAUDE_CODE_AUTO_MODE_SERVER"], "0");
+        // 请求体附加、关思考只跟默认那家，不并进来。
+        assert!(exclusive.get("CLAUDE_CODE_EXTRA_BODY").is_none());
+        assert!(exclusive.get("CLAUDE_CODE_DISABLE_THINKING").is_none());
+    }
+
+    #[test]
+    fn stack_does_not_take_a_member_switch_that_keeps_the_feature_on() {
+        let mut exclusive = Map::new();
+        let other = env(json!({
+            "CLAUDE_CODE_AUTO_MODE_SERVER": "1",
+            "CLAUDE_CODE_DISABLE_ARTIFACT": "0"
+        }));
+        with_member_switches(&mut exclusive, &[other]);
+        assert!(exclusive.get("CLAUDE_CODE_AUTO_MODE_SERVER").is_none());
+        assert!(exclusive.get("CLAUDE_CODE_DISABLE_ARTIFACT").is_none());
+    }
+
+    #[test]
+    fn stack_keeps_a_feature_on_only_when_every_member_turns_it_on() {
+        let route = env(json!({ "ENABLE_TOOL_SEARCH": "true" }));
+        let with = env(json!({ "ENABLE_TOOL_SEARCH": "1" }));
+        let without = env(json!({}));
+
+        let mut exclusive = route.clone();
+        with_member_switches(&mut exclusive, &[with.clone()]);
+        assert_eq!(exclusive["ENABLE_TOOL_SEARCH"], "true");
+
+        let mut exclusive = route.clone();
+        with_member_switches(&mut exclusive, &[with, without]);
+        assert!(exclusive.get("ENABLE_TOOL_SEARCH").is_none());
+
+        // 没有其他成员（路由模式）时只保留默认那家的开关
+        let mut exclusive = route;
+        with_member_switches(&mut exclusive, &[]);
+        assert_eq!(exclusive["ENABLE_TOOL_SEARCH"], "true");
+    }
 }

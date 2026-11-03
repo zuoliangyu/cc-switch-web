@@ -527,6 +527,14 @@ pub struct ProviderMeta {
     pub prompt_cache_routing: Option<String>,
     #[serde(rename = "codexChatReasoning", skip_serializing_if = "Option::is_none")]
     pub codex_chat_reasoning: Option<CodexChatReasoningConfig>,
+    /// Claude 路由经 OpenAI Chat / Responses 转发时怎么发思考档位。
+    /// 缺省 = 自动（见 `proxy::providers::claude_reasoning`）；"off"（不发）/
+    /// "passthrough"（原样发）为用户覆盖，其余值按缺省处理。
+    #[serde(
+        rename = "claudeReasoningEffort",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub claude_reasoning_effort: Option<String>,
     /// 本地代理转发使用的自定义 User-Agent。
     #[serde(rename = "customUserAgent", skip_serializing_if = "Option::is_none")]
     pub custom_user_agent: Option<String>,
@@ -1212,7 +1220,10 @@ mod tests {
         }}));
         assert_eq!(
             claude.resolve_usage_credentials(&AppType::Claude),
-            ("https://opencode.ai/zen/go".to_string(), "sk-claude".to_string())
+            (
+                "https://opencode.ai/zen/go".to_string(),
+                "sk-claude".to_string()
+            )
         );
 
         let codex = make(json!({
@@ -1221,7 +1232,10 @@ mod tests {
         }));
         assert_eq!(
             codex.resolve_usage_credentials(&AppType::Codex),
-            ("https://opencode.ai/zen/go/v1".to_string(), "sk-codex".to_string())
+            (
+                "https://opencode.ai/zen/go/v1".to_string(),
+                "sk-codex".to_string()
+            )
         );
 
         let opencode = make(json!({ "options": {
@@ -1230,7 +1244,10 @@ mod tests {
         }}));
         assert_eq!(
             opencode.resolve_usage_credentials(&AppType::OpenCode),
-            ("https://opencode.ai/zen/go/v1".to_string(), "sk-opencode".to_string())
+            (
+                "https://opencode.ai/zen/go/v1".to_string(),
+                "sk-opencode".to_string()
+            )
         );
 
         let pi = make(json!({
@@ -1241,7 +1258,10 @@ mod tests {
         }));
         assert_eq!(
             pi.resolve_usage_credentials(&AppType::Pi),
-            ("https://opencode.ai/zen/go/v1".to_string(), "sk-pi".to_string())
+            (
+                "https://opencode.ai/zen/go/v1".to_string(),
+                "sk-pi".to_string()
+            )
         );
     }
 

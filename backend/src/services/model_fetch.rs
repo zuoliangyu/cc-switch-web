@@ -91,7 +91,6 @@ pub async fn fetch_models(
     }
 
     let candidates = build_models_url_candidates(base_url, is_full_url, models_url_override)?;
-    let client = crate::proxy::http_client::get_for_provider(None);
     let mut last_err: Option<String> = None;
 
     for (index, url) in candidates.iter().enumerate() {
@@ -100,7 +99,7 @@ pub async fn fetch_models(
             index + 1,
             candidates.len()
         );
-        let request = client
+        let request = crate::proxy::http_client::get_for_url(url)
             .get(url)
             .headers(headers.clone())
             .timeout(Duration::from_secs(FETCH_TIMEOUT_SECS));

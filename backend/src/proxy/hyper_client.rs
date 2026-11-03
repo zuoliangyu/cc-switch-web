@@ -88,6 +88,11 @@ pub enum ProxyResponse {
         headers: http::HeaderMap,
         body: Bytes,
     },
+    Streamed {
+        status: http::StatusCode,
+        headers: http::HeaderMap,
+        stream: std::pin::Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
+    },
 }
 
 impl ProxyResponse {
@@ -99,11 +104,23 @@ impl ProxyResponse {
         }
     }
 
+    pub fn streamed(
+        status: http::StatusCode,
+        headers: http::HeaderMap,
+        stream: impl Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static,
+    ) -> Self {
+        Self::Streamed {
+            status,
+            headers,
+            stream: Box::pin(stream),
+        }
+    }
+
     pub fn status(&self) -> http::StatusCode {
         match self {
             Self::Hyper(r) => r.status(),
             Self::Reqwest(r) => r.status(),
-            Self::Buffered { status, .. } => *status,
+            Self::Buffered { status, .. } | Self::Streamed { status, .. } => *status,
         }
     }
 
@@ -111,7 +128,7 @@ impl ProxyResponse {
         match self {
             Self::Hyper(r) => r.headers(),
             Self::Reqwest(r) => r.headers(),
-            Self::Buffered { headers, .. } => headers,
+            Self::Buffered { headers, .. } | Self::Streamed { headers, .. } => headers,
         }
     }
 
@@ -186,7 +203,12 @@ impl ProxyResponse {
                                 Some((Ok(Bytes::new()), body))
                             }
                         }
-                        Some(Err(e)) => Some((Err(std::io::Error::other(e.to_string())), body)),
+                        Some(Err(e)) => Some((
+                            Err(std::io::Error::other(super::error::describe_error_chain(
+                                &e,
+                            ))),
+                            body,
+                        )),
                         None => None,
                     }
                 })
@@ -197,13 +219,14 @@ impl ProxyResponse {
                     as std::pin::Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>
             }
             Self::Reqwest(r) => {
-                let stream = r
-                    .bytes_stream()
-                    .map(|r| r.map_err(|e| std::io::Error::other(e.to_string())));
+                let stream = r.bytes_stream().map(|r| {
+                    r.map_err(|e| std::io::Error::other(super::error::describe_reqwest_error(e)))
+                });
                 Box::pin(stream)
             }
             Self::Buffered { body, .. } => Box::pin(futures::stream::once(async move { Ok(body) }))
                 as std::pin::Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>>,
+            Self::Streamed { stream, .. } => stream,
         }
     }
 }
@@ -290,7 +313,12 @@ pub async fn send_request(
     let resp = tokio::time::timeout(timeout, client.request(req))
         .await
         .map_err(|_| ProxyError::Timeout(format!("请求超时: {}s", timeout.as_secs())))?
-        .map_err(|e| ProxyError::ForwardFailed(format!("上游请求失败: {e}")))?;
+        .map_err(|e| {
+            ProxyError::ForwardFailed(format!(
+                "上游请求失败: {}",
+                super::error::describe_error_chain(&e)
+            ))
+        })?;
 
     Ok(ProxyResponse::Hyper(resp))
 }
@@ -545,11 +573,13 @@ fn global_tls_connector() -> &'static tokio_rustls::TlsConnector {
         let native = rustls_native_certs::load_native_certs();
         let (added, _errors) = root_store.add_parsable_certificates(native.certs);
         log::debug!("[HyperClient] TLS root store: webpki + {added} native certs");
-        let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(rustls::crypto::ring::default_provider()))
-            .with_safe_default_protocol_versions()
-            .expect("ring supports default TLS protocol versions")
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+        let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("ring supports default TLS protocol versions")
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
         tokio_rustls::TlsConnector::from(std::sync::Arc::new(config))
     })
 }

@@ -27,8 +27,11 @@ use crate::{
     app_config::AppType,
     provider::{LocalProxyRequestOverrides, Provider},
 };
+use bytes::Bytes;
+use futures::StreamExt;
 use http::Extensions;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -36,6 +39,110 @@ use tokio::sync::RwLock;
 /// 避免把 PROXY_MANAGED 字面量带到上游（特别是托管账号上游 `*.githubcopilot.com`
 /// 和 `chatgpt.com/backend-api/codex`）。跟随上游 cc-switch 61e68d75。
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
+/// Whether the upstream belongs to the OpenCode gateway (`opencode.ai`).
+///
+/// That gateway (<https://opencode.ai/docs/go/>) expects clients to identify
+/// themselves with a `User-Agent` and to carry a **stable per-conversation**
+/// session id in `x-opencode-session`; a request without the session header is
+/// rejected with `400 MissingSessionID`. Claude Code and Codex already send
+/// headers the gateway recognises, Claude Desktop does not - the proxy fills
+/// the gap (see the injection site in `forward`).
+fn is_opencode_upstream(upstream_host: Option<&str>) -> bool {
+    upstream_host
+        .map(|host| {
+            let host = host.rsplit_once(':').map_or(host, |(h, _)| h);
+            host.trim_matches(['[', ']']).to_ascii_lowercase()
+        })
+        .is_some_and(|host| host == "opencode.ai" || host.ends_with(".opencode.ai"))
+}
+
+/// Derive a session id that stays **stable within one conversation**: a digest
+/// of the system prompt plus the first user message.
+///
+/// The gateway uses the session id for upstream routing and prompt caching, so
+/// it must not change between the turns of a conversation. Claude Desktop hands
+/// CC Switch a fresh id on every request, which defeats that; hashing the
+/// conversation prefix keeps the id stable while still separating conversations.
+fn conversation_fingerprint(body: &Value) -> Option<String> {
+    let mut hasher = Sha256::new();
+    let mut fed = false;
+    if let Some(system) = body.get("system") {
+        hasher.update(without_cache_control(system).to_string().as_bytes());
+        fed = true;
+    }
+    if let Some(first_user) = body
+        .get("messages")
+        .and_then(Value::as_array)
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|m| m.get("role").and_then(Value::as_str) == Some("user"))
+        })
+    {
+        hasher.update(without_cache_control(first_user).to_string().as_bytes());
+        fed = true;
+    }
+    if !fed {
+        return None;
+    }
+    let digest = format!("{:x}", hasher.finalize());
+    Some(format!("ccsw-{}", &digest[..32]))
+}
+
+/// A stable session header the client already sends and the gateway recognises
+/// natively (Claude Code, Codex). Checked before deriving an id of our own.
+fn native_session_header(headers: &http::HeaderMap) -> Option<&str> {
+    [
+        "x-claude-code-session-id",
+        "session-id",
+        "session_id",
+        "x-session-id",
+    ]
+    .iter()
+    .find_map(|name| {
+        headers
+            .get(*name)?
+            .to_str()
+            .ok()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    })
+}
+
+/// Pick the value for `x-opencode-session`, most stable identity first: a native
+/// session header the client already sends, the client-provided session id, the
+/// conversation fingerprint, then the generated id.
+fn pick_opencode_session<'a>(
+    native: Option<&'a str>,
+    client_provided: Option<&'a str>,
+    fingerprint: Option<&'a str>,
+    generated: &'a str,
+) -> Option<String> {
+    [native, client_provided, fingerprint, Some(generated)]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+/// Clone `value` without any `cache_control` key, at any depth.
+///
+/// Clients move that marker between messages as the conversation grows (Claude
+/// Code puts it on the first user message, then on the last one), so hashing it
+/// would change the session id once, mid-conversation.
+fn without_cache_control(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .filter(|(key, _)| key.as_str() != "cache_control")
+                .map(|(key, value)| (key.clone(), without_cache_control(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(without_cache_control).collect()),
+        other => other.clone(),
+    }
+}
 
 fn codex_bearer_access_token(headers: &http::HeaderMap) -> Option<&str> {
     let authorization = headers
@@ -66,8 +173,10 @@ fn validate_codex_official_authorization(
         None | Some("") => Err(ProxyError::AuthError(
             "Codex 官方登录不可用，请先在 Codex 中完成 ChatGPT 登录".to_string(),
         )),
+        // 带占位 Key 的请求有两种来源：没重载配置的 Codex 进程；或切换前用第三方供应商建的
+        // 旧会话（Codex 按会话记下的 provider 走休眠的 custom 表，重启也还是它）。
         Some(value) if value.contains(PROXY_AUTH_PLACEHOLDER) => Err(ProxyError::AuthError(
-            "已切换到 OpenAI 官方供应商，请重启 Codex 或新建会话以加载官方登录配置".to_string(),
+            "已切换到 OpenAI 官方供应商，但这个请求仍按第三方供应商的配置发出。如果这是切换前用第三方供应商创建的旧会话，它会一直沿用原供应商，重启也无效，请新建会话继续；否则请重启 Codex 以加载官方登录配置".to_string(),
         )),
         Some(_) => {
             let managed_account_id = provider
@@ -235,6 +344,32 @@ impl RequestForwarder {
         )
     }
 
+    /// 客户端兼容性导致的失败：释放 HalfOpen 许可但不计入熔断，失败数加一后直接返回。
+    async fn finish_neutral_failure(
+        &self,
+        error: ProxyError,
+        provider: &Provider,
+        app_type_str: &str,
+        used_half_open_permit: bool,
+    ) -> ForwardError {
+        if self.routing_state_enabled() {
+            self.router
+                .release_permit_neutral(&provider.id, app_type_str, used_half_open_permit)
+                .await;
+            let mut status = self.status.write().await;
+            status.failed_requests += 1;
+            status.last_error = Some(error.to_string());
+            if status.total_requests > 0 {
+                status.success_rate =
+                    (status.success_requests as f32 / status.total_requests as f32) * 100.0;
+            }
+        }
+        ForwardError {
+            error,
+            provider: Some(provider.clone()),
+        }
+    }
+
     /// 转发请求（带故障转移）
     ///
     /// # Arguments
@@ -345,11 +480,29 @@ impl RequestForwarder {
                     &provider_body,
                     error,
                 ) {
+                    // 这一轮是派给子 agent 的加密任务：整流不动它（见
+                    // `opaque_state_rectifier`），去掉别家的状态后仍被拒，就是任务本身解不开。
+                    let agent_task =
+                        super::opaque_state_rectifier::carries_encrypted_agent_task(&provider_body);
                     let mut retry_body = provider_body.clone();
                     let rectified = super::opaque_state_rectifier::rectify_opaque_state(
                         &mut retry_body,
                         rejection,
                     );
+                    if !rectified.applied && agent_task {
+                        log::warn!(
+                            "[{app_type_str}] [RECT-023] provider={} 解不开子 agent 任务的密文（主、子 agent 不在同一家），不重试",
+                            provider.id
+                        );
+                        return Err(self
+                            .finish_neutral_failure(
+                                super::opaque_state_rectifier::unreadable_agent_task_error(),
+                                provider,
+                                app_type_str,
+                                used_half_open_permit,
+                            )
+                            .await);
+                    }
                     if rectified.applied {
                         opaque_rectifier_retried = true;
                         log::info!(
@@ -366,6 +519,34 @@ impl RequestForwarder {
                                 app_type,
                             )
                             .await;
+                        if let Err(retry_err) = &forwarded {
+                            if agent_task
+                                && self
+                                    .opaque_state_retry_rejection(
+                                        app_type,
+                                        provider,
+                                        endpoint,
+                                        false,
+                                        &retry_body,
+                                        retry_err,
+                                    )
+                                    .is_some()
+                            {
+                                log::warn!(
+                                    "[{app_type_str}] [RECT-023] provider={} 解不开子 agent 任务的密文（主、子 agent 不在同一家），不再重试",
+                                    provider.id
+                                );
+                                return Err(self
+                                    .finish_neutral_failure(
+                                        super::opaque_state_rectifier::unreadable_agent_task_error(
+                                        ),
+                                        provider,
+                                        app_type_str,
+                                        used_half_open_permit,
+                                    )
+                                    .await);
+                            }
+                        }
                     }
                 }
             }
@@ -1023,6 +1204,63 @@ impl RequestForwarder {
     }
 
     /// 转发单个请求（使用适配器）
+    /// 原样转发的 Responses 请求末尾是一条带密文的子 agent 任务时（见
+    /// `opaque_state_rectifier::carries_encrypted_agent_task`），先看到第一个不是生命周期的事件
+    /// 再交出流：上游解不开密文时会在流里、输出之前回 `response.failed`，这时改成上游错误，
+    /// 回到重试循环里和 HTTP 报错一样整流或说明原因。其余情况（有输出、别的失败、到了截止
+    /// 时间、缓冲太多）把读过的字节原样接回去，客户端看到的流和没经过这里一样。
+    ///
+    /// 整个缓冲阶段只有一个截止时间（不是每读一块重新计时）：上游在输出前一直发心跳时，流
+    /// 也得按时交出去。解不开密文是上游一收到请求就报的错，不用等到生成，所以最多压
+    /// [`MAX_HOLD`]。
+    async fn hold_encrypted_agent_task_stream(
+        &self,
+        response: ProxyResponse,
+        request: &Value,
+    ) -> Result<ProxyResponse, ProxyError> {
+        const MAX_HOLD_BYTES: usize = 256 * 1024;
+        const MAX_HOLD: std::time::Duration = std::time::Duration::from_secs(10);
+
+        // Web 的流式首包超时由客户端链路负责，这里只用固定上限。
+        let deadline = tokio::time::Instant::now() + MAX_HOLD;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let mut stream = Box::pin(response.bytes_stream());
+        let mut replay_chunks: Vec<Bytes> = Vec::new();
+        let mut held_bytes = 0usize;
+        let mut parse_buffer = String::new();
+        let mut utf8_remainder = Vec::new();
+
+        'hold: loop {
+            let Ok(next) = tokio::time::timeout_at(deadline, stream.next()).await else {
+                break 'hold;
+            };
+            let Some(chunk) = next else {
+                break 'hold;
+            };
+            // 还没有交出流，读出错和首包前出错一样回到重试循环。
+            let chunk = chunk
+                .map_err(|error| ProxyError::ForwardFailed(format!("读取流式响应失败: {error}")))?;
+            crate::proxy::sse::append_utf8_safe(&mut parse_buffer, &mut utf8_remainder, &chunk);
+            held_bytes += chunk.len();
+            replay_chunks.push(chunk);
+
+            while let Some(block) = crate::proxy::sse::take_sse_block(&mut parse_buffer) {
+                match encrypted_task_stream_start(&block, request) {
+                    StreamStart::Pending => {}
+                    StreamStart::Commit => break 'hold,
+                    StreamStart::Rejected(error) => return Err(error),
+                }
+            }
+            if held_bytes > MAX_HOLD_BYTES {
+                break 'hold;
+            }
+        }
+
+        let replay = futures::stream::iter(replay_chunks.into_iter().map(Ok)).chain(stream);
+        Ok(ProxyResponse::streamed(status, headers, replay))
+    }
+
     async fn forward(
         &self,
         provider: &Provider,
@@ -1061,6 +1299,31 @@ impl RequestForwarder {
 
         // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
         let mut mapped_body = normalize_thinking_type(mapped_body);
+
+        // The OpenCode gateway wants a stable per-conversation session id (see the
+        // injection site below). It has to be derived here: `mapped_body` is moved
+        // by the format conversion further down.
+        //
+        // Only that upstream consumes it, and only when the client neither sent
+        // `x-opencode-session` nor supplied a session id, so guard the work: the
+        // digest serialises the system prompt plus the first user message, which
+        // routinely carry files and images and can reach megabytes. The host check
+        // uses `base_url` - none of the URL-construction branches below rewrites the
+        // authority (the only one that replaces the host wholesale is Copilot's
+        // dynamic endpoint, which points at GitHub, never opencode.ai).
+        let base_url_host = base_url
+            .parse::<http::Uri>()
+            .ok()
+            .and_then(|u| u.authority().map(|a| a.to_string()));
+        let opencode_conversation_fingerprint = if !self.session_client_provided
+            && !headers.contains_key("x-opencode-session")
+            && native_session_header(headers).is_none()
+            && is_opencode_upstream(base_url_host.as_deref())
+        {
+            conversation_fingerprint(&mapped_body)
+        } else {
+            None
+        };
 
         // 确定有效端点
         // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
@@ -1224,6 +1487,12 @@ impl RequestForwarder {
             adapter.build_url(&base_url, &effective_endpoint)
         };
 
+        let (listen_address, listen_port) = {
+            let status = self.status.read().await;
+            (status.address.clone(), status.port)
+        };
+        super::upstream_guard::reject_self_forwarding(&url, &listen_address, listen_port).await?;
+
         // Grok Build 客户端使用稳定 profile；转发前替换为当前供应商真实模型。
         if matches!(app_type, AppType::GrokBuild) {
             super::providers::apply_codex_upstream_model(provider, &mut mapped_body);
@@ -1244,6 +1513,15 @@ impl RequestForwarder {
                     mapped_body,
                     reasoning_config.as_ref(),
                 )?;
+            let signature_fallbacks =
+                super::providers::codex_chat_common::fill_gemini_thought_signature_fallback(
+                    &mut chat_body,
+                );
+            if signature_fallbacks > 0 {
+                log::debug!(
+                    "[Codex] Filled {signature_fallbacks} missing Gemini thought signature(s) with the skip placeholder"
+                );
+            }
             super::providers::inject_codex_chat_prompt_cache_key(
                 provider,
                 &mut chat_body,
@@ -1296,6 +1574,19 @@ impl RequestForwarder {
                 let api_format = resolved_claude_api_format
                     .as_deref()
                     .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
+                let mut mapped_body = mapped_body;
+                // 映射后的模型名不再带「省略 thinking 仍默认开思考」的语义（5.x 的
+                // Fable / Mythos / Opus / Sonnet），按客户端原模型补成显式 adaptive，
+                // effort 换算才不会当成关闭。
+                if matches!(
+                    api_format,
+                    "openai_chat" | "openai_responses" | "gemini_native"
+                ) {
+                    super::providers::transform::make_default_adaptive_thinking_explicit(
+                        &mut mapped_body,
+                        body.get("model").and_then(|m| m.as_str()),
+                    );
+                }
                 super::providers::transform_claude_request_for_api_format(
                     mapped_body,
                     provider,
@@ -1417,7 +1708,7 @@ impl RequestForwarder {
         let mut codex_oauth_account_id: Option<String> = None;
 
         // 获取认证头（提前准备，用于内联替换）
-        let auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
+        let mut auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
             // GitHub Copilot 特殊处理：从 CopilotAuthManager 获取真实 token
             if auth.strategy == AuthStrategy::GitHubCopilot {
                 let copilot_auth: tokio::sync::RwLockReadGuard<'_, CopilotAuthManager> =
@@ -1577,6 +1868,48 @@ impl RequestForwarder {
             .ok()
             .and_then(|u| u.authority().map(|a| a.to_string()));
 
+        // OpenCode Go places two hard requirements on clients
+        // (<https://opencode.ai/docs/go/>); satisfy both, only for its upstream.
+        //
+        // 1) User-Agent: a client that identifies itself is passed through
+        //    untouched (Claude Code, Codex, ...). Only a request that carries no
+        //    UA at all gets this fallback - the gateway sits behind Cloudflare and
+        //    rejects unidentified clients (403 Access denied; a UA clears it).
+        //    The fallback is therefore applied after the header loop, next to the
+        //    custom UA. An explicitly configured custom UA still wins.
+        let opencode_fallback_user_agent =
+            if custom_user_agent.is_none() && is_opencode_upstream(upstream_host.as_deref()) {
+                Some(http::HeaderValue::from_static(concat!(
+                    "cc-switch/",
+                    env!("CARGO_PKG_VERSION")
+                )))
+            } else {
+                None
+            };
+
+        // 2) Session header: without `x-opencode-session` the gateway answers
+        //    400 MissingSessionID. Pass it through when the client already sends
+        //    one, otherwise send the most stable identity we have
+        //    (`pick_opencode_session`) - a native client header, the client's
+        //    session id, the conversation fingerprint, or the generated id.
+        if is_opencode_upstream(upstream_host.as_deref())
+            && !headers.contains_key("x-opencode-session")
+        {
+            let client_id = self
+                .session_client_provided
+                .then_some(self.session_id.as_str());
+            if let Some(session) = pick_opencode_session(
+                native_session_header(headers),
+                client_id,
+                opencode_conversation_fingerprint.as_deref(),
+                &self.session_id,
+            ) {
+                if let Ok(value) = http::HeaderValue::from_str(&session) {
+                    auth_headers.push((http::HeaderName::from_static("x-opencode-session"), value));
+                }
+            }
+        }
+
         // 预计算 anthropic-beta 值（仅 Claude）
         let anthropic_beta_value = if adapter.name() == "Claude" {
             const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
@@ -1664,12 +1997,14 @@ impl RequestForwarder {
                 continue;
             }
 
-            if (codex_responses_to_anthropic
-                || (self.stack_request
-                    && matches!(app_type, AppType::Codex)
-                    && !codex_official_auth_passthrough))
-                && is_codex_client_fingerprint_header(key_str)
-            {
+            if should_strip_codex_client_fingerprint_header(
+                key_str,
+                endpoint,
+                codex_responses_to_anthropic,
+                codex_responses_to_chat,
+                self.stack_request && matches!(app_type, AppType::Codex),
+                codex_official_auth_passthrough,
+            ) {
                 continue;
             }
 
@@ -1794,7 +2129,10 @@ impl RequestForwarder {
             ordered_headers.append("x-app", http::HeaderValue::from_static("cli"));
         }
         if !saw_user_agent {
-            if let Some(ref user_agent) = custom_user_agent {
+            if let Some(user_agent) = custom_user_agent
+                .as_ref()
+                .or(opencode_fallback_user_agent.as_ref())
+            {
                 ordered_headers.append(http::header::USER_AGENT, user_agent.clone());
             }
         }
@@ -1877,7 +2215,8 @@ impl RequestForwarder {
         let upstream_proxy_url: Option<String> = proxy_config
             .filter(|c| c.enabled)
             .and_then(super::http_client::build_proxy_url_from_config)
-            .or_else(super::http_client::get_current_proxy_url);
+            // 上游是本机地址时不送进全局代理
+            .or_else(|| super::http_client::proxy_url_for(&url));
 
         // SOCKS5 代理不支持 CONNECT 隧道，需要用 reqwest
         let is_socks_proxy = upstream_proxy_url
@@ -1893,7 +2232,7 @@ impl RequestForwarder {
         let response = if is_socks_proxy || provider.is_xai_oauth() {
             // xAI 使用标准 header 编码；SOCKS5 代理也只能走 reqwest。
             log::debug!("[Forwarder] Using reqwest without exact header case preservation");
-            let client = super::http_client::get_for_provider(proxy_config);
+            let client = super::http_client::get_for_provider_url(proxy_config, &url);
             let mut request = client.post(&url);
             if !self.non_streaming_timeout.is_zero() {
                 request = request.timeout(self.non_streaming_timeout);
@@ -1902,12 +2241,16 @@ impl RequestForwarder {
                 request = request.header(key, value);
             }
             let reqwest_resp = request.body(body_bytes).send().await.map_err(|e| {
-                if e.is_timeout() {
-                    ProxyError::Timeout(format!("请求超时: {e}"))
-                } else if e.is_connect() {
-                    ProxyError::ForwardFailed(format!("连接失败: {e}"))
+                let is_timeout = e.is_timeout();
+                let is_connect = e.is_connect();
+                // 去掉 URL（查询参数里可能有 Key）并展开原因链
+                let detail = super::error::describe_reqwest_error(e);
+                if is_timeout {
+                    ProxyError::Timeout(format!("请求超时: {detail}"))
+                } else if is_connect {
+                    ProxyError::ForwardFailed(format!("连接失败: {detail}"))
                 } else {
-                    ProxyError::ForwardFailed(e.to_string())
+                    ProxyError::ForwardFailed(detail)
                 }
             })?;
             ProxyResponse::Reqwest(reqwest_resp)
@@ -1933,6 +2276,16 @@ impl RequestForwarder {
             let response =
                 if codex_responses_to_anthropic && (!request_is_streaming || response.is_json()) {
                     self.validate_codex_anthropic_success_response(response)
+                        .await?
+                } else if matches!(app_type, AppType::Codex | AppType::GrokBuild)
+                    && !codex_responses_to_chat
+                    && !codex_responses_to_anthropic
+                    && request_is_streaming
+                    && !response.is_json()
+                    && self.rectifier_config.enabled
+                    && super::opaque_state_rectifier::carries_encrypted_agent_task(&filtered_body)
+                {
+                    self.hold_encrypted_agent_task_stream(response, &filtered_body)
                         .await?
                 } else {
                     response
@@ -2106,6 +2459,48 @@ impl RequestForwarder {
 }
 
 /// 从 ProxyError 中提取错误消息
+/// [`RequestForwarder::hold_encrypted_agent_task_stream`] 看到一个完整 SSE 块之后怎么做。
+enum StreamStart {
+    /// 生命周期事件（或不是 JSON），接着读。
+    Pending,
+    /// 有输出或别的结局：交出流。
+    Commit,
+    /// 输出之前上游就自证验不了请求里的密文。
+    Rejected(ProxyError),
+}
+
+fn encrypted_task_stream_start(block: &str, request: &Value) -> StreamStart {
+    let mut named_event = None;
+    let mut data_lines = Vec::new();
+    for line in block.lines() {
+        if let Some(event) = crate::proxy::sse::strip_sse_field(line, "event") {
+            named_event = Some(event.trim().to_string());
+        } else if let Some(data) = crate::proxy::sse::strip_sse_field(line, "data") {
+            data_lines.push(data);
+        }
+    }
+    let Ok(value) = serde_json::from_str::<Value>(&data_lines.join("\n")) else {
+        return StreamStart::Pending;
+    };
+    let event = named_event
+        .as_deref()
+        .filter(|event| !event.is_empty())
+        .or_else(|| value.get("type").and_then(Value::as_str))
+        .unwrap_or("");
+    match event {
+        "response.created" | "response.in_progress" | "response.queued" => StreamStart::Pending,
+        "response.failed" | "error" => {
+            let response = value.get("response").unwrap_or(&value);
+            let error = response.get("error").unwrap_or(response);
+            match super::opaque_state_rectifier::in_stream_rejection(error, request) {
+                Some(rejection) => StreamStart::Rejected(rejection),
+                None => StreamStart::Commit,
+            }
+        }
+        _ => StreamStart::Commit,
+    }
+}
+
 fn extract_error_message(error: &ProxyError) -> Option<String> {
     match error {
         ProxyError::UpstreamError { body, .. } => body.clone(),
@@ -2321,6 +2716,37 @@ fn is_codex_client_fingerprint_header(key: &str) -> bool {
             | "version"
     ) || key.starts_with("x-stainless-")
         || key.starts_with("x-codex-")
+}
+
+/// Decide whether a Codex fingerprint header must be removed before the request
+/// reaches an upstream.
+///
+/// Stack requests to a third party still must not carry ChatGPT session or
+/// account identity. A native Responses third party, however, may use the
+/// non-identity `x-codex-beta-features` marker to recognize the Codex protocol
+/// and reject requests without it. Keep only that marker; all other Codex and
+/// OpenAI identity headers remain stripped. Converted Chat/Anthropic requests
+/// continue to receive a clean client fingerprint.
+fn should_strip_codex_client_fingerprint_header(
+    key_str: &str,
+    endpoint: &str,
+    codex_responses_to_anthropic: bool,
+    codex_responses_to_chat: bool,
+    codex_stack_request: bool,
+    codex_official_auth_passthrough: bool,
+) -> bool {
+    if codex_responses_to_anthropic {
+        return is_codex_client_fingerprint_header(key_str);
+    }
+
+    if codex_stack_request && !codex_official_auth_passthrough {
+        let native_third_party_responses =
+            !codex_responses_to_chat && super::providers::is_codex_responses_endpoint(endpoint);
+        return is_codex_client_fingerprint_header(key_str)
+            && !(native_third_party_responses && key_str == "x-codex-beta-features");
+    }
+
+    false
 }
 
 fn codex_anthropic_error_envelope_message(body: &[u8]) -> Option<String> {
@@ -2811,6 +3237,214 @@ mod tests {
     use axum::http::header::{HeaderValue, ACCEPT};
     use axum::http::HeaderMap;
     use serde_json::json;
+
+    fn encrypted_sub_agent_request() -> Value {
+        json!({
+            "model": "listed",
+            "stream": true,
+            "input": [{
+                "type": "agent_message",
+                "author": "/root",
+                "recipient": "/root/worker",
+                "content": [
+                    { "type": "input_text", "text": "Message Type: NEW_TASK\nTask name: /root/worker\nSender: /root\nPayload:\n" },
+                    { "type": "encrypted_content", "encrypted_content": "gAAAAB-task-from-main" }
+                ]
+            }]
+        })
+    }
+
+    fn sse_block(event: &Value) -> String {
+        format!("event: {}\ndata: {event}", event["type"].as_str().unwrap())
+    }
+
+    #[test]
+    fn encrypted_task_stream_start_waits_for_first_meaningful_event() {
+        let request = encrypted_sub_agent_request();
+        assert!(super::super::opaque_state_rectifier::carries_encrypted_agent_task(&request));
+
+        let created = json!({ "type": "response.created", "response": { "id": "r1" } });
+        assert!(matches!(
+            encrypted_task_stream_start(&sse_block(&created), &request),
+            StreamStart::Pending
+        ));
+
+        let output = json!({ "type": "response.output_item.added", "output_index": 0,
+            "item": { "type": "message", "id": "msg_1", "role": "assistant", "content": [] } });
+        assert!(matches!(
+            encrypted_task_stream_start(&sse_block(&output), &request),
+            StreamStart::Commit
+        ));
+
+        // 输出之前上游自证解不开任务密文：回到重试循环
+        let rejected = json!({ "type": "response.failed", "response": { "id": "r1", "status": "failed",
+            "error": { "code": "server_error",
+                       "message": "Encrypted function output content could not be decrypted or decoded." } } });
+        assert!(matches!(
+            encrypted_task_stream_start(&sse_block(&rejected), &request),
+            StreamStart::Rejected(_)
+        ));
+
+        // 与密文无关的失败照常交给客户端
+        let other = json!({ "type": "response.failed", "response": { "id": "r1", "status": "failed",
+            "error": { "code": "server_error", "message": "overloaded" } } });
+        assert!(matches!(
+            encrypted_task_stream_start(&sse_block(&other), &request),
+            StreamStart::Commit
+        ));
+    }
+
+    #[test]
+    fn opencode_upstream_host_matching() {
+        // With or without a port, and subdomains, count as OpenCode; other
+        // upstreams must not (they would otherwise gain a stray header).
+        for host in ["opencode.ai", "opencode.ai:443", "zen.opencode.ai"] {
+            assert!(
+                is_opencode_upstream(Some(host)),
+                "{host} should be recognised as OpenCode"
+            );
+        }
+        for host in [
+            "api.anthropic.com",
+            "notopencode.ai",
+            "example.com",
+            "127.0.0.1:15721",
+        ] {
+            assert!(
+                !is_opencode_upstream(Some(host)),
+                "{host} must not be recognised as OpenCode"
+            );
+        }
+        assert!(!is_opencode_upstream(None));
+    }
+
+    #[test]
+    fn conversation_fingerprint_is_stable_per_conversation() {
+        let turn1 = json!({
+            "system": "You are an assistant.",
+            "messages": [{"role": "user", "content": "first question"}]
+        });
+        // Later turns of the same conversation append messages; system and the
+        // first user message stay put.
+        let turn2 = json!({
+            "system": "You are an assistant.",
+            "messages": [
+                {"role": "user", "content": "first question"},
+                {"role": "assistant", "content": "answer"},
+                {"role": "user", "content": "follow-up"}
+            ]
+        });
+        let other = json!({
+            "system": "You are an assistant.",
+            "messages": [{"role": "user", "content": "another conversation"}]
+        });
+
+        let a = conversation_fingerprint(&turn1).expect("fingerprint");
+        let b = conversation_fingerprint(&turn2).expect("fingerprint");
+        let c = conversation_fingerprint(&other).expect("fingerprint");
+        assert_eq!(a, b, "one conversation must keep a single session id");
+        assert_ne!(a, c, "different conversations must not share a session id");
+        assert!(
+            a.starts_with("ccsw-"),
+            "prefix keeps the origin recognisable: {a}"
+        );
+    }
+
+    #[test]
+    fn conversation_fingerprint_requires_conversation_content() {
+        assert!(conversation_fingerprint(&json!({"model": "x"})).is_none());
+    }
+
+    #[test]
+    fn conversation_fingerprint_ignores_cache_control() {
+        // Clients move `cache_control` between messages as a conversation grows
+        // (Claude Code puts it on the first user message, then on the last one);
+        // the session id must not change with it.
+        let first = json!({
+            "system": "You are an assistant.",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hello", "cache_control": {"type": "ephemeral"}}
+                ]
+            }]
+        });
+        let later = json!({
+            "system": "You are an assistant.",
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": "hello"}]},
+                {"role": "assistant", "content": "hi"},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "again", "cache_control": {"type": "ephemeral"}}
+                ]}
+            ]
+        });
+        assert_eq!(
+            conversation_fingerprint(&first),
+            conversation_fingerprint(&later),
+            "cache_control placement must not change the session id"
+        );
+    }
+
+    #[test]
+    fn opencode_session_precedence() {
+        // native client header > client-provided id > fingerprint > generated id
+        assert_eq!(
+            pick_opencode_session(Some("native"), Some("client"), Some("fp"), "gen").as_deref(),
+            Some("native")
+        );
+        assert_eq!(
+            pick_opencode_session(None, Some("client"), Some("fp"), "gen").as_deref(),
+            Some("client")
+        );
+        assert_eq!(
+            pick_opencode_session(None, None, Some("fp"), "gen").as_deref(),
+            Some("fp")
+        );
+        assert_eq!(
+            pick_opencode_session(None, None, None, "gen").as_deref(),
+            Some("gen")
+        );
+        // Blank candidates are skipped, and nothing is sent when all are blank.
+        assert_eq!(
+            pick_opencode_session(Some("   "), None, None, "gen").as_deref(),
+            Some("gen")
+        );
+        assert_eq!(pick_opencode_session(None, None, None, "  "), None);
+    }
+
+    #[test]
+    fn native_session_header_recognises_real_client_headers() {
+        // Claude Code and Codex each send one of these; unknown headers do not count.
+        for name in [
+            "x-claude-code-session-id",
+            "session-id",
+            "session_id",
+            "x-session-id",
+        ] {
+            let mut headers = http::HeaderMap::new();
+            headers.insert(
+                http::HeaderName::from_static(name),
+                http::HeaderValue::from_static("abc123"),
+            );
+            assert_eq!(native_session_header(&headers), Some("abc123"), "{name}");
+        }
+
+        let mut blank = http::HeaderMap::new();
+        blank.insert(
+            http::HeaderName::from_static("session_id"),
+            http::HeaderValue::from_static("  "),
+        );
+        assert_eq!(native_session_header(&blank), None);
+
+        let mut other = http::HeaderMap::new();
+        other.insert(
+            http::HeaderName::from_static("x-request-id"),
+            http::HeaderValue::from_static("ignored"),
+        );
+        assert_eq!(native_session_header(&other), None);
+        assert_eq!(native_session_header(&http::HeaderMap::new()), None);
+    }
 
     fn managed_codex_provider(account_id: &str) -> Provider {
         let mut provider = Provider::with_id(
@@ -3539,6 +4173,39 @@ mod tests {
         assert!(is_codex_client_fingerprint_header("x-stainless-runtime"));
         assert!(!is_codex_client_fingerprint_header("anthropic-version"));
         assert!(is_codex_client_fingerprint_header("version"));
+        // 聚合请求发往原生 Responses 第三方：只保留非身份的 beta 标记
+        assert!(!should_strip_codex_client_fingerprint_header(
+            "x-codex-beta-features",
+            "/v1/responses",
+            false,
+            false,
+            true,
+            false
+        ));
+        assert!(should_strip_codex_client_fingerprint_header(
+            "x-codex-beta-features",
+            "/v1/responses",
+            false,
+            true,
+            true,
+            false
+        ));
+        assert!(should_strip_codex_client_fingerprint_header(
+            "x-codex-turn-state",
+            "/v1/responses",
+            false,
+            false,
+            true,
+            false
+        ));
+        assert!(should_strip_codex_client_fingerprint_header(
+            "x-codex-beta-features",
+            "/v1/responses",
+            true,
+            false,
+            false,
+            false
+        ));
         assert_eq!(strip_one_m_suffix("claude-opus-4-6[1m]"), "claude-opus-4-6");
     }
 

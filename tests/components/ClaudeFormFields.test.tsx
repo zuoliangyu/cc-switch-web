@@ -68,6 +68,8 @@ const renderForm = (overrides: Partial<ClaudeFormFieldsProps> = {}) => {
     speedTestEndpoints: [],
     apiFormat: "anthropic",
     onApiFormatChange: vi.fn(),
+    reasoningEffort: "auto",
+    onReasoningEffortChange: vi.fn(),
     apiKeyField: "ANTHROPIC_AUTH_TOKEN",
     onApiKeyFieldChange: vi.fn(),
     isFullUrl: false,
@@ -192,5 +194,26 @@ describe("ClaudeFormFields role-based model mapping", () => {
       "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
       expect.anything(),
     );
+  });
+});
+
+// 上游 2122f7da：只在转成 OpenAI 格式时显示思考档位
+describe("ClaudeFormFields reasoning effort", () => {
+  beforeEach(() => {
+    modelFetchApiMock.fetchModelsForConfig.mockResolvedValue([]);
+  });
+
+  it("只在转成 OpenAI 格式时显示思考档位", () => {
+    const { unmount } = renderForm({ apiFormat: "openai_chat" });
+    expect(screen.getByRole("combobox", { name: "思考档位" })).toBeVisible();
+    unmount();
+
+    renderForm({ apiFormat: "anthropic" });
+    expect(screen.queryByRole("combobox", { name: "思考档位" })).toBeNull();
+  });
+
+  it("Copilot 卡不显示思考档位", () => {
+    renderForm({ apiFormat: "openai_chat", isCopilotPreset: true });
+    expect(screen.queryByRole("combobox", { name: "思考档位" })).toBeNull();
   });
 });

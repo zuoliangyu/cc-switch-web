@@ -49,6 +49,10 @@ import {
 } from "@/lib/api/model-fetch";
 import { CustomUserAgentField } from "./CustomUserAgentField";
 import { LocalProxyRequestOverridesField } from "./LocalProxyRequestOverridesField";
+import {
+  ClaudeReasoningEffortField,
+  type ClaudeReasoningEffortChoice,
+} from "./ClaudeReasoningEffortField";
 import type {
   ProviderCategory,
   ClaudeApiFormat,
@@ -141,6 +145,9 @@ interface ClaudeFormFieldsProps {
   // API Format (for third-party providers that use OpenAI Chat Completions format)
   apiFormat: ClaudeApiFormat;
   onApiFormatChange: (format: ClaudeApiFormat) => void;
+  // 转成 OpenAI Chat / Responses 时思考档位的发法
+  reasoningEffort: ClaudeReasoningEffortChoice;
+  onReasoningEffortChange: (value: ClaudeReasoningEffortChoice) => void;
 
   // Auth Field (ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY)
   apiKeyField: ClaudeApiKeyField;
@@ -208,6 +215,8 @@ export function ClaudeFormFields({
   speedTestEndpoints,
   apiFormat,
   onApiFormatChange,
+  reasoningEffort,
+  onReasoningEffortChange,
   apiKeyField,
   onApiKeyFieldChange,
   isFullUrl,
@@ -229,6 +238,7 @@ export function ClaudeFormFields({
     defaultSonnetModel ||
     defaultOpusModel ||
     (!isXaiOauthPreset && apiFormat !== "anthropic") ||
+    reasoningEffort !== "auto" ||
     apiKeyField !== "ANTHROPIC_AUTH_TOKEN" ||
     customUserAgent ||
     hasRequestOverrides
@@ -705,39 +715,42 @@ export function ClaudeFormFields({
               </div>
             )}
 
-            {/* 认证字段选择器 */}
-            <div className="space-y-2">
-              <FormLabel>
-                {t("providerForm.authField", { defaultValue: "认证字段" })}
-              </FormLabel>
-              <Select
-                value={apiKeyField}
-                onValueChange={(v) =>
-                  onApiKeyFieldChange(v as ClaudeApiKeyField)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ANTHROPIC_AUTH_TOKEN">
-                    {t("providerForm.authFieldAuthToken", {
-                      defaultValue: "ANTHROPIC_AUTH_TOKEN（默认）",
-                    })}
-                  </SelectItem>
-                  <SelectItem value="ANTHROPIC_API_KEY">
-                    {t("providerForm.authFieldApiKey", {
-                      defaultValue: "ANTHROPIC_API_KEY",
-                    })}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {t("providerForm.authFieldHint", {
-                  defaultValue: "选择写入配置的认证环境变量名",
-                })}
-              </p>
-            </div>
+            {/* 认证字段只决定 Anthropic 格式上游的认证头（OpenAI 格式一律 Bearer）；Copilot
+                靠它决定占位符写在哪个变量。 */}
+            {(apiFormat === "anthropic" || isCopilotPreset) && (
+              <div className="space-y-2">
+                <FormLabel>
+                  {t("providerForm.authField", { defaultValue: "认证字段" })}
+                </FormLabel>
+                <Select
+                  value={apiKeyField}
+                  onValueChange={(v) =>
+                    onApiKeyFieldChange(v as ClaudeApiKeyField)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ANTHROPIC_AUTH_TOKEN">
+                      {t("providerForm.authFieldAuthToken", {
+                        defaultValue: "ANTHROPIC_AUTH_TOKEN（默认）",
+                      })}
+                    </SelectItem>
+                    <SelectItem value="ANTHROPIC_API_KEY">
+                      {t("providerForm.authFieldApiKey", {
+                        defaultValue: "ANTHROPIC_API_KEY",
+                      })}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t("providerForm.authFieldHint", {
+                    defaultValue: "选择写入配置的认证环境变量名",
+                  })}
+                </p>
+              </div>
+            )}
 
             {/* 模型映射 */}
             <div className="space-y-1 border-t border-border-default pt-2">
@@ -982,6 +995,17 @@ export function ClaudeFormFields({
           isFetching={isFetchingModels || modelsLoading}
         />
       )}
+      {category !== "cloud_provider" &&
+        !isXaiOauthPreset &&
+        !isCodexOauthPreset &&
+        !isCopilotPreset &&
+        (apiFormat === "openai_chat" || apiFormat === "openai_responses") && (
+          <ClaudeReasoningEffortField
+            id="claudeReasoningEffort"
+            value={reasoningEffort}
+            onChange={onReasoningEffortChange}
+          />
+        )}
     </>
   );
 }

@@ -3,6 +3,7 @@
 //! 提供本地HTTP代理服务，支持多Provider故障转移和请求透传
 
 pub(crate) mod body_filter;
+mod browser_guard;
 pub(crate) mod cache_injector;
 pub(crate) mod circuit_breaker;
 pub(crate) mod content_encoding;
@@ -33,6 +34,7 @@ pub(crate) mod thinking_optimizer;
 pub(crate) mod thinking_rectifier;
 pub(crate) mod tool_media;
 pub(crate) mod types;
+mod upstream_guard;
 pub(crate) mod usage;
 
 // 公开导出给外部使用（commands, services等模块需要）
@@ -43,3 +45,5 @@ pub(crate) use session::extract_session_id;
 mod aggregation_tests;
 #[cfg(test)]
 mod compaction_tests;
+#[cfg(test)]
+mod tests_issue_7271;

@@ -239,9 +239,9 @@ impl StreamCheckService {
             .or_else(|| adapter.extract_auth(provider))
             .ok_or_else(|| AppError::Message("API Key not found".to_string()))?;
 
-        // 获取 HTTP 客户端：优先使用供应商单独代理配置，否则使用全局客户端
+        // 获取 HTTP 客户端：优先使用供应商单独代理配置，否则使用全局客户端（本机地址直连）
         let proxy_config = provider.meta.as_ref().and_then(|m| m.proxy_config.as_ref());
-        let client = crate::proxy::http_client::get_for_provider(proxy_config);
+        let client = crate::proxy::http_client::get_for_provider_url(proxy_config, &base_url);
         let request_timeout = std::time::Duration::from_secs(config.timeout_secs);
 
         let model_to_test = Self::resolve_test_model(app_type, provider, config);
@@ -387,13 +387,8 @@ impl StreamCheckService {
             == Some("codex_oauth");
 
         let body = if is_openai_responses {
-            anthropic_to_responses(
-                anthropic_body,
-                Some(&provider.id),
-                is_codex_oauth,
-                false,
-            )
-            .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
+            anthropic_to_responses(anthropic_body, Some(&provider.id), is_codex_oauth, false)
+                .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?
         } else if is_gemini_native {
             anthropic_to_gemini(anthropic_body)
                 .map_err(|e| AppError::Message(format!("Failed to build test request: {e}")))?

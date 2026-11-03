@@ -189,7 +189,13 @@ async fn compaction_is_returned_through_native_chat_and_anthropic_http_paths() {
         let seen = up.requests.lock().await;
         assert_eq!(seen.len(), 1);
         assert!(!seen[0].to_string().contains("compaction_trigger"));
-        assert!(seen[0].get("tools").is_none(), "{format}");
+        if format == "openai_responses" {
+            // 原生 Responses 摘要回合保留工具定义（历史调用还引用它们），只禁止新调用
+            assert_eq!(seen[0]["tools"][0]["name"], "tool", "{format}");
+            assert_eq!(seen[0]["tool_choice"], "none", "{format}");
+        } else {
+            assert!(seen[0].get("tools").is_none(), "{format}");
+        }
         task.abort();
     }
 }

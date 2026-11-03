@@ -234,6 +234,8 @@ export interface ProviderMeta {
   promptCacheRouting?: PromptCacheRoutingMode;
   // Codex Responses -> Chat Completions 推理能力元数据
   codexChatReasoning?: CodexChatReasoning;
+  // Claude route → OpenAI Chat / Responses: how the client's thinking effort is sent upstream (absent = auto)
+  claudeReasoningEffort?: ClaudeReasoningEffortMode;
   // 本地代理转发使用的自定义 User-Agent
   customUserAgent?: string;
   // 协议转换完成后应用到上游请求的本地代理覆盖项
@@ -262,6 +264,9 @@ export type ClaudeApiFormat =
   | "openai_chat"
   | "openai_responses"
   | "gemini_native";
+
+// Claude 路由经 OpenAI Chat / Responses 转发时思考档位的发法；缺省 = 自动
+export type ClaudeReasoningEffortMode = "off" | "passthrough";
 
 // Codex API 格式类型（跟随上游 cc-switch 1c82b8a3）
 // - "openai_responses": OpenAI Responses API 格式，直接透传

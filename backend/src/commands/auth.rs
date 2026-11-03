@@ -123,11 +123,18 @@ fn map_device_code_response(
 pub(crate) async fn auth_start_login_internal(
     auth_provider: &str,
     target_account_id: Option<&str>,
+    login_method: Option<&str>,
     copilot_state: &Arc<RwLock<crate::proxy::providers::copilot_auth::CopilotAuthManager>>,
     codex_state: &Arc<RwLock<crate::proxy::providers::codex_oauth_auth::CodexOAuthManager>>,
     xai_state: &Arc<RwLock<crate::proxy::providers::xai_oauth_auth::XaiOAuthManager>>,
 ) -> Result<ManagedAuthDeviceCodeResponse, String> {
     let auth_provider = ensure_auth_provider(auth_provider)?;
+    // 部分 ChatGPT 工作区禁用设备码登录：Codex OAuth 另有浏览器登录（PKCE，回调落在服务端本机 1455 端口）
+    let browser_login = match login_method.unwrap_or("device_code") {
+        "device_code" => false,
+        "browser" if auth_provider == AUTH_PROVIDER_CODEX_OAUTH => true,
+        _ => return Err("Unsupported login method for this auth provider".into()),
+    };
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
             if target_account_id.is_some() {
@@ -142,10 +149,12 @@ pub(crate) async fn auth_start_login_internal(
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
             let auth_manager = codex_state.read().await;
-            let response = auth_manager
-                .start_device_flow(target_account_id)
-                .await
-                .map_err(|e| e.to_string())?;
+            let response = if browser_login {
+                auth_manager.start_browser_flow(target_account_id).await
+            } else {
+                auth_manager.start_device_flow(target_account_id).await
+            }
+            .map_err(|e| e.to_string())?;
             Ok(map_device_code_response(auth_provider, response))
         }
         AUTH_PROVIDER_XAI_OAUTH => {

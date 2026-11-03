@@ -81,6 +81,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RefreshAllQuotaButton } from "@/components/settings/auth/RefreshAllQuotaButton";
 
 // 首屏只展示供应商列表；其余视图与弹窗按需加载，避免首屏包过大。
 const AddProviderDialog = lazy(() =>
@@ -1181,6 +1182,7 @@ function App() {
             </div>
             <div className="flex shrink-0 items-center">
               <div className="flex shrink-0 items-center gap-1.5 ml-auto">
+                {currentView === "accounts" && <RefreshAllQuotaButton />}
                 {currentView === "prompts" && (
                   <Button
                     variant="ghost"

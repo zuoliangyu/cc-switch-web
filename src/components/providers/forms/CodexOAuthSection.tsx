@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, AlertTriangle, RefreshCw } from "lucide-react";
 import { useCodexOauth } from "./hooks/useCodexOauth";
+import type { CodexLoginMethod } from "@/lib/api/auth";
 import {
   ManagedAccountRemoveDialog,
   type ManagedAccountRemoveTarget,
@@ -94,6 +95,10 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
   helpSide,
 }) => {
   const { t, i18n } = useTranslation();
+  // Web 默认用设备码：浏览器登录的回调落在服务端本机的 1455 端口，浏览器和服务端不在同一台
+  // 机器时完成不了；部分工作区禁用了设备码，仍可在右侧改成浏览器登录
+  const [loginMethod, setLoginMethod] =
+    React.useState<CodexLoginMethod>("device_code");
 
   const {
     accounts,
@@ -115,7 +120,7 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
     setDefaultAccount,
     cancelAuth,
     refetchStatus,
-  } = useCodexOauth();
+  } = useCodexOauth(loginMethod);
   const accountUsers = useManagedAccountUsers("codex_oauth", defaultAccountId);
   const [removeTarget, setRemoveTarget] =
     React.useState<ManagedAccountRemoveTarget | null>(null);
@@ -464,6 +469,28 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
         service: "ChatGPT",
       })}
       onAdd={addAccount}
+      loginControl={
+        <Select
+          value={loginMethod}
+          onValueChange={(value) => setLoginMethod(value as CodexLoginMethod)}
+          disabled={isAddingAccount}
+        >
+          <SelectTrigger
+            aria-label={t("codexOauth.loginMethod")}
+            className="h-7 w-[136px]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="browser">
+              {t("codexOauth.browserLogin")}
+            </SelectItem>
+            <SelectItem value="device_code">
+              {t("codexOauth.deviceCodeLogin")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      }
       canReauth
       onReauth={reauthAccount}
       onSetDefault={setDefaultAccount}

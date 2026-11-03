@@ -684,6 +684,7 @@ export async function invoke<T>(
       return (await startWebManagedAuthLogin(
         args?.authProvider as string,
         (args?.targetAccountId as string | null | undefined) ?? null,
+        args?.loginMethod as string | undefined,
       )) as T;
     case "auth_poll_for_account":
       return (await pollWebManagedAuthAccount(

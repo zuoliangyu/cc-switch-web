@@ -513,6 +513,8 @@ struct AuthStartLoginRequest {
     auth_provider: String,
     #[serde(default)]
     target_account_id: Option<String>,
+    #[serde(default)]
+    login_method: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -3153,6 +3155,7 @@ async fn auth_start_login(
     let response = crate::commands::auth_start_login_internal(
         &payload.auth_provider,
         payload.target_account_id.as_deref(),
+        payload.login_method.as_deref(),
         &state.copilot_auth_state,
         &state.codex_oauth_state,
         &state.xai_oauth_state,

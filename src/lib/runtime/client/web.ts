@@ -594,10 +594,12 @@ export async function disableWebCurrentOmoSlim(): Promise<void> {
 export async function startWebManagedAuthLogin(
   authProvider: string,
   targetAccountId?: string | null,
+  loginMethod?: string,
 ): Promise<import("@/lib/api/auth").ManagedAuthDeviceCodeResponse> {
   return requestWithBody("/api/auth/start-login", "POST", {
     authProvider,
     targetAccountId: targetAccountId || null,
+    ...(loginMethod ? { loginMethod } : {}),
   });
 }
 

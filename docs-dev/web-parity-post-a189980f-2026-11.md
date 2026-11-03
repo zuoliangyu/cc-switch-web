@@ -730,7 +730,7 @@
 | `7f9cd9e9` | v4.0.20 | fix(proxy): use the attached marker for orphan tool result media (#8157) | 1b 代理协议 | 1b：孤立工具结果中的媒体使用附件标记 | 已迁移 |
 | `9decd60e` | v4.0.20 | feat(i18n): complete Turkish catalog (#8616) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `bd50984e` | v4.0.20 | fix(forms): reflect automatic Copilot protocol routing (#8196) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `c72c82cf` | v4.0.20 | feat(auth): support browser login for managed ChatGPT accounts (#8288) | 3 官方账号 | 托管 ChatGPT 账号浏览器登录；回调监听需在 Web 部署下可达；需新建或映射：`proxy/providers/codex_oauth_auth/browser.rs` | 待迁移 |
+| `c72c82cf` | v4.0.20 | feat(auth): support browser login for managed ChatGPT accounts (#8288) | 3 官方账号 | 3a：托管 ChatGPT 账号的浏览器登录（授权码 + PKCE，codex_oauth_auth/browser.rs 上游最终版本；/api/auth/start-login 接受 loginMethod）；回调监听服务端本机 1455 端口，只有浏览器与服务端同机时才能完成，Web 因此默认设备码登录（上游默认浏览器），标题行仍可切换 | 已迁移 |
 | `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 2c：从原生 generations 恢复子代理用量模型（native_models.rs） | 已迁移 |
 | `5bc562ce` | v4.0.20 | feat(apps): group the apps page into installed and not installed sections | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `72b056f6` | v4.0.20 | fix(usage): show the balance amount even when it is used up | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -782,7 +782,7 @@
 | `d2008fdb` | v4.0.21 | fix(i18n): complete Turkish catalog follow-ups (#8836) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `238d8a71` | v4.0.21 | test(proxy): add end-to-end regression tests for inline <think> block conversion (#8835) | 1b 代理协议 | 1b：内联 <think> 转换端到端回归（适配 Web 代理构造参数） | 已迁移 |
 | `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
-| `ea1645f9` | v4.0.21 | fix(auth): align quota bars across accounts in the auth center | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
+| `ea1645f9` | v4.0.21 | fix(auth): align quota bars across accounts in the auth center | 3 官方账号 | 3a：授权中心各账号的额度列定宽对齐（.auth-quota-col 与分组卡片 container query） | 已迁移 |
 | `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx`、`components/providers/ProviderCardActions.tsx` | 待迁移 |
 | `5f0fc253` | v4.0.21 | fix(apps): count Hermes's leftover hermes.cmd beside hermes.exe as one install | 1d 资源/设置/工具 | 1d：Hermes 的 hermes.exe 旁残留 hermes.cmd 按一处安装计（tool_management.rs） | 已迁移 |
 | `cfc64971` | v4.0.21 | fix(mcp): drop timeout/autoApprove from Codex MCP entries | 1d 资源/设置/工具 | 1d：写入 Codex MCP 条目时去掉 timeout/autoApprove（Web 只有单服务器写入路径） | 已迁移 |
@@ -821,7 +821,7 @@
 | `869c0b27` | v4.0.22 | fix(usage): refresh balances for inactive providers (#8342) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `a62203bb` | v4.0.22 | fix(ui): prevent duplicate tooltips and constrain help cards (#8593) | 5a 供应商与全局 UI | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
 | `cd9c7210` | v4.0.22 | fix(proxy): reject upstream URLs that loop back to the proxy itself (#8598) | 1b 代理协议 | 1b：拒绝回环到代理自身监听地址的上游 URL | 已迁移 |
-| `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
+| `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 3a：跳到某个授权分组时只滚动面板正文（新增 AuthCenterPanel 测试） | 已迁移 |
 | `67cce7ad` | v4.0.22 | fix(usage): show bound Claude official account quota in tray and usage settings | 3 官方账号 | 用量设置显示绑定 Claude 账号额度；托盘部分不适用；需新建或映射：`commands/claude_account.rs`、`services/usage_cache.rs` | 待迁移 |
 | `e78f641c` | v4.0.22 | fix(apps): report a CLI that is present but yields no version as not runnable | 1d 资源/设置/工具 | 1d：存在但不输出版本的 CLI 报告为不可运行 | 已迁移 |
 | `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
@@ -867,7 +867,7 @@
 | `46ea443d` | v4.0.23 | fix(usage): record MiniMax Code latency and first-token time | 1c 会话/用量导入 | 1c：MiniMax Code 用量记录耗时与首字时间 | 已迁移 |
 | `645f8fa1` | v4.0.23 | feat(presets): add Astron MaaS pay-as-you-go preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `fcd8f3bd` | v4.0.23 | fix(claude-account): resolve mise shims when locating the claude CLI | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
-| `12078d5b` | v4.0.23 | feat(auth): add refresh-all button to the Accounts page header (#9073) | 3 官方账号 | 需新建或映射：`components/settings/auth/RefreshAllQuotaButton.tsx` | 待迁移 |
+| `12078d5b` | v4.0.23 | feat(auth): add refresh-all button to the Accounts page header (#9073) | 3 官方账号 | 3a：授权中心页头“全部刷新”（Copilot、ChatGPT、xAI、Kimi、Antigravity 额度与 DSH 余额）；Claude 官方账号随 3b 接入 | 部分迁移 |
 | `6d6ee68f` | v4.0.23 | fix(providers): stop IME composition from duplicating letters in provider key inputs (#9069) | 2b Kimi Code | 2b：供应商键输入框的输入法组合不再重复字母（Kimi 与 MiniMax Code 表单） | 已迁移 |
 | `7569b27a` | v4.0.23 | fix(providers): keep fetched model list when the form re-renders (#9068) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `d8339d6a` | v4.0.23 | fix(icon-picker): keep picker clear of macOS traffic lights (#9076) | — | 图标选择器避让 macOS 红绿灯；Web 无原生窗口按钮 | 不适用 |
@@ -900,7 +900,7 @@
 | `7e02e494` | v4.0.24 | fix(codex): restore reasoning effort after re-enabling (#8998) | 1b 代理协议 | 1b：重新启用 Codex Chat 思考等级时恢复默认参数名，后端修复已启用但参数为 none 的旧配置；组件交互测试依赖 Web 不同的测试夹具未迁移 | 已迁移 |
 | `c1fb9eec` | v4.0.24 | fix(tray): store Linux tray icons in app cache directory (#9021) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `734ed4a1` | v4.0.24 | feat(auth): let sign-in copy the login link instead of opening the browser | 3 官方账号 | 登录只复制链接不打开浏览器；Web 远程访问场景尤其适用；需新建或映射：`services/claude_account/layout.rs`、`services/claude_account/login.rs`等 6 个 | 待迁移 |
-| `832fbe65` | v4.0.24 | test(codex-oauth): retry the stale keep-alive request in the replacement test | 3 官方账号 | 浏览器登录模块测试，随 c72c82cf（3 官方账号）一并处理 | 待迁移 |
+| `832fbe65` | v4.0.24 | test(codex-oauth): retry the stale keep-alive request in the replacement test | 3 官方账号 | 3a：替换测试中重试过期的 keep-alive 请求（browser.rs 上游最终版本） | 已迁移 |
 | `14ddd7b5` | v4.0.24 | fix(dsh): keep only text/image in exported model input | 2e DeepSeek Harness | 2e：导出的模型输入只保留 text/image（dsh_config 最终版本） | 已迁移 |
 | `39183b59` | v4.0.24 | fix(proxy): keep max effort for every GPT 5.6+ Sol/Terra/Luna/Astra model | 1b 代理协议 | 1b：GPT 5.6+ Sol/Terra/Luna/Astra 全系保留 max 档 | 已迁移 |
 | `6532c5a9` | v4.0.24 | chore(release): v4.0.24 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -1034,3 +1034,8 @@
   - 测试：上游 `tests/dsh_commands.rs` 3 个用例改写为 `services/provider/dsh_tests.rs`，另补 v20 → v21 迁移用例。
   - 转出：用量页 `providerLabel` 与筛选随 5b（6fa328f3）；预设副行“用 DeepSeek 账号登录”随 5a（1f21c289）；DSH 模型方言专用控件随 5a（3d4a3da3）。
   - 验证：`cargo test --lib` 3269 项通过、6 项忽略（一次全量运行中 `services::proxy::tests::codex_takeover_without_provider_selects_a_local_authenticated_route` 偶发失败，单独运行 3 次与再次全量运行 2 次均通过；该用例读全局设置且未串行化）；`tsc --noEmit` 通过；前端全量 Vitest 166 个文件 1788 项通过、2 项跳过。
+- 2026-11-04：完成批次 3a（ChatGPT 浏览器登录与授权中心修复，5 项）。
+  - 后端：`codex_oauth_auth.rs` 按上游差异更新（换 refresh token 的永久失败判定此前批次已在），新增 `codex_oauth_auth/browser.rs`（上游最终版本）；`auth_start_login_internal` 与 `POST /api/auth/start-login` 接受 `loginMethod`（`device_code` / `browser`，浏览器登录只给 Codex OAuth）。
+  - 浏览器登录的回调监听在服务端本机的 1455 端口，浏览器与服务端不在同一台机器时完成不了：Web 默认设备码登录（上游默认浏览器），部分禁用设备码的工作区可在账号组标题行改为浏览器登录。
+  - 前端：登录方式选择、轮询防重叠、额度列定宽对齐、跳转分组只滚面板正文、页头“全部刷新”（Claude 官方账号随 3b 接入）。
+  - 验证：Codex OAuth 后端用例 64 项通过；`tsc --noEmit` 通过；前端全量 Vitest 167 个文件 1805 项通过、2 项跳过。

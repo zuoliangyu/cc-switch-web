@@ -6,6 +6,9 @@ export type ManagedAuthProvider =
   | "xai_oauth"
   | "agy_oauth";
 
+/** ChatGPT 托管账号的登录方式：浏览器（PKCE，回调落在服务端本机 1455 端口）或设备码 */
+export type CodexLoginMethod = "browser" | "device_code";
+
 export const CODEX_OAUTH_DUPLICATE_ACCOUNT_ERROR =
   "codex_oauth_duplicate_account";
 
@@ -43,10 +46,12 @@ export interface ManagedAuthDeviceCodeResponse {
 export async function authStartLogin(
   authProvider: ManagedAuthProvider,
   targetAccountId?: string,
+  loginMethod?: CodexLoginMethod,
 ): Promise<ManagedAuthDeviceCodeResponse> {
   return invoke<ManagedAuthDeviceCodeResponse>("auth_start_login", {
     authProvider,
     targetAccountId: targetAccountId || null,
+    ...(loginMethod ? { loginMethod } : {}),
   });
 }
 

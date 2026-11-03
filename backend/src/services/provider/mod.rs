@@ -17,6 +17,8 @@ mod common_config_tests;
 mod desktop;
 #[cfg(test)]
 mod desktop_tests;
+#[cfg(test)]
+mod dsh_tests;
 pub(crate) mod editor_toml;
 mod endpoints;
 mod gemini_auth;
@@ -24,8 +26,6 @@ pub(crate) mod gemini_direct;
 pub(crate) mod gemini_editor;
 pub(crate) mod grok_direct;
 pub(crate) mod grok_editor;
-#[cfg(test)]
-mod dsh_tests;
 #[cfg(test)]
 mod kimi_tests;
 mod live;
@@ -67,11 +67,12 @@ pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppErro
 }
 
 // Internal re-exports (pub(crate))
+#[cfg(test)]
+pub(crate) use live::initialize_dsh_profiles;
 pub(crate) use live::{
-    build_effective_settings_with_common_config, initialize_dsh_profiles,
-    normalize_provider_common_config_for_storage, provider_exists_in_live_config,
-    strip_common_config_from_live_settings, sync_current_provider_for_app_to_live,
-    write_live_with_common_config,
+    build_effective_settings_with_common_config, normalize_provider_common_config_for_storage,
+    provider_exists_in_live_config, strip_common_config_from_live_settings,
+    sync_current_provider_for_app_to_live, write_live_with_common_config,
 };
 
 // Internal re-exports

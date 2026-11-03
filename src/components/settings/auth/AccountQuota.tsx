@@ -57,8 +57,10 @@ interface AccountQuotaColumnProps {
 }
 
 /**
- * 授权中心账号行右侧的额度（v7 Auth 画板）：212 宽的额度条（条和数字都按「剩余」画，
+ * 授权中心账号行右侧的额度（v7 Auth 画板）：额度条（条和数字都按「剩余」画，
  * 平时 --chart-1；不到 10% 换 warning，用完换 danger）+ 84 宽的「x 分钟前 ↻」。
+ * 档名、数值、倒计时三格定宽，倒计时格没有也留着；整列宽度只随分组卡片宽度变
+ * （.auth-quota-col，见 index.css），各账号、各分组的条起点和长度一致。
  * 打开页面时查一次，不轮询；↻ 手动重查。
  */
 export function AccountQuotaColumn({
@@ -74,23 +76,14 @@ export function AccountQuotaColumn({
       (state?.kind === "rows" && state.rows.some(({ line }) => line.resetsAt)),
   );
   if (!state) return null;
-  // 有一档带重置时间，每行数值后面都留出倒计时那一格（各行对齐），整列加宽
-  const showReset =
-    state.kind === "rows" &&
-    state.rows.some(({ line }) => countdownStr(line.resetsAt, now));
-  const resetCell = (line: QuotaLine) =>
-    showReset ? (
-      <ResetSlot countdown={countdownStr(line.resetsAt, now)} className="" />
-    ) : null;
+  // 倒计时格始终留着（没有重置时间就空着），别的号的条才不会因此变宽或挪位
+  const resetCell = (line: QuotaLine) => (
+    <ResetSlot countdown={countdownStr(line.resetsAt, now)} className="" />
+  );
 
   return (
     <>
-      <div
-        className={cn(
-          "flex shrink-0 flex-col gap-0.5",
-          showReset ? "w-[272px]" : "w-[212px]",
-        )}
-      >
+      <div className="auth-quota-col flex shrink-0 flex-col gap-0.5">
         {state.kind === "rows" &&
           state.rows.map(({ label, line }) =>
             line.breakdown ? (
@@ -228,7 +221,11 @@ function QuotaRowCells({
   const value = line.value ?? line.text;
   return (
     <>
-      <span className="min-w-[52px] shrink-0 whitespace-nowrap text-muted-foreground">
+      {/* 定宽：「Claude/GPT 每周」这类长档名不再把条挤短；更长的截断，悬停看全名 */}
+      <span
+        title={label}
+        className="w-[112px] shrink-0 truncate whitespace-nowrap text-muted-foreground"
+      >
         {label}
       </span>
       {line.caption ? (
@@ -256,7 +253,8 @@ function QuotaRowCells({
       )}
       <span
         className={cn(
-          "w-14 shrink-0 whitespace-nowrap text-end tabular-nums",
+          // 64 宽放得下「剩余 100%」，和「剩余 99%」右边对齐
+          "w-16 shrink-0 whitespace-nowrap text-end tabular-nums",
           line.tone === "normal" ? "text-foreground" : TONE_TEXT[line.tone],
         )}
       >

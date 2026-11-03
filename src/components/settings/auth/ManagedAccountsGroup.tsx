@@ -207,7 +207,7 @@ export function ManagedAccountsGroup({
   return (
     <section
       aria-label={name}
-      className="shrink-0 rounded-xl border border-border bg-card"
+      className="auth-group shrink-0 rounded-xl border border-border bg-card"
     >
       <div className="flex h-[52px] items-center gap-3 pe-2.5 ps-4">
         <span

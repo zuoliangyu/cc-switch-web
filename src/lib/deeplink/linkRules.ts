@@ -45,6 +45,7 @@ export const MCP_LINK_APPS: readonly AppId[] = [
   "pi",
   "kimi",
   "mcode",
+  "omp",
 ];
 
 /** 累加式应用：没有「切换」，开关决定写不写进应用的配置文件（同后端 `is_additive_mode`） */

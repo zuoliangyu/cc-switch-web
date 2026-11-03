@@ -227,7 +227,7 @@ impl StreamCheckService {
 
         if matches!(
             app_type,
-            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi
+            AppType::OpenCode | AppType::OpenClaw | AppType::Hermes | AppType::Pi | AppType::Omp
         ) {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
@@ -328,7 +328,8 @@ impl StreamCheckService {
             | AppType::Hermes
             | AppType::Pi
             | AppType::Mcode
-            | AppType::Kimi => {
+            | AppType::Kimi
+            | AppType::Omp => {
                 unreachable!("累加模式应用已通过 check_once_without_adapter 处理")
             }
         };
@@ -756,7 +757,8 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::Pi => {
+            // Oh My Pi 的 models.yml 节点与 Pi 的 models.json 同形（baseUrl、apiKey、api）
+            AppType::Pi | AppType::Omp => {
                 Self::check_openclaw_stream(
                     &client,
                     provider,
@@ -1373,7 +1375,7 @@ impl StreamCheckService {
             AppType::Hermes => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
-            AppType::Pi | AppType::Mcode | AppType::Kimi => {
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => {
                 Self::extract_openclaw_model(provider).unwrap_or_else(|| config.codex_model.clone())
             }
         }

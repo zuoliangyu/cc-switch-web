@@ -37,6 +37,7 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
     mcode: "~/.minimax/AGENTS.md",
     kimi: "~/.kimi-code/AGENTS.md",
     agy: "~/.gemini/config/AGENTS.md",
+    omp: "~/.omp/agent/AGENTS.md",
   };
   const filename = filenameMap[appId];
   const [name, setName] = useState("");

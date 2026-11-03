@@ -203,10 +203,15 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           apiKey: (config as any).apiKey,
           baseUrl: (config as any).baseUrl,
         };
-      } else if (appId === "pi") {
+      } else if (appId === "pi" || appId === "omp") {
+        // Pi / Oh My Pi: provider values are camelCase; a model may override baseUrl.
+        const root = config as any;
+        const firstModel = Array.isArray(root.models)
+          ? root.models[0]
+          : undefined;
         return {
-          apiKey: (config as any).apiKey,
-          baseUrl: (config as any).baseUrl,
+          apiKey: root.apiKey,
+          baseUrl: firstModel?.baseUrl || root.baseUrl,
         };
       } else if (appId === "opencode") {
         // OpenCode: 凭据嵌在 options（SDK options 对象）

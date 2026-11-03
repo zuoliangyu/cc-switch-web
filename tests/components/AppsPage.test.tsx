@@ -423,8 +423,11 @@ describe("AppsPage concurrent CLI upgrades", () => {
       expect(dialog.getByText("pnpm remove -g openclaw")).toBeInTheDocument();
       expect(dialog.queryByText("Codex")).not.toBeInTheDocument();
       await chooseMethod("bun");
-      expect(dialog.getAllByRole("listitem")).toHaveLength(1);
+      expect(dialog.getAllByRole("listitem")).toHaveLength(2);
       expect(dialog.getByText("bun remove -g openclaw")).toBeInTheDocument();
+      expect(
+        dialog.getByText("bun remove -g @oh-my-pi/pi-coding-agent"),
+      ).toBeInTheDocument();
       expect(
         dialog.queryByText("bun remove -g opencode-ai"),
       ).not.toBeInTheDocument();
@@ -1312,7 +1315,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     const { AppsPage } = await import("@/components/apps/AppsPage");
     const view = mountApps(AppsPage);
     await waitFor(() =>
-      expect(mocks.getManagedToolVersions).toHaveBeenCalledTimes(11),
+      expect(mocks.getManagedToolVersions).toHaveBeenCalledTimes(12),
     );
     view.unmount();
     const remounted = await renderApps();

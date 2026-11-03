@@ -252,6 +252,7 @@ import {
   upsertWebUniversalProvider,
   deleteWebUniversalProvider,
   getWebPiState,
+  updateWebPiProviderUsageScript,
   getWebPiPromptFile,
   saveWebPiPromptFile,
   deleteWebPiPromptFile,
@@ -548,6 +549,8 @@ export async function invoke<T>(
       return (await getWebLiveProviderIds("openclaw")) as T;
     case "get_pi_live_provider_ids":
       return (await getWebLiveProviderIds("pi")) as T;
+    case "import_omp_providers_from_live":
+      return (await importWebProvidersFromLive("omp")) as T;
     case "import_opencode_providers_from_live":
       return (await importWebProvidersFromLive("opencode")) as T;
     case "import_openclaw_providers_from_live":
@@ -923,7 +926,15 @@ export async function invoke<T>(
         }[]) ?? [],
       )) as T;
     case "get_pi_current_state":
-      return (await getWebPiState()) as T;
+      return (await getWebPiState("pi")) as T;
+    case "get_omp_current_state":
+      return (await getWebPiState("omp")) as T;
+    case "update_pi_provider_usage_script":
+      return (await updateWebPiProviderUsageScript(
+        args?.app as "pi" | "omp",
+        args?.id as string,
+        args?.usageScript,
+      )) as T;
     case "get_pi_prompt_file":
       return (await getWebPiPromptFile(args?.kind as any)) as T;
     case "save_pi_prompt_file":

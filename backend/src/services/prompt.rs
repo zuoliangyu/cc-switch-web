@@ -444,6 +444,31 @@ mod tests {
         ))
     }
 
+    /// 上游 tests/prompt_live_sync.rs（b34753b8）：Oh My Pi 的提示词写进 agent 目录的 AGENTS.md
+    #[test]
+    #[serial]
+    fn omp_prompts_write_agents_md_in_the_agent_directory() {
+        let _agent = crate::omp_config::test_support::TestAgentDir::new();
+        let agent_dir = crate::omp_config::get_omp_agent_dir().unwrap();
+        let state = memory_state();
+
+        let prompt = Prompt {
+            id: "global".into(),
+            name: "Global".into(),
+            content: "Use the project conventions.".into(),
+            description: None,
+            enabled: false,
+            created_at: None,
+            updated_at: None,
+        };
+        PromptService::upsert_prompt(&state, AppType::Omp, "global", prompt).unwrap();
+        PromptService::enable_prompt(&state, AppType::Omp, "global").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(agent_dir.join("AGENTS.md")).unwrap(),
+            "Use the project conventions."
+        );
+    }
+
     #[test]
     #[serial]
     fn inactive_prompt_saves_preserve_external_file_until_last_active_is_disabled() {

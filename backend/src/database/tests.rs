@@ -1641,3 +1641,33 @@ fn incremental_vacuum_reclaims_entire_freelist() {
     Database::incremental_vacuum_on_conn(&conn).expect("incremental vacuum");
     assert_eq!(freelist(&conn), 0, "all free pages should be reclaimed");
 }
+
+/// Web v19 -> v20（上游 v22 -> v23）：补上 `mcp_servers.enabled_omp`，否则读 MCP 列表报
+/// `no such column`。Skills 没有 omp 列（启用状态按原生目录现算）。
+#[test]
+fn migration_v19_to_v20_adds_enabled_omp_to_mcp_servers_only() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    conn.execute_batch("ALTER TABLE mcp_servers DROP COLUMN enabled_omp;")
+        .expect("rewind mcp_servers to v19 shape");
+    conn.execute(
+        "INSERT INTO mcp_servers (id, name, server_config, enabled_pi) VALUES ('mcp-1', 'm', '{}', 1)",
+        [],
+    )
+    .expect("seed mcp row");
+    Database::set_user_version(&conn, 19).expect("set user_version=19");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    assert!(Database::has_column(&conn, "mcp_servers", "enabled_omp").unwrap());
+    assert!(!Database::has_column(&conn, "skills", "enabled_omp").unwrap());
+    let (pi, omp): (i64, i64) = conn
+        .query_row(
+            "SELECT enabled_pi, enabled_omp FROM mcp_servers WHERE id = 'mcp-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("read mcp row");
+    assert_eq!((pi, omp), (1, 0));
+}

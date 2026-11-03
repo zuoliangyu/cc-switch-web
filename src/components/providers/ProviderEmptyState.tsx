@@ -16,8 +16,10 @@ export function ProviderEmptyState({
 }: ProviderEmptyStateProps) {
   const { t } = useTranslation();
   // MiniMax Code 自动合并原生自定义供应商，不提供手动导入入口。
-  // Kimi 的列表同样直接读原生 config.toml，没有可导入的“当前配置”
-  const emptyCopyNs = appId === "mcode" || appId === "kimi" ? appId : null;
+  // Kimi 的列表同样直接读原生 config.toml，没有可导入的“当前配置”；
+  // Oh My Pi 的空状态提示从 + 添加 API Key 供应商
+  const emptyCopyNs =
+    appId === "mcode" || appId === "kimi" || appId === "omp" ? appId : null;
   const showSnippetHint =
     appId === "claude" || appId === "codex" || appId === "gemini";
 

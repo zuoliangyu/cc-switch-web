@@ -711,16 +711,16 @@
 | `bada9a4b` | v4.0.19 | fix(models): don't borrow a vendor-hosted entry that points at another vendor | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `a043b1f8` | v4.0.19 | chore(release): v4.0.19 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `d8983bb1` | v4.0.19 | docs(release): add v4.0.19 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `c8945d2d` | v4.0.20 | feat(omp): add Oh My Pi support | 2d Oh My Pi | Oh My Pi 应用接入（含 models.yml 文本编辑、复用 Pi 表单）；Web 需新增 AppType::Omp；需新建或映射：`deeplink/mcp.rs`、`deeplink/parser.rs`等 9 个 | 待迁移 |
-| `2afe8cdb` | v4.0.20 | refactor(omp): rename the internal app id from ohmypi to omp | 2d Oh My Pi | Oh My Pi 应用接入（含 models.yml 文本编辑、复用 Pi 表单）；Web 需新增 AppType::Omp；需新建或映射：`commands/omp.rs`、`deeplink/mcp.rs`等 13 个 | 待迁移 |
-| `3d7cf6aa` | v4.0.20 | refactor(omp): port #8308's text-level models.yml editor and share Pi plumbing | 2d Oh My Pi | Oh My Pi 应用接入（含 models.yml 文本编辑、复用 Pi 表单）；Web 需新增 AppType::Omp；需新建或映射：`commands/omp.rs`、`commands/pi.rs`等 6 个 | 待迁移 |
-| `a03c6c7a` | v4.0.20 | refactor(omp): reuse the Pi provider form and plumbing for Oh My Pi | 2d Oh My Pi | Oh My Pi 应用接入（含 models.yml 文本编辑、复用 Pi 表单）；Web 需新增 AppType::Omp；需新建或映射：`components/providers/presentation.ts`、`components/skills/SkillImportDialog.tsx`等 3 个 | 待迁移 |
-| `e88a9fa4` | v4.0.20 | refactor(omp): read Oh My Pi sessions through the Pi session reader | 2d Oh My Pi | 需新建或映射：`session_manager/providers/omp.rs` | 待迁移 |
-| `b34753b8` | v4.0.20 | feat(omp): manage Oh My Pi global prompts | 2d Oh My Pi | 需新建或映射：`deeplink/parser.rs`、`deeplink/tests.rs`等 4 个 | 待迁移 |
+| `c8945d2d` | v4.0.20 | feat(omp): add Oh My Pi support | 2d Oh My Pi | 2d：Oh My Pi 支持（omp_config、AppType::Omp 累加式、MCP 开关/导入、Skills 按原生目录、提示词 AGENTS.md、会话浏览、目录覆盖、工具安装卸载、图标；Web schema v20 mcp_servers.enabled_omp）；托盘不适用，启动时导入改由列表读取时同步 | 已迁移 |
+| `2afe8cdb` | v4.0.20 | refactor(omp): rename the internal app id from ohmypi to omp | 2d Oh My Pi | 2d：直接采用最终的 omp 命名（未经过 ohmypi 中间态） | 已迁移 |
+| `3d7cf6aa` | v4.0.20 | refactor(omp): port #8308's text-level models.yml editor and share Pi plumbing | 2d Oh My Pi | 2d：models.yml 文本级编辑与共享 Pi 接口（GET /api/omp/state 同 Pi 状态；Pi/Omp 用量脚本只改数据库 PUT /api/providers/:app/:id/usage-script）；Web 的 Pi 供应商服务保留自有实现，仅增加 Pi/Omp 共用的用量脚本更新 | 已迁移 |
+| `a03c6c7a` | v4.0.20 | refactor(omp): reuse the Pi provider form and plumbing for Oh My Pi | 2d Oh My Pi | 2d：omp 复用 Web 的 PiProviderForm（预设、YAML 编辑框、模型自动发现）；Web 的 Pi 表单为自写简化版，上游完整表单细节未照搬；AddProvider/EditProvider 的 onSubmitReadyChange 用例因 Web 无该机制未迁移 | 部分迁移 |
+| `e88a9fa4` | v4.0.20 | refactor(omp): read Oh My Pi sessions through the Pi session reader | 2d Oh My Pi | 2d：omp 会话经 Pi 会话读取器（session_manager/providers/pi.rs 取上游最终版本，shell_escape 用 Web 的 utils） | 已迁移 |
+| `b34753b8` | v4.0.20 | feat(omp): manage Oh My Pi global prompts | 2d Oh My Pi | 2d：Oh My Pi 全局提示词写 agent 目录的 AGENTS.md；深链提示词不接受 omp（与上游一致） | 已迁移 |
 | `f1d43eba` | v4.0.20 | docs(readme): list Oh My Pi among the managed tools | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
-| `9bacd1d1` | v4.0.20 | fix(omp): allow project images in Oh My Pi session previews | 2d Oh My Pi | 合并到 Web 已改文件 | 待迁移 |
-| `d9422e7d` | v4.0.20 | fix(omp): install and update Oh My Pi without assuming Bun | 2d Oh My Pi | 需新建或映射：`commands/tool_uninstall.rs` | 待迁移 |
-| `d01daa0d` | v4.0.20 | fix(omp): hide the Oh My Pi choice when importing skills | 2d Oh My Pi | 需新建或映射：`components/skills/SkillImportDialog.tsx` | 待迁移 |
+| `9bacd1d1` | v4.0.20 | fix(omp): allow project images in Oh My Pi session previews | 2d Oh My Pi | 2d：omp 会话预览允许项目内图片（content.rs 加入 omp） | 已迁移 |
+| `d9422e7d` | v4.0.20 | fix(omp): install and update Oh My Pi without assuming Bun | 2d Oh My Pi | 2d：不假设 Bun 的安装/升级（后端生命周期在 1d 已是最终版本；前端安装提示改为官方脚本，并补上 installHint.agy） | 已迁移 |
+| `d01daa0d` | v4.0.20 | fix(omp): hide the Oh My Pi choice when importing skills | 2d Oh My Pi | 2d：导入技能时隐藏 Oh My Pi | 已迁移 |
 | `c3e54a4e` | v4.0.20 | feat(pricing): seed Kimi K3.1 Pro and HighSpeed prices | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `62652945` | v4.0.20 | feat(kimi): edit official account models and remove them from Kimi | 2b Kimi Code | 2b：编辑官方账号模型、从 Kimi 移出官方账号（kimi_official_connection/ensure_kimi_provider_editable） | 已迁移 |
 | `c91aa774` | v4.0.20 | feat(kimi): show "No subscription" for accounts without a Kimi Code plan | 2b Kimi Code | 2b：无订阅账号显示“未订阅”（额度视图 emptyText、账号行 note 状态） | 已迁移 |
@@ -737,14 +737,14 @@
 | `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 1d：额度失败文案改为“额度查询失败”；托盘部分不适用 | 已迁移 |
 | `b71141a8` | v4.0.20 | feat(apps): drag to reorder installed apps, sidebar follows the order | 5a 供应商与全局 UI | 应用排序依赖 Sidebar 与 appConfig 的 orderAppIds，随 5a 处理 | 待迁移 |
 | `ba6a8a55` | v4.0.20 | fix(apps): group Claude Desktop by whether it is installed | 1d 资源/设置/工具 | 1d：Claude Desktop 状态新增 installed（按数据目录/应用包推断）；Web 应用页尚无按安装分组，界面分组随 5a | 已迁移 |
-| `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
+| `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | 2d：发现说明从应用页移到 MCP/Skills；Web 无矩阵列头，改为计数条下方的一行说明与文档链接（OmpDiscoveryNote） | 部分迁移 |
 | `6c2fc74e` | v4.0.20 | feat(pi): pick fetched models in a dialog for Pi and omp | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `f395cd6b` | v4.0.20 | fix(kimi): import subagent usage from their own wire logs | 2b Kimi Code | 2b：子代理用量从各自的 wire 日志导入 | 已迁移 |
 | `b9f317af` | v4.0.20 | fix(usage): stop treating an empty DeepSeek balance as an expired plan | 1c 会话/用量导入 | 1c：DeepSeek 余额为空不再判为套餐过期 | 已迁移 |
 | `442df1db` | v4.0.20 | fix(skills): send a User-Agent when downloading skill archives | 1d 资源/设置/工具 | 1d：下载 Skill 归档时带 User-Agent（CC-Switch-Web/版本） | 已迁移 |
 | `dcdcbcb4` | v4.0.20 | fix(pi): resolve $NAME references in apiKey for usage queries | 1d 资源/设置/工具 | 1d：Pi 用量查询解析 apiKey 中的 $NAME 引用，!command 与未设置变量不当 Key 发送 | 已迁移 |
-| `6e040f4c` | v4.0.20 | fix(omp): check provider keys against omp's own providers | 2d Oh My Pi | 合并到 Web 已改文件 | 待迁移 |
-| `f67cb33d` | v4.0.20 | fix(omp): match omp's apiKey, models.json and schema rules | 2d Oh My Pi | 需新建或映射：`omp_config.rs` | 待迁移 |
+| `6e040f4c` | v4.0.20 | fix(omp): check provider keys against omp's own providers | 2d Oh My Pi | 2d：供应商键按 omp 自己的供应商校验（omp_config 最终版本） | 已迁移 |
+| `f67cb33d` | v4.0.20 | fix(omp): match omp's apiKey, models.json and schema rules | 2d Oh My Pi | 2d：apiKey、models.json 与 schema 规则对齐 omp（omp_config 最终版本；表单切换自动发现类型时丢弃 injectV1） | 已迁移 |
 | `5f642640` | v4.0.20 | feat(pi): move rarely used provider settings into a collapsed advanced section | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `28a2ebc0` | v4.0.20 | fix(usage): show every tab count and keep counts steady across filter changes | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `50a9d103` | v4.0.20 | chore(presets): refresh preset models to the latest vendor lineups | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -794,7 +794,7 @@
 | `96f01af0` | v4.0.21 | fix(proxy): retry Codex requests rejected for a foreign Azure resource | 1b 代理协议 | 1b：Codex 请求因外部 Azure 资源 item id 被拒时整流重试 | 已迁移 |
 | `c2110ebb` | v4.0.21 | fix(mcp): warn when an SSE server is written to apps without SSE support | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `80640b52` | v4.0.21 | fix(proxy): read Chat completions wrapped in a data envelope | 1b 代理协议 | 1b：读取包在 data 信封里的 Chat completions（转换与用量解析） | 已迁移 |
-| `e332cfdb` | v4.0.21 | fix(omp): stop refusing models.yml values that contain &, * or ! | 2d Oh My Pi | 需新建或映射：`omp_config.rs` | 待迁移 |
+| `e332cfdb` | v4.0.21 | fix(omp): stop refusing models.yml values that contain &, * or ! | 2d Oh My Pi | 2d：models.yml 中含 &、*、! 的值不再被拒绝（omp_config 最终版本） | 已迁移 |
 | `644f5664` | v4.0.21 | fix(kimi): date session usage by each request, not the turn commit | 2b Kimi Code | 2b：会话用量按每个请求完成时间记日期 | 已迁移 |
 | `0820ff73` | v4.0.21 | fix(codex-oauth): stop reporting transient refresh failures as an expired login | 1b 代理协议 | 1b：Codex OAuth 刷新暂时失败不再显示登录过期；Web 无托盘事件，改在切换供应商成功后重查失败的额度 | 已迁移 |
 | `fec3629a` | v4.0.21 | docs(readme): move TeamoRouter ahead of AICoding in the sponsor table | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
@@ -843,7 +843,7 @@
 | `6282108e` | v4.0.22 | fix(proxy): mount thoughtSignature at Part level instead of inside functionCall (#6690) | 1b 代理协议 | 1b：thoughtSignature 挂在 Part 层 | 已迁移 |
 | `df753b5e` | v4.0.22 | fix(proxy): fall back to Gemini's skip signature on the Gemini Native path | 1b 代理协议 | 1b：Gemini Native 路径缺签名时回退 skip 签名 | 已迁移 |
 | `8355f1f1` | v4.0.22 | fix(proxy): filter unsupported xAI Responses include marker (#8997) | 1b 代理协议 | 1b：过滤 xAI Responses 不支持的 include 标记 | 已迁移 |
-| `accc4489` | v4.0.22 | feat(usage): import Oh My Pi session usage (#9046) | 2d Oh My Pi | 需新建或映射：`services/session_usage_omp.rs`、`session_manager/providers/omp.rs`等 4 个 | 待迁移 |
+| `accc4489` | v4.0.22 | feat(usage): import Oh My Pi session usage (#9046) | 2d Oh My Pi | 2d：导入 Oh My Pi 会话用量（session_usage_omp、Pi 用量导入取上游最终版本；Web 无 input_token_semantics/pricing_model 列，插入时去掉）；providerLabel 与用量页筛选随 5b | 部分迁移 |
 | `efb955bd` | v4.0.22 | fix(dsh): drop the account banner and note the shared list in the section title | 2e DeepSeek Harness | 需新建或映射：`components/providers/DshAccount.tsx`、`components/providers/presentation.ts` | 待迁移 |
 | `2baa6862` | v4.0.22 | feat(dsh): add DeepSeek official account sign-in like Kimi Code | 2e DeepSeek Harness | 需新建或映射：`components/providers/DshAccount.tsx`、`components/providers/presentation.ts`等 3 个 | 待迁移 |
 | `dfa29123` | v4.0.22 | feat(providers): align the shared model editor with Pi and Kimi | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -884,7 +884,7 @@
 | `4e31203c` | v4.0.23 | refactor(usage): return bool from bounded fork validation (#9106) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b：Kimi 原生 TOML 编辑框（NativeConfigEditor、useNativeConfigPath、kimiToml）；MiniMax Code / Oh My Pi 的 YAML 编辑需新增 yaml 依赖且 Web 的 MCode 表单已分叉，随 2d 处理 | 部分迁移 |
+| `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b/2d：Kimi 原生 TOML 编辑框（2b）；MiniMax Code custom_provider 与 Oh My Pi models.yml 的 YAML 编辑框（2d，新增依赖 yaml 2.8.1 与 helpers/yamlNode.ts）；DSH 部分随 2e | 部分迁移 |
 | `5c8f4e2e` | v4.0.23 | feat(presets): add OpenAI API key presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `2122f7da` | v4.0.23 | fix(proxy): send reasoning effort to non-whitelisted models on Claude OpenAI routes | 1b 代理协议 | 1b：Claude 路由经 OpenAI Chat/Responses 时按模型能力补发思考档位（claude_reasoning），表单与 Desktop 表单新增思考档位选项（自动/原样/不发） | 已迁移 |
 | `93d0bf18` | v4.0.23 | feat(proxy): map Claude thinking settings to Gemini thinkingConfig | 1b 代理协议 | 1b：Claude thinking 设置映射到 Gemini thinkingConfig | 已迁移 |
@@ -917,7 +917,7 @@
 | `153db16e` | v4.0.25 | fix(windows): prevent provider form values from flickering (#6420) | — | WebView2 自动填充覆盖受控输入；Web 运行于普通浏览器，不注入 WebView 钩子 | 不适用 |
 | `b696f890` | v4.0.25 | fix(minimax): declare M3.1-Flash native thinking levels in Pi (#8540) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `1cc2c732` | v4.0.25 | fix(mcp): follow up on Pi MCP sync review notes (#7888) | 2a Pi MCP/迁移基线 | 2a：Pi MCP 审查跟进（重名检查与提交同锁、导入按 Pi 规则校验、未装 Pi 时只入库）；Pi 拒绝原因本地化；深链 MCP 的 apps 接受 pi，合并已有服务器时保留 Pi 勾选；上游集成测试改写为 services::mcp 单元测试；用户手册不适用 | 已迁移 |
-| `69b41cdb` | v4.0.25 | fix(usage): import Pi official subagent usage (#8386) | 2d Oh My Pi | 需新建或映射：`services/session_usage_omp.rs` | 待迁移 |
+| `69b41cdb` | v4.0.25 | fix(usage): import Pi official subagent usage (#8386) | 2d Oh My Pi | 2d：导入 Pi 官方子代理用量（session_usage_pi 上游最终版本） | 已迁移 |
 | `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 汇率自动获取（联网），与自选货币配套；保留手动汇率回退；需新建或映射：`services/exchange_rates.rs`、`components/usage/UsageDisplaySection.tsx`等 4 个 | 待迁移 |
 | `5ba95160` | v4.0.25 | fix(proxy): send a supported tool_choice for forced web search to xAI (#8664) | 1b 代理协议 | 1b：强制 WebSearch 发往 xAI 时使用其支持的 tool_choice | 已迁移 |
 | `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -1017,3 +1017,11 @@
   - 前端：Gemini 风格表单经 `usesGeminiStyleForm` 复用给 agy（地址可选、模型优先读配置）；卡片显示模型、按绑定账号显示额度，合并成组的额度列整列做成下拉列出四档（276eff8d）；授权中心无用户码登录显示说明与“重新打开登录页”；按 ee83fd89 去掉账号组标题行的“删除全部账号”（xAI 表单内的按钮保留）；Apps 页加入 Antigravity CLI；深链接受 agy 的供应商/MCP/提示词。
   - 转出：`9a10e4f7` 的 OpenTerminalDialog 随 5a；`6fabe63a` 的会话日志标签随 5b（`providerLabel.ts`）。不适用：#8268 旧启动器清理（Web 从未安装，函数保留为 dead_code）、`03ec9dbb` 的 WSL2 工作流。
   - 验证：`cargo test --lib` 3168 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 160 个文件 1761 项通过、2 项跳过；改动的 Rust 文件逐个 rustfmt 检查通过。
+- 2026-11-04：完成批次 2d（Oh My Pi，15 项，另含 `3d4a3da3` 的 YAML 编辑框）。
+  - 后端：Oh My Pi 专属模块（`omp_config`、`mcp/omp`、`services/provider/omp`、`session_usage_omp`、`session_manager/providers/omp`）取上游最终版本；`AppType::Omp`（累加式）接入应用配置、MCP（`mcp.json` 与数据库一起提交，取消勾选时保留禁用条目并写入 `disabledServers`）、Skills（同 Pi，以 `agent/skills` 原生目录存在性为准、不存库）、提示词（agent 目录的 `AGENTS.md`）、会话浏览与删除、用量导入、目录覆盖（`ompConfigDir`）、流式检查（同 Pi）。omp 共用的 Pi 会话读取器与 Pi 用量导入取上游最终版本（含子代理用量 #8318/#8386）；Web 的 `proxy_request_logs` 没有 `input_token_semantics`、`pricing_model` 列，插入时去掉。
+  - 数据库：Web 版本链 v19 → v20 为 `mcp_servers` 增加 `enabled_omp`（对应上游 v22 → v23），Skills 不加列；建表兜底补列清单同步加入。
+  - 接口：`GET /api/omp/state`（同 Pi 状态的形状）；`PUT /api/providers/:app/:id/usage-script`：Pi 与 Oh My Pi 的用量脚本只更新数据库，不用旧快照覆盖外部改过的原生配置（Pi 原先走整条供应商更新）；`POST /api/providers/omp/import-live`。
+  - 前端：omp 复用 Web 的 PiProviderForm（预设 `ompProviderPresets.ts`、models.yml YAML 编辑框、模型自动发现）；MiniMax Code 表单增加 `custom_provider.<key>` YAML 编辑框；新增依赖 `yaml 2.8.1`（与上游一致）与 `helpers/yamlNode.ts`。MCP/Skills 计数条下方显示 omp 自动发现说明；导入技能时隐藏 omp；深链 MCP 接受 omp，供应商与提示词链接不接受（与上游一致）。
+  - 测试：上游 `tests/mcp_commands.rs` 3 个、`tests/provider_service.rs` 1 个、`tests/prompt_live_sync.rs` 1 个 omp 用例改写为 Web 单元测试，另补 v19 → v20 迁移用例。
+  - 转出：`providerLabel` 与用量页筛选随 5b（accc4489）；`3d4a3da3` 的 DSH 部分随 2e。上游 AddProvider/EditProvider 的“可提交”用例因 Web 无 `onSubmitReadyChange` 未迁移。
+  - 验证：`cargo test --lib` 3205 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 163 个文件 1776 项通过、2 项跳过（中途一次全量运行中 `modelsDevAutoSync` 偶发超时，单独与再次全量运行均通过）；改动的 Rust 文件逐个 rustfmt 检查通过。

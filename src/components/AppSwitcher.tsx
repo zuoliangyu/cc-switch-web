@@ -65,6 +65,7 @@ export function AppSwitcher({
     mcode: "minimax",
     kimi: "kimi",
     agy: "antigravity",
+    omp: "omp",
   };
   const appDisplayName: Record<AppId, string> = {
     claude: "Claude",
@@ -79,6 +80,7 @@ export function AppSwitcher({
     mcode: "MiniMax Code",
     kimi: "Kimi Code",
     agy: "Antigravity",
+    omp: "Oh My Pi",
   };
 
   // Filter apps based on visibility settings (default all visible)

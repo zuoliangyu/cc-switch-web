@@ -4,6 +4,8 @@ import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
+import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
+import { settingsApi } from "@/lib/api";
 
 const bulkToggle = vi.fn().mockResolvedValue({ succeeded: [], failed: [] });
 
@@ -71,6 +73,31 @@ describe("UnifiedMcpPanel", () => {
       app: "claude",
       enabled: true,
     });
+  });
+
+  it("Oh My Pi 显示时说明它还会发现其他 Agent 的配置", async () => {
+    const openExternal = vi
+      .spyOn(settingsApi, "openExternal")
+      .mockResolvedValue(undefined);
+    const { unmount } = render(<UnifiedMcpPanel onOpenChange={() => {}} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "appMatrix.ompDiscovery.docsLink" }),
+    );
+    expect(openExternal).toHaveBeenCalledWith(
+      expect.stringContaining("oh-my-pi/blob/main/docs/context-files.md"),
+    );
+    unmount();
+
+    render(
+      <UnifiedMcpPanel
+        onOpenChange={() => {}}
+        visibleApps={{ ...DEFAULT_VISIBLE_APPS, omp: false }}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "appMatrix.ompDiscovery.docsLink" }),
+    ).not.toBeInTheDocument();
+    openExternal.mockRestore();
   });
 });
 

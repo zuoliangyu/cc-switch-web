@@ -1,3 +1,4 @@
+import { isPiFamilyApp } from "@/config/appConfig";
 import { parseProviderEditorConflict } from "@/utils/providerEditorConflict";
 import type { ProviderEditorSave } from "@/lib/api/providers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -71,6 +72,7 @@ export const useAddProviderMutation = (appId: AppId) => {
         appId === "openclaw" ||
         appId === "hermes" ||
         appId === "pi" ||
+        appId === "omp" ||
         appId === "mcode" ||
         appId === "kimi"
       ) {
@@ -131,8 +133,8 @@ export const useAddProviderMutation = (appId: AppId) => {
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
       }
-      if (appId === "pi") {
-        await invalidatePiProviderCaches(queryClient);
+      if (isPiFamilyApp(appId)) {
+        await invalidatePiProviderCaches(queryClient, appId);
       }
 
       toast.success(
@@ -148,7 +150,7 @@ export const useAddProviderMutation = (appId: AppId) => {
       if (parseProviderEditorConflict(error)) return;
       const rawDetail = extractErrorMessage(error);
       const detail =
-        (appId === "pi"
+        (isPiFamilyApp(appId)
           ? translatePiProviderMutationError(rawDetail, t)
           : appId === "kimi"
             ? translateKimiProviderMutationError(rawDetail, t)
@@ -194,8 +196,8 @@ export const useUpdateProviderMutation = (appId: AppId) => {
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
       }
-      if (appId === "pi") {
-        await invalidatePiProviderCaches(queryClient);
+      if (isPiFamilyApp(appId)) {
+        await invalidatePiProviderCaches(queryClient, appId);
       }
       toast.success(
         t("notifications.updateSuccess", {
@@ -210,7 +212,7 @@ export const useUpdateProviderMutation = (appId: AppId) => {
       if (parseProviderEditorConflict(error)) return;
       const rawDetail = extractErrorMessage(error);
       const detail =
-        (appId === "pi"
+        (isPiFamilyApp(appId)
           ? translatePiProviderMutationError(rawDetail, t)
           : appId === "kimi"
             ? translateKimiProviderMutationError(rawDetail, t)
@@ -263,8 +265,8 @@ export const useDeleteProviderMutation = (appId: AppId) => {
         await invalidateHermesProviderCaches(queryClient);
       }
 
-      if (appId === "pi") {
-        await invalidatePiProviderCaches(queryClient);
+      if (isPiFamilyApp(appId)) {
+        await invalidatePiProviderCaches(queryClient, appId);
       }
 
       toast.success(
@@ -279,7 +281,7 @@ export const useDeleteProviderMutation = (appId: AppId) => {
     onError: (error: Error) => {
       const rawDetail = extractErrorMessage(error);
       const detail =
-        (appId === "pi"
+        (isPiFamilyApp(appId)
           ? translatePiProviderMutationError(rawDetail, t)
           : appId === "kimi"
             ? translateKimiProviderMutationError(rawDetail, t)
@@ -333,8 +335,8 @@ export const useSwitchProviderMutation = (appId: AppId) => {
       if (appId === "hermes") {
         await invalidateHermesProviderCaches(queryClient);
       }
-      if (appId === "pi") {
-        await invalidatePiProviderCaches(queryClient);
+      if (isPiFamilyApp(appId)) {
+        await invalidatePiProviderCaches(queryClient, appId);
       }
       // 切换会顺带刷新托管 ChatGPT 账号的令牌：重查停在失败上的账号额度，
       // 免得主界面一直显示旧的「登录过期」

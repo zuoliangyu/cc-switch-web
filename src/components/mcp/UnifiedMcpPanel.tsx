@@ -25,6 +25,7 @@ import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
 import { MCP_APP_IDS, type McpAppId } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
+import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
 import { ManagementListSearch } from "@/components/common/ManagementListSearch";
@@ -116,6 +117,7 @@ const UnifiedMcpPanel = React.forwardRef<
       mcode: 0,
       kimi: 0,
       agy: 0,
+      omp: 0,
     };
     filteredServerEntries.forEach(([_, server]) => {
       for (const app of MCP_APP_IDS) {
@@ -272,6 +274,7 @@ const UnifiedMcpPanel = React.forwardRef<
         pendingApp={bulkToggleAppMutation.variables?.app ?? null}
         disabled={writePending}
       />
+      {visibleAppIds.includes("omp") && <OmpDiscoveryNote />}
 
       <ManagementListSearch
         value={searchQuery}

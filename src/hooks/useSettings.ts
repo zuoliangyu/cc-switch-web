@@ -1,8 +1,10 @@
 import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { settingsApi, type AppId } from "@/lib/api";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
+import { invalidatePiDirectoryCaches } from "@/lib/query/pi";
 import { useSettingsQuery, useSaveSettingsMutation } from "@/lib/query";
 import type { Settings } from "@/types";
 import { useSettingsForm, type SettingsFormState } from "./useSettingsForm";
@@ -60,6 +62,7 @@ export function useSettings(): UseSettingsResult {
   const { t } = useTranslation();
   const { data } = useSettingsQuery();
   const saveMutation = useSaveSettingsMutation();
+  const queryClient = useQueryClient();
 
   // 1️⃣ 表单状态管理
   const {
@@ -110,6 +113,7 @@ export function useSettings(): UseSettingsResult {
       sanitizeDir(data?.openclawConfigDir),
       sanitizeDir(data?.hermesConfigDir),
       sanitizeDir(data?.piConfigDir),
+      sanitizeDir(data?.ompConfigDir),
     );
     setRequiresRestart(false);
   }, [
@@ -141,6 +145,7 @@ export function useSettings(): UseSettingsResult {
         );
         const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
         const sanitizedPiDir = sanitizeDir(mergedSettings.piConfigDir);
+        const sanitizedOmpDir = sanitizeDir(mergedSettings.ompConfigDir);
         const { webdavSync: _ignoredWebdavSync, ...restSettings } =
           mergedSettings;
 
@@ -154,6 +159,7 @@ export function useSettings(): UseSettingsResult {
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
           piConfigDir: sanitizedPiDir,
+          ompConfigDir: sanitizedOmpDir,
           language: mergedSettings.language,
         };
 
@@ -278,7 +284,9 @@ export function useSettings(): UseSettingsResult {
           mergedSettings.openclawConfigDir,
         );
         const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
+        const sanitizedOmpDir = sanitizeDir(mergedSettings.ompConfigDir);
         const previousAppDir = initialAppConfigDir;
+        const previousOmpDir = sanitizeDir(data?.ompConfigDir);
         const previousClaudeDir = sanitizeDir(data?.claudeConfigDir);
         const previousCodexDir = sanitizeDir(data?.codexConfigDir);
         const previousGeminiDir = sanitizeDir(data?.geminiConfigDir);
@@ -296,6 +304,7 @@ export function useSettings(): UseSettingsResult {
           opencodeConfigDir: sanitizedOpencodeDir,
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
+          ompConfigDir: sanitizedOmpDir,
           language: mergedSettings.language,
         };
 
@@ -402,6 +411,11 @@ export function useSettings(): UseSettingsResult {
               syncResult.error,
             );
           }
+        }
+
+        // Oh My Pi 换了目录：供应商状态、技能和会话都换了来源
+        if (sanitizedOmpDir !== previousOmpDir) {
+          await invalidatePiDirectoryCaches(queryClient, "omp");
         }
 
         const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);

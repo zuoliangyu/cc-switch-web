@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { ImeSafeInput } from "@/components/ui/ime-safe-input";
 import { Label } from "@/components/ui/label";
-import JsonEditor from "@/components/JsonEditor";
-import { useDarkMode } from "@/hooks/useDarkMode";
 import { useProvidersQuery } from "@/lib/query/queries";
 import type { ProviderFormData } from "@/lib/schemas/provider";
 import type { OpenCodeModel, OpenCodeProviderOptions } from "@/types";
@@ -17,6 +15,12 @@ import { BasicFormFields } from "./BasicFormFields";
 import { OpenCodeFormFields } from "./OpenCodeFormFields";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { normalizeRequestHeaders } from "./helpers/requestHeaders";
+import {
+  yamlNodeFromText,
+  yamlNodeToText,
+  type YamlNodeError,
+} from "./helpers/yamlNode";
+import { NativeConfigEditor } from "./shared/NativeConfigEditor";
 import {
   isKnownOpencodeOptionKey,
   OPENCODE_EXTRA_OPTION_DRAFT_PREFIX,
@@ -68,6 +72,11 @@ type McodeConfig = z.infer<typeof configSchema>;
 const KEY_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const normalizeKey = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+// MiniMax Code 的供应商在 config.yaml 的 `custom_provider.<标识>` 下；编辑器按这个位置显示 YAML。
+const MCODE_SECTION = "custom_provider";
+const placeholderKey = (key: string) => key || "custom";
+const renderText = (next: unknown, key: string) =>
+  yamlNodeToText(MCODE_SECTION, placeholderKey(key), next);
 
 export function McodeProviderForm({
   providerId,
@@ -79,7 +88,6 @@ export function McodeProviderForm({
   onSubmittingChange,
 }: ProviderFormProps) {
   const { t } = useTranslation();
-  const isDarkMode = useDarkMode();
   const [config, setConfig] = useState<McodeConfig>(
     initialData?.settingsConfig ?? {
       kind: "custom",
@@ -89,7 +97,12 @@ export function McodeProviderForm({
       models: {},
     },
   );
-  const [jsonText, setJsonText] = useState(JSON.stringify(config, null, 2));
+  const [jsonText, setJsonText] = useState(() =>
+    renderText(config, providerId ?? ""),
+  );
+  const [nativeError, setNativeError] = useState<
+    YamlNodeError | { kind: "schema" } | null
+  >(null);
   const [jsonValid, setJsonValid] = useState(true);
   const [presetId, setPresetId] = useState("custom");
   const preset =
@@ -132,10 +145,11 @@ export function McodeProviderForm({
     config.options?.apiKey?.trim() &&
     Object.keys(config.models ?? {}).length,
   );
-  const update = (next: McodeConfig) => {
+  const update = (next: McodeConfig, key = providerKey) => {
     setConfig(next);
-    setJsonText(JSON.stringify(next, null, 2));
+    setJsonText(renderText(next, key));
     setJsonValid(true);
+    setNativeError(null);
   };
   const updateOptions = (next: Partial<OpenCodeProviderOptions>) =>
     update({ ...config, options: { ...config.options, ...next } });
@@ -150,7 +164,7 @@ export function McodeProviderForm({
       options: {},
       models: {},
     };
-    update(next);
+    update(next, selected?.providerKey ?? "");
     setExtraOptions(toOpencodeExtraOptions(next.options));
     setProviderKey(selected?.providerKey ?? "");
     form.reset({
@@ -236,7 +250,11 @@ export function McodeProviderForm({
                 <ImeSafeInput
                   id="mcode-provider-key"
                   value={providerKey}
-                  onValueChange={setProviderKey}
+                  onValueChange={(next) => {
+                    setProviderKey(next);
+                    // 编辑器里的 custom_provider.<标识> 跟着改
+                    update(config, next);
+                  }}
                   normalize={normalizeKey}
                   disabled={isEdit}
                   placeholder={t("opencode.providerKeyPlaceholder")}
@@ -303,31 +321,46 @@ export function McodeProviderForm({
             }}
           />
         </fieldset>
-        <div className="space-y-2">
-          <Label htmlFor="mcode-settings-config">
-            {t("provider.configJson")}
-          </Label>
-          <JsonEditor
-            id="mcode-settings-config"
-            ariaLabel={t("provider.configJson")}
-            value={jsonText}
-            darkMode={isDarkMode}
-            language="json"
-            showValidation
-            height={Math.max(1, jsonText.split("\n").length) * 20 + 20}
-            onChange={(text) => {
-              setJsonText(text);
-              try {
-                const next = configSchema.parse(JSON.parse(text));
-                setConfig(next);
-                setExtraOptions(toOpencodeExtraOptions(next.options ?? {}));
-                setJsonValid(true);
-              } catch {
-                setJsonValid(false);
-              }
-            }}
-          />
-        </div>
+        <NativeConfigEditor
+          appId="mcode"
+          file="config.yaml"
+          id="mcode-settings-config"
+          value={jsonText}
+          onChange={(text) => {
+            setJsonText(text);
+            const parsed = yamlNodeFromText(
+              text,
+              MCODE_SECTION,
+              placeholderKey(providerKey),
+            );
+            const result = parsed.ok
+              ? configSchema.safeParse(parsed.value)
+              : undefined;
+            if (!result?.success) {
+              setJsonValid(false);
+              setNativeError(parsed.ok ? { kind: "schema" } : parsed.error);
+              return;
+            }
+            setConfig(result.data);
+            setExtraOptions(toOpencodeExtraOptions(result.data.options ?? {}));
+            setJsonValid(true);
+            setNativeError(null);
+          }}
+          error={
+            !nativeError
+              ? null
+              : nativeError.kind === "syntax"
+                ? t("providerForm.nativeConfig.invalid", {
+                    format: "YAML",
+                    error: nativeError.detail,
+                  })
+                : nativeError.kind === "scope"
+                  ? t("providerForm.nativeConfig.scope", {
+                      section: `${MCODE_SECTION}.${placeholderKey(providerKey)}`,
+                    })
+                  : t("providerForm.nativeConfig.schema")
+          }
+        />
         {showButtons && (
           <div className="flex justify-end gap-2">
             <Button

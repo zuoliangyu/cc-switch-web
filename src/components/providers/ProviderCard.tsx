@@ -201,13 +201,14 @@ export function ProviderCard({
   const isAdditiveMode =
     (appId === "opencode" && !isAnyOmo) ||
     appId === "pi" ||
+    appId === "omp" ||
     appId === "mcode" ||
     appId === "kimi";
 
   const { data: health } = useProviderHealth(
     provider.id,
     appId,
-    appId !== "pi",
+    appId !== "pi" && appId !== "omp",
   );
 
   const fallbackUrlText = t("provider.notConfigured", {
@@ -260,7 +261,8 @@ export function ProviderCard({
     appId === "opencode" ||
     appId === "openclaw" ||
     appId === "hermes" ||
-    appId === "pi"
+    appId === "pi" ||
+    appId === "omp"
       ? isInConfig
       : isCurrent;
   const autoQueryInterval = shouldAutoQuery
@@ -320,7 +322,7 @@ export function ProviderCard({
       ? Boolean(isDefaultModel)
       : appId === "opencode" || appId === "mcode"
         ? false
-        : appId === "pi"
+        : appId === "pi" || appId === "omp"
           ? false
           : isAutoFailoverEnabled
             ? activeProviderId === provider.id

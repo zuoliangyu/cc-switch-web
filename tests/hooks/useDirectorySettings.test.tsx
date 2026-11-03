@@ -91,6 +91,7 @@ describe("useDirectorySettings", () => {
       openclaw: "/remote/opencode",
       hermes: "/remote/opencode",
       pi: "/remote/opencode",
+      omp: "/remote/opencode",
     });
   });
 

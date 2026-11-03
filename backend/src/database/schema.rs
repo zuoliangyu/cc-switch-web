@@ -71,7 +71,8 @@ impl Database {
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
             enabled_pi BOOLEAN NOT NULL DEFAULT 0,
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
-            enabled_agy BOOLEAN NOT NULL DEFAULT 0
+            enabled_agy BOOLEAN NOT NULL DEFAULT 0,
+            enabled_omp BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -386,6 +387,7 @@ impl Database {
             ("skills", "enabled_kimi"),
             ("mcp_servers", "enabled_agy"),
             ("skills", "enabled_agy"),
+            ("mcp_servers", "enabled_omp"),
         ] {
             if Self::table_exists(conn, table)? {
                 Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
@@ -534,6 +536,11 @@ impl Database {
                         log::info!("迁移数据库从 v18 到 v19（Skills/MCP 添加 Antigravity 支持）");
                         Self::migrate_v18_to_v19(conn)?;
                         Self::set_user_version(conn, 19)?;
+                    }
+                    19 => {
+                        log::info!("迁移数据库从 v19 到 v20（MCP 添加 Oh My Pi 支持）");
+                        Self::migrate_v19_to_v20(conn)?;
+                        Self::set_user_version(conn, 20)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1475,6 +1482,20 @@ impl Database {
                     "BOOLEAN NOT NULL DEFAULT 0",
                 )?;
             }
+        }
+        Ok(())
+    }
+
+    /// v19 -> v20 迁移：为 mcp_servers 添加 enabled_omp 列（上游 c8945d2d/3d7cf6aa，
+    /// 上游编号 v22 -> v23）。Oh My Pi 的 Skills 启用状态按原生目录现算（同 Pi），不加列
+    fn migrate_v19_to_v20(conn: &Connection) -> Result<(), AppError> {
+        if Self::table_exists(conn, "mcp_servers")? {
+            Self::add_column_if_missing(
+                conn,
+                "mcp_servers",
+                "enabled_omp",
+                "BOOLEAN NOT NULL DEFAULT 0",
+            )?;
         }
         Ok(())
     }

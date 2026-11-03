@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
+import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
 import { AppToggleGroup } from "@/components/common/AppToggleGroup";
 import { ListItemRow } from "@/components/common/ListItemRow";
 import { ManagementListSearch } from "@/components/common/ManagementListSearch";
@@ -59,6 +60,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+/** Oh My Pi 的启用状态由它原生 skills 目录里有没有这个目录决定，导入时不提供勾选 */
+const IMPORT_APP_IDS = SKILLS_APP_IDS.filter((app) => app !== "omp");
 
 interface UnifiedSkillsPanelProps {
   onOpenDiscovery: () => void;
@@ -201,6 +205,7 @@ const UnifiedSkillsPanel = React.forwardRef<
       mcode: 0,
       kimi: 0,
       agy: 0,
+      omp: 0,
     };
 
     filteredSkills.forEach((skill) => {
@@ -657,6 +662,7 @@ const UnifiedSkillsPanel = React.forwardRef<
           </Button>
         </div>
       </div>
+      <OmpDiscoveryNote />
 
       <ManagementListSearch
         value={searchQuery}
@@ -1361,7 +1367,7 @@ const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
                           },
                         }));
                       }}
-                      appIds={SKILLS_APP_IDS}
+                      appIds={IMPORT_APP_IDS}
                     />
                   </div>
                   <div

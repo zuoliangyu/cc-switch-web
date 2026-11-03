@@ -786,6 +786,7 @@
     "openclawConfigDir": "OpenClaw Configuration Directory",
     "hermesConfigDir": "Hermes Configuration Directory",
     "piConfigDir": "Pi Configuration Directory",
+    "ompConfigDir": "Oh My Pi Configuration Directory",
     "browsePlaceholderClaude": "e.g., /home/<your-username>/.claude",
     "browsePlaceholderCodex": "e.g., /home/<your-username>/.codex",
     "browsePlaceholderGemini": "e.g., /home/<your-username>/.gemini",
@@ -794,6 +795,7 @@
     "browsePlaceholderOpenclaw": "e.g., /home/<your-username>/.openclaw",
     "browsePlaceholderHermes": "e.g., /home/<your-username>/.hermes",
     "browsePlaceholderPi": "e.g., /home/<your-username>/.pi/agent",
+    "browsePlaceholderOmp": "e.g., /home/<your-username>/.omp/agent",
     "browseDirectory": "Browse Directory",
     "resetDefault": "Reset to default directory (takes effect after saving)",
     "updateTo": "Update to v{{version}}",
@@ -932,6 +934,7 @@
     "pi": "Pi",
     "mcode": "MiniMax Code",
     "agy": "Antigravity",
+    "omp": "Oh My Pi",
     "kimi": "Kimi Code"
   },
   "appSwitcher": {
@@ -1484,6 +1487,8 @@
     "nativeConfig": {
       "hint": "Shows this provider's part of the file in the app's own format and writes it there on save. Global settings such as the default model are not here. Comments typed here are not saved.",
       "invalid": "Invalid {{format}}: {{error}}",
+      "scope": "Only the {{section}} node belongs here. Change the Provider Key in the field above.",
+      "schema": "Some fields have the wrong type. Check them against the form above.",
       "title": "Config file {{path}} (this provider only)"
     }
   },
@@ -3982,7 +3987,9 @@
       "openclaw": "Installs with npm",
       "hermes": "Installs with the official script",
       "pi": "Installs with npm",
-      "mcode": "Installs with the official script, falls back to npm"
+      "mcode": "Installs with the official script, falls back to npm",
+      "agy": "Installs with the official script",
+      "omp": "Installs with the official script"
     }
   },
   "nav": {
@@ -4125,6 +4132,55 @@
     "error": {
       "defaultModelInUse": "Kimi Code is using a model from this provider. Switch to another model with /model in Kimi Code first.",
       "secondaryModelInUse": "Kimi Code's subagent model uses a model from this provider. Change it with /secondary-model in Kimi Code first."
+    }
+  },
+  "omp": {
+    "empty": {
+      "title": "No API key providers yet",
+      "description": "Use the + button in the top-right corner to add a preset or custom provider."
+    },
+    "provider": {
+      "enabled": "Enabled in Oh My Pi",
+      "enableFailed": "Could not enable this provider in Oh My Pi",
+      "removed": "Removed from Oh My Pi"
+    },
+    "current": {
+      "readFailed": "Could not read Oh My Pi's provider configuration",
+      "stateUnavailableHint": "Provider changes are disabled until CC Switch can read Oh My Pi's provider configuration."
+    },
+    "form": {
+      "discoveryType": "Model discovery",
+      "discoveryOff": "Off",
+      "discoveryHint": "When on, Oh My Pi asks the endpoint which models it offers, so you don't have to list them by hand and new models show up on their own. Most online services use “OpenAI model list”; for models running on your machine, pick the matching app. Anthropic-format endpoints usually have no model list, so leave this off. Manually added models still apply.",
+      "discoveryTypes": {
+        "openaiModelsList": "OpenAI model list (most online services)",
+        "proxy": "Proxy (each model sets its own format)",
+        "ollama": "Ollama (local)",
+        "llamaCpp": "llama.cpp (local)",
+        "lmStudio": "LM Studio (local)",
+        "litellm": "LiteLLM gateway",
+        "appleFoundationModels": "Apple on-device models (macOS)"
+      }
+    },
+    "errors": {
+      "fileTooLarge": "Oh My Pi configuration exceeds the 1 MiB limit.",
+      "externalChange": "Oh My Pi configuration changed outside CC Switch. Refresh and try again.",
+      "rollbackConflict": "The database save failed and Oh My Pi configuration changed externally. Restore it by hand.",
+      "invalidMcp": "Invalid Oh My Pi MCP JSON. The root and mcpServers must be objects.",
+      "invalidYaml": "Invalid Oh My Pi YAML. The root and providers must be mappings.",
+      "invalidProvider": "Invalid Oh My Pi provider. Check required fields, API format and field types.",
+      "manualEdit": "This YAML uses a layout or construct CC Switch cannot safely edit. Edit models.yml by hand.",
+      "duplicateProvider": "This Oh My Pi provider key already exists.",
+      "renameProvider": "Oh My Pi provider keys cannot be renamed.",
+      "providerMissing": "This Oh My Pi provider is no longer saved.",
+      "legacyModelsJson": "Oh My Pi still has a legacy models.json, which omp migrates to models.yml on its next start. Run omp once, then add the provider again."
+    }
+  },
+  "appMatrix": {
+    "ompDiscovery": {
+      "title": "What Oh My Pi actually loads",
+      "help": "Beyond its own ~/.omp/agent config, Oh My Pi discovers MCP servers, skills, commands, hooks, rules, and settings from other agents' directories (e.g. Claude's ~/.claude, Codex's ~/.codex). To keep what Oh My Pi actually loads in sync with the CC Switch UI, disable unneeded discovery sources via disabledProviders in ~/.omp/agent/config.yml (ids match the docs, e.g. claude, codex, gemini, opencode, github, agents).",
+      "docsLink": "How to stop Oh My Pi from loading other agents' config"
     }
   }
 }

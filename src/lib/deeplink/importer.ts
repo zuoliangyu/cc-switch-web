@@ -488,6 +488,7 @@ const mergeMcpApps = (apps: string | undefined) => {
     pi: targets.includes("pi"),
     agy: targets.includes("agy"),
     kimi: targets.includes("kimi"),
+    omp: targets.includes("omp"),
   };
 };
 
@@ -532,6 +533,7 @@ const importMcp = async (
               hermes: current.apps.hermes || targetApps.hermes,
               pi: Boolean(current.apps.pi) || targetApps.pi,
               kimi: Boolean(current.apps.kimi) || targetApps.kimi,
+              omp: Boolean(current.apps.omp) || targetApps.omp,
               agy: Boolean(current.apps.agy) || targetApps.agy,
             },
           }

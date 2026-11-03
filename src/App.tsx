@@ -36,6 +36,7 @@ import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
 import { syncLanguageFromSettings } from "@/i18n";
 import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
+import { piApi } from "@/lib/api/pi";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import {
@@ -254,6 +255,7 @@ function App() {
     mcode: true,
     kimi: true,
     agy: true,
+    omp: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -399,6 +401,7 @@ function App() {
     activeApp !== "mcode" &&
     activeApp !== "kimi" &&
     activeApp !== "agy" &&
+    activeApp !== "omp" &&
     (takeoverStatus?.[activeApp] || false);
   const activeProviderId = useMemo(() => {
     const target = proxyStatus?.active_targets?.find(
@@ -436,6 +439,7 @@ function App() {
     activeApp === "openclaw" ||
     activeApp === "gemini" ||
     activeApp === "pi" ||
+    activeApp === "omp" ||
     activeApp === "mcode";
 
   const {
@@ -606,6 +610,8 @@ function App() {
           queryKey: ["piLiveProviderIds"],
         });
         await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
+      } else if (activeApp === "omp") {
+        await queryClient.invalidateQueries({ queryKey: ["omp", "state"] });
       } else if (activeApp === "mcode" || activeApp === "kimi") {
         // MiniMax Code / Kimi Code 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
         await queryClient.invalidateQueries({
@@ -689,7 +695,8 @@ function App() {
       activeApp === "opencode" ||
       activeApp === "openclaw" ||
       activeApp === "hermes" ||
-      activeApp === "pi"
+      activeApp === "pi" ||
+      activeApp === "omp"
     ) {
       let liveProviderIds: string[] = [];
       try {
@@ -709,10 +716,17 @@ function App() {
                     queryKey: hermesKeys.liveProviderIds,
                     queryFn: () => providersApi.getHermesLiveProviderIds(),
                   })
-                : await queryClient.ensureQueryData({
-                    queryKey: ["piLiveProviderIds"],
-                    queryFn: () => providersApi.getPiLiveProviderIds(),
-                  });
+                : activeApp === "omp"
+                  ? (
+                      await queryClient.ensureQueryData({
+                        queryKey: ["omp", "state"],
+                        queryFn: () => piApi.getCurrentState("omp"),
+                      })
+                    ).enabledProviderIds
+                  : await queryClient.ensureQueryData({
+                      queryKey: ["piLiveProviderIds"],
+                      queryFn: () => providersApi.getPiLiveProviderIds(),
+                    });
       } catch (error) {
         console.error(
           "[App] Failed to load live provider IDs for duplication",
@@ -935,6 +949,7 @@ function App() {
                         activeApp === "openclaw" ||
                         activeApp === "hermes" ||
                         activeApp === "pi" ||
+                        activeApp === "omp" ||
                         activeApp === "mcode" ||
                         activeApp === "kimi"
                           ? (provider) =>
@@ -1084,7 +1099,7 @@ function App() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {activeApp !== "pi" && (
+                {activeApp !== "pi" && activeApp !== "omp" && (
                   <RoutingActivationBrand
                     active={isProxyRunning && isCurrentAppTakeoverActive}
                     contextKey={activeApp}
@@ -1137,6 +1152,7 @@ function App() {
               activeApp !== "openclaw" &&
               activeApp !== "hermes" &&
               activeApp !== "pi" &&
+              activeApp !== "omp" &&
               activeApp !== "mcode" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableFailoverToggle &&

@@ -162,6 +162,7 @@ export type AppTypeFilter =
   | "gemini"
   | "grokbuild"
   | "pi"
+  | "omp"
   | "mcode"
   | "kimi"
   | "agy";

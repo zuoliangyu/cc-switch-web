@@ -7,6 +7,7 @@ const mutateAsyncMock = vi.fn();
 const useSettingsQueryMock = vi.fn();
 const setAppConfigDirOverrideMock = vi.fn();
 const syncCurrentProvidersLiveMock = vi.fn();
+const invalidateQueriesMock = vi.fn();
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 
@@ -41,6 +42,19 @@ vi.mock("@/lib/query", () => ({
     isPending: false,
   }),
 }));
+
+vi.mock("@tanstack/react-query", async () => {
+  const actual = await vi.importActual<typeof import("@tanstack/react-query")>(
+    "@tanstack/react-query",
+  );
+  return {
+    ...actual,
+    useQueryClient: () => ({
+      invalidateQueries: (...args: unknown[]) =>
+        invalidateQueriesMock(...args),
+    }),
+  };
+});
 
 vi.mock("@/lib/api", () => ({
   settingsApi: {
@@ -253,6 +267,7 @@ describe("useSettings hook", () => {
       undefined, // openclawConfigDir
       undefined, // hermesConfigDir
       undefined, // piConfigDir
+      undefined, // ompConfigDir
     );
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
   });

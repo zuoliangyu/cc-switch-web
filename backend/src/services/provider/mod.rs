@@ -31,6 +31,7 @@ mod kimi_tests;
 mod mcode_tests;
 #[cfg(test)]
 mod opencode_tests;
+mod omp;
 mod pi;
 mod usage;
 
@@ -57,6 +58,10 @@ pub use live::{
 
 pub fn import_pi_providers_from_live(state: &AppState) -> Result<usize, AppError> {
     pi::import_from_live(state)
+}
+
+pub fn import_omp_providers_from_live(state: &AppState) -> Result<usize, AppError> {
+    omp::import_from_live(state)
 }
 
 // Internal re-exports (pub(crate))
@@ -1834,6 +1839,9 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::list(state);
         }
+        if app_type == AppType::Omp {
+            return omp::list(state);
+        }
         if matches!(app_type, AppType::Mcode | AppType::Kimi) {
             let native = if app_type == AppType::Kimi {
                 crate::kimi_config::get_providers()?
@@ -2054,6 +2062,9 @@ impl ProviderService {
         }
         if app_type == AppType::Pi {
             return pi::add(state, provider, add_to_live);
+        }
+        if app_type == AppType::Omp {
+            return omp::add(state, provider, add_to_live);
         }
         // Antigravity 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
         if app_type == AppType::Agy {
@@ -2315,6 +2326,9 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::update(state, original_id, provider);
         }
+        if app_type == AppType::Omp {
+            return omp::update(state, original_id, provider);
+        }
         let _switch_guard = if matches!(
             app_type,
             AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
@@ -2561,11 +2575,23 @@ impl ProviderService {
 
     /// Delete a provider
     ///
+    pub(crate) fn update_pi_usage_script(
+        state: &AppState,
+        app_type: AppType,
+        id: &str,
+        script: crate::provider::UsageScript,
+    ) -> Result<bool, AppError> {
+        pi::update_usage_script(state, app_type, id, script)
+    }
+
     /// 直连指针或代理路由指着的供应商不能删（见 `mode::current::is_referenced`）。
     /// 对于累加模式应用（OpenCode, OpenClaw），可以随时删除任意供应商，同时从 live 配置中移除。
     pub fn delete(state: &AppState, app_type: AppType, id: &str) -> Result<(), AppError> {
         if app_type == AppType::Pi {
             return pi::delete(state, id);
+        }
+        if app_type == AppType::Omp {
+            return omp::delete(state, id);
         }
         if app_type == AppType::Kimi {
             let _guard = futures::executor::block_on(
@@ -2696,6 +2722,9 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::remove(state, id);
         }
+        if app_type == AppType::Omp {
+            return omp::remove(state, id);
+        }
         if app_type == AppType::Kimi {
             let _guard = futures::executor::block_on(
                 state.proxy_service.lock_switch_for_app(app_type.as_str()),
@@ -2784,6 +2813,9 @@ impl ProviderService {
     pub fn switch(state: &AppState, app_type: AppType, id: &str) -> Result<SwitchResult, AppError> {
         if app_type == AppType::Pi {
             return pi::enable(state, id);
+        }
+        if app_type == AppType::Omp {
+            return omp::enable(state, id);
         }
         // Antigravity 的卡只作用于它打开的终端，没有「启用」（见 agy_config 模块说明）。
         if app_type == AppType::Agy {
@@ -3567,7 +3599,9 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy | AppType::Omp => {
+                Ok(String::new())
+            }
         }
     }
 
@@ -3586,7 +3620,9 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy | AppType::Omp => {
+                Ok(String::new())
+            }
         }
     }
 
@@ -4195,6 +4231,9 @@ impl ProviderService {
             AppType::Pi => {
                 crate::pi_config::validate_provider_node(&provider.id, &provider.settings_config)?;
             }
+            AppType::Omp => {
+                crate::omp_config::validate_provider(&provider.id, &provider.settings_config)?;
+            }
         }
 
         // Validate and clean UsageScript configuration (common for all app types)
@@ -4437,6 +4476,18 @@ impl ProviderService {
                 let base_url = crate::pi_config::provider_base_url(&provider.settings_config)
                     .unwrap_or_default();
                 Ok((api_key, base_url))
+            }
+            AppType::Omp => {
+                // Oh My Pi 的 models.yml 节点把 apiKey、baseUrl 直接放在节点上。
+                let field = |key: &str| {
+                    provider
+                        .settings_config
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                Ok((field("apiKey"), field("baseUrl")))
             }
             AppType::Mcode => {
                 // MiniMax Code 的 custom_provider 把凭据放在 options 下。

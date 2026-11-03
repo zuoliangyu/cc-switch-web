@@ -13,6 +13,7 @@ export const SESSION_APP_IDS = [
   "hermes",
   "gemini",
   "pi",
+  "omp",
   "grokbuild",
   "openclaw",
   "mcode",
@@ -35,6 +36,7 @@ export const SESSION_SOURCE_PATHS: Record<SessionAppId, string[]> = {
   openclaw: ["~/.openclaw/agents/<agent>/sessions"],
   hermes: ["~/.hermes/state.db", "~/.hermes/sessions"],
   pi: ["~/.pi/agent/sessions"],
+  omp: ["~/.omp/agent/sessions"],
   mcode: ["~/.minimax"],
   kimi: ["~/.kimi-code/sessions"],
   agy: [

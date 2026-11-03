@@ -786,6 +786,7 @@
     "openclawConfigDir": "OpenClaw 設定ディレクトリ",
     "hermesConfigDir": "Hermes 設定ディレクトリ",
     "piConfigDir": "Pi 設定ディレクトリ",
+    "ompConfigDir": "Oh My Pi 設定ディレクトリ",
     "browsePlaceholderClaude": "例: /home/<your-username>/.claude",
     "browsePlaceholderCodex": "例: /home/<your-username>/.codex",
     "browsePlaceholderGemini": "例: /home/<your-username>/.gemini",
@@ -794,6 +795,7 @@
     "browsePlaceholderOpenclaw": "例: /home/<your-username>/.openclaw",
     "browsePlaceholderHermes": "例: /home/<your-username>/.hermes",
     "browsePlaceholderPi": "例: /home/<your-username>/.pi/agent",
+    "browsePlaceholderOmp": "例: /home/<your-username>/.omp/agent",
     "browseDirectory": "ディレクトリを選択",
     "resetDefault": "デフォルトに戻す（保存後に反映）",
     "updateTo": "v{{version}} に更新",
@@ -932,6 +934,7 @@
     "pi": "Pi",
     "mcode": "MiniMax Code",
     "agy": "Antigravity",
+    "omp": "Oh My Pi",
     "kimi": "Kimi Code"
   },
   "appSwitcher": {
@@ -1484,6 +1487,8 @@
     "nativeConfig": {
       "hint": "このプロバイダーの部分をアプリ本来の形式で表示し、保存時にこのファイルへ書き込みます。デフォルトモデルなどのグローバル設定はここにはありません。ここに書いたコメントは保存されません。",
       "invalid": "{{format}} の形式が正しくありません：{{error}}",
+      "scope": "ここには {{section}} ノードだけを書けます。プロバイダーキーは上の欄で変更してください。",
+      "schema": "型が正しくない項目があります。上のフォームと照らし合わせて確認してください。",
       "title": "設定ファイル {{path}}（このプロバイダーのみ）"
     }
   },
@@ -3982,7 +3987,9 @@
       "openclaw": "npm でインストール",
       "hermes": "公式インストールスクリプトでインストール",
       "pi": "npm でインストール",
-      "mcode": "公式インストールスクリプトで入れ、失敗したら npm を使います"
+      "mcode": "公式インストールスクリプトで入れ、失敗したら npm を使います",
+      "agy": "公式インストールスクリプトでインストール",
+      "omp": "公式インストールスクリプトでインストール"
     }
   },
   "nav": {
@@ -4125,6 +4132,55 @@
     "error": {
       "defaultModelInUse": "Kimi Code がこのプロバイダーのモデルを使用中です。先に Kimi Code の /model でほかのモデルに切り替えてください。",
       "secondaryModelInUse": "Kimi Code のサブエージェントモデルがこのプロバイダーのモデルを使用中です。先に Kimi Code の /secondary-model で変更してください。"
+    }
+  },
+  "omp": {
+    "empty": {
+      "title": "API キープロバイダーはまだありません",
+      "description": "右上の + から、プリセットまたはカスタムプロバイダーを追加できます。"
+    },
+    "provider": {
+      "enabled": "Oh My Pi で有効にしました",
+      "enableFailed": "Oh My Pi でこのプロバイダーを有効にできませんでした",
+      "removed": "Oh My Pi から削除しました"
+    },
+    "current": {
+      "readFailed": "Oh My Pi のプロバイダー設定を読み込めません",
+      "stateUnavailableHint": "CC Switch が Oh My Pi のプロバイダー設定を読み込むまで、プロバイダーの変更は無効です。"
+    },
+    "form": {
+      "discoveryType": "モデルの自動検出",
+      "discoveryOff": "使用しない",
+      "discoveryHint": "オンにすると、Oh My Pi がエンドポイントに利用できるモデルを問い合わせるので、モデルを一つずつ入力する必要がなく、新しいモデルも自動で表示されます。オンラインサービスの多くは「OpenAI モデル一覧」を、ローカルで動かすモデルは対応するアプリを選んでください。Anthropic 形式のエンドポイントは通常モデル一覧がないので、「使用しない」のままにします。手動で追加したモデルも有効です。",
+      "discoveryTypes": {
+        "openaiModelsList": "OpenAI モデル一覧（多くのオンラインサービス）",
+        "proxy": "プロキシ（モデルごとに形式を指定）",
+        "ollama": "Ollama（ローカル）",
+        "llamaCpp": "llama.cpp（ローカル）",
+        "lmStudio": "LM Studio（ローカル）",
+        "litellm": "LiteLLM ゲートウェイ",
+        "appleFoundationModels": "Apple オンデバイスモデル（macOS）"
+      }
+    },
+    "errors": {
+      "fileTooLarge": "Oh My Pi の設定が 1 MiB の上限を超えています。",
+      "externalChange": "Oh My Pi の設定が外部で変更されました。更新して再試行してください。",
+      "rollbackConflict": "データベース保存に失敗し、Oh My Pi の設定も外部で変更されました。手動で復元してください。",
+      "invalidMcp": "Oh My Pi の MCP JSON が無効です。ルートと mcpServers はオブジェクトである必要があります。",
+      "invalidYaml": "Oh My Pi の YAML が無効です。ルートと providers はマッピングにしてください。",
+      "invalidProvider": "Oh My Pi のプロバイダ設定が無効です。必須項目、API 形式、値の型を確認してください。",
+      "manualEdit": "この YAML の構造は CC Switch で安全に編集できません。models.yml を手動で編集してください。",
+      "duplicateProvider": "この Oh My Pi プロバイダキーは既に存在します。",
+      "renameProvider": "Oh My Pi プロバイダキーは変更できません。",
+      "providerMissing": "この Oh My Pi プロバイダは保存済みリストにありません。",
+      "legacyModelsJson": "Oh My Pi にはまだ旧形式の models.json があり、omp は次回起動時にこれを models.yml へ移行します。omp を一度起動してから、もう一度プロバイダを追加してください。"
+    }
+  },
+  "appMatrix": {
+    "ompDiscovery": {
+      "title": "Oh My Pi が実際に読み込む範囲",
+      "help": "Oh My Pi は ~/.omp/agent 自身の設定に加え、他の Agent のディレクトリ（Claude の ~/.claude、Codex の ~/.codex など）からも MCP サーバー、スキル、コマンド、フック、ルール、設定を発見します。Oh My Pi の実際の読み込み内容を CC Switch の表示と一致させるには、~/.omp/agent/config.yml の disabledProviders で不要な発行元を無効化してください（id はドキュメント準拠：claude、codex、gemini、opencode、github、agents など）。",
+      "docsLink": "Oh My Pi に他の Agent の設定を読み込ませない方法"
     }
   }
 }

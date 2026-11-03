@@ -1,5 +1,5 @@
 import { compareProviderNames } from "@/utils/providerSort";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,16 @@ import {
   type PiApiFormat,
   type PiProviderPreset,
 } from "@/config/piProviderPresets";
+import {
+  ompProviderPresets,
+  type OmpProviderPreset,
+} from "@/config/ompProviderPresets";
+import {
+  yamlNodeFromText,
+  yamlNodeToText,
+  type YamlNodeError,
+} from "./helpers/yamlNode";
+import { NativeConfigEditor } from "./shared/NativeConfigEditor";
 import type { ProviderCategory } from "@/types";
 import type { ProviderFormProps, ProviderFormValues } from "./ProviderForm";
 
@@ -32,8 +42,26 @@ const PI_API_FORMATS: readonly PiApiFormat[] = [
   "bedrock-converse-stream",
 ];
 
+// omp 的供应商在 models.yml 的 `providers.<标识>` 下
+const OMP_SECTION = "providers";
+// omp 的 `discovery.type`（docs/models.md）：运行时从端点拉模型列表，可以不写 models。
+// 值里有点号，不能直接当 i18n key，所以另配一个 key。
+const OMP_DISCOVERY_TYPES: ReadonlyArray<{ value: string; labelKey: string }> =
+  [
+    { value: "openai-models-list", labelKey: "openaiModelsList" },
+    { value: "proxy", labelKey: "proxy" },
+    { value: "ollama", labelKey: "ollama" },
+    { value: "llama.cpp", labelKey: "llamaCpp" },
+    { value: "lm-studio", labelKey: "lmStudio" },
+    { value: "litellm", labelKey: "litellm" },
+    { value: "apple-foundation-models", labelKey: "appleFoundationModels" },
+  ];
+const OMP_DISCOVERY_OFF = "__off__";
+
+type PiFamilyPreset = PiProviderPreset | OmpProviderPreset;
+
 const getPiPresetDisplayName = (
-  preset: PiProviderPreset,
+  preset: PiFamilyPreset,
   t: (key: string, options?: Record<string, unknown>) => string,
 ) =>
   preset.nameKey
@@ -110,11 +138,12 @@ export function mergePiProviderSettings(
     headers: Record<string, string>;
     models: unknown;
   },
+  { includeName = true }: { includeName?: boolean } = {},
 ): Record<string, unknown> {
   const normalizedHeaders = normalizeRequestHeaders(fields.headers);
   const merged: Record<string, unknown> = {
     ...config,
-    name: fields.name.trim(),
+    ...(includeName ? { name: fields.name.trim() } : {}),
     baseUrl: fields.baseUrl.trim(),
     apiKey: fields.apiKey,
     api: fields.api,
@@ -129,6 +158,7 @@ export function mergePiProviderSettings(
 }
 
 export function PiProviderForm({
+  appId,
   providerId,
   submitLabel,
   onSubmit,
@@ -138,15 +168,20 @@ export function PiProviderForm({
   showButtons = true,
 }: ProviderFormProps) {
   const { t } = useTranslation();
+  // Oh My Pi 是 Pi 的分支：同一张表单，预设、文件格式和几处 schema 规则不同
+  const isOmp = appId === "omp";
+  const presets: readonly PiFamilyPreset[] = isOmp
+    ? ompProviderPresets
+    : piProviderPresets;
   const sortedPresets = useMemo(
     () =>
-      [...piProviderPresets].sort((a, b) =>
+      [...presets].sort((a, b) =>
         compareProviderNames(
           getPiPresetDisplayName(a, t),
           getPiPresetDisplayName(b, t),
         ),
       ),
-    [t],
+    [presets, t],
   );
   const initialConfig = useMemo(
     () => asObject(initialData?.settingsConfig),
@@ -173,7 +208,7 @@ export function PiProviderForm({
     JSON.stringify(initialConfig, null, 2),
   );
   const [submitting, setSubmitting] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState<PiProviderPreset | null>(
+  const [selectedPreset, setSelectedPreset] = useState<PiFamilyPreset | null>(
     null,
   );
 
@@ -198,9 +233,7 @@ export function PiProviderForm({
   };
 
   const applyPreset = (presetKey: string) => {
-    const preset = piProviderPresets.find(
-      (entry) => entry.providerKey === presetKey,
-    );
+    const preset = presets.find((entry) => entry.providerKey === presetKey);
     if (!preset) return;
     const config = structuredClone(preset.settingsConfig) as Record<
       string,
@@ -223,7 +256,8 @@ export function PiProviderForm({
     setConfigText(value);
     try {
       const config = asObject(JSON.parse(value));
-      setName(stringField(config.name) || name);
+      // omp 的 models.yml 节点没有 name，显示名只存在 CC Switch 里
+      if (!isOmp) setName(stringField(config.name) || name);
       setBaseUrl(stringField(config.baseUrl));
       setApiKey(stringField(config.apiKey));
       setApi(stringField(config.api) || "openai-completions");
@@ -232,6 +266,67 @@ export function PiProviderForm({
     } catch {
       // 编辑中的无效 JSON 保留到提交校验，不打断输入。
     }
+  };
+
+  // omp：编辑框按 models.yml 里 `providers.<标识>` 的位置显示 YAML，
+  // 表单内部仍以 JSON 的配置文本为准，读通的 YAML 经 updateFromJson 同步回来。
+  const ompKey = providerKey.trim() || "custom";
+  const [ompText, setOmpText] = useState("");
+  const [ompError, setOmpError] = useState<YamlNodeError | null>(null);
+  const ompEmittedRef = useRef<{ json: string; key: string } | null>(null);
+  useEffect(() => {
+    if (!isOmp) return;
+    const emitted = ompEmittedRef.current;
+    if (emitted?.json === configText && emitted.key === ompKey) return;
+    let config: Record<string, unknown>;
+    try {
+      const value = JSON.parse(configText || "{}");
+      if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      config = value as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    ompEmittedRef.current = { json: configText, key: ompKey };
+    setOmpText(yamlNodeToText(OMP_SECTION, ompKey, config));
+    setOmpError(null);
+  }, [isOmp, ompKey, configText]);
+  const ompErrorMessage = !ompError
+    ? null
+    : ompError.kind === "syntax"
+      ? t("providerForm.nativeConfig.invalid", {
+          format: "YAML",
+          error: ompError.detail,
+        })
+      : t("providerForm.nativeConfig.scope", {
+          section: `${OMP_SECTION}.${ompKey}`,
+        });
+  const handleOmpTextChange = (text: string) => {
+    setOmpText(text);
+    const parsed = yamlNodeFromText(text, OMP_SECTION, ompKey);
+    if (!parsed.ok) {
+      setOmpError(parsed.error);
+      return;
+    }
+    setOmpError(null);
+    const json = JSON.stringify(parsed.value, null, 2);
+    ompEmittedRef.current = { json, key: ompKey };
+    updateFromJson(json);
+  };
+
+  // discovery 只改 type，其余子键原样保留；例外是 injectV1：omp 只允许它出现在
+  // openai-models-list 上，留着会让整份 models.yml 失效。
+  const ompDiscoveryType = stringField(asObject(parsedConfig?.discovery).type);
+  const handleOmpDiscoveryChange = (value: string) => {
+    // 下拉挂载时 Radix 可能回报一次空串，不能当成「关闭」
+    if (!value || !parsedConfig) return;
+    const next = { ...parsedConfig };
+    const { type: _previous, injectV1, ...extra } = asObject(next.discovery);
+    if (value === "openai-models-list" && injectV1 !== undefined) {
+      extra.injectV1 = injectV1;
+    }
+    if (value === OMP_DISCOVERY_OFF) delete next.discovery;
+    else next.discovery = { type: value, ...extra };
+    setConfigText(JSON.stringify(next, null, 2));
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -255,20 +350,40 @@ export function PiProviderForm({
       toast.error(t("pi.provider.invalidJson"));
       return;
     }
-    const modelsError = validatePiModels(models);
+    // 编辑框里没读通的 YAML 不能按上一次读通的内容悄悄保存
+    if (isOmp && ompErrorMessage) {
+      toast.error(ompErrorMessage);
+      return;
+    }
+    // omp 开了模型自动发现时可以不写 models；thinkingLevelMap 是 Pi 独有的字段
+    const discoveryEnabled = isOmp && Boolean(asObject(config.discovery).type);
+    if (isOmp && Array.isArray(models)) {
+      models = models.map((model) => {
+        const { thinkingLevelMap: _piOnly, ...rest } = asObject(model);
+        return rest;
+      });
+    }
+    const modelsError =
+      discoveryEnabled && Array.isArray(models) && models.length === 0
+        ? null
+        : validatePiModels(models);
     if (modelsError) {
       toast.error(t(modelsError));
       return;
     }
 
-    const settingsConfig = mergePiProviderSettings(config, {
-      name,
-      baseUrl,
-      apiKey,
-      api,
-      headers,
-      models,
-    });
+    const settingsConfig = mergePiProviderSettings(
+      config,
+      {
+        name,
+        baseUrl,
+        apiKey,
+        api,
+        headers,
+        models,
+      },
+      { includeName: !isOmp },
+    );
 
     setSubmitting(true);
     onSubmittingChange?.(true);
@@ -278,7 +393,7 @@ export function PiProviderForm({
         notes: notes.trim() || undefined,
         websiteUrl: websiteUrl.trim() || undefined,
         settingsConfig: JSON.stringify(settingsConfig),
-        // 无图标时留空，由列表按 Pi 默认图标兜底，避免预设 logo 被固定写成 "pi"。
+        // 无图标时留空，由列表按应用默认图标兜底，避免预设 logo 被固定写成 "pi"。
         icon: initialData?.icon || selectedPreset?.icon || "",
         iconColor: initialData?.iconColor || selectedPreset?.iconColor || "",
         providerKey: key,
@@ -331,7 +446,7 @@ export function PiProviderForm({
             value={name}
             onValueChange={(value) => {
               setName(value);
-              setStructuredConfig({ name: value });
+              if (!isOmp) setStructuredConfig({ name: value });
             }}
           />
         </div>
@@ -409,6 +524,44 @@ export function PiProviderForm({
         }}
       />
 
+      {isOmp && (
+        <div className="space-y-2">
+          <Label htmlFor="omp-discovery-type">
+            {t("omp.form.discoveryType")}
+          </Label>
+          <Select
+            value={ompDiscoveryType || OMP_DISCOVERY_OFF}
+            onValueChange={handleOmpDiscoveryChange}
+            disabled={!parsedConfig}
+          >
+            <SelectTrigger id="omp-discovery-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={OMP_DISCOVERY_OFF}>
+                {t("omp.form.discoveryOff")}
+              </SelectItem>
+              {OMP_DISCOVERY_TYPES.map(({ value, labelKey }) => (
+                <SelectItem key={value} value={value}>
+                  {t(`omp.form.discoveryTypes.${labelKey}`)}
+                </SelectItem>
+              ))}
+              {ompDiscoveryType &&
+                !OMP_DISCOVERY_TYPES.some(
+                  ({ value }) => value === ompDiscoveryType,
+                ) && (
+                  <SelectItem value={ompDiscoveryType}>
+                    {ompDiscoveryType}
+                  </SelectItem>
+                )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t("omp.form.discoveryHint")}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>{t("pi.provider.models")}</Label>
         <p className="text-xs text-muted-foreground">
@@ -443,13 +596,24 @@ export function PiProviderForm({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label>{t("pi.provider.rawJson")}</Label>
-        <p className="text-xs text-muted-foreground">
-          {t("pi.provider.rawJsonHint")}
-        </p>
-        <JsonEditor value={configText} onChange={updateFromJson} rows={14} />
-      </div>
+      {isOmp ? (
+        <NativeConfigEditor
+          appId="omp"
+          file="models.yml"
+          id="pi-settings-config"
+          value={ompText}
+          onChange={handleOmpTextChange}
+          error={ompErrorMessage}
+        />
+      ) : (
+        <div className="space-y-2">
+          <Label>{t("pi.provider.rawJson")}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t("pi.provider.rawJsonHint")}
+          </p>
+          <JsonEditor value={configText} onChange={updateFromJson} rows={14} />
+        </div>
+      )}
 
       {showButtons && (
         <div className="flex justify-end gap-2">

@@ -1,4 +1,9 @@
 import { invoke } from "@/lib/runtime/client/core";
+import type { AppId } from "@/lib/api/types";
+import type { UsageScript } from "@/types";
+
+/** Oh My Pi 是 Pi 的分支，供应商状态和用量脚本走同一套命令 */
+export type PiFamilyAppId = Extract<AppId, "pi" | "omp">;
 
 export interface PiCurrentState {
   enabledProviderIds: string[];
@@ -25,7 +30,18 @@ export type PiSessionDiscovery =
   | { status: "unavailable"; reason: string };
 
 export const piApi = {
-  getCurrentState: () => invoke<PiCurrentState>("get_pi_current_state"),
+  getCurrentState: (app: PiFamilyAppId = "pi") =>
+    invoke<PiCurrentState>(`get_${app}_current_state`),
+  updateProviderUsageScript: (
+    id: string,
+    usageScript: UsageScript,
+    app: PiFamilyAppId = "pi",
+  ) =>
+    invoke<boolean>("update_pi_provider_usage_script", {
+      app,
+      id,
+      usageScript,
+    }),
   getPromptFile: (kind: PiPromptFileKind) =>
     invoke<PiPromptFileSnapshot>("get_pi_prompt_file", { kind }),
   savePromptFile: (

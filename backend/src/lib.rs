@@ -25,6 +25,7 @@ mod jsonc_document;
 mod kimi_config;
 mod kimi_session;
 mod mcode_config;
+mod omp_config;
 mod live;
 mod mode;
 mod mcp;

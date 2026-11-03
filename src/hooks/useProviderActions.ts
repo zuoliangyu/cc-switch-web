@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { piApi } from "@/lib/api/pi";
 import { providersApi, settingsApi, openclawApi, type AppId } from "@/lib/api";
 import type {
   Provider,
@@ -334,6 +335,7 @@ export function useProviderActions(
             activeApp === "openclaw" ||
             activeApp === "hermes" ||
             activeApp === "pi" ||
+            activeApp === "omp" ||
             activeApp === "mcode" ||
             activeApp === "kimi";
           const messageKey = isMultiProviderApp
@@ -381,7 +383,12 @@ export function useProviderActions(
           },
         };
 
-        await providersApi.update(updatedProvider, activeApp);
+        // Pi / Oh My Pi 的用量脚本只存在数据库元数据里，不重写原生配置文件
+        if (activeApp === "pi" || activeApp === "omp") {
+          await piApi.updateProviderUsageScript(provider.id, script, activeApp);
+        } else {
+          await providersApi.update(updatedProvider, activeApp);
+        }
         await queryClient.invalidateQueries({
           queryKey: ["providers", activeApp],
         });

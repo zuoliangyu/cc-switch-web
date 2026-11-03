@@ -1,7 +1,7 @@
 use super::{ProviderService, SwitchResult};
 use crate::app_config::AppType;
 use crate::error::AppError;
-use crate::provider::{Provider, ProviderMeta};
+use crate::provider::{Provider, ProviderMeta, UsageScript};
 use crate::store::AppState;
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -66,6 +66,45 @@ pub(super) fn add(
         }
         return Err(error);
     }
+    Ok(true)
+}
+
+// Pi、Omp 的用量脚本只更新数据库，避免用旧快照覆盖外部修改过的原生配置。
+pub(super) fn update_usage_script(
+    state: &AppState,
+    app_type: AppType,
+    id: &str,
+    script: UsageScript,
+) -> Result<bool, AppError> {
+    // Pi 的增删改走本模块的锁，Omp 走切换锁（与 omp.rs 一致）
+    let _pi_guard = match app_type {
+        AppType::Pi => Some(lock()?),
+        AppType::Omp => None,
+        _ => {
+            return Err(AppError::InvalidInput(
+                "Usage metadata updates only support Pi and Omp".into(),
+            ))
+        }
+    };
+    let _switch_guard = (app_type == AppType::Omp).then(|| {
+        futures::executor::block_on(state.proxy_service.lock_switch_for_app(app_type.as_str()))
+    });
+    super::validate_usage_script(&script)?;
+
+    let mut provider = state
+        .db
+        .get_provider_by_id(id, app_type.as_str())?
+        .ok_or_else(|| {
+            AppError::InvalidInput(format!("{} provider '{id}' not found", app_type.as_str()))
+        })?;
+    provider
+        .meta
+        .get_or_insert_with(ProviderMeta::default)
+        .usage_script = Some(script);
+    if app_type == AppType::Pi {
+        strip_unsupported_metadata(&mut provider);
+    }
+    state.db.save_provider(app_type.as_str(), &provider)?;
     Ok(true)
 }
 

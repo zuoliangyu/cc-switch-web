@@ -568,7 +568,7 @@ impl SkillService {
     fn is_sync_managed_app(app: &AppType) -> bool {
         !matches!(
             app,
-            AppType::ClaudeDesktop | AppType::OpenClaw | AppType::Pi
+            AppType::ClaudeDesktop | AppType::OpenClaw | AppType::Pi | AppType::Omp
         )
     }
 
@@ -939,6 +939,9 @@ impl SkillService {
             AppType::Kimi => return Ok(crate::kimi_config::data_dir().join("skills")),
             // agy 与 Antigravity 桌面版、IDE 共用 ~/.gemini/config 下的 Skills
             AppType::Agy => return Ok(crate::agy_config::customizations_dir().join("skills")),
+            AppType::Omp => {
+                return Ok(crate::omp_config::get_omp_agent_dir()?.join("skills"));
+            }
         }
 
         // 默认路径：回退到用户主目录下的标准位置
@@ -956,6 +959,7 @@ impl SkillService {
             AppType::Mcode => crate::mcode_config::data_dir().join("skills"),
             AppType::Kimi => crate::kimi_config::data_dir().join("skills"),
             AppType::Agy => home.join(".gemini").join("config").join("skills"),
+            AppType::Omp => crate::omp_config::get_omp_agent_dir()?.join("skills"),
         })
     }
 
@@ -965,8 +969,10 @@ impl SkillService {
     pub fn get_all_installed(db: &Arc<Database>) -> Result<Vec<InstalledSkill>> {
         let mut skills = db.get_all_installed_skills()?;
         let pi_dir = Self::get_app_skills_dir(&AppType::Pi)?;
+        let omp_dir = Self::get_app_skills_dir(&AppType::Omp)?;
         for skill in skills.values_mut() {
             skill.apps.pi = pi_dir.join(&skill.directory).is_dir();
+            skill.apps.omp = omp_dir.join(&skill.directory).is_dir();
         }
         Ok(skills.into_values().collect())
     }
@@ -1691,8 +1697,8 @@ impl SkillService {
             Self::remove_from_app(&skill.directory, app)?;
         }
 
-        // Pi 以原生目录存在性为唯一状态，不增加数据库影子字段。
-        if !matches!(app, AppType::Pi) {
+        // Pi、Oh My Pi 以原生目录存在性为唯一状态，不增加数据库影子字段。
+        if !matches!(app, AppType::Pi | AppType::Omp) {
             db.update_skill_apps(id, &skill.apps)?;
         }
 
@@ -1854,7 +1860,7 @@ impl SkillService {
                     .unwrap_or(false);
                 if matches!(
                     app,
-                    AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy
+                    AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy | AppType::Omp
                 ) || !apps.is_enabled_for(&app)
                     || exists_in_app
                 {
@@ -3879,6 +3885,7 @@ mod tests {
                     mcode: false,
                     kimi: false,
                     agy: false,
+                    omp: false,
                 },
             }],
         )
@@ -3942,6 +3949,7 @@ mod tests {
                 mcode: false,
                 kimi: false,
                 agy: false,
+                omp: false,
             },
             installed_at: 0,
             content_hash: Some("disabled-hash".to_string()),
@@ -4092,6 +4100,7 @@ mod tests {
                 mcode: false,
                 kimi: false,
                 agy: false,
+                omp: false,
             },
             installed_at: 123,
             content_hash: Some("backup-hash".to_string()),
@@ -4158,6 +4167,7 @@ mod tests {
                 mcode: false,
                 kimi: false,
                 agy: false,
+                omp: false,
             },
             installed_at: 456,
             content_hash: Some("restore-hash".to_string()),
@@ -4234,6 +4244,7 @@ mod tests {
                 mcode: false,
                 kimi: false,
                 agy: false,
+                omp: false,
             },
             installed_at: 789,
             content_hash: Some("delete-backup-hash".to_string()),

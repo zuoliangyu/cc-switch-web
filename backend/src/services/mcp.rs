@@ -78,23 +78,46 @@ impl McpService {
     /// 添加或更新 MCP 服务器
     pub fn upsert_server(state: &AppState, server: McpServer) -> Result<(), AppError> {
         // 读取旧状态：用于处理“编辑时取消勾选某个应用”的场景（需要从对应 live 配置中移除）
-        let prev_apps = state
-            .db
-            .get_all_mcp_servers()?
-            .get(&server.id)
+        let previous = state.db.get_all_mcp_servers()?.shift_remove(&server.id);
+        let prev_apps = previous
+            .as_ref()
             .map(|s| s.apps.clone())
             .unwrap_or_default();
 
-        // MCode / Pi / Kimi 的文件和数据库一起提交：任一步失败都恢复原样
+        // Keep our disabled OMP tombstone in step with edits while the checkbox is off.
+        let managed_omp = server.apps.omp
+            || prev_apps.omp
+            || previous.as_ref().is_some_and(|saved| {
+                mcp::omp::is_disabled_managed(&saved.id, &saved.server).unwrap_or(false)
+            });
+        // MCode / Pi / Kimi / Oh My Pi 的文件和数据库一起提交：任一步失败都恢复原样
+        let save_with_omp = || {
+            if managed_omp {
+                mcp::omp::sync_and_commit(
+                    &server.id,
+                    mcp::omp::OmpChange::from_previous(
+                        &server.server,
+                        previous
+                            .as_ref()
+                            .map(|s| &s.server)
+                            .unwrap_or(&server.server),
+                        server.apps.omp,
+                    ),
+                    || state.db.save_mcp_server(&server),
+                )
+            } else {
+                state.db.save_mcp_server(&server)
+            }
+        };
         let save_with_kimi = || {
             if server.apps.kimi || prev_apps.kimi {
                 mcp::kimi::sync_and_commit(
                     &server.id,
                     server.apps.kimi.then_some(&server.server),
-                    || state.db.save_mcp_server(&server),
+                    save_with_omp,
                 )
             } else {
-                state.db.save_mcp_server(&server)
+                save_with_omp()
             }
         };
         let save_with_agy = || {
@@ -165,11 +188,22 @@ impl McpService {
                     state.db.delete_mcp_server(id)
                 }
             };
-            let delete_with_agy = || {
-                if server.apps.agy {
-                    mcp::agy::sync_and_commit(id, mcp::agy::AgyChange::Remove, delete_with_kimi)
+            let delete_with_omp = || {
+                if server.apps.omp {
+                    mcp::omp::sync_and_commit(
+                        id,
+                        mcp::omp::OmpChange::Remove(Some(&server.server)),
+                        delete_with_kimi,
+                    )
                 } else {
                     delete_with_kimi()
+                }
+            };
+            let delete_with_agy = || {
+                if server.apps.agy {
+                    mcp::agy::sync_and_commit(id, mcp::agy::AgyChange::Remove, delete_with_omp)
+                } else {
+                    delete_with_omp()
                 }
             };
             let delete_with_pi = || {
@@ -193,6 +227,11 @@ impl McpService {
                 // 取消勾选只在 Pi 里禁用、条目还留着：服务器删了就一并清掉（尽力而为）
                 if let Err(err) = mcp::pi::remove_disabled_if_managed(id, &server.server) {
                     log::warn!("清理 Pi 中已禁用的 MCP 条目 '{id}' 失败: {err}");
+                }
+            }
+            if !server.apps.omp {
+                if let Err(err) = mcp::omp::remove_disabled_if_managed(id, &server.server) {
+                    log::warn!("清理 Oh My Pi 中已禁用的 MCP 条目 '{id}' 失败: {err}");
                 }
             }
 
@@ -228,7 +267,7 @@ impl McpService {
     ) -> Result<(), AppError> {
         if matches!(
             app,
-            AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy
+            AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy | AppType::Omp
         ) {
             if let Some(server) = state.db.get_all_mcp_servers()?.get(server_id) {
                 let spec = enabled.then_some(&server.server);
@@ -245,6 +284,12 @@ impl McpService {
                     mcp::agy::sync_and_commit(
                         server_id,
                         mcp::agy::AgyChange::from_enabled(spec),
+                        commit,
+                    )?;
+                } else if app == AppType::Omp {
+                    mcp::omp::sync_and_commit(
+                        server_id,
+                        mcp::omp::OmpChange::from_enabled(&server.server, enabled),
                         commit,
                     )?;
                 } else {
@@ -278,7 +323,7 @@ impl McpService {
         for app in server.apps.enabled_apps() {
             if matches!(
                 app,
-                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy
+                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy | AppType::Omp
             ) {
                 continue; // Already written before saving the managed state.
             }
@@ -327,6 +372,7 @@ impl McpService {
             AppType::Pi => mcp::pi::sync(&server.id, Some(&server.server))?,
             AppType::Kimi => mcp::kimi::sync(&server.id, Some(&server.server))?,
             AppType::Agy => mcp::agy::sync(&server.id, Some(&server.server))?,
+            AppType::Omp => mcp::omp::sync_single_server_to_omp(&server.id, &server.server)?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 同步
                 log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过同步");
@@ -345,7 +391,7 @@ impl McpService {
         for app in server.apps.enabled_apps() {
             if matches!(
                 app,
-                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy
+                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy | AppType::Omp
             ) {
                 continue; // Already removed before deleting the managed record.
             }
@@ -376,6 +422,7 @@ impl McpService {
             AppType::Pi => mcp::pi::sync(id, None)?,
             AppType::Kimi => mcp::kimi::sync(id, None)?,
             AppType::Agy => mcp::agy::sync(id, None)?,
+            AppType::Omp => mcp::omp::remove_server_from_omp(id)?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 移除
                 log::debug!("claude-desktop MCP 尚未实现（C-Phase0），跳过移除");
@@ -433,7 +480,7 @@ impl McpService {
                 Self::sync_server_to_app(state, server, app)
             } else if !matches!(
                 app,
-                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy
+                AppType::Mcode | AppType::Pi | AppType::Kimi | AppType::Agy | AppType::Omp
             ) {
                 Self::remove_server_from_app(state, &server.id, app)
             } else {
@@ -531,6 +578,11 @@ impl McpService {
     }
 
     /// Best-effort 导入所有当前支持 MCP 的应用，并在结束后聚合上报失败。
+    /// 从 Oh My Pi 导入 MCP
+    pub fn import_from_omp(state: &AppState) -> Result<usize, AppError> {
+        mcp::omp::import(state)
+    }
+
     pub fn import_from_all_apps(state: &AppState) -> Result<usize, AppError> {
         let results = [
             ("claude", Self::import_from_claude(state)),
@@ -542,6 +594,7 @@ impl McpService {
             ("pi", mcp::pi::import(state)),
             ("kimi", mcp::kimi::import(state)),
             ("agy", mcp::agy::import(state)),
+            ("omp", Self::import_from_omp(state)),
         ];
         let mut total = 0;
         let mut failures = Vec::new();
@@ -1115,6 +1168,120 @@ mod tests {
                 assert_eq!(enabled, 1, "round {round}");
             }
             assert!(!crate::config::get_home_dir().join(".pi").exists());
+        }
+    }
+    /// 上游 tests/mcp_commands.rs 的 Oh My Pi MCP 用例（c8945d2d、3d7cf6aa），改为 Web 的单元测试；
+    /// agent 目录用 omp_config 的测试目录代替上游的 omp_config_dir 设置
+    mod omp_mcp {
+        use super::*;
+        use crate::omp_config::test_support::TestAgentDir;
+        use serde_json::json;
+        use std::fs;
+
+        fn omp_test_state() -> (TestHome, TestAgentDir, AppState, std::path::PathBuf) {
+            let home = TestHome::new();
+            let agent = TestAgentDir::new();
+            let path = crate::omp_config::get_omp_mcp_path().expect("omp mcp path");
+            fs::write(&path, "{}").unwrap();
+            let state = AppState::new(Arc::new(
+                crate::database::Database::memory().expect("database"),
+            ));
+            (home, agent, state, path)
+        }
+
+        fn read(path: &std::path::Path) -> serde_json::Value {
+            serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+        }
+
+        #[test]
+        #[serial]
+        fn omp_mcp_disable_reenable_preserves_options_and_suppresses_discovered_sources() {
+            let (_home, _agent, state, path) = omp_test_state();
+            let native = json!({"mcpServers":{"demo":{"command":"node","args":["mcp.js"],"enabled":false,"timeout":0,"requestIdFormat":"string","instructions":false}},"disabledServers":["demo","other"],"enabledServers":["other"]});
+            fs::write(&path, native.to_string()).unwrap();
+            assert_eq!(McpService::import_from_omp(&state).unwrap(), 1);
+            assert!(!state.db.get_all_mcp_servers().unwrap()["demo"].apps.omp);
+            McpService::toggle_app(&state, "demo", AppType::Omp, true).unwrap();
+            let enabled = read(&path);
+            assert_eq!(enabled["mcpServers"]["demo"]["enabled"], true);
+            assert_eq!(enabled["disabledServers"], json!(["other"]));
+            for field in ["timeout", "requestIdFormat", "instructions"] {
+                assert_eq!(
+                    enabled["mcpServers"]["demo"][field],
+                    native["mcpServers"]["demo"][field]
+                );
+            }
+            McpService::toggle_app(&state, "demo", AppType::Omp, false).unwrap();
+            let disabled = read(&path);
+            assert_eq!(disabled["mcpServers"]["demo"]["enabled"], false);
+            assert!(
+                disabled["disabledServers"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("demo")),
+                "the denylist must also suppress project/foreign discovery"
+            );
+            McpService::toggle_app(&state, "demo", AppType::Omp, true).unwrap();
+            let mut edited = state.db.get_all_mcp_servers().unwrap()["demo"].clone();
+            edited.apps.omp = false;
+            McpService::upsert_server(&state, edited).unwrap();
+            assert_eq!(read(&path)["mcpServers"]["demo"]["enabled"], false);
+            let mut disabled_edit = state.db.get_all_mcp_servers().unwrap()["demo"].clone();
+            disabled_edit.server["args"] = json!(["updated.js"]);
+            McpService::upsert_server(&state, disabled_edit).unwrap();
+            McpService::toggle_app(&state, "demo", AppType::Omp, true).unwrap();
+            assert_eq!(read(&path)["mcpServers"]["demo"]["args"], json!(["updated.js"]));
+            McpService::toggle_app(&state, "demo", AppType::Omp, false).unwrap();
+            assert!(McpService::delete_server(&state, "demo").unwrap());
+            assert!(read(&path)["mcpServers"].get("demo").is_none());
+            assert_eq!(read(&path)["disabledServers"], json!(["other"]));
+        }
+
+        #[test]
+        #[serial]
+        fn omp_mcp_resync_and_conflicting_enable_preserve_native_configuration() {
+            let (_home, _agent, state, path) = omp_test_state();
+            let native =
+                json!({"mcpServers":{"context7":{"command":"authored","env":{"SECRET":"native"}}}});
+            fs::write(&path, native.to_string()).unwrap();
+            let server: McpServer = serde_json::from_value(json!({"id":"context7","name":"Context7","server":{"command":"managed"},"apps":{"claude":true}})).unwrap();
+            state.db.save_mcp_server(&server).unwrap();
+            McpService::sync_enabled_for_app(&state, &AppType::Omp).unwrap();
+            assert_eq!(fs::read_to_string(&path).unwrap(), native.to_string());
+            assert!(McpService::toggle_app(&state, &server.id, AppType::Omp, true).is_err());
+            assert!(!state.db.get_all_mcp_servers().unwrap()[&server.id].apps.omp);
+            assert!(McpService::import_from_omp(&state)
+                .unwrap_err()
+                .to_string()
+                .contains("context7"));
+            assert_eq!(fs::read_to_string(&path).unwrap(), native.to_string());
+        }
+
+        #[test]
+        #[serial]
+        fn omp_mcp_delete_removes_enabled_native_entry_and_write_failure_keeps_db() {
+            let (_home, _agent, state, path) = omp_test_state();
+            let server: McpServer = serde_json::from_value(
+                json!({"id":"demo","name":"Demo","server":{"command":"node"},"apps":{"omp":true}}),
+            )
+            .unwrap();
+            McpService::upsert_server(&state, server.clone()).unwrap();
+            fs::write(&path, "invalid json").unwrap();
+            assert!(McpService::delete_server(&state, &server.id).is_err());
+            assert!(state
+                .db
+                .get_all_mcp_servers()
+                .unwrap()
+                .contains_key(&server.id));
+            assert!(McpService::toggle_app(&state, &server.id, AppType::Omp, false).is_err());
+            assert!(state.db.get_all_mcp_servers().unwrap()[&server.id].apps.omp);
+            fs::write(
+                &path,
+                json!({"mcpServers":{"demo":{"command":"node","enabled":true}}}).to_string(),
+            )
+            .unwrap();
+            assert!(McpService::delete_server(&state, &server.id).unwrap());
+            assert!(read(&path)["mcpServers"].get("demo").is_none());
         }
     }
 }

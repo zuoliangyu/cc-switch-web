@@ -232,6 +232,10 @@ export const providersApi = {
     return await invoke("import_pi_providers_from_live");
   },
 
+  async importOmpFromLive(): Promise<number> {
+    return await invoke("import_omp_providers_from_live");
+  },
+
   /**
    * 获取 Hermes live 配置中的供应商 ID 列表
    */

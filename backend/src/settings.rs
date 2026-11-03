@@ -50,6 +50,8 @@ pub struct VisibleApps {
     pub kimi: bool,
     #[serde(default = "default_true")]
     pub agy: bool,
+    #[serde(default = "default_true")]
+    pub omp: bool,
 }
 
 impl Default for VisibleApps {
@@ -66,6 +68,7 @@ impl Default for VisibleApps {
             mcode: true,
             kimi: true,
             agy: true,
+            omp: true,
         }
     }
 }
@@ -299,6 +302,8 @@ pub struct AppSettings {
     pub hermes_config_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pi_config_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub omp_config_dir: Option<String>,
 
     // ===== 当前供应商 ID（设备级）=====
     /// 当前 Claude 供应商 ID（本地存储，优先于数据库 is_current）
@@ -392,6 +397,7 @@ impl Default for AppSettings {
             openclaw_config_dir: None,
             hermes_config_dir: None,
             pi_config_dir: None,
+            omp_config_dir: None,
             current_provider_claude: None,
             current_provider_claude_desktop: None,
             current_provider_codex: None,
@@ -470,6 +476,13 @@ impl AppSettings {
 
         self.pi_config_dir = self
             .pi_config_dir
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        self.omp_config_dir = self
+            .omp_config_dir
             .as_ref()
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -914,6 +927,14 @@ pub fn get_pi_override_dir() -> Option<PathBuf> {
         .map(|p| resolve_override_path(p))
 }
 
+pub fn get_omp_override_dir() -> Option<PathBuf> {
+    let settings = settings_store().read().ok()?;
+    settings
+        .omp_config_dir
+        .as_ref()
+        .map(|path| resolve_override_path(path))
+}
+
 // ===== 当前供应商管理函数 =====
 
 /// 获取指定应用类型的当前供应商 ID（从本地 settings 读取）
@@ -932,7 +953,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
         AppType::Agy => settings.current_provider_agy.clone(),
         AppType::Hermes => None,
-        AppType::Pi | AppType::Mcode | AppType::Kimi => None,
+        AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => None,
     }
 }
 
@@ -954,7 +975,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
         AppType::Agy => settings.current_provider_agy = id.map(|s| s.to_string()),
-        AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi => {}
+        AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Omp => {}
     }
 
     update_settings(settings)

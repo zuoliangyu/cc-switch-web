@@ -28,6 +28,7 @@ export const APP_IDS: AppId[] = [
   "mcode",
   "kimi",
   "agy",
+  "omp",
 ];
 
 /** Claude Desktop、OpenClaw 不由 CC Switch 管理 MCP；Pi 1.0 起内置 MCP（`~/.pi/agent/mcp.json`） */
@@ -42,6 +43,7 @@ export const MCP_APP_IDS = [
   "mcode",
   "kimi",
   "agy",
+  "omp",
 ] as const satisfies readonly AppId[];
 export type McpAppId = (typeof MCP_APP_IDS)[number];
 
@@ -56,6 +58,7 @@ export const SKILLS_APP_IDS = [
   "kimi",
   "agy",
   "pi",
+  "omp",
 ] as const satisfies readonly AppId[];
 
 export function getAppLabel(appId: string): string {
@@ -149,9 +152,25 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
   },
+  omp: {
+    label: "Oh My Pi",
+    icon: (
+      <ProviderIcon icon="omp" name="Oh My Pi" size={14} showFallback={false} />
+    ),
+    activeClass: "theme-chip-tertiary",
+    badgeClass: "theme-chip-tertiary border-0 gap-1.5",
+  },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, agy: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, agy: true, omp: true };
+
+/** Oh My Pi 是 Pi 的分支：供应商表单、启用状态和用量脚本命令与 Pi 共用。 */
+export type PiFamilyAppId = Extract<AppId, "pi" | "omp">;
+export const PI_FAMILY_APP_IDS: PiFamilyAppId[] = ["pi", "omp"];
+
+export function isPiFamilyApp(appId: string): appId is PiFamilyAppId {
+  return (PI_FAMILY_APP_IDS as string[]).includes(appId);
+}
 
 /** 用 Gemini 那套表单（env + settings.json）的应用：Antigravity 的卡与 Gemini 同形 */
 export function usesGeminiStyleForm(appId: string): boolean {

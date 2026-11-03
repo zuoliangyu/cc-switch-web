@@ -37,7 +37,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api/settings";
-import { invalidatePiProviderCaches } from "@/lib/query/pi";
+import {
+  invalidatePiProviderCaches,
+  usePiCurrentState,
+} from "@/lib/query/pi";
 
 interface ProviderListProps {
   modeView?: AppModeView;
@@ -108,6 +111,11 @@ export function ProviderList({
     queryFn: () => providersApi.getPiLiveProviderIds(),
     enabled: appId === "pi",
   });
+  // Oh My Pi：models.yml 里有哪些供应商由后端的当前状态给出
+  const { data: ompState, isPending: ompStatePending } = usePiCurrentState(
+    appId === "omp",
+    "omp",
+  );
 
   // OpenClaw: 查询 live 配置中的供应商 ID 列表，用于判断 isInConfig
   const { data: openclawLiveIds, isPending: openclawLivePending } = useOpenClawLiveProviderIds(
@@ -135,6 +143,9 @@ export function ProviderList({
       if (appId === "pi") {
         return piLiveIds?.includes(providerId) ?? false;
       }
+      if (appId === "omp") {
+        return ompState?.enabledProviderIds.includes(providerId) ?? false;
+      }
       return true; // 其他应用始终返回 true
     },
     [
@@ -143,6 +154,7 @@ export function ProviderList({
       openclawLiveIds,
       hermesLiveIds,
       piLiveIds,
+      ompState,
       providers,
     ],
   );
@@ -168,6 +180,7 @@ export function ProviderList({
     "pi",
     "kimi",
     "agy",
+    "omp",
   ].includes(appId);
   const { data: isAutoFailoverEnabled } = useAutoFailoverEnabled(
     appId,
@@ -280,6 +293,10 @@ export function ProviderList({
         const count = await providersApi.importPiFromLive();
         return count > 0;
       }
+      if (appId === "omp") {
+        const count = await providersApi.importOmpFromLive();
+        return count > 0;
+      }
       return providersApi.importDefault(appId);
     },
     onSuccess: (imported) => {
@@ -288,8 +305,8 @@ export function ProviderList({
         if (appId === "claude-desktop") {
           queryClient.invalidateQueries({ queryKey: ["claudeDesktopStatus"] });
         }
-        if (appId === "pi") {
-          void invalidatePiProviderCaches(queryClient);
+        if (appId === "pi" || appId === "omp") {
+          void invalidatePiProviderCaches(queryClient, appId);
         }
         toast.success(t("provider.importCurrentDescription"));
       } else {
@@ -372,7 +389,7 @@ export function ProviderList({
     return messages;
   }, [appId, claudeDesktopStatus, t]);
 
-  const membershipPending = (appId === "opencode" && opencodeLivePending) || (appId === "openclaw" && openclawLivePending) || (appId === "hermes" && hermesLivePending) || (appId === "pi" && piLivePending);
+  const membershipPending = (appId === "opencode" && opencodeLivePending) || (appId === "openclaw" && openclawLivePending) || (appId === "hermes" && hermesLivePending) || (appId === "pi" && piLivePending) || (appId === "omp" && ompStatePending);
   if (isLoading || (membershipPending && sortedProviders.length > 0)) {
     return (
       <div className="space-y-3">

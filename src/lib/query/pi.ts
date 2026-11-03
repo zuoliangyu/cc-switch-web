@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import { piApi } from "@/lib/api/pi";
+import { piApi, type PiFamilyAppId } from "@/lib/api/pi";
 
 export const piKeys = {
   all: ["pi"] as const,
@@ -9,17 +9,37 @@ export const piKeys = {
   sessionDiscovery: ["pi", "session-discovery"] as const,
 };
 
-export const invalidatePiProviderCaches = (queryClient: QueryClient) =>
+/** Pi 与 Oh My Pi 各自的当前状态缓存（Pi 的就是 piKeys.state） */
+export const piStateKey = (app: PiFamilyAppId) => [app, "state"] as const;
+
+export const invalidatePiProviderCaches = (
+  queryClient: QueryClient,
+  app: PiFamilyAppId = "pi",
+) =>
   Promise.all([
-    queryClient.invalidateQueries({ queryKey: piKeys.state }),
-    queryClient.invalidateQueries({ queryKey: ["providers", "pi"] }),
-    queryClient.invalidateQueries({ queryKey: ["piLiveProviderIds"] }),
+    queryClient.invalidateQueries({ queryKey: piStateKey(app) }),
+    queryClient.invalidateQueries({ queryKey: ["providers", app] }),
+    ...(app === "pi"
+      ? [queryClient.invalidateQueries({ queryKey: ["piLiveProviderIds"] })]
+      : []),
   ]);
 
-export function usePiCurrentState(enabled = true) {
+/** 改了 Pi / Oh My Pi 的配置目录：状态、供应商、技能和会话都换了来源 */
+export const invalidatePiDirectoryCaches = (
+  queryClient: QueryClient,
+  app: PiFamilyAppId = "pi",
+) =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: [app] }),
+    queryClient.invalidateQueries({ queryKey: ["providers", app] }),
+    queryClient.invalidateQueries({ queryKey: ["skills", "installed"] }),
+    queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+  ]);
+
+export function usePiCurrentState(enabled = true, app: PiFamilyAppId = "pi") {
   return useQuery({
-    queryKey: piKeys.state,
-    queryFn: piApi.getCurrentState,
+    queryKey: piStateKey(app),
+    queryFn: () => piApi.getCurrentState(app),
     enabled,
   });
 }

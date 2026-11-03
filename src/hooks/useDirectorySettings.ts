@@ -13,7 +13,8 @@ type DirectoryKey =
   | "opencode"
   | "openclaw"
   | "hermes"
-  | "pi";
+  | "pi"
+  | "omp";
 
 export interface ResolvedDirectories {
   appConfig: string;
@@ -25,6 +26,7 @@ export interface ResolvedDirectories {
   openclaw: string;
   hermes: string;
   pi: string;
+  omp: string;
 }
 
 const sanitizeDir = (value?: string | null): string | undefined => {
@@ -59,6 +61,7 @@ export interface UseDirectorySettingsResult {
     openclawDir?: string,
     hermesDir?: string,
     piDir?: string,
+    ompDir?: string,
   ) => void;
 }
 
@@ -90,6 +93,7 @@ export function useDirectorySettings({
     openclaw: "",
     hermes: "",
     pi: "",
+    omp: "",
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -103,6 +107,7 @@ export function useDirectorySettings({
     openclaw: "",
     hermes: "",
     pi: "",
+    omp: "",
   });
   const initialAppConfigDirRef = useRef<string | undefined>(undefined);
 
@@ -124,6 +129,7 @@ export function useDirectorySettings({
           openclawDir,
           hermesDir,
           piDir,
+          ompDir,
           defaultAppConfig,
           defaultClaudeDir,
           defaultCodexDir,
@@ -133,6 +139,7 @@ export function useDirectorySettings({
           defaultOpenclawDir,
           defaultHermesDir,
           defaultPiDir,
+          defaultOmpDir,
         ] = await Promise.all([
           settingsApi.getAppConfigDirOverride(),
           settingsApi.getAppConfigDir(),
@@ -144,6 +151,7 @@ export function useDirectorySettings({
           settingsApi.getConfigDir("openclaw"),
           settingsApi.getConfigDir("hermes"),
           settingsApi.getConfigDir("pi"),
+          settingsApi.getConfigDir("omp"),
           settingsApi.getDefaultAppConfigDir(),
           settingsApi.getDefaultConfigDir("claude"),
           settingsApi.getDefaultConfigDir("codex"),
@@ -153,6 +161,7 @@ export function useDirectorySettings({
           settingsApi.getDefaultConfigDir("openclaw"),
           settingsApi.getDefaultConfigDir("hermes"),
           settingsApi.getDefaultConfigDir("pi"),
+          settingsApi.getDefaultConfigDir("omp"),
         ]);
 
         if (!active) return;
@@ -169,6 +178,7 @@ export function useDirectorySettings({
           openclaw: defaultOpenclawDir ?? "",
           hermes: defaultHermesDir ?? "",
           pi: defaultPiDir ?? "",
+          omp: defaultOmpDir ?? "",
         };
 
         setAppConfigDir(normalizedOverride);
@@ -187,6 +197,7 @@ export function useDirectorySettings({
           openclaw: openclawDir || defaultsRef.current.openclaw,
           hermes: hermesDir || defaultsRef.current.hermes,
           pi: piDir || defaultsRef.current.pi,
+          omp: ompDir || defaultsRef.current.omp,
         });
       } catch (error) {
         console.error(
@@ -227,7 +238,9 @@ export function useDirectorySettings({
                       ? { openclawConfigDir: sanitized }
                       : key === "hermes"
                         ? { hermesConfigDir: sanitized }
-                        : { piConfigDir: sanitized },
+                        : key === "pi"
+                          ? { piConfigDir: sanitized }
+                          : { ompConfigDir: sanitized },
         );
       }
 
@@ -263,7 +276,9 @@ export function useDirectorySettings({
                     ? "openclaw"
                     : app === "hermes"
                       ? "hermes"
-                      : "pi",
+                      : app === "omp"
+                        ? "omp"
+                        : "pi",
         value,
       );
     },
@@ -306,7 +321,9 @@ export function useDirectorySettings({
                     ? "openclaw"
                     : app === "hermes"
                       ? "hermes"
-                      : "pi";
+                      : app === "omp"
+                        ? "omp"
+                        : "pi";
       if (!defaultsRef.current[key]) {
         try {
           const fallback = await settingsApi.getDefaultConfigDir(app);
@@ -354,6 +371,7 @@ export function useDirectorySettings({
       openclawDir?: string,
       hermesDir?: string,
       piDir?: string,
+      ompDir?: string,
     ) => {
       setAppConfigDir(initialAppConfigDirRef.current);
       setResolvedDirs({
@@ -367,6 +385,7 @@ export function useDirectorySettings({
         openclaw: openclawDir ?? defaultsRef.current.openclaw,
         hermes: hermesDir ?? defaultsRef.current.hermes,
         pi: piDir ?? defaultsRef.current.pi,
+        omp: ompDir ?? defaultsRef.current.omp,
       });
     },
     [],

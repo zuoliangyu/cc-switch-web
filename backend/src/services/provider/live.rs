@@ -32,6 +32,7 @@ pub(crate) fn provider_exists_in_live_config(
         AppType::Kimi => {
             crate::kimi_config::get_providers().map(|providers| providers.contains_key(provider_id))
         }
+        AppType::Omp => Ok(crate::omp_config::get_providers()?.contains_key(provider_id)),
         _ => Ok(false),
     }
 }
@@ -374,7 +375,8 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
-        | AppType::Agy => false,
+        | AppType::Agy
+        | AppType::Omp => false,
     }
 }
 
@@ -451,7 +453,8 @@ pub(crate) fn remove_common_config_from_settings(
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
-        | AppType::Agy => Ok(settings.clone()),
+        | AppType::Agy
+        | AppType::Omp => Ok(settings.clone()),
     }
 }
 
@@ -513,7 +516,8 @@ fn apply_common_config_to_settings(
         | AppType::Pi
         | AppType::Mcode
         | AppType::Kimi
-        | AppType::Agy => Ok(settings.clone()),
+        | AppType::Agy
+        | AppType::Omp => Ok(settings.clone()),
     }
 }
 
@@ -954,6 +958,11 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 "Pi providers must use the native models.json adapter".to_string(),
             ));
         }
+        AppType::Omp => {
+            return Err(AppError::InvalidInput(
+                "Oh My Pi providers use the Oh My Pi provider service".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -1034,8 +1043,12 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
     // Sync providers based on mode
     for app_type in AppType::all() {
         // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）；
-        // Antigravity 的卡只作用于它打开的终端，全量同步不写真实 settings.json。
-        if matches!(app_type, AppType::Mcode | AppType::Kimi | AppType::Agy) {
+        // Antigravity 的卡只作用于它打开的终端，全量同步不写真实 settings.json；
+        // Oh My Pi 的 models.yml 只经它自己的供应商服务改动（上游同样跳过）。
+        if matches!(
+            app_type,
+            AppType::Mcode | AppType::Kimi | AppType::Agy | AppType::Omp
+        ) {
             continue;
         }
         if app_type.is_additive_mode() {
@@ -1177,6 +1190,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
         AppType::Mcode => Ok(json!(crate::mcode_config::get_providers()?)),
         AppType::Kimi => Ok(json!(crate::kimi_config::get_providers()?)),
         AppType::Agy => crate::agy_config::read_live_settings(),
+        AppType::Omp => Ok(json!(crate::omp_config::get_providers()?)),
     }
 }
 
@@ -1292,7 +1306,8 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
         | AppType::Hermes
         | AppType::Pi
         | AppType::Mcode
-        | AppType::Kimi => {
+        | AppType::Kimi
+        | AppType::Omp => {
             unreachable!("additive mode apps are handled by early return")
         }
     };

@@ -2328,8 +2328,21 @@ export async function deleteWebSessions(
   );
 }
 
-export const getWebPiState = (): Promise<PiCurrentState> =>
-  requestJson<PiCurrentState>("/api/pi/state");
+export const getWebPiState = (
+  app: "pi" | "omp" = "pi",
+): Promise<PiCurrentState> => requestJson<PiCurrentState>(`/api/${app}/state`);
+
+/** 只改 Pi / Oh My Pi 供应商的用量脚本（元数据），不重写原生配置文件 */
+export const updateWebPiProviderUsageScript = (
+  app: "pi" | "omp",
+  id: string,
+  usageScript: unknown,
+): Promise<boolean> =>
+  requestWithBody<boolean>(
+    `/api/providers/${app}/${encodeURIComponent(id)}/usage-script`,
+    "PUT",
+    { usageScript },
+  );
 
 export const getWebPiPromptFile = (
   kind: PiPromptFileKind,

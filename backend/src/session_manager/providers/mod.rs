@@ -7,6 +7,7 @@ pub mod gemini;
 pub mod grokbuild;
 pub mod hermes;
 pub mod kimi;
+pub mod omp;
 pub mod openclaw;
 pub mod opencode;
 mod opencode_blocks;

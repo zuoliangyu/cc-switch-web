@@ -966,6 +966,14 @@ async fn get_pi_state() -> Result<Json<crate::services::pi_state::PiCurrentState
         .map_err(|error| ApiError::internal(format!("failed to load Pi state: {error}")))
 }
 
+async fn get_omp_state(
+    State(state): State<WebApiState>,
+) -> Result<Json<crate::services::pi_state::PiCurrentState>, ApiError> {
+    crate::commands::get_omp_current_state_internal(state.app_state.as_ref())
+        .map(Json)
+        .map_err(|error| ApiError::internal(format!("failed to load Oh My Pi state: {error}")))
+}
+
 async fn get_pi_prompt_file(
     Path(kind): Path<String>,
 ) -> Result<Json<crate::services::pi_prompt_files::PiPromptFileSnapshot>, ApiError> {
@@ -1071,6 +1079,9 @@ async fn import_providers_from_live(
         }
         Ok(AppType::Pi) => {
             crate::services::provider::import_pi_providers_from_live(state.app_state.as_ref())
+        }
+        Ok(AppType::Omp) => {
+            crate::services::provider::import_omp_providers_from_live(state.app_state.as_ref())
         }
         Ok(app_type) => {
             return Err(ApiError::bad_request(format!(
@@ -1307,6 +1318,29 @@ async fn read_live_provider_settings(
     let settings = crate::commands::read_live_provider_settings_internal(app)
         .map_err(|e| ApiError::internal(format!("failed to read live provider settings: {e}")))?;
     Ok(Json(settings))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageScriptUpdateRequest {
+    usage_script: crate::provider::UsageScript,
+}
+
+/// Pi、Oh My Pi 的用量脚本只改数据库，不用旧快照覆盖外部改过的原生配置
+async fn update_pi_provider_usage_script(
+    State(state): State<WebApiState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(payload): Json<UsageScriptUpdateRequest>,
+) -> Result<Json<bool>, ApiError> {
+    let app_type = AppType::from_str(&app).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    crate::services::provider::ProviderService::update_pi_usage_script(
+        state.app_state.as_ref(),
+        app_type,
+        &id,
+        payload.usage_script,
+    )
+    .map(Json)
+    .map_err(|error| ApiError::bad_request(error.to_string()))
 }
 
 async fn query_provider_usage(
@@ -4823,6 +4857,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/providers/:app/:id/usage", get(query_provider_usage))
         .route(
+            "/api/providers/:app/:id/usage-script",
+            put(update_pi_provider_usage_script),
+        )
+        .route(
             "/api/providers/:app/:id/usage/test",
             post(test_usage_script),
         )
@@ -5023,6 +5061,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/prompts/:app/:id/enable", post(enable_prompt))
         .route("/api/pi/state", get(get_pi_state))
+        .route("/api/omp/state", get(get_omp_state))
         .route(
             "/api/pi/prompt-files/:kind",
             get(get_pi_prompt_file)

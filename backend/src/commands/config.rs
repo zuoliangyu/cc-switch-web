@@ -86,6 +86,7 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
             .unwrap()
             .to_path_buf(),
         AppType::Kimi => crate::kimi_config::data_dir(),
+        AppType::Agy => crate::agy_config::agy_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())
@@ -107,6 +108,7 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::Pi => config::get_home_dir().join(".pi").join("agent"),
         AppType::Mcode => config::get_home_dir().join(".minimax"),
         AppType::Kimi => config::get_home_dir().join(".kimi-code"),
+        AppType::Agy => config::get_home_dir().join(".gemini").join("antigravity-cli"),
     };
 
     Ok(dir.to_string_lossy().to_string())

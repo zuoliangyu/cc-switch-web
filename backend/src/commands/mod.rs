@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+mod agy_account;
 mod auth;
 mod codex_oauth;
 mod config;
@@ -29,6 +30,7 @@ mod webdav_sync;
 mod workspace;
 mod xai_oauth;
 
+pub(crate) use agy_account::*;
 pub(crate) use auth::*;
 pub(crate) use codex_oauth::*;
 pub(crate) use config::*;

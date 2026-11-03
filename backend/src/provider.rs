@@ -212,6 +212,13 @@ impl Provider {
                 crate::pi_config::provider_base_url(settings).unwrap_or_default(),
                 crate::pi_config::resolve_usage_api_key(&str_at(settings.get("apiKey"))),
             ),
+            // Antigravity cards use Gemini's env keys.
+            AppType::Agy => {
+                let env = settings.get("env");
+                let base_url = str_at(env.and_then(|e| e.get("GOOGLE_GEMINI_BASE_URL")));
+                let api_key = first_non_empty(env, &["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+                (base_url, api_key)
+            }
             // Kimi Code (config.toml) keeps the provider table under `provider`.
             AppType::Kimi => (
                 str_at(settings.pointer("/provider/base_url")),

@@ -88,6 +88,8 @@ import { CodexFormFields } from "./CodexFormFields";
 import { CodexOAuthSection } from "./CodexOAuthSection";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { McodeProviderForm } from "./McodeProviderForm";
+import { AgyAccountSelect, useAgyAccountSupported } from "./AgyOAuthSection";
+import { usesGeminiStyleForm } from "@/config/appConfig";
 import { KimiProviderForm } from "./KimiProviderForm";
 import { OmoFormFields } from "./OmoFormFields";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
@@ -425,7 +427,7 @@ function ProviderFormFull({
         ? JSON.stringify(initialData.settingsConfig, null, 2)
         : appId === "codex"
           ? CODEX_DEFAULT_CONFIG
-          : appId === "gemini"
+          : usesGeminiStyleForm(appId)
             ? JSON.stringify(
                 overlayGeminiProviderFields(
                   providerLiveBase ?? {},
@@ -582,6 +584,11 @@ function ProviderFormFull({
   const [selectedXaiAccountId, setSelectedXaiAccountId] = useState<
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "xai_oauth"));
+  // Antigravity 官方卡绑定的授权中心账号；null = 跟着 agy 当前的登录
+  const [selectedAgyAccountId, setSelectedAgyAccountId] = useState<
+    string | null
+  >(() => resolveManagedAccountId(initialData?.meta, "agy_oauth"));
+  const agyAccountSupported = useAgyAccountSupported(appId === "agy");
 
   const {
     codexAuth,
@@ -705,7 +712,7 @@ function ProviderFormFull({
           preset,
         }))
         .filter((entry) => !(entry.preset as CodexProviderPreset).hidden);
-    } else if (appId === "gemini") {
+    } else if (usesGeminiStyleForm(appId)) {
       return geminiProviderPresets.map<PresetEntry>((preset, index) => ({
         id: `gemini-${index}`,
         preset,
@@ -794,7 +801,7 @@ function ProviderFormFull({
 
   const geminiInitialData = useMemo(
     () =>
-      appId === "gemini"
+      usesGeminiStyleForm(appId)
         ? (initialData ??
           (providerLiveBase ? { settingsConfig: providerLiveBase } : undefined))
         : undefined,
@@ -819,6 +826,8 @@ function ProviderFormFull({
     envObjToString,
   } = useGeminiConfigState({
     initialData: geminiInitialData,
+    // agy 只认 settings.json 里的 model.name（显示名），模型字段读写那里
+    preferConfigModel: appId === "agy",
   });
 
   const updateGeminiEnvField = useCallback(
@@ -882,9 +891,10 @@ function ProviderFormFull({
     onEnvChange: handleGeminiEnvChange,
     envStringToObj,
     envObjToString,
-    initialData: appId === "gemini" ? initialData : undefined,
-    initialEnabled:
-      appId === "gemini" ? initialData?.meta?.commonConfigEnabled : undefined,
+    initialData: usesGeminiStyleForm(appId) ? initialData : undefined,
+    initialEnabled: usesGeminiStyleForm(appId)
+      ? initialData?.meta?.commonConfigEnabled
+      : undefined,
     selectedPresetId: selectedPresetId ?? undefined,
   });
 
@@ -1329,8 +1339,9 @@ function ProviderFormFull({
           );
           return;
         }
-      } else if (appId === "gemini") {
-        if (!geminiBaseUrl.trim()) {
+      } else if (usesGeminiStyleForm(appId)) {
+        // agy 只填 Key 不填地址是合法用法（走 Google 默认 API）
+        if (appId !== "agy" && !geminiBaseUrl.trim()) {
           toast.error(
             t("providerForm.endpointRequired", {
               defaultValue: "非官方供应商请填写 API 端点",
@@ -1389,7 +1400,7 @@ function ProviderFormFull({
       } catch (err) {
         settingsConfig = values.settingsConfig.trim();
       }
-    } else if (appId === "gemini") {
+    } else if (usesGeminiStyleForm(appId)) {
       try {
         const envObj = envStringToObj(geminiEnv);
         const configObj = geminiConfig.trim() ? JSON.parse(geminiConfig) : {};
@@ -1543,7 +1554,7 @@ function ProviderFormFull({
           ? true
           : appId === "codex"
             ? useCodexCommonConfigFlag
-            : appId === "gemini"
+            : usesGeminiStyleForm(appId)
               ? true
               : undefined,
       endpointAutoSelect,
@@ -1567,7 +1578,13 @@ function ProviderFormFull({
                 authProvider: "xai_oauth",
                 accountId: selectedXaiAccountId ?? undefined,
               }
-            : undefined,
+            : appId === "agy" && category === "official" && selectedAgyAccountId
+              ? {
+                  source: "managed_account",
+                  authProvider: "agy_oauth",
+                  accountId: selectedAgyAccountId,
+                }
+              : undefined,
       // GitHub Copilot 多账号：保存关联的账号 ID
       githubAccountId:
         isCopilotProvider && selectedGitHubAccountId
@@ -1743,7 +1760,7 @@ function ProviderFormFull({
         );
         setCodexCatalogEnabled(false);
       }
-      if (appId === "gemini") {
+      if (usesGeminiStyleForm(appId)) {
         const base = overlayGeminiProviderFields(providerLiveBase ?? {}, {});
         resetGeminiConfig(base.env, base.config);
       }
@@ -1807,7 +1824,7 @@ function ProviderFormFull({
       return;
     }
 
-    if (appId === "gemini") {
+    if (usesGeminiStyleForm(appId)) {
       const preset = entry.preset as GeminiProviderPreset;
       const merged = overlayGeminiProviderFields(
         providerLiveBase ?? {},
@@ -2288,8 +2305,9 @@ function ProviderFormFull({
             </>
           )}
 
-          {appId === "gemini" && (
+          {usesGeminiStyleForm(appId) && (
             <GeminiFormFields
+              appId={appId as "gemini" | "agy"}
               providerId={providerId}
               shouldShowApiKey={shouldShowApiKey(
                 form.getValues("settingsConfig"),
@@ -2316,6 +2334,16 @@ function ProviderFormFull({
               speedTestEndpoints={speedTestEndpoints}
             />
           )}
+
+          {/* 切号只实现了 macOS 钥匙串：服务端不支持时不显示，卡上已有的绑定原样保留 */}
+          {appId === "agy" &&
+            category === "official" &&
+            agyAccountSupported && (
+              <AgyAccountSelect
+                value={selectedAgyAccountId}
+                onChange={setSelectedAgyAccountId}
+              />
+            )}
 
           {appId === "opencode" && !isAnyOmoCategory && !isNativeOpencode && (
             <OpenCodeFormFields
@@ -2429,9 +2457,10 @@ function ProviderFormFull({
               />
               {settingsConfigErrorField}
             </>
-          ) : appId === "gemini" ? (
+          ) : usesGeminiStyleForm(appId) ? (
             <>
               <GeminiConfigEditor
+                isAgy={appId === "agy"}
                 keyFieldMode
                 envValue={geminiEnv}
                 configValue={geminiConfig}

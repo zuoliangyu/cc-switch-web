@@ -184,8 +184,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           apiKey: auth.OPENAI_API_KEY,
           baseUrl: extractCodexBaseUrl(configToml),
         };
-      } else if (appId === "gemini") {
-        // Gemini: { env: { GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL } }
+      } else if (appId === "gemini" || appId === "agy") {
+        // Gemini / Antigravity: { env: { GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL } }
         const env = (config as any).env || {};
         return {
           apiKey: env.GEMINI_API_KEY,

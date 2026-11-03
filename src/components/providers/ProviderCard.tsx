@@ -12,6 +12,9 @@ import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
 import KimiAccountQuotaFooter from "@/components/KimiAccountQuotaFooter";
+import AgyAccountQuotaFooter from "@/components/AgyAccountQuotaFooter";
+import { useAgyAccountSupported } from "@/components/providers/forms/AgyOAuthSection";
+import { resolveManagedAccountId } from "@/lib/authBinding";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
@@ -108,7 +111,8 @@ function isOfficialProvider(provider: Provider, appId: AppId): boolean {
     return !apiKey || (typeof apiKey === "string" && apiKey.trim() === "");
   }
 
-  if (appId === "gemini") {
+  if (appId === "gemini" || appId === "agy") {
+    // 无 GEMINI_API_KEY 且无 GOOGLE_GEMINI_BASE_URL → Google 登录的官方模式
     const apiKey = config?.env?.GEMINI_API_KEY;
     const baseUrl = config?.env?.GOOGLE_GEMINI_BASE_URL;
     return (
@@ -118,6 +122,43 @@ function isOfficialProvider(provider: Provider, appId: AppId): boolean {
   }
 
   return false;
+}
+
+/**
+ * Antigravity 官方卡的额度：绑了授权中心账号就按那个号查，不用先切号；切号只实现了
+ * macOS 钥匙串，服务端不支持时按 agy 当前登录查，忽略卡上的绑定。
+ */
+function AgyOfficialQuotaFooter({
+  provider,
+  isCurrent,
+}: {
+  provider: Provider;
+  isCurrent: boolean;
+}) {
+  const supported = useAgyAccountSupported();
+  const boundAccountId = supported
+    ? resolveManagedAccountId(provider.meta, "agy_oauth")?.trim() || null
+    : null;
+  return boundAccountId ? (
+    <AgyAccountQuotaFooter
+      accountId={boundAccountId}
+      inline={true}
+      isCurrent={isCurrent}
+    />
+  ) : (
+    <SubscriptionQuotaFooter appId="agy" inline={true} isCurrent={isCurrent} />
+  );
+}
+
+/** Antigravity 卡片直接显示当前模型，省得进编辑才知道。 */
+function extractAgyModel(provider: Provider): string | null {
+  const config = provider.settingsConfig as Record<string, any>;
+  const model = config?.config?.model?.name;
+  if (typeof model === "string" && model.trim()) return model.trim();
+  const envModel = config?.env?.GEMINI_MODEL;
+  return typeof envModel === "string" && envModel.trim()
+    ? envModel.trim()
+    : null;
 }
 
 export function ProviderCard({
@@ -192,6 +233,11 @@ export function ProviderCard({
   const usageEnabled =
     provider.meta?.usage_script?.enabled ?? isBoundCodexOfficial;
   const isOfficial = isOfficialProvider(provider, appId);
+  const agyModel = useMemo(
+    () => (appId === "agy" ? extractAgyModel(provider) : null),
+    [appId, provider],
+  );
+
   const isCopilot =
     provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
     provider.meta?.usage_script?.templateType === "github_copilot";
@@ -390,21 +436,30 @@ export function ProviderCard({
               )}
             </div>
 
-            {displayUrl && (
-              <button
-                type="button"
-                onClick={handleOpenWebsite}
-                className={cn(
-                  "inline-flex max-w-[320px] items-center text-sm sm:max-w-[420px]",
-                  isClickableUrl
-                    ? "theme-primary-link cursor-pointer hover:underline"
-                    : "text-muted-foreground cursor-default",
-                )}
-                title={displayUrl}
-                disabled={!isClickableUrl}
+            {agyModel ? (
+              <span
+                className="inline-flex max-w-[320px] items-center text-sm text-muted-foreground sm:max-w-[420px]"
+                title={agyModel}
               >
-                <span className="truncate">{displayUrl}</span>
-              </button>
+                <span className="truncate">{agyModel}</span>
+              </span>
+            ) : (
+              displayUrl && (
+                <button
+                  type="button"
+                  onClick={handleOpenWebsite}
+                  className={cn(
+                    "inline-flex max-w-[320px] items-center text-sm sm:max-w-[420px]",
+                    isClickableUrl
+                      ? "theme-primary-link cursor-pointer hover:underline"
+                      : "text-muted-foreground cursor-default",
+                  )}
+                  title={displayUrl}
+                  disabled={!isClickableUrl}
+                >
+                  <span className="truncate">{displayUrl}</span>
+                </button>
+              )
             )}
           </div>
         </div>
@@ -435,6 +490,11 @@ export function ProviderCard({
                 <XaiOauthQuotaFooter
                   meta={provider.meta}
                   inline={true}
+                  isCurrent={isCurrent}
+                />
+              ) : appId === "agy" && isOfficial ? (
+                <AgyOfficialQuotaFooter
+                  provider={provider}
                   isCurrent={isCurrent}
                 />
               ) : appId === "kimi" && isOfficial ? (

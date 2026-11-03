@@ -103,7 +103,14 @@ export function ProviderActions({
   const isFailoverMode =
     !isAdditiveMode && !isOmo && isAutoFailoverEnabled && onToggleFailover;
 
+  // Antigravity 的卡只作用于它打开的终端，没有「启用」：主按钮就是「打开终端」
+  const isTerminalOnly = appId === "agy";
+
   const handleMainButtonClick = () => {
+    if (isTerminalOnly) {
+      onOpenTerminal?.();
+      return;
+    }
     if (failoverUnavailable && isAutoFailoverEnabled && !aggregation) return;
     if (aggregation) {
       aggregation.onToggle();
@@ -134,6 +141,15 @@ export function ProviderActions({
   };
 
   const getMainButtonState = () => {
+    if (isTerminalOnly) {
+      return {
+        disabled: !onOpenTerminal,
+        variant: "default" as const,
+        className: "theme-primary-solid",
+        icon: <Terminal className="h-4 w-4" />,
+        text: t("provider.openTerminal", { defaultValue: "打开终端" }),
+      };
+    }
     if (aggregation)
       return {
         disabled: aggregation.disabled || aggregation.default,
@@ -237,7 +253,7 @@ export function ProviderActions({
   const canDelete =
     !deleteDisabled &&
     !isReadOnly &&
-    (isOmo || isAdditiveMode ? true : !isCurrent);
+    (isOmo || isAdditiveMode || isTerminalOnly ? true : !isCurrent);
   const readOnlyHint = t("provider.managedByHermesHint", {
     defaultValue: "由 Hermes 管理，请在 Hermes Web UI 中编辑",
   });
@@ -365,7 +381,7 @@ export function ProviderActions({
           <BarChart3 className="h-4 w-4" />
         </Button>
 
-        {onOpenTerminal && (
+        {onOpenTerminal && !isTerminalOnly && (
           <Button
             size="icon"
             variant="ghost"

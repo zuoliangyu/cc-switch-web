@@ -1,4 +1,5 @@
 mod blocks;
+pub mod agy;
 pub mod claude;
 pub mod codex;
 mod codex_items;

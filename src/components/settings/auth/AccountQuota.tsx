@@ -28,6 +28,7 @@ import {
 import type { SubscriptionQuota } from "@/types/subscription";
 import { useCopilotQuota } from "@/lib/query/copilot";
 import {
+  useAgyAccountQuota,
   useKimiAccountQuota,
   useXaiOauthQuotaByAccountId,
 } from "@/lib/query/subscription";
@@ -366,6 +367,31 @@ export function KimiAccountQuota({
           ? { kind: "note", text: t("kimi.oauth.noSubscription") }
           : state
       }
+      queriedAt={quota?.queriedAt ?? null}
+      loading={loading}
+      onRefresh={() => void refetch()}
+    />
+  );
+}
+
+/** Antigravity 账号的剩余额度（agy_account_quota(accountId)，不用先切号） */
+export function AgyAccountQuota({
+  accountId,
+  login,
+}: {
+  accountId: string;
+  login: string;
+}) {
+  const { t, i18n } = useTranslation();
+  const {
+    data: quota,
+    isFetching: loading,
+    refetch,
+  } = useAgyAccountQuota(accountId, { enabled: true, autoQuery: false });
+  return (
+    <AccountQuotaColumn
+      login={login}
+      state={subscriptionQuotaState(t, quota, loading, i18n.language)}
       queriedAt={quota?.queriedAt ?? null}
       loading={loading}
       onRefresh={() => void refetch()}

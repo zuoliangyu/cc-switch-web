@@ -234,3 +234,33 @@ export function useKimiAccountQuota(
 
   return useQuotaKeepLastGood(query, accountId);
 }
+
+/**
+ * Antigravity 账号的剩余额度（按授权中心账号 ID）：授权中心那一行和绑了这个号的官方卡共用缓存。
+ */
+export function useAgyAccountQuota(
+  accountId: string,
+  options: UseCodexOauthQuotaOptions = {},
+) {
+  const {
+    enabled = true,
+    autoQuery = false,
+    autoQueryIntervalMinutes = 5,
+  } = options;
+  const refetchInterval =
+    autoQuery && autoQueryIntervalMinutes > 0
+      ? Math.max(autoQueryIntervalMinutes, 1) * 60 * 1000
+      : false;
+  const query = useQuery({
+    queryKey: ["agy_oauth", "quota", accountId],
+    queryFn: () => subscriptionApi.getAgyAccountQuota(accountId),
+    enabled,
+    refetchInterval,
+    refetchIntervalInBackground: Boolean(refetchInterval),
+    refetchOnWindowFocus: Boolean(refetchInterval),
+    staleTime: REFETCH_INTERVAL,
+    retry: 1,
+  });
+
+  return useQuotaKeepLastGood(query, accountId);
+}

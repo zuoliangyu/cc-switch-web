@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 const AUTH_PROVIDER_GITHUB_COPILOT: &str = "github_copilot";
 const AUTH_PROVIDER_CODEX_OAUTH: &str = "codex_oauth";
 const AUTH_PROVIDER_XAI_OAUTH: &str = "xai_oauth";
+const AUTH_PROVIDER_AGY_OAUTH: &str = "agy_oauth";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ManagedAuthAccount {
@@ -48,6 +49,7 @@ fn ensure_auth_provider(auth_provider: &str) -> Result<&str, String> {
         AUTH_PROVIDER_GITHUB_COPILOT => Ok(AUTH_PROVIDER_GITHUB_COPILOT),
         AUTH_PROVIDER_CODEX_OAUTH => Ok(AUTH_PROVIDER_CODEX_OAUTH),
         AUTH_PROVIDER_XAI_OAUTH => Ok(AUTH_PROVIDER_XAI_OAUTH),
+        AUTH_PROVIDER_AGY_OAUTH => Ok(AUTH_PROVIDER_AGY_OAUTH),
         _ => Err(format!("Unsupported auth provider: {auth_provider}")),
     }
 }
@@ -84,6 +86,23 @@ fn map_xai_account(
         github_domain: account.github_domain,
         reauth_required: false,
         requires_reauth: account.requires_reauth,
+    }
+}
+
+fn map_agy_account(
+    account: crate::services::agy_account::AgyAccount,
+    current_account_id: Option<&str>,
+) -> ManagedAuthAccount {
+    ManagedAuthAccount {
+        is_default: current_account_id == Some(account.id.as_str()),
+        login: account.label(),
+        avatar_url: account.picture,
+        authenticated_at: account.authenticated_at,
+        github_domain: "google.com".to_string(),
+        reauth_required: false,
+        requires_reauth: account.requires_reauth,
+        provider: AUTH_PROVIDER_AGY_OAUTH.to_string(),
+        id: account.id,
     }
 }
 
@@ -139,6 +158,24 @@ pub(crate) async fn auth_start_login_internal(
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(map_device_code_response(auth_provider, response))
+        }
+        // 浏览器登录没有用户码：device_code 放这次登录的 id，verification_uri 放授权页地址
+        AUTH_PROVIDER_AGY_OAUTH => {
+            if target_account_id.is_some() {
+                return Err("Targeted re-authentication is only supported for Codex OAuth".into());
+            }
+            let start = crate::commands::agy_account_manager()
+                .start_login()
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(ManagedAuthDeviceCodeResponse {
+                provider: auth_provider.to_string(),
+                device_code: start.flow_id,
+                user_code: String::new(),
+                verification_uri: start.auth_url,
+                expires_in: start.expires_in,
+                interval: 1,
+            })
         }
         _ => unreachable!(),
     }
@@ -200,6 +237,22 @@ pub(crate) async fn auth_poll_for_account_internal(
                 Err(e) => Err(e.to_string()),
             }
         }
+        AUTH_PROVIDER_AGY_OAUTH => {
+            let manager = crate::commands::agy_account_manager();
+            let Some(account) = manager
+                .poll_login(device_code)
+                .await
+                .map_err(|e| e.to_string())?
+            else {
+                return Ok(None);
+            };
+            let current = manager
+                .status()
+                .await
+                .ok()
+                .and_then(|status| status.current_account_id);
+            Ok(Some(map_agy_account(account, current.as_deref())))
+        }
         _ => unreachable!(),
     }
 }
@@ -211,6 +264,11 @@ pub(crate) async fn auth_cancel_login_internal(
     codex_state: &Arc<RwLock<crate::proxy::providers::codex_oauth_auth::CodexOAuthManager>>,
 ) -> Result<bool, String> {
     let auth_provider = ensure_auth_provider(auth_provider)?;
+    if auth_provider == AUTH_PROVIDER_AGY_OAUTH {
+        return Ok(crate::commands::agy_account_manager()
+            .cancel_login(device_code)
+            .await);
+    }
     if auth_provider != AUTH_PROVIDER_CODEX_OAUTH {
         return Err("Login cancellation is only supported for Codex OAuth".to_string());
     }
@@ -257,6 +315,18 @@ pub(crate) async fn auth_list_accounts_internal(
                 .accounts
                 .into_iter()
                 .map(|account| map_xai_account(account, default_account_id.as_deref()))
+                .collect())
+        }
+        AUTH_PROVIDER_AGY_OAUTH => {
+            let status = crate::commands::agy_account_manager()
+                .status()
+                .await
+                .map_err(|e| e.to_string())?;
+            let current = status.current_account_id;
+            Ok(status
+                .accounts
+                .into_iter()
+                .map(|account| map_agy_account(account, current.as_deref()))
                 .collect())
         }
         _ => unreachable!(),
@@ -323,6 +393,25 @@ pub(crate) async fn auth_get_status_internal(
                     .collect(),
             })
         }
+        // 「默认账号」在这里是 agy 当前登录的那个号
+        AUTH_PROVIDER_AGY_OAUTH => {
+            let status = crate::commands::agy_account_manager()
+                .status()
+                .await
+                .map_err(|e| e.to_string())?;
+            let current = status.current_account_id;
+            Ok(ManagedAuthStatus {
+                provider: auth_provider.to_string(),
+                authenticated: !status.accounts.is_empty(),
+                default_account_id: current.clone(),
+                migration_error: None,
+                accounts: status
+                    .accounts
+                    .into_iter()
+                    .map(|account| map_agy_account(account, current.as_deref()))
+                    .collect(),
+            })
+        }
         _ => unreachable!(),
     }
 }
@@ -357,6 +446,11 @@ pub(crate) async fn auth_remove_account_internal(
                 .await
                 .map_err(|e| e.to_string())
         }
+        // 只删 CC Switch 里的副本，不替 agy 登出
+        AUTH_PROVIDER_AGY_OAUTH => crate::commands::agy_account_manager()
+            .remove(account_id)
+            .await
+            .map_err(|e| e.to_string()),
         _ => unreachable!(),
     }
 }
@@ -391,6 +485,11 @@ pub(crate) async fn auth_set_default_account_internal(
                 .await
                 .map_err(|e| e.to_string())
         }
+        // 切 agy 的全局登录（写钥匙串）
+        AUTH_PROVIDER_AGY_OAUTH => crate::commands::agy_account_manager()
+            .switch_to(account_id)
+            .await
+            .map_err(|e| e.to_string()),
         _ => unreachable!(),
     }
 }
@@ -415,6 +514,11 @@ pub(crate) async fn auth_logout_internal(
             let auth_manager = xai_state.write().await;
             auth_manager.clear_auth().await.map_err(|e| e.to_string())
         }
+        AUTH_PROVIDER_AGY_OAUTH => crate::commands::agy_account_manager()
+            .remove_all()
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
         _ => unreachable!(),
     }
 }

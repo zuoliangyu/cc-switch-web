@@ -70,7 +70,8 @@ impl Database {
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
             enabled_pi BOOLEAN NOT NULL DEFAULT 0,
-            enabled_kimi BOOLEAN NOT NULL DEFAULT 0
+            enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
+            enabled_agy BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -102,6 +103,7 @@ impl Database {
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
+            enabled_agy BOOLEAN NOT NULL DEFAULT 0,
             installed_at INTEGER NOT NULL DEFAULT 0,
             content_hash TEXT,
             updated_at INTEGER NOT NULL DEFAULT 0
@@ -382,6 +384,8 @@ impl Database {
             ("mcp_servers", "enabled_pi"),
             ("mcp_servers", "enabled_kimi"),
             ("skills", "enabled_kimi"),
+            ("mcp_servers", "enabled_agy"),
+            ("skills", "enabled_agy"),
         ] {
             if Self::table_exists(conn, table)? {
                 Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
@@ -525,6 +529,11 @@ impl Database {
                         log::info!("迁移数据库从 v17 到 v18（Skills/MCP 添加 Kimi Code 支持）");
                         Self::migrate_v17_to_v18(conn)?;
                         Self::set_user_version(conn, 18)?;
+                    }
+                    18 => {
+                        log::info!("迁移数据库从 v18 到 v19（Skills/MCP 添加 Antigravity 支持）");
+                        Self::migrate_v18_to_v19(conn)?;
+                        Self::set_user_version(conn, 19)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1447,6 +1456,22 @@ impl Database {
                     conn,
                     table,
                     "enabled_kimi",
+                    "BOOLEAN NOT NULL DEFAULT 0",
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// v18 -> v19 迁移：为 mcp_servers 和 skills 添加 enabled_agy 列（上游 c7dceb80，
+    /// 上游编号 v20 -> v21，Web 按自有版本链重新排号）
+    fn migrate_v18_to_v19(conn: &Connection) -> Result<(), AppError> {
+        for table in ["mcp_servers", "skills"] {
+            if Self::table_exists(conn, table)? {
+                Self::add_column_if_missing(
+                    conn,
+                    table,
+                    "enabled_agy",
                     "BOOLEAN NOT NULL DEFAULT 0",
                 )?;
             }

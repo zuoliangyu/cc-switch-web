@@ -937,6 +937,8 @@ impl SkillService {
             // MiniMax Code 数据目录已通过 MINIMAX_DATA_DIR / MAVIS_DATA_DIR 覆盖（上游 06082e18）。
             AppType::Mcode => return Ok(crate::mcode_config::data_dir().join("skills")),
             AppType::Kimi => return Ok(crate::kimi_config::data_dir().join("skills")),
+            // agy 与 Antigravity 桌面版、IDE 共用 ~/.gemini/config 下的 Skills
+            AppType::Agy => return Ok(crate::agy_config::customizations_dir().join("skills")),
         }
 
         // 默认路径：回退到用户主目录下的标准位置
@@ -953,6 +955,7 @@ impl SkillService {
             AppType::Pi => home.join(".pi").join("agent").join("skills"),
             AppType::Mcode => crate::mcode_config::data_dir().join("skills"),
             AppType::Kimi => crate::kimi_config::data_dir().join("skills"),
+            AppType::Agy => home.join(".gemini").join("config").join("skills"),
         })
     }
 
@@ -1849,8 +1852,10 @@ impl SkillService {
                 let exists_in_app = Self::get_app_skills_dir(&app)
                     .map(|dir| dir.join(&dir_name).exists())
                     .unwrap_or(false);
-                if matches!(app, AppType::Pi | AppType::Mcode | AppType::Kimi)
-                    || !apps.is_enabled_for(&app)
+                if matches!(
+                    app,
+                    AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy
+                ) || !apps.is_enabled_for(&app)
                     || exists_in_app
                 {
                     continue;
@@ -2083,9 +2088,9 @@ impl SkillService {
             .map(|skill| (skill.directory.to_lowercase(), skill))
             .collect();
 
-        // Unselected MCode / Kimi directories may have been installed outside CC Switch.
+        // Unselected MCode / Kimi / agy directories may have been installed outside CC Switch.
         // Explicit disable/uninstall handles removal of managed deployments.
-        if app_dir.exists() && !matches!(app, AppType::Mcode | AppType::Kimi) {
+        if app_dir.exists() && !matches!(app, AppType::Mcode | AppType::Kimi | AppType::Agy) {
             for entry in fs::read_dir(&app_dir)? {
                 let entry = entry?;
                 let path = entry.path();
@@ -2760,6 +2765,7 @@ impl SkillService {
         for app in AppType::all() {
             if (matches!(app, AppType::Mcode) && !skill.apps.mcode)
                 || (matches!(app, AppType::Kimi) && !skill.apps.kimi)
+                || (matches!(app, AppType::Agy) && !skill.apps.agy)
             {
                 continue;
             }
@@ -3872,6 +3878,7 @@ mod tests {
                     pi: false,
                     mcode: false,
                     kimi: false,
+                    agy: false,
                 },
             }],
         )
@@ -3934,6 +3941,7 @@ mod tests {
                 pi: false,
                 mcode: false,
                 kimi: false,
+                agy: false,
             },
             installed_at: 0,
             content_hash: Some("disabled-hash".to_string()),
@@ -4083,6 +4091,7 @@ mod tests {
                 pi: false,
                 mcode: false,
                 kimi: false,
+                agy: false,
             },
             installed_at: 123,
             content_hash: Some("backup-hash".to_string()),
@@ -4148,6 +4157,7 @@ mod tests {
                 pi: false,
                 mcode: false,
                 kimi: false,
+                agy: false,
             },
             installed_at: 456,
             content_hash: Some("restore-hash".to_string()),
@@ -4223,6 +4233,7 @@ mod tests {
                 pi: false,
                 mcode: false,
                 kimi: false,
+                agy: false,
             },
             installed_at: 789,
             content_hash: Some("delete-backup-hash".to_string()),

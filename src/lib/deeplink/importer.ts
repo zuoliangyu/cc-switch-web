@@ -300,6 +300,17 @@ const buildProviderSettings = (
           ...(request.model ? { GEMINI_MODEL: request.model } : {}),
         },
       };
+    case "agy":
+      // agy 只认 settings.json 里的 model.name（显示名），Key 和地址只经打开的终端传入
+      return {
+        env: {
+          GEMINI_API_KEY: request.apiKey ?? "",
+          GOOGLE_GEMINI_BASE_URL: endpoint,
+        },
+        ...(request.model
+          ? { config: { model: { name: request.model } } }
+          : {}),
+      };
     case "grokbuild":
       return buildGrokbuildSettings(request);
     case "opencode":
@@ -404,9 +415,10 @@ const importProvider = async (
   // 写进应用的配置文件；旧链接没写时照旧写进去。切换式应用开关关闭时只存进列表：`add` 在
   // 还没有当前供应商时会让这家直接生效，所以走不写客户端配置的路径。
   const additive = isAdditiveLinkApp(app);
-  const activate = additive
-    ? (request.enabled ?? true)
-    : (request.enabled ?? false);
+  // Antigravity 没有「启用」（卡片只用来打开终端），只导入
+  const activate =
+    app !== "agy" &&
+    (additive ? (request.enabled ?? true) : (request.enabled ?? false));
 
   if (additive) {
     await providersApi.add(provider, app, activate);
@@ -474,6 +486,7 @@ const mergeMcpApps = (apps: string | undefined) => {
     openclaw: targets.includes("openclaw"),
     hermes: targets.includes("hermes"),
     pi: targets.includes("pi"),
+    agy: targets.includes("agy"),
     kimi: targets.includes("kimi"),
   };
 };
@@ -519,6 +532,7 @@ const importMcp = async (
               hermes: current.apps.hermes || targetApps.hermes,
               pi: Boolean(current.apps.pi) || targetApps.pi,
               kimi: Boolean(current.apps.kimi) || targetApps.kimi,
+              agy: Boolean(current.apps.agy) || targetApps.agy,
             },
           }
         : {

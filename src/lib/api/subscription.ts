@@ -11,6 +11,10 @@ export const subscriptionApi = {
   getXaiOauthQuota(accountId: string | null): Promise<SubscriptionQuota> {
     return invoke("get_xai_oauth_quota", { accountId });
   },
+  /** Antigravity 某个账号的剩余额度：用它自己的令牌直接查，不用先切号 */
+  getAgyAccountQuota(accountId: string): Promise<SubscriptionQuota> {
+    return invoke("agy_account_quota", { accountId });
+  },
   getCodingPlanQuota(
     baseUrl: string,
     apiKey: string,

@@ -1045,6 +1045,18 @@ export async function fetchWebModelsDev(): Promise<unknown> {
   return requestJson<unknown>("/api/usage/models-dev");
 }
 
+/** Antigravity 官方账号（只有服务端是 macOS 时能用）与模型列表 */
+export const agyWeb = {
+  quota: <T>(accountId: string) =>
+    requestJson<T>(
+      `/api/auth/agy/quota?accountId=${encodeURIComponent(accountId)}`,
+    ),
+  running: <T>() => requestJson<T>("/api/auth/agy/running"),
+  supported: <T>() => requestJson<T>("/api/auth/agy/supported"),
+  models: <T>(payload: Record<string, unknown>) =>
+    requestWithBody<T>("/api/providers/agy/models", "POST", payload),
+};
+
 /** Kimi Code 官方账号设备登录（`/api/auth/kimi/*`） */
 export const kimiOAuthWeb = {
   status: <T>() => requestJson<T>("/api/auth/kimi/status"),

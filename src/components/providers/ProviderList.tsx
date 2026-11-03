@@ -167,6 +167,7 @@ export function ProviderList({
     "hermes",
     "pi",
     "kimi",
+    "agy",
   ].includes(appId);
   const { data: isAutoFailoverEnabled } = useAutoFailoverEnabled(
     appId,

@@ -211,6 +211,7 @@ import {
   removeWebProviderFromLiveConfig,
   addWebProviderToLiveConfig,
   kimiOAuthWeb,
+  agyWeb,
   fetchWebModelsDev,
   saveWebDailyMemoryFile,
   setWebHermesMemory,
@@ -560,6 +561,14 @@ export async function invoke<T>(
         args?.app as AppId,
         args?.id as string,
       )) as T;
+    case "agy_account_quota":
+      return agyWeb.quota<T>(args?.accountId as string);
+    case "agy_account_is_running":
+      return agyWeb.running<T>();
+    case "agy_account_supported":
+      return agyWeb.supported<T>();
+    case "get_agy_models":
+      return agyWeb.models<T>(args ?? {});
     case "kimi_oauth_status":
       return kimiOAuthWeb.status<T>();
     case "kimi_oauth_start":

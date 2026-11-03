@@ -89,8 +89,6 @@ interface ManagedAccountsGroupProps {
   onSetDefault: (accountId: string) => void;
   settingDefault: boolean;
   onRemove: (accountId: string, login: string) => void;
-  /** ⋯ 里的「删除全部账号」；不传就没有这一项（Kimi Code 自己的登录不能替它删） */
-  onRemoveAll?: () => void;
   removing: boolean;
   /** 「默认」徽标和 ⋯ 里「设为默认」的文案（Kimi Code 是「在用」「使用这个账号」） */
   defaultLabel?: string;
@@ -104,7 +102,7 @@ const PILL =
   "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-xs";
 
 /**
- * 授权中心的一个服务（v7 Auth 画板）：标题行（图标、名字、「?」、添加账号、⋯ 删除全部），
+ * 授权中心的一个服务（v7 Auth 画板）：标题行（图标、名字、「?」、添加账号），
  * 每个账号一行（头像、名字 + 默认 / 需要重新登录、第二行、额度、⋯），空状态，
  * 登录等待块。删账号走确认框（列出受影响的供应商），由调用方传进 children。
  */
@@ -128,7 +126,6 @@ export function ManagedAccountsGroup({
   onSetDefault,
   settingDefault,
   onRemove,
-  onRemoveAll,
   defaultLabel,
   setDefaultLabel,
   removing,
@@ -249,37 +246,6 @@ export function ManagedAccountsGroup({
             {t("authCenter.addAccount", { defaultValue: "添加账号" })}
           </Button>
         )}
-        {ready && accounts.length > 1 && onRemoveAll && (
-          <DropdownMenu>
-            <HoverTip content={t("common.more", { defaultValue: "更多" })}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("authCenter.groupMenu", {
-                    defaultValue: "{{service}} 的更多操作",
-                    service: name,
-                  })}
-                >
-                  <MoreHorizontal className="h-[15px] w-[15px]" />
-                </Button>
-              </DropdownMenuTrigger>
-            </HoverTip>
-            <DropdownMenuContent
-              align="end"
-              className="w-[168px] rounded-xl bg-card p-1 shadow-md"
-            >
-              <DropdownMenuItem
-                disabled={removing}
-                onSelect={onRemoveAll}
-                className="h-[30px] rounded-md px-2.5 text-sm text-destructive focus:text-destructive"
-              >
-                {t("authCenter.removeAll", { defaultValue: "删除全部账号…" })}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
 
       {notice && <div className="px-3 pb-3">{notice}</div>}
@@ -362,7 +328,30 @@ export function ManagedAccountsGroup({
                 {t("common.cancel", { defaultValue: "取消" })}
               </Button>
             </div>
-            {login.deviceCode && (
+            {login.deviceCode && !login.deviceCode.user_code && (
+              // 浏览器登录（Antigravity）没有验证码：说明一句，并可重新打开登录页
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="min-w-0 flex-1">
+                  {t("authCenter.pending.browserNote", {
+                    defaultValue:
+                      "已在浏览器打开 {{service}} 的登录页，登录并同意授权后这里会自动更新。",
+                    service: name,
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1"
+                  onClick={openPage}
+                >
+                  {t("authCenter.pending.reopen", {
+                    defaultValue: "重新打开登录页",
+                  })}
+                </Button>
+              </div>
+            )}
+            {login.deviceCode?.user_code && (
               <>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>

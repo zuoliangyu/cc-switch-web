@@ -373,7 +373,8 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
         | AppType::Hermes
         | AppType::Pi
         | AppType::Mcode
-        | AppType::Kimi => false,
+        | AppType::Kimi
+        | AppType::Agy => false,
     }
 }
 
@@ -449,7 +450,8 @@ pub(crate) fn remove_common_config_from_settings(
         | AppType::Hermes
         | AppType::Pi
         | AppType::Mcode
-        | AppType::Kimi => Ok(settings.clone()),
+        | AppType::Kimi
+        | AppType::Agy => Ok(settings.clone()),
     }
 }
 
@@ -510,7 +512,8 @@ fn apply_common_config_to_settings(
         | AppType::Hermes
         | AppType::Pi
         | AppType::Mcode
-        | AppType::Kimi => Ok(settings.clone()),
+        | AppType::Kimi
+        | AppType::Agy => Ok(settings.clone()),
     }
 }
 
@@ -940,6 +943,12 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
         AppType::Kimi => {
             crate::kimi_config::set_provider(&provider.id, provider.settings_config.clone())?
         }
+        AppType::Agy => {
+            // 卡片只作用于它打开的终端，真实的 settings.json 不写（见 agy_config 模块说明）
+            return Err(AppError::Config(
+                "Antigravity configuration requires the provider switch flow".into(),
+            ));
+        }
         AppType::Pi => {
             return Err(AppError::InvalidInput(
                 "Pi providers must use the native models.json adapter".to_string(),
@@ -1024,8 +1033,9 @@ pub(crate) fn sync_current_provider_for_app_to_live(
 pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
     // Sync providers based on mode
     for app_type in AppType::all() {
-        // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）。
-        if matches!(app_type, AppType::Mcode | AppType::Kimi) {
+        // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）；
+        // Antigravity 的卡只作用于它打开的终端，全量同步不写真实 settings.json。
+        if matches!(app_type, AppType::Mcode | AppType::Kimi | AppType::Agy) {
             continue;
         }
         if app_type.is_additive_mode() {
@@ -1166,6 +1176,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
             .map_err(|source| AppError::JsonSerialize { source }),
         AppType::Mcode => Ok(json!(crate::mcode_config::get_providers()?)),
         AppType::Kimi => Ok(json!(crate::kimi_config::get_providers()?)),
+        AppType::Agy => crate::agy_config::read_live_settings(),
     }
 }
 
@@ -1266,6 +1277,15 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             crate::grok_config::strip_grok_mcp_servers_from_settings(&mut settings)?;
             settings
         }
+        AppType::Agy => {
+            let live = crate::agy_config::read_live_settings()?;
+            // agy 首次启动就会写出空的 settings.json；没有 Key、端点、模型的配置
+            // 不是用户的供应商，不导入。
+            if !crate::agy_config::has_managed_content(&live) {
+                return Ok(false);
+            }
+            live
+        }
         // Additive mode apps are handled by the early return above.
         AppType::OpenCode
         | AppType::OpenClaw
@@ -1283,7 +1303,15 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
         settings_config,
         None,
     );
-    provider.category = Some("custom".to_string());
+    // agy 的 Key 只在进程环境里，从不落盘：从 live 导入的一定是 agy 自己的登录。
+    provider.category = Some(
+        if matches!(app_type, AppType::Agy) {
+            "official"
+        } else {
+            "custom"
+        }
+        .to_string(),
+    );
 
     state.db.save_provider(app_type.as_str(), &provider)?;
     state

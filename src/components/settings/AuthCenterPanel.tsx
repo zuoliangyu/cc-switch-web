@@ -4,6 +4,10 @@ import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSect
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
+import {
+  AgyOAuthSection,
+  useAgyAccountSupported,
+} from "@/components/providers/forms/AgyOAuthSection";
 import type { ManagedAuthProvider } from "@/lib/api";
 
 interface AuthCenterPanelProps {
@@ -27,6 +31,7 @@ export function AuthCenterPanel({
   const copilotSectionRef = useRef<HTMLDivElement | null>(null);
   const codexOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const xaiOauthSectionRef = useRef<HTMLDivElement | null>(null);
+  const showAgy = useAgyAccountSupported();
 
   useEffect(() => {
     if (!authScrollTarget) return;
@@ -71,6 +76,12 @@ export function AuthCenterPanel({
       <div className="scroll-mt-4">
         <KimiAccountLogin helpSide="top" />
       </div>
+      {/* Antigravity 切号只实现了 macOS 钥匙串，登录回调也只监听服务端本机：服务端支持时才显示 */}
+      {showAgy && (
+        <div className="scroll-mt-4">
+          <AgyOAuthSection helpSide="top" />
+        </div>
+      )}
     </div>
   );
 }

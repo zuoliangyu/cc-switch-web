@@ -214,6 +214,8 @@ impl ProviderType {
                 ProviderType::Codex // Fallback to Codex-like type
             }
             AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi => ProviderType::Codex,
+            // agy 的设置与 Gemini 同形（env.GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL）
+            AppType::Agy => ProviderType::Gemini,
         }
     }
 
@@ -265,7 +267,7 @@ pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
     match app_type {
         AppType::Claude | AppType::ClaudeDesktop => Box::new(ClaudeAdapter::new()),
         AppType::Codex => Box::new(CodexAdapter::new()),
-        AppType::Gemini => Box::new(GeminiAdapter::new()),
+        AppType::Gemini | AppType::Agy => Box::new(GeminiAdapter::new()),
         AppType::GrokBuild => Box::new(CodexAdapter::new()),
         AppType::OpenCode => {
             // OpenCode doesn't support proxy, fallback to Codex adapter

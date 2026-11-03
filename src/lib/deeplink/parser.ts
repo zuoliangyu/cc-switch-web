@@ -278,6 +278,22 @@ const mergeGeminiConfig = (
   }
 };
 
+/** agy 的 config：`{ env, config }` 或直接是 env；模型优先 URL，其次 config.model.name，再 GEMINI_MODEL */
+const mergeAgyConfig = (
+  request: DeepLinkImportRequest,
+  config: Record<string, unknown>,
+) => {
+  const env = (
+    config.env && typeof config.env === "object" ? config.env : config
+  ) as Record<string, unknown>;
+  if (!request.model) {
+    const nested = (config.config as { model?: { name?: unknown } } | undefined)
+      ?.model?.name;
+    if (typeof nested === "string") request.model = nested;
+  }
+  mergeGeminiConfig(request, env);
+};
+
 const mergeGrokbuildConfig = (
   request: DeepLinkImportRequest,
   payload: DeepLinkConfigPayload,
@@ -340,6 +356,9 @@ const mergeProviderConfig = (
       break;
     case "gemini":
       mergeGeminiConfig(merged, payload.value);
+      break;
+    case "agy":
+      mergeAgyConfig(merged, payload.value);
       break;
     case "grokbuild":
       mergeGrokbuildConfig(merged, payload);

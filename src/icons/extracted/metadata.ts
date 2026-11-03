@@ -285,6 +285,13 @@ export const iconMetadata: Record<string, IconMetadata> = {
     keywords: [],
     defaultColor: "currentColor",
   },
+  antigravity: {
+    name: "antigravity",
+    displayName: "Antigravity",
+    category: "ai-provider",
+    keywords: ["antigravity", "agy", "google"],
+    defaultColor: "#3186FF",
+  },
   kimi: {
     name: "kimi",
     displayName: "Kimi",

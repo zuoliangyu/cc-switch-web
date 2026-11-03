@@ -10,6 +10,7 @@ export const PROVIDER_LINK_APPS: readonly AppId[] = [
   "claude",
   "codex",
   "gemini",
+  "agy",
   "grokbuild",
   "opencode",
   "openclaw",
@@ -22,6 +23,7 @@ export const PROMPT_LINK_APPS: readonly AppId[] = [
   "claude",
   "codex",
   "gemini",
+  "agy",
   "grokbuild",
   "opencode",
   "openclaw",
@@ -35,6 +37,7 @@ export const MCP_LINK_APPS: readonly AppId[] = [
   "claude",
   "codex",
   "gemini",
+  "agy",
   "grokbuild",
   "opencode",
   "openclaw",
@@ -90,6 +93,7 @@ const NATIVE_VALUES: Partial<
     openai_responses: "openai_responses",
   },
   gemini: { gemini_native: "gemini_native" },
+  agy: { gemini_native: "gemini_native" },
   opencode: {
     anthropic: "@ai-sdk/anthropic",
     openai_chat: "@ai-sdk/openai-compatible",
@@ -125,6 +129,7 @@ const defaultApiFormat = (app: AppId): DeepLinkApiFormat => {
     case "grokbuild":
       return "openai_responses";
     case "gemini":
+    case "agy":
       return "gemini_native";
     default:
       return "openai_chat";

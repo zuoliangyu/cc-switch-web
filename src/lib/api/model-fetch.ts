@@ -85,3 +85,17 @@ export function showFetchModelsError(
 }
 
 export async function fetchCodexOauthModels(accountId?: string | null): Promise<FetchedModel[]> { return invoke("get_codex_oauth_models", { accountId: accountId || null }); }
+
+/**
+ * Models reported by the Antigravity runtime installed on the server. With an API key it asks agy's
+ * API-key mode, which only accepts its built-in Gemini models (by display name).
+ */
+export async function getAgyModels(options?: {
+  apiKey?: string;
+  baseUrl?: string;
+}): Promise<FetchedModel[]> {
+  return invoke("get_agy_models", {
+    apiKey: options?.apiKey || null,
+    baseUrl: options?.baseUrl || null,
+  });
+}

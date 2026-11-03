@@ -232,10 +232,25 @@ impl StreamCheckService {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
 
+        // Antigravity 的官方登录卡走 agy 自己的登录，没有可检测的端点（上游同样拒绝）。
+        if matches!(app_type, AppType::Agy)
+            && crate::services::provider::agy_direct::is_official(provider)
+        {
+            return Err(AppError::Message(
+                "Official providers do not expose a reachability-check target".to_string(),
+            ));
+        }
+
         let adapter = get_adapter(app_type);
 
         let base_url = match base_url_override {
             Some(base_url) => base_url,
+            // agy 的 settings 与 Gemini 同形；未配置端点时 agy 自身走 Google 默认端点，这里保持一致
+            None if matches!(app_type, AppType::Agy) => adapter
+                .extract_base_url(provider)
+                .ok()
+                .filter(|url| !url.trim().is_empty())
+                .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_string()),
             None => adapter
                 .extract_base_url(provider)
                 .map_err(|e| AppError::Message(format!("Failed to extract base_url: {e}")))?,
@@ -296,7 +311,7 @@ impl StreamCheckService {
                 )
                 .await
             }
-            AppType::Gemini => {
+            AppType::Gemini | AppType::Agy => {
                 Self::check_gemini_stream(
                     &client,
                     &base_url,
@@ -1343,7 +1358,7 @@ impl StreamCheckService {
             )
             .map(|model| model.model)
             .unwrap_or_else(|| config.codex_model.clone()),
-            AppType::Gemini => Self::extract_env_model(provider, "GEMINI_MODEL")
+            AppType::Gemini | AppType::Agy => Self::extract_env_model(provider, "GEMINI_MODEL")
                 .unwrap_or_else(|| config.gemini_model.clone()),
             AppType::OpenCode => {
                 // OpenCode uses models map in settings_config

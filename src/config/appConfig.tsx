@@ -27,6 +27,7 @@ export const APP_IDS: AppId[] = [
   "pi",
   "mcode",
   "kimi",
+  "agy",
 ];
 
 /** Claude Desktop、OpenClaw 不由 CC Switch 管理 MCP；Pi 1.0 起内置 MCP（`~/.pi/agent/mcp.json`） */
@@ -40,6 +41,7 @@ export const MCP_APP_IDS = [
   "pi",
   "mcode",
   "kimi",
+  "agy",
 ] as const satisfies readonly AppId[];
 export type McpAppId = (typeof MCP_APP_IDS)[number];
 
@@ -52,6 +54,7 @@ export const SKILLS_APP_IDS = [
   "hermes",
   "mcode",
   "kimi",
+  "agy",
   "pi",
 ] as const satisfies readonly AppId[];
 
@@ -134,6 +137,12 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-primary",
     badgeClass: "theme-chip-primary border-0 gap-1.5",
   },
+  agy: {
+    label: "Antigravity",
+    icon: <ProviderIcon icon="antigravity" name="Antigravity" size={14} />,
+    activeClass: "theme-chip-primary",
+    badgeClass: "theme-chip-primary border-0 gap-1.5",
+  },
   kimi: {
     label: "Kimi Code",
     icon: <ProviderIcon icon="kimi" name="Kimi Code" size={14} />,
@@ -142,4 +151,9 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, agy: true };
+
+/** 用 Gemini 那套表单（env + settings.json）的应用：Antigravity 的卡与 Gemini 同形 */
+export function usesGeminiStyleForm(appId: string): boolean {
+  return appId === "gemini" || appId === "agy";
+}

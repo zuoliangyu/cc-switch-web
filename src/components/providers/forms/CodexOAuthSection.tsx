@@ -114,7 +114,6 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
     removeAccount,
     setDefaultAccount,
     cancelAuth,
-    logout,
     refetchStatus,
   } = useCodexOauth();
   const accountUsers = useManagedAccountUsers("codex_oauth", defaultAccountId);
@@ -160,11 +159,8 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
   const confirmRemove = () => {
     const target = removeTarget;
     setRemoveTarget(null);
-    if (!target) return;
-    if (target.kind === "all") {
-      logout();
-      return;
-    }
+    // 标题行没有「删除全部」，只会是单个账号
+    if (target?.kind !== "one") return;
     removeAccount(target.accountId);
     if (selectedAccountId === target.accountId) {
       onSelectionInvalidated?.();
@@ -242,12 +238,16 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
           <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-content-available-width)]">
             {requireExplicitSelection && !selectedAccountId && (
               <SelectItem value="__official_account_required__" disabled>
-                <span className="text-muted-foreground">{accountChoicePlaceholder}</span>
+                <span className="text-muted-foreground">
+                  {accountChoicePlaceholder}
+                </span>
               </SelectItem>
             )}
             {!allowUnboundSelection && !selectedAccountId && (
               <SelectItem value="__managed_account_required__" disabled>
-                <span className="text-muted-foreground">{accountChoicePlaceholder}</span>
+                <span className="text-muted-foreground">
+                  {accountChoicePlaceholder}
+                </span>
               </SelectItem>
             )}
             {!nativeLoginOnly &&
@@ -470,12 +470,6 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
       settingDefault={isSettingDefaultAccount}
       onRemove={(accountId, login) =>
         setRemoveTarget({ kind: "one", accountId, login })
-      }
-      onRemoveAll={() =>
-        setRemoveTarget({
-          kind: "all",
-          accountIds: accounts.map((account) => account.id),
-        })
       }
       removing={isRemovingAccount}
       login={{

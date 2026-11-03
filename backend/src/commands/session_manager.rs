@@ -22,10 +22,20 @@ pub async fn get_session_messages_internal(
 }
 
 pub async fn launch_session_terminal_internal(
+    db: &crate::database::Database,
     command: String,
     cwd: Option<String>,
     customConfig: Option<String>,
 ) -> Result<bool, String> {
+    // Antigravity 第三方 Key 的会话：命令里只有私有目录、没有 Key，按「打开终端」的方式补上
+    // 那张卡的 Key 再恢复。
+    if let Some((provider, conversation)) =
+        crate::services::provider::agy_direct::key_resume_target(db, &command)
+            .map_err(|e| e.to_string())?
+    {
+        crate::commands::open_agy_resume_terminal(&provider, &conversation, cwd)?;
+        return Ok(true);
+    }
     spawn_blocking(move || {
         crate::commands::launch_terminal_command_internal(command, cwd, customConfig)
     })

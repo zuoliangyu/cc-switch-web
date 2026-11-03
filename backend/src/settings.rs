@@ -48,6 +48,8 @@ pub struct VisibleApps {
     pub mcode: bool,
     #[serde(default = "default_true")]
     pub kimi: bool,
+    #[serde(default = "default_true")]
+    pub agy: bool,
 }
 
 impl Default for VisibleApps {
@@ -63,6 +65,7 @@ impl Default for VisibleApps {
             pi: true,
             mcode: true,
             kimi: true,
+            agy: true,
         }
     }
 }
@@ -319,6 +322,9 @@ pub struct AppSettings {
     /// 当前 OpenClaw 供应商 ID（本地存储，对 OpenClaw 可能无意义，但保持结构一致）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_provider_openclaw: Option<String>,
+    /// 当前 Antigravity 供应商（本地存储；只决定「打开终端」默认用哪张卡）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_provider_agy: Option<String>,
 
     // ===== Skill 同步设置 =====
     /// Skill 同步方式：auto（默认，优先 symlink）、symlink、copy
@@ -393,6 +399,7 @@ impl Default for AppSettings {
             current_provider_grokbuild: None,
             current_provider_opencode: None,
             current_provider_openclaw: None,
+            current_provider_agy: None,
             skill_sync_method: SyncMethod::default(),
             skill_storage_location: SkillStorageLocation::default(),
             webdav_sync: None,
@@ -923,6 +930,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::GrokBuild => settings.current_provider_grokbuild.clone(),
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
+        AppType::Agy => settings.current_provider_agy.clone(),
         AppType::Hermes => None,
         AppType::Pi | AppType::Mcode | AppType::Kimi => None,
     }
@@ -945,6 +953,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::GrokBuild => settings.current_provider_grokbuild = id.map(|s| s.to_string()),
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
+        AppType::Agy => settings.current_provider_agy = id.map(|s| s.to_string()),
         AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi => {}
     }
 

@@ -209,6 +209,19 @@
         "oauthTitle": "OAuth Authentication Mode",
         "oauthHint": "Google official uses OAuth personal authentication, no need to fill in API Key. The browser will automatically open for login on first use.",
         "apiKeyPlaceholder": "Enter Gemini API Key"
+      },
+      "agy": {
+        "account": "Account",
+        "accountFollow": "Follow agy's current sign-in",
+        "accountMissing": "An account not on this computer",
+        "accountHelp": "With an account selected, Open Terminal first switches agy's sign-in to it (this applies globally: agy sessions started afterwards use it). Add accounts in the Auth Center.",
+        "configJson": "Model configuration (CC Switch format)",
+        "configJsonHint": "Only model settings are supported here. Change other Antigravity options in agy; manage MCP in the MCP panel.",
+        "endpointHelp": "Leave empty for Google's default API. Third-party endpoints must support the Gemini API and agy's built-in Gemini models.",
+        "modelHelp": "Use the display name from the model list (Fetch Models). Applies to that session only.",
+        "keyFieldsHint": "The model, key and endpoint are only used by \"Open Terminal\" and are never written to Antigravity's own settings.",
+        "envFile": "Launcher environment variables",
+        "envFileHint": "When agy is started from the card's \"Open Terminal\", CC Switch passes the API key and endpoint to that one agy process only and never writes them to a file. Other environment variables are not applied."
       }
     }
   },
@@ -918,6 +931,7 @@
     "hermes": "Hermes",
     "pi": "Pi",
     "mcode": "MiniMax Code",
+    "agy": "Antigravity",
     "kimi": "Kimi Code"
   },
   "appSwitcher": {
@@ -1041,6 +1055,7 @@
     "deleteSessionEllipsis": "Delete sessions",
     "deleteEllipsis": "Delete",
     "selectSessionLabel": "Select {{title}}",
+    "agyDeleteHint": "Delete this session in Antigravity to also remove its runtime state",
     "mcodeDeleteHint": "Delete it in MiniMax Code",
     "groupMeta": "{{count}} sessions · {{time}}",
     "bucketToday": "Today",
@@ -3614,6 +3629,12 @@
     "geminiPro": "Pro",
     "geminiFlash": "Flash",
     "geminiFlashLite": "Flash Lite",
+    "agyGemini": "Gemini",
+    "agyThirdParty": "Claude/GPT",
+    "agyGeminiFiveHour": "Gemini 5-hour",
+    "agyGeminiWeekly": "Gemini weekly",
+    "agyThirdPartyFiveHour": "Claude/GPT 5-hour",
+    "agyThirdPartyWeekly": "Claude/GPT weekly",
     "copilotPremium": "Premium",
     "weeklyLimit": "Weekly",
     "monthly": "Monthly",
@@ -3760,6 +3781,10 @@
       "times": "×{{count}}",
       "inTime": "in {{time}}",
       "showAll": "Show when each of the {{count}} resets expires"
+    },
+    "windows": {
+      "title": "All limits",
+      "showAll": "Show all limits"
     }
   },
   "mcpPage": {
@@ -3992,12 +4017,11 @@
       "helpTitle": "How {{service}} accounts are used",
       "copilotHelp": "Used by GitHub Copilot presets in Claude Code and Claude Desktop. Providers without a chosen account use the Default one.",
       "chatgptHelp": "Used by ChatGPT presets in Claude Code and Claude Desktop, and by Codex's official-login binding. Providers without a chosen account use the Default one.",
-      "xaiHelp": "Used by xAI presets in Claude Code, Claude Desktop and Codex. Providers without a chosen account use the Default one."
+      "xaiHelp": "Used by xAI presets in Claude Code, Claude Desktop and Codex. Providers without a chosen account use the Default one.",
+      "agyHelp": "The official sign-in for Antigravity CLI (agy). agy can only be signed in to one account at a time; Switch replaces agy's sign-in with the selected account, and agy sessions started afterwards use it. The account agy was already signed in with is added here automatically, so switching away never loses it."
     },
     "addAccount": "Add account",
-    "groupMenu": "More actions for {{service}}",
     "accountMenu": "More actions for {{login}}",
-    "removeAll": "Delete all accounts",
     "removeAccount": "Delete account",
     "setDefault": "Set as default",
     "reauth": "Sign in again",
@@ -4023,6 +4047,8 @@
       "copied": "Code copied.",
       "open": "Open the authorization page",
       "note": "The authorization page is open in your browser; this updates on its own when you finish. Mind {{service}}'s terms of use.",
+      "browserNote": "The {{service}} sign-in page is open in your browser. Sign in and grant access, and this updates automatically.",
+      "reopen": "Reopen sign-in page",
       "linkCopied": "Sign-in link copied."
     },
     "toast": {
@@ -4034,6 +4060,17 @@
       "loading": "Checking quota…",
       "refresh": "Refresh quota",
       "refreshAria": "Refresh quota for {{login}}"
+    },
+    "agy": {
+      "addedOn": "Added {{date}}",
+      "statusLoadFailed": "Couldn't read Antigravity accounts. Try again.",
+      "empty": "No Antigravity accounts yet. The account agy is signed in with appears here automatically.",
+      "current": "In use by agy",
+      "switchTo": "Switch agy to this account",
+      "removeNote": "agy stays signed in: if agy is using this account, it keeps working after removal.",
+      "switched": "Switched. New agy sessions will use this account.",
+      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
+      "reauthNote": "Sign-in expired, can't switch to it"
     }
   },
   "kimi": {

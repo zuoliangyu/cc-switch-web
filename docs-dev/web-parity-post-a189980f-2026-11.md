@@ -625,34 +625,34 @@
 | `f460410f` | v4.0.17 | feat(hermes): warn when a provider key is a Hermes built-in provider id | 5a 供应商与全局 UI | 需新建或映射：`config/hermesBuiltinProviderIds.ts` | 待迁移 |
 | `e172f37d` | v4.0.17 | chore(release): v4.0.17 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `19798e2f` | v4.0.17 | docs(release): add v4.0.17 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `c7dceb80` | v4.0.18 | feat(agy): integrate Antigravity CLI management (#8268) | 2c Antigravity | Antigravity 应用接入；Web 需新增 AppType::Agy；需新建或映射：`agy_config.rs`、`agy_smoke_tests.rs`等 17 个 | 待迁移 |
-| `3854c613` | v4.0.18 | refactor(agy): launch API-key providers from the terminal instead of a shell wrapper | 2c Antigravity | 需新建或映射：`agy_config.rs`、`agy_smoke_tests.rs`等 5 个 | 待迁移 |
-| `b667b00a` | v4.0.18 | feat(agy): show the model on cards and attribute session usage to it | 2c Antigravity | 需新建或映射：`agy_config.rs`、`services/session_usage_agy.rs` | 待迁移 |
-| `dfe10081` | v4.0.18 | feat(agy): share prompts with key profiles, resume key sessions, price usage | 2c Antigravity | 需新建或映射：`agy_config.rs`、`services/provider/agy_direct.rs`等 5 个 | 待迁移 |
-| `1b4cd547` | v4.0.18 | feat(agy): show the signed-in quota on the official card | 2c Antigravity | 需新建或映射：`services/subscription_agy.rs` | 待迁移 |
-| `94126795` | v4.0.18 | fix(agy): show only the typed prompt in sessions and describe the quota check | 2c Antigravity | 需新建或映射：`session_manager/providers/agy.rs` | 待迁移 |
-| `2e22ca20` | v4.0.18 | feat(agy): give Antigravity its own icon and manage the CLI on the Apps page | 2c Antigravity | 需新建或映射：`agy_config.rs`、`commands/tool_uninstall.rs`等 3 个 | 待迁移 |
-| `fb91155a` | v4.0.18 | fix(agy): accept the empty mcp_config.json agy creates on first run | 2c Antigravity | 需新建或映射：`mcp/agy.rs` | 待迁移 |
-| `9a10e4f7` | v4.0.18 | feat(agy): replace the enable button with Open Terminal | 2c Antigravity | 需新建或映射：`agy_config.rs`、`agy_smoke_tests.rs`等 9 个 | 待迁移 |
-| `c776fd0e` | v4.0.18 | feat(agy): trim the form hint and require a key on custom cards | 2c Antigravity | 需新建或映射：`components/providers/presentation.ts` | 待迁移 |
+| `c7dceb80` | v4.0.18 | feat(agy): integrate Antigravity CLI management (#8268) | 2c Antigravity | 2c：Antigravity CLI 管理（agy_config、AppType::Agy、MCP/技能/提示词、供应商只存库不写 live、会话与用量；Web schema v19 enabled_agy）；#8268 旧启动器清理函数 Web 从未安装，保留为 dead_code | 已迁移 |
+| `3854c613` | v4.0.18 | refactor(agy): launch API-key providers from the terminal instead of a shell wrapper | 2c Antigravity | 2c：API Key 供应商经终端启动（Unix 环境变量写 0600 临时文件 source 后删除；Windows set 行），复用 Web 的 launch_terminal_command | 已迁移 |
+| `b667b00a` | v4.0.18 | feat(agy): show the model on cards and attribute session usage to it | 2c Antigravity | 2c：卡片显示模型（extractAgyModel），会话用量按模型归属 | 已迁移 |
+| `dfe10081` | v4.0.18 | feat(agy): share prompts with key profiles, resume key sessions, price usage | 2c Antigravity | 2c：Key 配置共享提示词、Key 会话恢复（agy_direct::key_resume_target）、用量计价；Web 原本只精确匹配定价，一并移植上游的候选匹配（去命名空间、日期/版本/推理档后缀、前缀匹配） | 已迁移 |
+| `1b4cd547` | v4.0.18 | feat(agy): show the signed-in quota on the official card | 2c Antigravity | 2c：官方卡显示登录账号额度（订阅额度 tool=agy） | 已迁移 |
+| `94126795` | v4.0.18 | fix(agy): show only the typed prompt in sessions and describe the quota check | 2c Antigravity | 2c：会话只显示用户输入的提示词；用量脚本弹窗按 Gemini 读 agy 凭据 | 已迁移 |
+| `2e22ca20` | v4.0.18 | feat(agy): give Antigravity its own icon and manage the CLI on the Apps page | 2c Antigravity | 2c：Antigravity 图标（内联 SVG）与 Apps 页 CLI 安装/升级/卸载（后端生命周期已在 1d 随上游最终版就位） | 已迁移 |
+| `fb91155a` | v4.0.18 | fix(agy): accept the empty mcp_config.json agy creates on first run | 2c Antigravity | 2c：接受 agy 首次运行生成的空 mcp_config.json（mcp/agy.rs 上游最终版） | 已迁移 |
+| `9a10e4f7` | v4.0.18 | feat(agy): replace the enable button with Open Terminal | 2c Antigravity | 2c：卡片主按钮由「启用」改为「打开终端」；上游的 OpenTerminalDialog（选终端/目录）随 5a 处理，Web 直接调用服务端打开终端 | 部分迁移 |
+| `c776fd0e` | v4.0.18 | feat(agy): trim the form hint and require a key on custom cards | 2c Antigravity | 2c：表单提示精简，自定义卡要求 Key（EndpointField 增加 required/help） | 已迁移 |
 | `1ef08d5e` | v4.0.18 | fix(windows): stop in-app updates from rebooting the machine (#8628) | — | MSI 应用内更新重启；Web 无安装器 | 不适用 |
 | `c1fd26bd` | v4.0.18 | fix(ui): show compact mode-colored connection badge in header (#8634) | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeTabs.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `ab5d4a12` | v4.0.18 | fix(ui): trim redundant provider and settings helper copy (#8633) | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/StructuredOptionsEditor.tsx` | 待迁移 |
 | `cdfdff5e` | v4.0.18 | fix(installer): make Windows desktop shortcut optional (#8601) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `92ec18d7` | v4.0.18 | docs(aggregation): correct the workaround for the exhausted-quota lock | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `711a4127` | v4.0.18 | fix(usage): only list apps shown on the Apps page in the app filter | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `fdbac61c` | v4.0.18 | feat(agy): manage Antigravity official accounts in the Auth Center backend | 2c Antigravity | 需新建或映射：`commands/agy_account.rs`、`services/agy_account/keychain.rs`等 5 个 | 待迁移 |
-| `86271879` | v4.0.18 | feat(agy): add an Antigravity group to the Auth Center | 2c Antigravity | 需新建或映射：`services/agy_account/mod.rs`、`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
-| `0af8b772` | v4.0.18 | feat(agy): bind official cards to an Antigravity account | 2c Antigravity | 需新建或映射：`components/providers/OpenTerminalDialog.tsx`、`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
+| `fdbac61c` | v4.0.18 | feat(agy): manage Antigravity official accounts in the Auth Center backend | 2c Antigravity | 2c：授权中心 Antigravity 官方账号后端（Web 单例管理器 + /api/auth 统一接口）；切号依赖 macOS 钥匙串，浏览器登录回调落在服务端本机，仅服务端为 macOS 且浏览器在同机时可用，其他平台前端隐藏该分组 | 部分迁移 |
+| `86271879` | v4.0.18 | feat(agy): add an Antigravity group to the Auth Center | 2c Antigravity | 2c：授权中心 Antigravity 分组（无用户码的浏览器登录，显示提示与「重新打开登录页」） | 已迁移 |
+| `0af8b772` | v4.0.18 | feat(agy): bind official cards to an Antigravity account | 2c Antigravity | 2c：官方卡绑定 Antigravity 账号（AgyAccountSelect，authBinding agy_oauth） | 已迁移 |
 | `81634602` | v4.0.18 | fix(pricing): price deepseek-v4.1-flash as V4.1 Flash | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `5a08e230` | v4.0.18 | feat(agy): query each Antigravity account's quota directly | 2c Antigravity | 需新建或映射：`commands/agy_account.rs`、`services/agy_account/mod.rs`等 6 个 | 待迁移 |
-| `8f9525b0` | v4.0.18 | fix(agy): explain why an account is not eligible for Antigravity | 2c Antigravity | 需新建或映射：`services/agy_account/quota.rs` | 待迁移 |
-| `c0490b05` | v4.0.18 | feat(agy): show each account's quota in the Auth Center | 2c Antigravity | 需新建或映射：`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
-| `2c63012b` | v4.0.18 | perf(agy): query the signed-in account's quota without starting agy | 2c Antigravity | 需新建或映射：`commands/agy_account.rs`、`services/agy_account/mod.rs`等 4 个 | 待迁移 |
-| `997e78b5` | v4.0.18 | feat(agy): show the bound account's quota on official cards | 2c Antigravity | 需新建或映射：`components/AgyAccountQuotaFooter.tsx` | 待迁移 |
-| `276eff8d` | v4.0.18 | feat(agy): open all four quota windows from the card's quota column | 2c Antigravity | 合并到 Web 已改文件 | 待迁移 |
-| `e91689f2` | v4.0.18 | fix(agy): drop the Antigravity-only note on the usage page | 2c Antigravity | 合并到 Web 已改文件 | 待迁移 |
-| `6fabe63a` | v4.0.18 | fix(agy): show Antigravity session-log rows as "Session log" | 2c Antigravity | 需新建或映射：`components/usage/providerLabel.ts` | 待迁移 |
+| `5a08e230` | v4.0.18 | feat(agy): query each Antigravity account's quota directly | 2c Antigravity | 2c：按账号直接查询额度（/api/auth/agy/quota?accountId=） | 已迁移 |
+| `8f9525b0` | v4.0.18 | fix(agy): explain why an account is not eligible for Antigravity | 2c Antigravity | 2c：说明账号不具备 Antigravity 资格的原因（quota.rs 上游最终版） | 已迁移 |
+| `c0490b05` | v4.0.18 | feat(agy): show each account's quota in the Auth Center | 2c Antigravity | 2c：授权中心每个账号显示额度 | 已迁移 |
+| `2c63012b` | v4.0.18 | perf(agy): query the signed-in account's quota without starting agy | 2c Antigravity | 2c：不启动 agy 查询登录账号额度 | 已迁移 |
+| `997e78b5` | v4.0.18 | feat(agy): show the bound account's quota on official cards | 2c Antigravity | 2c：官方卡显示绑定账号额度（AgyOfficialQuotaFooter，仅 agy 官方卡需要 QueryClient） | 已迁移 |
+| `276eff8d` | v4.0.18 | feat(agy): open all four quota windows from the card's quota column | 2c Antigravity | 2c：卡片额度列合并成组时整列做成下拉列出四档（Web 无「剩余/已用」显示切换，tierBreakdown 去掉 display 参数；Web 无 emphasis 着色，整段按档上色） | 已迁移 |
+| `e91689f2` | v4.0.18 | fix(agy): drop the Antigravity-only note on the usage page | 2c Antigravity | 2c：用量页不显示 Antigravity 专属说明（Web 从未加入该说明与键，无需改动） | 已迁移 |
+| `6fabe63a` | v4.0.18 | fix(agy): show Antigravity session-log rows as "Session log" | 2c Antigravity | 2c 顺延 5b：Antigravity 会话日志行显示为「会话日志」依赖 components/usage/providerLabel.ts，随 dd07b8f4/6f4d365b 一并迁移 | 待迁移 |
 | `e59252ee` | v4.0.18 | feat(presets): promote EveryAPI to a full sponsor | — | EveryAPI 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `8d4ec90f` | v4.0.18 | chore(presets): remove ZetaAPI sponsor and presets | 1a 预设/定价/图标 | 1a：九类预设移除 ZetaAPI，删除三语推广文案；Web 原本未登记其图标 | 已迁移 |
 | `0a41250d` | v4.0.18 | feat(presets): add DIT.ai sponsor presets across nine apps | — | DIT.ai 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
@@ -701,11 +701,11 @@
 | `c3ad9bb0` | v4.0.19 | fix(model-fetch): try compatible-mode models endpoint for /apps/anthropic base URLs (#8755) | 1d 资源/设置/工具 | 1d：/apps/anthropic 地址拉取模型时追加 compatible-mode 端点候选 | 已迁移 |
 | `e5b04221` | v4.0.19 | fix(subscription): select Claude Keychain credentials by account (#8764) | 1c 会话/用量导入 | Web 只从 ~/.claude/.credentials.json 读取 Claude 订阅凭据，不读 macOS Keychain | 不适用 |
 | `3494d0d1` | v4.0.19 | chore(presets): add V-API backup endpoints | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `b5aa7fbb` | v4.0.19 | fix(agy): show Gemini quota when querying Google directly | 2c Antigravity | 需新建或映射：`services/agy_account/quota.rs` | 待迁移 |
+| `b5aa7fbb` | v4.0.19 | fix(agy): show Gemini quota when querying Google directly | 2c Antigravity | 2c：直接查 Google 时显示 Gemini 额度 | 已迁移 |
 | `2fbd9c70` | v4.0.19 | fix(hermes): launch the dashboard inside WSL when Hermes lives there | 1d 资源/设置/工具 | 1d：Hermes 位于 WSL 时在对应发行版的登录 shell 里启动 dashboard | 已迁移 |
 | `7ecce7c7` | v4.0.19 | fix(proxy): carry encrypted-only reasoning as empty thinking for Claude clients | 1b 代理协议 | 1b：只有密文的推理以空 thinking 交给 Claude 客户端 | 已迁移 |
 | `10e0aa23` | v4.0.19 | fix(deeplink): don't let a finished import close a newer link's confirmation | 1d 资源/设置/工具 | 1d：导入完成只关闭仍在显示的请求，不误关新到链接的确认框 | 已迁移 |
-| `9cb6b6d7` | v4.0.19 | fix(agy): run background agy commands without a console window on Windows | 2c Antigravity | 需新建或映射：`agy_config.rs`、`services/subscription_agy.rs` | 待迁移 |
+| `9cb6b6d7` | v4.0.19 | fix(agy): run background agy commands without a console window on Windows | 2c Antigravity | 2c：Windows 下后台 agy 命令不弹控制台窗口 | 已迁移 |
 | `50e091b0` | v4.0.19 | fix(usage): step 7/14/30-day presets back by calendar days across DST | 5b 用量/额度 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `e53ca7e8` | v4.0.19 | fix(usage): tighten request log column spacing | 5b 用量/额度 UI | 需新建或映射：`components/usage/usageTable.ts` | 待迁移 |
 | `bada9a4b` | v4.0.19 | fix(models): don't borrow a vendor-hosted entry that points at another vendor | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -731,7 +731,7 @@
 | `9decd60e` | v4.0.20 | feat(i18n): complete Turkish catalog (#8616) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `bd50984e` | v4.0.20 | fix(forms): reflect automatic Copilot protocol routing (#8196) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `c72c82cf` | v4.0.20 | feat(auth): support browser login for managed ChatGPT accounts (#8288) | 3 官方账号 | 托管 ChatGPT 账号浏览器登录；回调监听需在 Web 部署下可达；需新建或映射：`proxy/providers/codex_oauth_auth/browser.rs` | 待迁移 |
-| `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 需新建或映射：`services/session_usage_agy.rs`、`services/session_usage_agy/native_models.rs` | 待迁移 |
+| `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 2c：从原生 generations 恢复子代理用量模型（native_models.rs） | 已迁移 |
 | `5bc562ce` | v4.0.20 | feat(apps): group the apps page into installed and not installed sections | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `72b056f6` | v4.0.20 | fix(usage): show the balance amount even when it is used up | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 1d：额度失败文案改为“额度查询失败”；托盘部分不适用 | 已迁移 |
@@ -753,7 +753,7 @@
 | `de0a235a` | v4.0.21 | fix(proxy): send Codex requests to the provider table that model_provider selects (#8849) | 1b 代理协议 | 1b：Codex 请求发往 model_provider 选中的供应商表地址 | 已迁移 |
 | `e8e1cfbf` | v4.0.21 | fix(usage): keep Codex remote-compaction usage billable across sync passes (#8879) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `93a3e8ec` | v4.0.21 | feat(auth-center): always show Add account in the header | 2b Kimi Code | 2b：授权中心标题行始终显示“添加账号”，空状态只留说明；Web 的 Codex 组没有登录方式选择，未引入 loginControl 用法；删除三语孤立键 | 已迁移 |
-| `ee83fd89` | v4.0.21 | refactor(auth-center): drop the header "Delete all accounts" menu | 2c Antigravity | 需新建或映射：`components/providers/forms/AgyOAuthSection.tsx` | 待迁移 |
+| `ee83fd89` | v4.0.21 | refactor(auth-center): drop the header "Delete all accounts" menu | 2c Antigravity | 2c：授权中心标题行去掉「删除全部账号」菜单（ManagedAccountsGroup 移除 onRemoveAll，Codex/Copilot/xAI 同步；xAI 表单内「删除全部 xAI 账号」保留），删除 groupMenu/removeAll 键 | 已迁移 |
 | `882e7a6a` | v4.0.21 | fix(profile): capture "no active prompt" so applying a project disables the current prompt | 1d 资源/设置/工具 | 1d：项目快照记录“没有启用的提示词”，应用项目时停用当前启用项 | 已迁移 |
 | `56fa007f` | v4.0.21 | feat(presets): use DeepSeek Flash instead of Pro everywhere | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `da0c84e4` | v4.0.21 | fix(tray): keep lightweight mode across restarts | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
@@ -830,9 +830,9 @@
 | `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | Copilot 原生 /v1/messages 透传依赖 Web 尚无的 Copilot supported_endpoints 解析与按格式响应转换，转入 3 官方账号与 Copilot 一并处理 | 待迁移 |
 | `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerConfigUtils.test.ts` | 待迁移 |
 | `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 需新建或映射：`commands/dsh.rs`、`deeplink/mcp.rs`等 11 个 | 待迁移 |
-| `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | SQLite 测试守卫随 Antigravity 会话用量迁移；WSL2 CI 部分不适用；需新建或映射：`services/session_usage_agy.rs`、`services/session_usage_agy/native_models.rs`等 3 个 | 待迁移 |
+| `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
 | `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `115677a1` | v4.0.22 | fix(agy): let a transcript win over another root's index-only entry | 2c Antigravity | 需新建或映射：`session_manager/providers/agy.rs` | 待迁移 |
+| `115677a1` | v4.0.22 | fix(agy): let a transcript win over another root's index-only entry | 2c Antigravity | 2c：会话 transcript 优先于其他根目录仅有索引的条目 | 已迁移 |
 | `11485ee7` | v4.0.22 | fix(codex): log the underlying cause when the official model list fetch fails | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `ed494fbc` | v4.0.22 | fix(opencode): read the V2 settings.baseURL in the connectivity check | 1d 资源/设置/工具 | 1d：OpenCode 连通性检查识别 V2 原生格式（settings.baseURL/apiKey、package、顶层 headers），Web 版按包名归一到对应 AI SDK 协议 | 已迁移 |
 | `7201d81b` | v4.0.22 | feat(sync): let users clear the saved WebDAV config | 1d 资源/设置/工具 | 1d：可清除本机保存的 WebDAV 配置（新增 /api/webdav/settings/clear）；自动上传在同步锁内重新读取设置 | 已迁移 |
@@ -848,7 +848,7 @@
 | `2baa6862` | v4.0.22 | feat(dsh): add DeepSeek official account sign-in like Kimi Code | 2e DeepSeek Harness | 需新建或映射：`components/providers/DshAccount.tsx`、`components/providers/presentation.ts`等 3 个 | 待迁移 |
 | `dfa29123` | v4.0.22 | feat(providers): align the shared model editor with Pi and Kimi | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `f283a55f` | v4.0.22 | fix(shell): show DeepSeek Harness by its full name in the sidebar | 5a 供应商与全局 UI | 需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
-| `4ed07150` | v4.0.22 | test(agy): compare transcript paths as Path so Windows separators match | 2c Antigravity | 需新建或映射：`session_manager/providers/agy.rs` | 待迁移 |
+| `4ed07150` | v4.0.22 | test(agy): compare transcript paths as Path so Windows separators match | 2c Antigravity | 2c：测试按 Path 比较 transcript 路径，兼容 Windows 分隔符 | 已迁移 |
 | `f19b3898` | v4.0.22 | fix(usage): cap stored proxy_request_logs.error_message on write (#9010) | 1c 会话/用量导入 | 1c：写入 proxy_request_logs.error_message 时截断到 4096 字符 | 已迁移 |
 | `c2aa4e0b` | v4.0.22 | docs(sponsors): update PatewayAI promotion copy | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
 | `3e75b96e` | v4.0.22 | docs(sponsors): refresh AIGoCode copy and add theme-aware banner | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
@@ -863,7 +863,7 @@
 | `84d4ce32` | v4.0.22 | chore(release): v4.0.22 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `b7642674` | v4.0.22 | docs(release): add v4.0.22 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `9941a645` | v4.0.23 | fix: classify 400 invalid_grant as permanent, honor export lines when cleaning .env, complete Turkish catalog (#9049) | 1d 资源/设置/工具 | 1d：Codex OAuth 刷新 400 invalid_grant 视为永久失效；清理 .env 时识别 export 行；土耳其语部分不迁移 | 已迁移 |
-| `779063c1` | v4.0.23 | fix(usage): record Antigravity latency and first-token time | 2c Antigravity | Antigravity 用量导入计时，依赖 2c 的 Antigravity 会话导入 | 待迁移 |
+| `779063c1` | v4.0.23 | fix(usage): record Antigravity latency and first-token time | 2c Antigravity | 2c：记录 Antigravity 延迟与首 token 时间 | 已迁移 |
 | `46ea443d` | v4.0.23 | fix(usage): record MiniMax Code latency and first-token time | 1c 会话/用量导入 | 1c：MiniMax Code 用量记录耗时与首字时间 | 已迁移 |
 | `645f8fa1` | v4.0.23 | feat(presets): add Astron MaaS pay-as-you-go preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `fcd8f3bd` | v4.0.23 | fix(claude-account): resolve mise shims when locating the claude CLI | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
@@ -1009,3 +1009,11 @@
   - 转出：`3d4a3da3` 的 MiniMax Code / Oh My Pi YAML 编辑框随 2d；`b61e2767` 的弹出式模型选择器随 5a。不适用：`d6db0c75`（Web 按钮无按压缩放）。
   - 测试：上游 `tests/kimi_commands.rs` 8 个用例改写为 `services/provider/kimi_tests.rs`；前端 Kimi 测试按 Web 的平铺预设选择器、内联登录与 `runtime.local` 调整；`session_usage_kimi` 的速度统计断言按 Web 现状改写，5b 迁移 a0dd3b39 时恢复上游断言。
   - 验证：`cargo test --lib` 3112 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 156 个文件 1740 项通过、2 项跳过。
+- 2026-11-04：完成批次 2c（Antigravity，29 项）。
+  - 后端：Antigravity 专属模块（`agy_config`、`mcp/agy`、`services/agy_account`、`services/provider/agy_direct`、`session_usage_agy`、`subscription_agy`、`session_manager/providers/agy`）取上游最终版本；`AppType::Agy` 接入应用配置、MCP（先写 `mcp_config.json` 后提交）、Skills（`~/.gemini/config/skills`）、提示词（`AGENTS.md`）、会话浏览（不支持删除）、用量导入。供应商只存数据库、不写 live，不支持“切换”，卡片主按钮为“打开终端”：官方卡先切到绑定账号，API Key 卡经临时环境文件（Unix 0600，用后删除）或 `set` 行（Windows）注入 Key 与地址。新增依赖 `prost 0.14`（与上游一致）。
+  - 数据库：Web 版本链 v18 → v19 为 `mcp_servers`、`skills` 增加 `enabled_agy`（对应上游 v20 → v21），建表兜底补列清单同步加入。
+  - 接口：官方账号走统一的 `/api/auth/*`（`agy_oauth`，浏览器登录，`device_code` 即登录流程 ID）；另有 `/api/auth/agy/{quota,running,supported}` 与 `POST /api/providers/agy/models`。切号依赖 macOS 钥匙串，登录回调落在服务端本机：服务端不是 macOS 时前端隐藏授权中心分组和表单账号选择，官方卡按 agy 当前登录查额度。
+  - 用量计价：Web 原先只按模型 ID 精确匹配定价，随本批移植上游的候选匹配（去命名空间、日期/版本/推理档后缀、前缀匹配），agy 的模型名才能计价。Web 无 `input_token_semantics` 列，agy 用量导入不写该列。
+  - 前端：Gemini 风格表单经 `usesGeminiStyleForm` 复用给 agy（地址可选、模型优先读配置）；卡片显示模型、按绑定账号显示额度，合并成组的额度列整列做成下拉列出四档（276eff8d）；授权中心无用户码登录显示说明与“重新打开登录页”；按 ee83fd89 去掉账号组标题行的“删除全部账号”（xAI 表单内的按钮保留）；Apps 页加入 Antigravity CLI；深链接受 agy 的供应商/MCP/提示词。
+  - 转出：`9a10e4f7` 的 OpenTerminalDialog 随 5a；`6fabe63a` 的会话日志标签随 5b（`providerLabel.ts`）。不适用：#8268 旧启动器清理（Web 从未安装，函数保留为 dead_code）、`03ec9dbb` 的 WSL2 工作流。
+  - 验证：`cargo test --lib` 3168 项通过、6 项忽略；`tsc --noEmit` 通过；前端全量 Vitest 160 个文件 1761 项通过、2 项跳过；改动的 Rust 文件逐个 rustfmt 检查通过。

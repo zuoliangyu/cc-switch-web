@@ -28,6 +28,8 @@ pub struct McpApps {
     pub pi: bool,
     #[serde(default)]
     pub kimi: bool,
+    #[serde(default)]
+    pub agy: bool,
 }
 
 impl McpApps {
@@ -44,6 +46,7 @@ impl McpApps {
             AppType::Mcode => self.mcode,
             AppType::Pi => self.pi,
             AppType::Kimi => self.kimi,
+            AppType::Agy => self.agy,
             AppType::ClaudeDesktop => false,
         }
     }
@@ -61,6 +64,7 @@ impl McpApps {
             AppType::Mcode => self.mcode = enabled,
             AppType::Pi => self.pi = enabled,
             AppType::Kimi => self.kimi = enabled,
+            AppType::Agy => self.agy = enabled,
             AppType::ClaudeDesktop => {}
         }
     }
@@ -95,6 +99,9 @@ impl McpApps {
         if self.kimi {
             apps.push(AppType::Kimi);
         }
+        if self.agy {
+            apps.push(AppType::Agy);
+        }
         apps
     }
 }
@@ -120,6 +127,8 @@ pub struct SkillApps {
     pub pi: bool,
     #[serde(default)]
     pub kimi: bool,
+    #[serde(default)]
+    pub agy: bool,
 }
 
 impl SkillApps {
@@ -136,6 +145,7 @@ impl SkillApps {
             AppType::Pi => self.pi,
             AppType::Mcode => self.mcode,
             AppType::Kimi => self.kimi,
+            AppType::Agy => self.agy,
             AppType::ClaudeDesktop => false, // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -153,6 +163,7 @@ impl SkillApps {
             AppType::Pi => self.pi = enabled,
             AppType::Mcode => self.mcode = enabled,
             AppType::Kimi => self.kimi = enabled,
+            AppType::Agy => self.agy = enabled,
             AppType::ClaudeDesktop => {} // C-Phase0：claude-desktop 暂不支持 Skills
         }
     }
@@ -187,6 +198,9 @@ impl SkillApps {
         if self.kimi {
             apps.push(AppType::Kimi);
         }
+        if self.agy {
+            apps.push(AppType::Agy);
+        }
         apps
     }
 
@@ -201,6 +215,7 @@ impl SkillApps {
             && !self.mcode
             && !self.pi
             && !self.kimi
+            && !self.agy
     }
 
     /// 仅启用指定应用（其他应用设为禁用）
@@ -397,6 +412,7 @@ pub enum AppType {
     Pi,
     Mcode,
     Kimi,
+    Agy,
 }
 
 impl AppType {
@@ -413,6 +429,7 @@ impl AppType {
             AppType::Pi => "pi",
             AppType::Mcode => "mcode",
             AppType::Kimi => "kimi",
+            AppType::Agy => "agy",
         }
     }
 
@@ -445,6 +462,7 @@ impl AppType {
             AppType::Pi,
             AppType::Mcode,
             AppType::Kimi,
+            AppType::Agy,
         ]
         .into_iter()
     }
@@ -467,10 +485,11 @@ impl FromStr for AppType {
             "pi" => Ok(AppType::Pi),
             "mcode" => Ok(AppType::Mcode),
             "kimi" | "kimi-code" => Ok(AppType::Kimi),
+            "agy" | "antigravity" | "antigravity-cli" => Ok(AppType::Agy),
             other => Err(AppError::localized(
                 "unsupported_app",
-                format!("不支持的应用标识: '{other}'。可选值: claude, claude-desktop, codex, gemini, grokbuild, opencode, openclaw, hermes, pi, mcode, kimi。"),
-                format!("Unsupported app id: '{other}'. Allowed: claude, claude-desktop, codex, gemini, grokbuild, opencode, openclaw, hermes, pi, mcode, kimi."),
+                format!("不支持的应用标识: '{other}'。可选值: claude, claude-desktop, codex, gemini, grokbuild, opencode, openclaw, hermes, pi, mcode, kimi, agy。"),
+                format!("Unsupported app id: '{other}'. Allowed: claude, claude-desktop, codex, gemini, grokbuild, opencode, openclaw, hermes, pi, mcode, kimi, agy."),
             )),
         }
     }
@@ -805,7 +824,7 @@ impl MultiAppConfig {
             AppType::OpenCode => &mut config.prompts.opencode.prompts,
             AppType::OpenClaw => &mut config.prompts.openclaw.prompts,
             AppType::Hermes => &mut config.prompts.hermes.prompts,
-            AppType::Pi | AppType::Mcode | AppType::Kimi => return Ok(false),
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => return Ok(false),
         };
 
         prompts.insert(id, prompt);
@@ -850,7 +869,7 @@ impl MultiAppConfig {
                 AppType::OpenClaw => continue, // OpenClaw MCP is still in development, skip
                 AppType::Hermes => continue,
                 AppType::ClaudeDesktop => continue, // C-Phase0：claude-desktop 暂不支持 MCP
-                AppType::Pi | AppType::Mcode | AppType::Kimi => continue,
+                AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => continue,
             };
 
             for (id, entry) in old_servers {

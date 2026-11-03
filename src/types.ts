@@ -302,6 +302,7 @@ export interface VisibleApps {
   pi: boolean;
   mcode: boolean;
   kimi: boolean;
+  agy: boolean;
 }
 
 // WebDAV 同步状态
@@ -675,6 +676,7 @@ export interface McpApps {
   hermes: boolean;
   pi?: boolean;
   kimi?: boolean;
+  agy?: boolean;
 }
 
 // MCP 服务器条目（v3.7.0 统一结构）

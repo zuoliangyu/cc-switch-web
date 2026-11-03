@@ -32,6 +32,8 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Pi => crate::pi_config::get_pi_agent_dir()?,
         AppType::Mcode => crate::mcode_config::data_dir(),
         AppType::Kimi => crate::kimi_config::data_dir(),
+        // agy 只从各「定制根目录」读独立的 AGENTS.md（见 agy_config::customizations_dir）
+        AppType::Agy => crate::agy_config::customizations_dir(),
     };
 
     let filename = match app {
@@ -40,7 +42,7 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Gemini => "GEMINI.md",
         AppType::GrokBuild | AppType::OpenCode | AppType::OpenClaw => "AGENTS.md",
         AppType::Hermes => "SOUL.md",
-        AppType::Pi | AppType::Mcode | AppType::Kimi => "AGENTS.md",
+        AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => "AGENTS.md",
     };
 
     Ok(base_dir.join(filename))

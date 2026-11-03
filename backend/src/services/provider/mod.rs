@@ -2,6 +2,7 @@
 //!
 //! Handles provider CRUD operations, switching, and configuration management.
 
+pub(crate) mod agy_direct;
 pub(crate) mod claude_direct;
 pub(crate) mod claude_editor;
 pub(crate) mod codex_client_catalog;
@@ -2054,6 +2055,12 @@ impl ProviderService {
         if app_type == AppType::Pi {
             return pi::add(state, provider, add_to_live);
         }
+        // Antigravity 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
+        if app_type == AppType::Agy {
+            Self::validate_provider_settings(&app_type, &provider)?;
+            state.db.save_provider(app_type.as_str(), &provider)?;
+            return Ok(true);
+        }
         let _switch_guard = if matches!(
             app_type,
             AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
@@ -2285,6 +2292,17 @@ impl ProviderService {
                 ));
             }
             return Self::save_gemini(state, provider, None, false);
+        }
+        // Antigravity 的卡只用来打开终端：编辑只存行，不写任何文件。
+        if app_type == AppType::Agy {
+            if original_id.is_some_and(|id| id != provider.id) {
+                return Err(AppError::Message(
+                    "Antigravity provider ID cannot be changed".into(),
+                ));
+            }
+            Self::validate_provider_settings(&app_type, &provider)?;
+            state.db.save_provider(app_type.as_str(), &provider)?;
+            return Ok(true);
         }
         if app_type == AppType::GrokBuild {
             if original_id.is_some_and(|id| id != provider.id) {
@@ -2618,6 +2636,11 @@ impl ProviderService {
             return Ok(());
         }
 
+        // Antigravity 的卡没有「启用」（只用来打开终端），旧版留下的当前指针不拦删除。
+        if app_type == AppType::Agy {
+            return state.db.delete_provider(app_type.as_str(), id);
+        }
+
         // For other apps: Check both local settings and database
         let local_current = crate::settings::get_current_provider(&app_type);
         let db_current = state.db.get_current_provider(app_type.as_str())?;
@@ -2761,6 +2784,14 @@ impl ProviderService {
     pub fn switch(state: &AppState, app_type: AppType, id: &str) -> Result<SwitchResult, AppError> {
         if app_type == AppType::Pi {
             return pi::enable(state, id);
+        }
+        // Antigravity 的卡只作用于它打开的终端，没有「启用」（见 agy_config 模块说明）。
+        if app_type == AppType::Agy {
+            return Err(AppError::localized(
+                "agy.switch.unsupported",
+                "Antigravity 的卡片不需要启用，用「打开终端」启动即可",
+                "Antigravity cards are not enabled; use Open terminal to start one",
+            ));
         }
         let _service = if crate::mode::controller::PROXY_APPS.contains(&app_type) {
             Some(futures::executor::block_on(
@@ -3536,7 +3567,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(&provider.settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(&provider.settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode | AppType::Kimi => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => Ok(String::new()),
         }
     }
 
@@ -3555,7 +3586,7 @@ impl ProviderService {
             AppType::OpenCode => Self::extract_opencode_common_config(settings_config),
             AppType::OpenClaw => Self::extract_openclaw_common_config(settings_config),
             AppType::Hermes => Ok(String::new()),
-            AppType::Pi | AppType::Mcode | AppType::Kimi => Ok(String::new()),
+            AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Agy => Ok(String::new()),
         }
     }
 
@@ -4072,7 +4103,7 @@ impl ProviderService {
                     }
                 }
             }
-            AppType::Gemini => {
+            AppType::Gemini | AppType::Agy => {
                 use crate::gemini_config::validate_gemini_settings;
                 validate_gemini_settings(&provider.settings_config)?
             }
@@ -4281,7 +4312,7 @@ impl ProviderService {
 
                 Ok((api_key, base_url))
             }
-            AppType::Gemini => {
+            AppType::Gemini | AppType::Agy => {
                 use crate::gemini_config::json_to_env;
 
                 let env_map = json_to_env(&provider.settings_config)?;

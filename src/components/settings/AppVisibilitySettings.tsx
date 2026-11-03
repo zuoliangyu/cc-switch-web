@@ -52,6 +52,7 @@ export function AppVisibilitySettings({
     pi: true,
     mcode: true,
     kimi: true,
+    agy: true,
   };
 
   // Count how many apps are currently visible

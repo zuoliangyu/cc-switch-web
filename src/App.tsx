@@ -253,6 +253,7 @@ function App() {
     pi: true,
     mcode: true,
     kimi: true,
+    agy: true,
   };
 
   const getFirstVisibleApp = (): AppId => {
@@ -397,6 +398,7 @@ function App() {
     activeApp !== "pi" &&
     activeApp !== "mcode" &&
     activeApp !== "kimi" &&
+    activeApp !== "agy" &&
     (takeoverStatus?.[activeApp] || false);
   const activeProviderId = useMemo(() => {
     const target = proxyStatus?.active_targets?.find(
@@ -951,7 +953,9 @@ function App() {
                       onConfigureUsage={setUsageProvider}
                       onOpenWebsite={handleOpenWebsite}
                       onOpenTerminal={
-                        activeApp === "claude" ? handleOpenTerminal : undefined
+                        activeApp === "claude" || activeApp === "agy"
+                          ? handleOpenTerminal
+                          : undefined
                       }
                       onCreate={() => setIsAddOpen(true)}
                       onSetAsDefault={

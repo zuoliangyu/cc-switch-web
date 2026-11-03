@@ -1098,6 +1098,49 @@ async fn remove_provider_from_live_config(
     Ok(Json(removed))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgyAccountQuery {
+    account_id: String,
+}
+
+async fn agy_account_quota(
+    Query(query): Query<AgyAccountQuery>,
+) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
+    crate::commands::agy_account_quota_internal(&query.account_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn agy_account_is_running() -> Result<Json<bool>, ApiError> {
+    crate::commands::agy_account_is_running_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+/// 服务端能不能管理 Antigravity 官方账号（只有 macOS 钥匙串，且登录回调只监听服务端本机）
+async fn agy_account_supported() -> Json<bool> {
+    Json(crate::commands::agy_account_supported())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgyModelsRequest {
+    api_key: Option<String>,
+    base_url: Option<String>,
+}
+
+async fn get_agy_models(
+    Json(payload): Json<AgyModelsRequest>,
+) -> Result<Json<Vec<crate::services::model_fetch::FetchedModel>>, ApiError> {
+    crate::commands::get_agy_models_internal(payload.api_key, payload.base_url)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
 /// models.dev 数据（api.json）：走后端的全局代理客户端拉取，浏览器不用自己能连上 models.dev
 async fn fetch_models_dev() -> Result<String, ApiError> {
     crate::services::model_pricing::fetch_models_dev()
@@ -2090,9 +2133,11 @@ async fn get_session_image(
 }
 
 async fn launch_session_terminal(
+    State(state): State<WebApiState>,
     Json(payload): Json<LaunchSessionTerminalRequest>,
 ) -> Result<Json<bool>, ApiError> {
     let opened = crate::commands::launch_session_terminal_internal(
+        state.app_state.db.as_ref(),
         payload.command,
         payload.cwd,
         payload.custom_config,
@@ -4664,6 +4709,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/auth/logout", post(auth_logout))
         .route("/api/auth/xai_oauth/models", get(fetch_xai_oauth_models))
         .route("/api/usage/models-dev", get(fetch_models_dev))
+        .route("/api/auth/agy/quota", get(agy_account_quota))
+        .route("/api/auth/agy/running", get(agy_account_is_running))
+        .route("/api/auth/agy/supported", get(agy_account_supported))
+        .route("/api/providers/agy/models", post(get_agy_models))
         .route("/api/auth/kimi/status", get(kimi_oauth_status))
         .route("/api/auth/kimi/start", post(kimi_oauth_start))
         .route("/api/auth/kimi/poll", post(kimi_oauth_poll))

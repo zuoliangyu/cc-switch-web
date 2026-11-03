@@ -12,6 +12,7 @@ import type { QuotaBreakdown, QuotaLine } from "./quotaRules";
 /**
  * 一行写不下的额度（存下了好几次重置）：整行（卡片上是那一段）是按钮，点开逐条列出明细
  * （每一次的到期日，同一天到期的并成一条）。授权中心、卡片额度列和展开的额度条共用。
+ * 不给 `line` 时标题右边不写值（卡片整列做成一个下拉时，列出的是好几档，没有一个总值）。
  *
  * `className` 给按钮，用调用方原来那一行的排版；左右各外扩 4px 留出悬停底色，文字不挪位。
  */
@@ -22,7 +23,7 @@ export function QuotaBreakdownRow({
   align = "start",
   children,
 }: {
-  line: QuotaLine;
+  line?: QuotaLine;
   breakdown: QuotaBreakdown;
   className?: string;
   /** 弹窗和按钮哪边对齐：卡片额度列靠右，用 end */
@@ -53,9 +54,11 @@ export function QuotaBreakdownRow({
       >
         <div className="mb-2 flex items-baseline justify-between gap-3 text-xs">
           <span className="font-medium text-foreground">{breakdown.title}</span>
-          <span className="whitespace-nowrap tabular-nums text-muted-foreground">
-            {line.value ?? line.text}
-          </span>
+          {line && (
+            <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+              {line.value ?? line.text}
+            </span>
+          )}
         </div>
         <ul className="flex flex-col gap-1 text-xs">
           {breakdown.items.map((item) => (
@@ -63,7 +66,9 @@ export function QuotaBreakdownRow({
               <span
                 className={cn(
                   "whitespace-nowrap",
-                  item.tone === "normal" ? "text-foreground" : TONE_TEXT[item.tone],
+                  item.tone === "normal"
+                    ? "text-foreground"
+                    : TONE_TEXT[item.tone],
                 )}
               >
                 {item.label}

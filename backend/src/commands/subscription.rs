@@ -3,6 +3,10 @@ use crate::services::subscription::SubscriptionQuota;
 pub(crate) async fn get_subscription_quota_internal(
     tool: String,
 ) -> Result<SubscriptionQuota, String> {
+    // Antigravity 官方登录：用 CC Switch 存的令牌直接问 Google，认不出 agy 的登录时再问 agy
+    if tool == "agy" {
+        return crate::commands::agy_quota(&crate::commands::agy_account_manager(), None).await;
+    }
     crate::services::subscription::get_subscription_quota(&tool).await
 }
 

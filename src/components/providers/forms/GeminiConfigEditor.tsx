@@ -3,6 +3,8 @@ import { GeminiEnvSection, GeminiConfigSection } from "./GeminiConfigSections";
 import { GeminiCommonConfigModal } from "./GeminiCommonConfigModal";
 
 interface GeminiConfigEditorProps {
+  /** Antigravity 卡：env 只经打开的终端传给 agy，settings.json 只放模型 */
+  isAgy?: boolean;
   keyFieldMode?: boolean;
   envValue: string;
   configValue: string;
@@ -22,6 +24,7 @@ interface GeminiConfigEditorProps {
 }
 
 const GeminiConfigEditor: React.FC<GeminiConfigEditorProps> = ({
+  isAgy = false,
   keyFieldMode = false,
   envValue,
   configValue,
@@ -50,6 +53,7 @@ const GeminiConfigEditor: React.FC<GeminiConfigEditorProps> = ({
     <div className="space-y-6">
       {/* Env Section */}
       <GeminiEnvSection
+        isAgy={isAgy}
         keyFieldMode={keyFieldMode}
         value={envValue}
         onChange={onEnvChange}
@@ -63,6 +67,7 @@ const GeminiConfigEditor: React.FC<GeminiConfigEditorProps> = ({
 
       {/* Config JSON Section */}
       <GeminiConfigSection
+        isAgy={isAgy}
         value={configValue}
         onChange={onConfigChange}
         configError={configError}

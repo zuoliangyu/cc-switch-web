@@ -1276,11 +1276,183 @@ pub(crate) fn open_provider_terminal_internal(
         .get(&provider_id)
         .ok_or_else(|| format!("提供商 {provider_id} 不存在"))?;
 
+    if app_type == AppType::Agy {
+        futures::executor::block_on(switch_agy_to_bound_account(provider))?;
+        open_agy_terminal(provider, None, launch_cwd.as_deref())?;
+        return Ok(true);
+    }
+
     let env_vars = extract_env_vars_from_config(&provider.settings_config, &app_type);
     launch_terminal_with_env(env_vars, &provider_id, launch_cwd.as_deref())
         .map_err(|e| format!("启动终端失败: {e}"))?;
 
     Ok(true)
+}
+
+/// 绑了 Antigravity 账号的官方卡：打开终端前先把 agy 的全局登录切到那个账号（只支持 macOS 钥匙串，
+/// 其他平台忽略绑定，与上游一致）。
+async fn switch_agy_to_bound_account(provider: &crate::provider::Provider) -> Result<(), String> {
+    if !crate::services::provider::agy_direct::is_official(provider) {
+        return Ok(());
+    }
+    let Some(account_id) = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.managed_account_id_for("agy_oauth"))
+        .filter(|id| !id.trim().is_empty())
+    else {
+        return Ok(());
+    };
+    if !crate::services::agy_account::keychain::supported() {
+        log::info!("[AgyAccount] 这个平台不能切号，忽略卡片绑定的账号");
+        return Ok(());
+    }
+    let accounts = crate::commands::agy_account_manager();
+    if !accounts
+        .list()
+        .await
+        .iter()
+        .any(|account| account.id == account_id)
+    {
+        return Err(crate::error::AppError::localized(
+            "agy.account.bound_missing",
+            format!(
+                "「{}」绑定的 Antigravity 账号不在这台电脑的授权中心里：请先在授权中心添加它，或编辑这张卡改选账号",
+                provider.name
+            ),
+            format!(
+                "The Antigravity account bound to \"{}\" is not in this computer's Auth Center. Add it there, or edit the card to choose another account.",
+                provider.name
+            ),
+        )
+        .to_string());
+    }
+    accounts
+        .switch_to(&account_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Antigravity CLI 的「打开终端」（上游 agy_terminal_launch 的 Web 版）：官方登录卡跑 `agy`，
+/// 卡上设了模型就加 `--model`（只对这次会话生效）；Key 卡用它的私有 `--gemini_dir`，Key 和
+/// 地址只经这一个 agy 进程的环境传入，不进命令行。`conversation` 用来恢复 Key 卡的会话。
+pub(crate) fn open_agy_terminal(
+    provider: &crate::provider::Provider,
+    conversation: Option<&str>,
+    cwd: Option<&Path>,
+) -> Result<(), String> {
+    let launch = crate::services::provider::agy_direct::terminal_launch(provider)
+        .map_err(|e| e.to_string())?;
+    // 只有 Key 卡有私有目录；卡上已经没有 Key 时私有目录对不上，不退回官方登录。
+    if conversation.is_some() && launch.gemini_dir.is_none() {
+        return Err(format!(
+            "「{}」已不再带 API Key，无法恢复它在私有目录里的会话",
+            provider.name
+        ));
+    }
+    let mut args = Vec::new();
+    if let Some(dir) = &launch.gemini_dir {
+        args.push(format!("--gemini_dir={}", dir.to_string_lossy()));
+    }
+    if let Some(model) = &launch.model {
+        args.push(format!("--model={model}"));
+    }
+    if let Some(conversation) = conversation {
+        args.push(format!("--conversation={conversation}"));
+    }
+    let command = agy_launch_command(&provider.id, &args, &launch.env)?;
+    launch_terminal_command(&command, cwd, None).map_err(|e| format!("启动终端失败: {e}"))
+}
+
+/// 恢复 Antigravity 第三方 Key 模式的会话：和「打开终端」同样带私有目录和 Key，再接上
+/// `--conversation`。
+pub(crate) fn open_agy_resume_terminal(
+    provider: &crate::provider::Provider,
+    conversation: &str,
+    cwd: Option<String>,
+) -> Result<(), String> {
+    let cwd = resolve_launch_cwd(cwd)?;
+    open_agy_terminal(provider, Some(conversation), cwd.as_deref())
+}
+
+/// macOS / Linux：环境变量写进只有本人可读的临时文件，命令里先读入再删掉（启动脚本本身是 0755，
+/// 不能直接写 Key）。
+#[cfg(not(target_os = "windows"))]
+fn agy_launch_command(
+    provider_id: &str,
+    args: &[String],
+    env: &[(&'static str, Option<String>)],
+) -> Result<String, String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut command = String::new();
+    if !env.is_empty() {
+        let safe_id: String = provider_id
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .take(32)
+            .collect();
+        let env_file = std::env::temp_dir().join(format!(
+            "cc_switch_agy_env_{safe_id}_{}_{}.sh",
+            std::process::id(),
+            chrono::Utc::now().timestamp_millis()
+        ));
+        let mut content = String::new();
+        for (key, value) in env {
+            match value {
+                Some(value) => content.push_str(&format!(
+                    "export {key}={}\n",
+                    shell_single_quote(value)
+                )),
+                None => content.push_str(&format!("unset {key}\n")),
+            }
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&env_file)
+            .map_err(|e| format!("写入 agy 环境文件失败: {e}"))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("写入 agy 环境文件失败: {e}"))?;
+        let path = shell_single_quote(&env_file.to_string_lossy());
+        command.push_str(&format!(". {path}; rm -f {path}; "));
+    }
+    command.push_str("agy");
+    for arg in args {
+        command.push(' ');
+        command.push_str(&shell_single_quote(arg));
+    }
+    Ok(command)
+}
+
+/// Windows：环境变量用 `set` 写进 %TEMP% 下的启动批处理（运行后自删），只作用于这个终端。
+#[cfg(target_os = "windows")]
+fn agy_launch_command(
+    _provider_id: &str,
+    args: &[String],
+    env: &[(&'static str, Option<String>)],
+) -> Result<String, String> {
+    let batch_value = |value: &str| -> Result<String, String> {
+        if value.contains('"') || value.contains('\r') || value.contains('\n') {
+            return Err("Antigravity 启动参数不能包含引号或换行".to_string());
+        }
+        Ok(value.replace('%', "%%"))
+    };
+    let mut lines = Vec::new();
+    for (key, value) in env {
+        match value {
+            Some(value) => lines.push(format!("set \"{key}={}\"", batch_value(value)?)),
+            None => lines.push(format!("set \"{key}=\"")),
+        }
+    }
+    let mut command = String::from("agy");
+    for arg in args {
+        command.push_str(&format!(" \"{}\"", batch_value(arg)?));
+    }
+    lines.push(command);
+    Ok(lines.join("\r\n"))
 }
 
 pub(crate) fn launch_terminal_command_internal(

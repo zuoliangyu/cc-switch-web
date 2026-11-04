@@ -260,7 +260,7 @@
 | `a7f66764` | v4.0.5 | chore(github): list all ten apps in issue templates | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `a40adef3` | v4.0.5 | fix(usage): import Grok Build session usage after 60s instead of 10min | 1c 会话/用量导入 | 1c：Grok Build 会话用量沉降 60s 后导入（不再等 10 分钟守卫窗口） | 已迁移 |
 | `efd236a4` | v4.0.5 | docs(manual): update the user manual for v4.0 | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `f9db9f70` | v4.0.5 | feat(codex): support GitHub Copilot managed accounts with Responses/Chat routing (#7157) | 3 官方账号 | Codex 使用 GitHub Copilot 托管账号（Responses/Chat 路由）；需新建或映射：`proxy/copilot_optimizer.rs`、`proxy/providers/codex_chat_history.rs`等 3 个 | 待迁移 |
+| `f9db9f70` | v4.0.5 | feat(codex): support GitHub Copilot managed accounts with Responses/Chat routing (#7157) | 3 官方账号 | 3c：Codex → GitHub Copilot 托管账号（按模型能力选 Responses / Chat、显式协议覆盖 codexCopilotApiFormat、Copilot 目录档、按请求实际格式整流与转换响应、Copilot 预设与表单、账号模型能力填目录）；Web 无 Copilot 优化器配置与企业版动态端点（基线前即已移除），Codex 路径按默认开启只做请求分类与 interaction ID；新增卡片的草稿投影 meta 不适用（编辑已存卡片时后端沿用其 meta） | 部分迁移 |
 | `c5233fe7` | v4.0.5 | fix(apps): enable native setup for Claude Code npm installs (#7929) | 1d 资源/设置/工具 | 1d：Claude Code npm 安装放行原生 postinstall（Web 生命周期代码位于 tool_management.rs） | 已迁移 |
 | `d90de1ba` | v4.0.5 | fix(updater): support Linux package auto-updates (#7620) | — | Linux 安装包自动更新；Web 无桌面更新器 | 不适用 |
 | `faae0e4d` | v4.0.5 | ci(wsl): run the WSL2 nightly from a nextest archive | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
@@ -827,7 +827,7 @@
 | `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `7f82b85b` | v4.0.22 | fix(sidebar): inset today's usage text to align with mode badge text | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
-| `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | Copilot 原生 /v1/messages 透传依赖 Web 尚无的 Copilot supported_endpoints 解析与按格式响应转换，转入 3 官方账号与 Copilot 一并处理 | 待迁移 |
+| `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | 3c：Anthropic 模型声明 /v1/messages 时原生透传、响应转换按每次请求解析的格式、Copilot 纳入 thinking 签名 / budget 整流；Claude 路径未接优化器，“只在 OpenAI 桥接上剥离 thinking”不适用 | 部分迁移 |
 | `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerConfigUtils.test.ts` | 待迁移 |
 | `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 2e：Web 与 Desktop 共用管理、DeepSeek 账号登录（/api/dsh/account*，回调落在服务端本机，仅浏览器与服务端同机时可完成）、用量导入（session_log_sync.parser_state、zstd 会话按解压后偏移读取）；Web 请求日志无 pricing_model/input_token_semantics 列：前缀模型仍按裸名计价，但导入时无定价、之后补价的前缀模型无法回填（对应上游用例未迁移）；用量页 providerLabel 与筛选随 5b | 部分迁移 |
 | `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
@@ -1047,3 +1047,9 @@
   - 测试：上游 `tests/provider_service.rs` 的账号目录同步用例改写为 `claude_runtime_tests`；订阅额度补套餐与缓存用例。
   - 转出/不适用：托盘切卡事件与托盘额度缓存（5cc6c47f、67cce7ad 的托盘部分）。
   - 验证：`cargo test --lib` 3351 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 173 个文件 1836 项通过、2 项跳过。
+- 2026-11-04：完成批次 3c（Copilot 托管账号路由，2 项，均为部分迁移）。
+  - 后端：Codex 卡按 `providerType = github_copilot` 识别 Copilot（自建中转保留自己的 key 与地址），固定走 `api.githubcopilot.com`，令牌取托管账号；代理按账号 `/models` 的 `supported_endpoints` 为每个模型选 Responses 或 Chat，可用 `meta.codexCopilotApiFormat`（`auto` / `openai_responses` / `openai_chat`）显式覆盖。Web 的 `forward()` 结构与上游不同，本次请求实际使用的上游格式记在每请求的 `RequestForwarder` 上，opaque state 重试与 Codex 响应转换据此进行。`proxy/copilot_optimizer.rs` 取上游最终版本（内联 Web 没有的 `codex_chat_history` 辅助函数），Codex 路径按上游默认只做请求分类与 interaction ID。Anthropic 模型声明 `/v1/messages` 时原生透传，Copilot 纳入 thinking 签名 / budget 整流。Codex 模型目录新增 Copilot 档（关闭 Codex 托管的 web_search）。
+  - 接口：无新增路由；`POST /api/providers/codex/editor/view` 可选带 `meta`（编辑已存卡片时沿用其 meta）；Copilot 模型接口补 `context_window`、`supported_endpoints`、`supports_parallel_tool_calls`、`reasoning_effort`。
+  - 前端：Codex 预设新增 GitHub Copilot；表单选择账号、不显示 key 与地址、协议选择（含自动）、拉取模型填目录；三种语言文案。
+  - 不适用：Claude 路径的 Copilot 优化器与企业版动态端点（基线前 Web 已移除，含 9403960f 只在优化器里做的 thinking 剥离）；新增卡片的草稿投影 meta。
+  - 验证：`cargo test --lib` 3453 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 176 个文件 1859 项通过、2 项跳过。

@@ -28,7 +28,7 @@ use crate::live::project::codex::{
 };
 use crate::mode::operation::{AppWrite, FileChange};
 use crate::mode::state::{op, PendingTarget};
-use crate::provider::Provider;
+use crate::provider::{Provider, ProviderMeta};
 use crate::store::AppState;
 
 use super::claude_editor::{ConflictPolicy, EditorSave, EditorView, InactiveField};
@@ -37,14 +37,26 @@ use super::editor_toml::{self, config_text, insert_at, render, Entry, TomlEdits}
 use super::ProviderService;
 
 impl ProviderService {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn codex_editor_view(
         state: &AppState,
         settings: &Value,
         category: Option<&str>,
     ) -> Result<EditorView, AppError> {
+        Self::codex_editor_view_with_meta(state, settings, category, None)
+    }
+
+    /// Codex 预览保留托管供应商身份（GitHub Copilot 托管账号）：传入的草稿 meta（含空值）
+    /// 优先于已存卡片的 meta，由调用方决定。
+    pub fn codex_editor_view_with_meta(
+        state: &AppState,
+        settings: &Value,
+        category: Option<&str>,
+        meta: Option<&ProviderMeta>,
+    ) -> Result<EditorView, AppError> {
         let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app("codex"));
         crate::mode::operation::settle(&state.db, "codex")?;
-        view(state, settings, category)
+        view(state, settings, category, meta)
     }
 
     pub fn save_codex(
@@ -235,6 +247,7 @@ pub fn view(
     state: &AppState,
     settings_config: &Value,
     category: Option<&str>,
+    meta: Option<&ProviderMeta>,
 ) -> Result<EditorView, AppError> {
     let path = get_codex_config_path();
     let pre = read_current(&path)?;
@@ -243,6 +256,7 @@ pub fn view(
     let mut provider =
         Provider::with_id(String::new(), String::new(), settings_config.clone(), None);
     provider.category = category.map(str::to_string);
+    provider.meta = meta.cloned();
     let live_owner = LiveOwner::read(state)?;
     let planned = plan_for_view(&state.db, &live_owner.owner(), &provider)?;
     planned.config().apply_to(&path, &mut doc)?;

@@ -27,6 +27,7 @@ import type {
   ProviderProxyConfig,
   ClaudeApiFormat,
   CodexApiFormat,
+  CodexCopilotApiFormat,
   CodexCatalogModel,
   CodexChatReasoning,
   PromptCacheRoutingMode,
@@ -630,6 +631,11 @@ function ProviderFormFull({
         ) ?? "openai_responses"
       );
     });
+  // Codex → GitHub Copilot 的协议选择：缺省为自动（按模型能力选 Responses / Chat）
+  const [codexCopilotApiFormat, setCodexCopilotApiFormat] =
+    useState<CodexCopilotApiFormat>(
+      () => initialData?.meta?.codexCopilotApiFormat ?? "auto",
+    );
   const [codexCatalogEnabled, setCodexCatalogEnabled] = useState(
     () => codexCatalogCountFromSettings(initialData?.settingsConfig) > 0,
   );
@@ -662,6 +668,14 @@ function ProviderFormFull({
       });
     },
     [setCodexConfig, debouncedValidate],
+  );
+
+  const handleCodexCopilotApiFormatChange = useCallback(
+    (format: CodexCopilotApiFormat) => {
+      setCodexCopilotApiFormat(format);
+      handleCodexApiFormatChange(format === "auto" ? "openai_chat" : format);
+    },
+    [handleCodexApiFormatChange],
   );
 
   useEffect(() => {
@@ -1233,10 +1247,12 @@ function ProviderFormFull({
     // 非官方供应商必填校验：端点和 API Key
     // cloud_provider（如 Bedrock）通过模板变量处理认证，跳过通用校验
     // GitHub Copilot 使用 OAuth 认证，不需要 API Key
+    // Codex 只按供应商类型认托管 Copilot：自建中转（地址里带 githubcopilot.com）保留自己的
+    // Key 和端点
     const isCopilotProvider =
       presetProviderType === "github_copilot" ||
       initialData?.meta?.providerType === "github_copilot" ||
-      baseUrl.includes("githubcopilot.com");
+      (appId !== "codex" && baseUrl.includes("githubcopilot.com"));
     const isCodexOauthProvider =
       presetProviderType === "codex_oauth" ||
       initialData?.meta?.providerType === "codex_oauth";
@@ -1328,7 +1344,8 @@ function ProviderFormFull({
           return;
         }
       } else if (appId === "codex") {
-        if (!isXaiOauthProvider && !codexBaseUrl.trim()) {
+        // 托管账号预设（Copilot / xAI）：端点由 adapter 硬定向、token 由代理注入
+        if (!isCopilotProvider && !isXaiOauthProvider && !codexBaseUrl.trim()) {
           toast.error(
             t("providerForm.endpointRequired", {
               defaultValue: "非官方供应商请填写 API 端点",
@@ -1336,7 +1353,7 @@ function ProviderFormFull({
           );
           return;
         }
-        if (!isXaiOauthProvider && !codexApiKey.trim()) {
+        if (!isCopilotProvider && !isXaiOauthProvider && !codexApiKey.trim()) {
           toast.error(
             t("providerForm.apiKeyRequired", {
               defaultValue: "非官方供应商请填写 API Key",
@@ -1639,10 +1656,20 @@ function ProviderFormFull({
             ? "openai_responses"
             : localApiFormat
           : appId === "codex" && category !== "official"
-            ? isXaiOauthProvider
-              ? "openai_responses"
-              : localCodexApiFormat
+            ? isCopilotProvider
+              ? codexCopilotApiFormat === "auto"
+                ? "openai_chat"
+                : codexCopilotApiFormat
+              : isXaiOauthProvider
+                ? "openai_responses"
+                : localCodexApiFormat
             : undefined,
+      codexCopilotApiFormat:
+        appId === "codex" &&
+        isCopilotProvider &&
+        codexCopilotApiFormat !== "auto"
+          ? codexCopilotApiFormat
+          : undefined,
       apiKeyField:
         appId === "claude" &&
         category !== "official" &&
@@ -1652,6 +1679,7 @@ function ProviderFormFull({
       isFullUrl:
         supportsFullUrl &&
         category !== "official" &&
+        !isCopilotProvider &&
         !isXaiOauthProvider &&
         localIsFullUrl
           ? true
@@ -1814,6 +1842,7 @@ function ProviderFormFull({
       resetCodexConfig(auth, config, preset.modelCatalog ?? []);
       setCodexChatReasoning(preset.codexChatReasoning ?? {});
       setPromptCacheRouting(preset.promptCacheRouting ?? "auto");
+      setCodexCopilotApiFormat("auto");
       setLocalCodexApiFormat(
         preset.apiFormat ??
           codexApiFormatFromWireApi(extractCodexWireApi(config)) ??
@@ -2275,6 +2304,13 @@ function ProviderFormFull({
               )}
               <CodexFormFields
                 providerId={providerId}
+                isCopilotPreset={
+                  presetProviderType === "github_copilot" ||
+                  initialData?.meta?.providerType === "github_copilot"
+                }
+                isCopilotAuthenticated={isCopilotAuthenticated}
+                selectedGitHubAccountId={selectedGitHubAccountId}
+                onGitHubAccountSelect={setSelectedGitHubAccountId}
                 isXaiOauthPreset={
                   presetProviderType === "xai_oauth" ||
                   initialData?.meta?.providerType === "xai_oauth"
@@ -2305,6 +2341,8 @@ function ProviderFormFull({
                 onCatalogEnabledChange={setCodexCatalogEnabled}
                 apiFormat={localCodexApiFormat}
                 onApiFormatChange={handleCodexApiFormatChange}
+                copilotApiFormat={codexCopilotApiFormat}
+                onCopilotApiFormatChange={handleCodexCopilotApiFormatChange}
                 shouldShowModelField={category !== "official"}
                 modelName={codexModelName}
                 onModelNameChange={handleCodexModelNameChange}

@@ -9,6 +9,7 @@
 
 use super::{
     error_mapper::{get_error_message, map_proxy_error_to_status},
+    forwarder::CodexUpstreamFormat,
     handler_config::{
         CLAUDE_PARSER_CONFIG, CODEX_PARSER_CONFIG, GEMINI_PARSER_CONFIG, OPENAI_PARSER_CONFIG,
     },
@@ -182,6 +183,21 @@ fn extract_gateway_token(headers: &axum::http::HeaderMap) -> Option<String> {
     None
 }
 
+/// Whether a Claude upstream response must be converted back to Anthropic Messages.
+///
+/// The forwarder resolves the wire format per request (GitHub Copilot picks native
+/// Messages for Anthropic models that advertise it), so that decision wins over the
+/// provider-level default, which always converts for Copilot.
+fn claude_response_needs_transform(
+    resolved_api_format: Option<&str>,
+    provider_default: bool,
+) -> bool {
+    resolved_api_format.map_or(
+        provider_default,
+        super::providers::claude_api_format_needs_transform,
+    )
+}
+
 /// `/v1/messages` 通用实现（Claude 与 Claude Desktop 共用）
 async fn handle_messages_for_app(
     state: ProxyState,
@@ -255,6 +271,7 @@ async fn handle_messages_for_app(
         }
     };
 
+    let resolved_api_format = result.claude_api_format.is_some();
     ctx.provider = result.provider;
     let api_format = result
         .claude_api_format
@@ -265,7 +282,10 @@ async fn handle_messages_for_app(
 
     // 检查是否需要格式转换（OpenRouter 等中转服务）
     let adapter = get_adapter(&app_type);
-    let needs_transform = adapter.needs_transform(&ctx.provider);
+    let needs_transform = claude_response_needs_transform(
+        resolved_api_format.then_some(api_format.as_str()),
+        adapter.needs_transform(&ctx.provider),
+    );
 
     // Claude 特有：格式转换处理
     if needs_transform {
@@ -1200,12 +1220,14 @@ async fn handle_responses_for_app(
         }
     };
 
+    let codex_upstream_format = result.codex_upstream_format;
     ctx.provider = result.provider;
     let response = result.response;
 
     // 跟随上游 cc-switch 1c82b8a3：如果该 Codex provider 的真实上游走 OpenAI
     // Chat Completions，把上游回来的 Chat 响应/SSE 翻译回 Responses 格式再返给客户端。
-    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+    // 按这次请求实际用的上游格式（托管 Copilot 按模型选），不按静态 apiFormat 推断。
+    if codex_upstream_format == Some(CodexUpstreamFormat::ChatCompletions) {
         return handle_codex_chat_to_responses_transform(
             response,
             &ctx,
@@ -1215,7 +1237,7 @@ async fn handle_responses_for_app(
         )
         .await;
     }
-    if super::providers::should_convert_codex_responses_to_anthropic(&ctx.provider, &endpoint) {
+    if codex_upstream_format == Some(CodexUpstreamFormat::Anthropic) {
         return handle_codex_anthropic_to_responses_transform(
             response,
             &ctx,
@@ -1427,10 +1449,11 @@ async fn handle_responses_compact_for_app(
         }
     };
 
+    let codex_upstream_format = result.codex_upstream_format;
     ctx.provider = result.provider;
     let response = result.response;
 
-    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+    if codex_upstream_format == Some(CodexUpstreamFormat::ChatCompletions) {
         return handle_codex_chat_to_responses_transform(
             response,
             &ctx,
@@ -1440,7 +1463,7 @@ async fn handle_responses_compact_for_app(
         )
         .await;
     }
-    if super::providers::should_convert_codex_responses_to_anthropic(&ctx.provider, &endpoint) {
+    if codex_upstream_format == Some(CodexUpstreamFormat::Anthropic) {
         return handle_codex_anthropic_to_responses_transform(
             response,
             &ctx,
@@ -3117,5 +3140,22 @@ data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\"}}\n
 
         let err = responses_sse_to_response_value(sse).unwrap_err();
         assert!(matches!(err, ProxyError::TransformError(message) if message == "upstream failed"));
+    }
+
+    /// 上游 9403960f：响应转换按这次请求解析出的格式，不按供应商级默认
+    #[test]
+    fn claude_response_transform_follows_the_resolved_format() {
+        use super::claude_response_needs_transform;
+
+        // Copilot defaults to converting, but a request resolved to native Messages
+        // gets an Anthropic response back and must pass through untouched.
+        assert!(!claude_response_needs_transform(Some("anthropic"), true));
+        assert!(claude_response_needs_transform(Some("openai_chat"), true));
+        assert!(claude_response_needs_transform(
+            Some("openai_responses"),
+            false
+        ));
+        assert!(claude_response_needs_transform(None, true));
+        assert!(!claude_response_needs_transform(None, false));
     }
 }

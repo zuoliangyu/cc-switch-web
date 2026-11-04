@@ -41,6 +41,12 @@ import {
 } from "./modelMetadataFill";
 import { normalizeEnabledCodexChatEffortParam } from "./helpers/codexChatReasoning";
 import { XaiOAuthSection } from "./XaiOAuthSection";
+import { CopilotAuthSection } from "./CopilotAuthSection";
+import {
+  copilotGetModels,
+  copilotGetModelsForAccount,
+  type CopilotModel,
+} from "@/lib/api/copilot";
 import {
   fetchModelsForConfig,
   fetchXaiOauthModels,
@@ -51,6 +57,7 @@ import { CustomUserAgentField } from "./CustomUserAgentField";
 import { LocalProxyRequestOverridesField } from "./LocalProxyRequestOverridesField";
 import type {
   CodexApiFormat,
+  CodexCopilotApiFormat,
   CodexCatalogModel,
   CodexChatReasoning,
   PromptCacheRoutingMode,
@@ -61,9 +68,43 @@ interface EndpointCandidate {
   url: string;
 }
 
+export function isCopilotModelSupportedByCodex(
+  model: CopilotModel,
+  format: CodexCopilotApiFormat = "auto",
+): boolean {
+  const endpoints =
+    format === "openai_responses"
+      ? ["/responses", "/v1/responses"]
+      : format === "openai_chat"
+        ? ["/chat/completions", "/v1/chat/completions"]
+        : [
+            "/responses",
+            "/v1/responses",
+            "/chat/completions",
+            "/v1/chat/completions",
+          ];
+  return (model.supported_endpoints ?? []).some((endpoint) =>
+    endpoints.includes(
+      endpoint.split("?")[0].replace(/\/+$/, "").toLowerCase(),
+    ),
+  );
+}
+
+export function resolveCopilotReportedPromptLimit(
+  current: CodexCatalogModel["contextWindow"],
+  reported: number | undefined,
+): CodexCatalogModel["contextWindow"] {
+  return reported ?? current;
+}
+
 interface CodexFormFieldsProps {
   appId?: "codex" | "grokbuild";
   providerId?: string;
+  // GitHub Copilot 托管账号预设：隐藏 API Key / 端点输入，挂账号选择区块
+  isCopilotPreset?: boolean;
+  isCopilotAuthenticated?: boolean;
+  selectedGitHubAccountId?: string | null;
+  onGitHubAccountSelect?: (accountId: string | null) => void;
   isXaiOauthPreset?: boolean;
   isXaiOauthAuthenticated?: boolean;
   selectedXaiAccountId?: string | null;
@@ -98,6 +139,9 @@ interface CodexFormFieldsProps {
   // API Format（跟随上游 cc-switch 1c82b8a3）
   apiFormat: CodexApiFormat;
   onApiFormatChange: (format: CodexApiFormat) => void;
+  // Copilot：自动按模型选 Responses / Chat，或显式指定协议
+  copilotApiFormat?: CodexCopilotApiFormat;
+  onCopilotApiFormatChange?: (format: CodexCopilotApiFormat) => void;
 
   // Model Name
   shouldShowModelField?: boolean;
@@ -170,6 +214,10 @@ function catalogRowsMatchModels(
 export function CodexFormFields({
   appId = "codex",
   providerId,
+  isCopilotPreset,
+  isCopilotAuthenticated,
+  selectedGitHubAccountId,
+  onGitHubAccountSelect,
   isXaiOauthPreset,
   isXaiOauthAuthenticated,
   selectedXaiAccountId,
@@ -197,6 +245,8 @@ export function CodexFormFields({
   onCatalogEnabledChange,
   apiFormat,
   onApiFormatChange,
+  copilotApiFormat = "auto",
+  onCopilotApiFormatChange,
   shouldShowModelField = true,
   modelName = "",
   onModelNameChange,
@@ -222,7 +272,13 @@ export function CodexFormFields({
     catalogModels.map((model) => createCatalogRow(model)),
   );
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
-  const isChatFormat = apiFormat === "openai_chat";
+  // Copilot 自动模式按 Chat 的能力选项展示（Responses 原生模型也兼容这些选项）
+  const effectiveApiFormat = isCopilotPreset
+    ? copilotApiFormat === "auto"
+      ? "openai_chat"
+      : copilotApiFormat
+    : apiFormat;
+  const isChatFormat = effectiveApiFormat === "openai_chat";
   const isGrokBuild = appId === "grokbuild";
   const canEditCatalog = Boolean(onCatalogModelsChange);
   const showChatOptions =
@@ -242,6 +298,7 @@ export function CodexFormFields({
     localProxyHeadersOverride.trim() || localProxyBodyOverride.trim(),
   );
   const hasAnyAdvancedValue =
+    !!isCopilotPreset ||
     !!customUserAgent ||
     hasRequestOverrides ||
     optionsEnabled ||
@@ -260,6 +317,10 @@ export function CodexFormFields({
     isFullUrl,
     codexApiKey,
     customUserAgent,
+    isCopilotPreset,
+    copilotApiFormat,
+    isCopilotAuthenticated,
+    selectedGitHubAccountId,
     isXaiOauthPreset,
     isXaiOauthAuthenticated,
     selectedXaiAccountId,
@@ -401,6 +462,91 @@ export function CodexFormFields({
   );
 
   const handleFetchModels = useCallback(() => {
+    // GitHub Copilot 托管账号：按账号的 /models 拉取，只留 Codex 能走的协议（Responses / Chat），
+    // 并把账号实际的上下文窗口、并行工具调用和推理档位填进模型目录
+    if (isCopilotPreset) {
+      if (!isCopilotAuthenticated) {
+        toast.error(
+          t("copilot.loginRequired", {
+            defaultValue: "请先登录 GitHub Copilot",
+          }),
+        );
+        return;
+      }
+      const seq = ++fetchModelsSeqRef.current;
+      setIsFetchingModels(true);
+      (selectedGitHubAccountId
+        ? copilotGetModelsForAccount(selectedGitHubAccountId)
+        : copilotGetModels()
+      )
+        .then((models) => {
+          if (seq !== fetchModelsSeqRef.current) return;
+          const usableModels = models.filter((model) =>
+            isCopilotModelSupportedByCodex(model, copilotApiFormat),
+          );
+          setFetchedModels(
+            usableModels.map((model) => ({
+              id: model.id,
+              ownedBy: model.vendor || null,
+            })),
+          );
+          if (onCatalogModelsChange) {
+            const existing = new Map(
+              catalogModels.map((model) => [model.model, model]),
+            );
+            onCatalogModelsChange(
+              usableModels.map((model) => ({
+                ...(existing.get(model.id) ?? {}),
+                model: model.id,
+                displayName: model.name || model.id,
+                contextWindow: resolveCopilotReportedPromptLimit(
+                  existing.get(model.id)?.contextWindow,
+                  model.context_window,
+                ),
+                supportsParallelToolCalls:
+                  model.supports_parallel_tool_calls ??
+                  existing.get(model.id)?.supportsParallelToolCalls ??
+                  false,
+                inputModalities: existing.get(model.id)?.inputModalities ?? [
+                  "text",
+                ],
+                ...(model.reasoning_effort !== undefined
+                  ? { reasoningLevels: model.reasoning_effort }
+                  : {}),
+              })),
+            );
+          }
+          if (
+            usableModels.length > 0 &&
+            onModelNameChange &&
+            !usableModels.some((model) => model.id === modelName)
+          ) {
+            const defaultModel =
+              usableModels.find((model) =>
+                model.id.toLowerCase().startsWith("gpt-"),
+              ) ?? usableModels[0];
+            onModelNameChange(defaultModel.id);
+          }
+          toast[usableModels.length === 0 ? "info" : "success"](
+            t(
+              usableModels.length === 0
+                ? "providerForm.fetchModelsEmpty"
+                : "providerForm.fetchModelsSuccess",
+              { count: usableModels.length },
+            ),
+          );
+        })
+        .catch((error) => {
+          if (seq !== fetchModelsSeqRef.current) return;
+          console.warn("[Copilot] Failed to fetch models:", error);
+          showFetchModelsError(error, t);
+        })
+        .finally(() => {
+          if (seq === fetchModelsSeqRef.current) setIsFetchingModels(false);
+        });
+      return;
+    }
+
     if (isXaiOauthPreset) {
       if (!isXaiOauthAuthenticated) {
         toast.error(t("xaiOauth.loginRequired"));
@@ -469,18 +615,34 @@ export function CodexFormFields({
         if (seq === fetchModelsSeqRef.current) setIsFetchingModels(false);
       });
   }, [
+    catalogModels,
     codexApiKey,
     codexBaseUrl,
+    copilotApiFormat,
     customUserAgent,
+    isCopilotAuthenticated,
+    isCopilotPreset,
     isFullUrl,
     isXaiOauthAuthenticated,
     isXaiOauthPreset,
+    modelName,
+    onCatalogModelsChange,
+    onModelNameChange,
+    selectedGitHubAccountId,
     selectedXaiAccountId,
     t,
   ]);
 
   return (
     <>
+      {isCopilotPreset && (
+        <CopilotAuthSection
+          mode="select"
+          selectedAccountId={selectedGitHubAccountId}
+          onAccountSelect={onGitHubAccountSelect}
+        />
+      )}
+
       {isXaiOauthPreset && (
         <XaiOAuthSection
           selectedAccountId={selectedXaiAccountId}
@@ -488,8 +650,8 @@ export function CodexFormFields({
         />
       )}
 
-      {/* Codex API Key 输入框 */}
-      {!isXaiOauthPreset && (
+      {/* Codex API Key 输入框（托管账号预设无需 Key） */}
+      {!isCopilotPreset && !isXaiOauthPreset && (
         <ApiKeySection
           required
           id="codexApiKey"
@@ -512,8 +674,8 @@ export function CodexFormFields({
         />
       )}
 
-      {/* Codex Base URL 输入框 */}
-      {shouldShowSpeedTest && !isXaiOauthPreset && (
+      {/* Codex Base URL 输入框（托管账号端点由 adapter 硬定向，不展示） */}
+      {shouldShowSpeedTest && !isCopilotPreset && !isXaiOauthPreset && (
         <EndpointField
           id="codexBaseUrl"
           label={t("codexConfig.apiUrlLabel")}
@@ -621,32 +783,52 @@ export function CodexFormFields({
             </p>
           )}
           <CollapsibleContent className="space-y-3 pt-3">
-            {shouldShowSpeedTest && !isXaiOauthPreset && (
+            {/* Copilot 支持按模型能力自动选协议或显式指定；其余供应商沿用原有格式选择 */}
+            {(shouldShowSpeedTest || isCopilotPreset) && !isXaiOauthPreset && (
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <FormLabel htmlFor="codexApiFormat">
                     {t("codexConfig.upstreamFormatLabel")}
                   </FormLabel>
                   <Select
-                    value={apiFormat}
-                    onValueChange={(value) =>
-                      onApiFormatChange(value as CodexApiFormat)
-                    }
+                    value={isCopilotPreset ? copilotApiFormat : apiFormat}
+                    onValueChange={(value) => {
+                      if (isCopilotPreset) {
+                        if (
+                          value === "auto" ||
+                          value === "openai_chat" ||
+                          value === "openai_responses"
+                        ) {
+                          onCopilotApiFormatChange?.(value);
+                        }
+                      } else {
+                        onApiFormatChange(value as CodexApiFormat);
+                      }
+                    }}
                   >
                     <SelectTrigger id="codexApiFormat" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      {isCopilotPreset && (
+                        <SelectItem value="auto">
+                          {t("codexConfig.upstreamFormatAuto")}
+                        </SelectItem>
+                      )}
                       <SelectItem value="openai_chat">
                         {t("codexConfig.upstreamFormatChat")}
                       </SelectItem>
                       <SelectItem value="openai_responses">
-                        {t("codexConfig.upstreamFormatResponses")}
+                        {isCopilotPreset
+                          ? t("codexConfig.upstreamFormatCopilotResponses")
+                          : t("codexConfig.upstreamFormatResponses")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {t("codexConfig.upstreamFormatHint")}
+                    {isCopilotPreset
+                      ? t("codexConfig.upstreamFormatCopilotHint")
+                      : t("codexConfig.upstreamFormatHint")}
                   </p>
                 </div>
 

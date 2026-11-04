@@ -21,11 +21,14 @@ use super::{
     ProxyError,
 };
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
-use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::copilot_auth::{CopilotAuthError, CopilotAuthManager};
+use crate::proxy::providers::copilot_model_map::{
+    CopilotProtocol, CopilotTransport, ResolvedCopilotModel,
+};
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::{
     app_config::AppType,
-    provider::{LocalProxyRequestOverrides, Provider},
+    provider::{CodexCopilotApiFormat, LocalProxyRequestOverrides, Provider},
 };
 use bytes::Bytes;
 use futures::StreamExt;
@@ -205,10 +208,81 @@ fn validate_codex_official_authorization(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodexUpstreamFormat {
+    NativeResponses,
+    ChatCompletions,
+    Anthropic,
+}
+
+/// Codex → Copilot 请求的身份头：按请求分类改 `x-initiator`（工具续写算 agent，不计为用户请求），
+/// 客户端带了会话时补上稳定的 `x-interaction-id`。
+struct CopilotRequestContext {
+    classification: super::copilot_optimizer::CopilotClassification,
+    request_id: Option<String>,
+    interaction_id: Option<String>,
+}
+
+impl CopilotRequestContext {
+    fn apply_headers(
+        &self,
+        headers: &mut Vec<(http::HeaderName, http::HeaderValue)>,
+        request_classification: bool,
+    ) -> Result<(), ProxyError> {
+        let request_id = self
+            .request_id
+            .as_deref()
+            .map(http::HeaderValue::from_str)
+            .transpose()
+            .map_err(|_| ProxyError::ConfigError("Invalid Copilot request ID".to_string()))?;
+        let interaction_id = self
+            .interaction_id
+            .as_deref()
+            .map(http::HeaderValue::from_str)
+            .transpose()
+            .map_err(|_| ProxyError::ConfigError("Invalid Copilot interaction ID".to_string()))?;
+
+        for (name, value) in headers.iter_mut() {
+            match name.as_str() {
+                "x-initiator" if request_classification => {
+                    *value = http::HeaderValue::from_static(self.classification.initiator);
+                }
+                "x-interaction-type" if self.classification.is_subagent => {
+                    *value = http::HeaderValue::from_static("conversation-subagent");
+                }
+                "x-request-id" | "x-agent-task-id" => {
+                    if let Some(request_id) = &request_id {
+                        *value = request_id.clone();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(interaction_id) = interaction_id {
+            headers.push((
+                http::HeaderName::from_static("x-interaction-id"),
+                interaction_id,
+            ));
+        }
+        if self.classification.is_subagent {
+            log::info!(
+                "[Copilot] 子代理请求: x-initiator=agent, x-interaction-type=conversation-subagent"
+            );
+        }
+        Ok(())
+    }
+}
+
 pub struct ForwardResult {
     pub response: ProxyResponse,
     pub provider: Provider,
     pub claude_api_format: Option<String>,
+    /// Wire format selected for this specific Codex Responses request.
+    ///
+    /// Copilot chooses this per model, so response handlers must consume this
+    /// value rather than re-deriving the format from static provider metadata.
+    pub codex_upstream_format: Option<CodexUpstreamFormat>,
 }
 
 pub struct ForwardError {
@@ -243,9 +317,25 @@ pub struct RequestForwarder {
     optimizer_config: OptimizerConfig,
     /// 非流式请求超时（秒）
     non_streaming_timeout: std::time::Duration,
+    /// 最近一次 `forward` 实际选用的 Codex 上游格式（每个请求一个转发器实例）
+    last_codex_upstream_format: std::sync::Mutex<Option<CodexUpstreamFormat>>,
 }
 
 impl RequestForwarder {
+    fn last_codex_upstream_format(&self) -> Option<CodexUpstreamFormat> {
+        *self
+            .last_codex_upstream_format
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn record_codex_upstream_format(&self, format: Option<CodexUpstreamFormat>) {
+        *self
+            .last_codex_upstream_format
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = format;
+    }
+
     pub fn stack_request(mut self, value: bool) -> Self {
         self.stack_request = value;
         self
@@ -315,6 +405,7 @@ impl RequestForwarder {
             rectifier_config,
             optimizer_config,
             non_streaming_timeout: std::time::Duration::from_secs(non_streaming_timeout),
+            last_codex_upstream_format: std::sync::Mutex::new(None),
         }
     }
 
@@ -322,15 +413,13 @@ impl RequestForwarder {
         &self,
         app_type: &AppType,
         provider: &Provider,
-        endpoint: &str,
         already_retried: bool,
         request: &Value,
         error: &ProxyError,
     ) -> Option<super::opaque_state_rectifier::OpaqueStateRejection> {
         if already_retried
             || !matches!(app_type, AppType::Codex | AppType::GrokBuild)
-            || super::providers::should_convert_codex_responses_to_chat(provider, endpoint)
-            || super::providers::should_convert_codex_responses_to_anthropic(provider, endpoint)
+            || self.last_codex_upstream_format() != Some(CodexUpstreamFormat::NativeResponses)
         {
             return None;
         }
@@ -475,7 +564,6 @@ impl RequestForwarder {
                 if let Some(rejection) = self.opaque_state_retry_rejection(
                     app_type,
                     provider,
-                    endpoint,
                     opaque_rectifier_retried,
                     &provider_body,
                     error,
@@ -525,7 +613,6 @@ impl RequestForwarder {
                                     .opaque_state_retry_rejection(
                                         app_type,
                                         provider,
-                                        endpoint,
                                         false,
                                         &retry_body,
                                         retry_err,
@@ -607,6 +694,7 @@ impl RequestForwarder {
                         response,
                         provider: provider.clone(),
                         claude_api_format,
+                        codex_upstream_format: self.last_codex_upstream_format(),
                     });
                 }
                 Err(mut e) => {
@@ -668,17 +756,16 @@ impl RequestForwarder {
                                     response,
                                     provider: provider.clone(),
                                     claude_api_format,
+                                    codex_upstream_format: self.last_codex_upstream_format(),
                                 });
                             }
                             Err(retry_error) => e = retry_error,
                         }
                     }
 
-                    // 检测是否需要触发整流器（仅 Claude/ClaudeAuth 供应商）
-                    let provider_type = ProviderType::from_app_type_and_config(app_type, provider);
-                    let is_anthropic_provider = matches!(
-                        provider_type,
-                        ProviderType::Claude | ProviderType::ClaudeAuth
+                    // 检测是否需要触发整流器（上游为 Anthropic Messages 的供应商）
+                    let is_anthropic_provider = uses_anthropic_rectifiers(
+                        ProviderType::from_app_type_and_config(app_type, provider),
                     );
                     let mut signature_rectifier_non_retryable_client_error = false;
 
@@ -810,6 +897,8 @@ impl RequestForwarder {
                                             response,
                                             provider: provider.clone(),
                                             claude_api_format,
+                                            codex_upstream_format: self
+                                                .last_codex_upstream_format(),
                                         });
                                     }
                                     Err(retry_err) => {
@@ -876,7 +965,7 @@ impl RequestForwarder {
                         }
                     }
 
-                    // 检测是否需要触发 budget 整流器（仅 Claude/ClaudeAuth 供应商）
+                    // 检测是否需要触发 budget 整流器（上游为 Anthropic Messages 的供应商）
                     if is_anthropic_provider {
                         let error_message = extract_error_message(&e);
                         if should_rectify_thinking_budget(
@@ -1017,6 +1106,7 @@ impl RequestForwarder {
                                         response,
                                         provider: provider.clone(),
                                         claude_api_format,
+                                        codex_upstream_format: self.last_codex_upstream_format(),
                                     });
                                 }
                                 Err(retry_err) => {
@@ -1271,17 +1361,32 @@ impl RequestForwarder {
         adapter: &dyn ProviderAdapter,
         app_type: &AppType,
     ) -> Result<(ProxyResponse, Option<String>), ProxyError> {
+        self.record_codex_upstream_format(None);
         // 使用适配器提取 base_url
         let base_url = adapter.extract_base_url(provider)?;
-        let codex_responses_to_anthropic = matches!(app_type, AppType::Codex | AppType::GrokBuild)
-            && super::providers::should_convert_codex_responses_to_anthropic(provider, endpoint);
+        // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）。Codex 只按供应商类型认
+        // 托管 Copilot，自建中转（地址里带 githubcopilot.com）保留自己的 Key 和地址。
+        let is_copilot = is_managed_copilot_request(app_type, provider, &base_url);
+        // Codex 上游转换方式：托管 Copilot 下面按模型改写
+        let mut codex_responses_to_anthropic =
+            matches!(app_type, AppType::Codex | AppType::GrokBuild)
+                && super::providers::should_convert_codex_responses_to_anthropic(
+                    provider, endpoint,
+                );
+        // 跟随上游 cc-switch 1c82b8a3：Codex provider 通过 wire_api=chat /
+        // apiFormat=openai_chat / base_url 直指 /chat/completions 等信号决定
+        // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
+        let mut codex_responses_to_chat = matches!(app_type, AppType::Codex | AppType::GrokBuild)
+            && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
+        let mut copilot_endpoint_override: Option<String> = None;
 
         let is_full_url = provider
             .meta
             .as_ref()
             .and_then(|meta| meta.is_full_url)
             .unwrap_or(false)
-            && !provider.is_xai_oauth();
+            && !provider.is_xai_oauth()
+            && !provider.is_github_copilot();
 
         // 应用模型映射（独立于格式转换）
         // Claude Desktop proxy 模式必须先把 Desktop 可见的 claude-* route
@@ -1299,6 +1404,10 @@ impl RequestForwarder {
 
         // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
         let mut mapped_body = normalize_thinking_type(mapped_body);
+        let is_copilot_codex_responses = matches!(app_type, AppType::Codex)
+            && is_copilot
+            && super::providers::is_codex_responses_endpoint(endpoint);
+        let is_copilot_claude_body = is_copilot && !matches!(app_type, AppType::Codex);
 
         // The OpenCode gateway wants a stable per-conversation session id (see the
         // injection site below). It has to be derived here: `mapped_body` is moved
@@ -1325,19 +1434,11 @@ impl RequestForwarder {
             None
         };
 
-        // 确定有效端点
-        // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
-        let is_copilot = provider
-            .meta
-            .as_ref()
-            .and_then(|m| m.provider_type.as_deref())
-            == Some("github_copilot")
-            || base_url.contains("githubcopilot.com");
-
         // Copilot 在格式转换前先做 model ID 归一化与 live /models 解析。
         // 客户端发的 dash 形式（claude-sonnet-4-6）与 [1m] 后缀必须改写成 dot 形式
         // 才能被 Copilot upstream 接受，否则直接 400 model_not_supported。
-        if is_copilot {
+        // Codex → Copilot 另按账号的 /models 能力解析（见下）。
+        if is_copilot_claude_body {
             mapped_body =
                 super::providers::copilot_model_map::apply_copilot_model_normalization(mapped_body);
             self.apply_copilot_live_model_resolution(provider, &mut mapped_body)
@@ -1351,7 +1452,7 @@ impl RequestForwarder {
             // variants pass through unchanged.
             mapped_body =
                 super::model_mapper::strip_one_m_suffix_for_upstream_from_body(mapped_body);
-        } else if !codex_responses_to_anthropic {
+        } else if !is_copilot_codex_responses && !codex_responses_to_anthropic {
             // Skip on the Codex→Anthropic path: stripping [1m] here would break both the
             // model-catalog match (apply_codex_upstream_model) and the transform's own
             // strip+`context-1m` beta detection. The marker is stripped later, on the
@@ -1359,6 +1460,39 @@ impl RequestForwarder {
             mapped_body =
                 super::model_mapper::strip_one_m_suffix_for_upstream_from_body(mapped_body);
         }
+
+        let copilot_request_context =
+            self.codex_copilot_request_context(is_copilot_codex_responses, &mapped_body);
+
+        // Codex always speaks Responses to the local proxy. Resolve the final
+        // Copilot model after every model rewrite, then select only a protocol
+        // that the model advertises. Messages is intentionally not supported
+        // on the Codex bridge. Only auto mode may fall back from Responses to Chat.
+        if is_copilot_codex_responses {
+            let api_format = CodexCopilotApiFormat::from_meta(provider.meta.as_ref());
+            let resolved = self
+                .resolve_codex_copilot_model(provider, &mapped_body, api_format)
+                .await?;
+            let transport = apply_codex_copilot_model(&mut mapped_body, resolved, api_format)?;
+            copilot_endpoint_override = Some(transport.endpoint);
+            codex_responses_to_chat = matches!(transport.protocol, CopilotProtocol::Chat);
+            codex_responses_to_anthropic = false;
+        }
+
+        let codex_upstream_format = if matches!(app_type, AppType::Codex | AppType::GrokBuild)
+            && super::providers::is_codex_responses_endpoint(endpoint)
+        {
+            Some(if codex_responses_to_anthropic {
+                CodexUpstreamFormat::Anthropic
+            } else if codex_responses_to_chat {
+                CodexUpstreamFormat::ChatCompletions
+            } else {
+                CodexUpstreamFormat::NativeResponses
+            })
+        } else {
+            None
+        };
+        self.record_codex_upstream_format(codex_upstream_format);
 
         let resolved_claude_api_format = if adapter.name() == "Claude" {
             Some(
@@ -1372,11 +1506,6 @@ impl RequestForwarder {
             Some(api_format) => super::providers::claude_api_format_needs_transform(api_format),
             None => adapter.needs_transform(provider),
         };
-        // 跟随上游 cc-switch 1c82b8a3：Codex provider 通过 wire_api=chat /
-        // apiFormat=openai_chat / base_url 直指 /chat/completions 等信号决定
-        // 是否需要把 Responses 请求改写成 Chat Completions 发到上游。
-        let codex_responses_to_chat = matches!(app_type, AppType::Codex | AppType::GrokBuild)
-            && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
         let codex_official_auth_passthrough = matches!(app_type, AppType::Codex)
             && super::providers::is_codex_official_provider(provider);
         if codex_official_auth_passthrough {
@@ -1426,23 +1555,26 @@ impl RequestForwarder {
                 .as_ref()
                 .and_then(|meta| meta.impersonate_claude_code)
                 == Some(true);
-        let (effective_endpoint, passthrough_query) = if codex_responses_to_chat {
-            rewrite_codex_responses_endpoint_to_chat(endpoint)
-        } else if codex_responses_to_anthropic {
-            rewrite_codex_responses_endpoint_to_anthropic(endpoint)
-        } else if needs_transform && adapter.name() == "Claude" {
-            let api_format = resolved_claude_api_format
-                .as_deref()
-                .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
-            rewrite_claude_transform_endpoint(endpoint, api_format, is_copilot, &mapped_body)
-        } else {
-            (
-                endpoint.to_string(),
-                split_endpoint_and_query(endpoint)
-                    .1
-                    .map(ToString::to_string),
-            )
-        };
+        let (effective_endpoint, passthrough_query) =
+            if let Some(copilot_endpoint) = copilot_endpoint_override.as_deref() {
+                rewrite_codex_endpoint_for_copilot(endpoint, copilot_endpoint)
+            } else if codex_responses_to_chat {
+                rewrite_codex_responses_endpoint_to_chat(endpoint)
+            } else if codex_responses_to_anthropic {
+                rewrite_codex_responses_endpoint_to_anthropic(endpoint)
+            } else if needs_transform && adapter.name() == "Claude" {
+                let api_format = resolved_claude_api_format
+                    .as_deref()
+                    .unwrap_or_else(|| super::providers::get_claude_api_format(provider));
+                rewrite_claude_transform_endpoint(endpoint, api_format, is_copilot, &mapped_body)
+            } else {
+                (
+                    endpoint.to_string(),
+                    split_endpoint_and_query(endpoint)
+                        .1
+                        .map(ToString::to_string),
+                )
+            };
 
         // 如果 base_url 本身就是 /chat/completions 完整端点（不带 v1 后缀的供应商常见配置），
         // 上面 effective_endpoint 已经是 /chat/completions，直接拼 query 即可，不再走 adapter.build_url。
@@ -1457,6 +1589,11 @@ impl RequestForwarder {
         let codex_standalone_endpoint = matches!(app_type, AppType::Codex)
             .then(|| CodexStandaloneEndpoint::from_effective_endpoint(&effective_endpoint))
             .flatten();
+        let is_copilot_unversioned_endpoint = is_copilot
+            && matches!(
+                split_endpoint_and_query(&effective_endpoint).0,
+                "/chat/completions" | "/responses" | "/responses/compact"
+            );
 
         let url = if matches!(resolved_claude_api_format.as_deref(), Some("gemini_native")) {
             super::gemini_url::resolve_gemini_native_url(
@@ -1483,6 +1620,8 @@ impl RequestForwarder {
             rewrite_codex_standalone_full_url(&base_url, passthrough_query.as_deref(), endpoint)?
         } else if codex_chat_base_is_full_endpoint || codex_anthropic_base_is_full_endpoint {
             append_query_to_full_url(&base_url, passthrough_query.as_deref())
+        } else if is_copilot_unversioned_endpoint {
+            build_copilot_unversioned_url(&base_url, &effective_endpoint)
         } else {
             adapter.build_url(&base_url, &effective_endpoint)
         };
@@ -1505,7 +1644,10 @@ impl RequestForwarder {
                 .get("prompt_cache_key")
                 .and_then(Value::as_str)
                 .map(ToString::to_string);
-            super::providers::apply_codex_chat_upstream_model(provider, &mut mapped_body);
+            // Copilot 的模型已按账号目录解析过，不再换成行里配置的模型
+            if !is_copilot_codex_responses {
+                super::providers::apply_codex_chat_upstream_model(provider, &mut mapped_body);
+            }
             let reasoning_config =
                 super::providers::resolve_codex_chat_reasoning_config(provider, &mapped_body);
             let mut chat_body =
@@ -1833,6 +1975,11 @@ impl RequestForwarder {
             Vec::new()
         };
 
+        // Codex → Copilot：按请求分类改写身份头（工具续写不按用户请求计）
+        if let Some(context) = copilot_request_context {
+            context.apply_headers(&mut auth_headers, true)?;
+        }
+
         // Copilot 的指纹 UA 不允许覆盖；其他供应商的非法值在运行时静默忽略。
         let custom_user_agent = if is_copilot {
             None
@@ -1857,6 +2004,12 @@ impl RequestForwarder {
                 "copilot-integration-id",
                 "x-github-api-version",
                 "openai-intent",
+                "x-initiator",
+                "x-interaction-type",
+                "x-interaction-id",
+                "x-vscode-user-agent-library-version",
+                "x-request-id",
+                "x-agent-task-id",
             ]
         } else {
             &[]
@@ -2325,6 +2478,59 @@ impl RequestForwarder {
         Ok(ProxyResponse::buffered(status, headers, body))
     }
 
+    fn codex_copilot_request_context(
+        &self,
+        is_codex_copilot_responses: bool,
+        body: &Value,
+    ) -> Option<CopilotRequestContext> {
+        // Web 没有 Copilot 优化器设置：按上游默认（开启）只做请求分类和 interaction ID
+        if !is_codex_copilot_responses {
+            return None;
+        }
+        Some(CopilotRequestContext {
+            classification: super::copilot_optimizer::classify_responses_request(body),
+            // Keep Codex request IDs per-request; only the interaction ID groups a session.
+            request_id: None,
+            interaction_id: self
+                .session_client_provided
+                .then(|| super::copilot_optimizer::deterministic_interaction_id(&self.session_id))
+                .flatten(),
+        })
+    }
+
+    async fn resolve_codex_copilot_model(
+        &self,
+        provider: &Provider,
+        body: &Value,
+        api_format: CodexCopilotApiFormat,
+    ) -> Result<Option<ResolvedCopilotModel>, ProxyError> {
+        let model_id = body
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+            .ok_or_else(|| {
+                ProxyError::InvalidRequest(
+                    "Codex Copilot requests require a non-empty string model".to_string(),
+                )
+            })?;
+        let copilot_auth = self.copilot_auth_state.read().await;
+        let account_id = provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.managed_account_id_for("github_copilot"));
+        let resolved = match account_id.as_deref() {
+            Some(id) => {
+                copilot_auth
+                    .resolve_model_for_account(id, model_id, api_format)
+                    .await
+            }
+            None => copilot_auth.resolve_model(model_id, api_format).await,
+        };
+
+        resolved.map_err(|error| codex_copilot_lookup_error(model_id, error))
+    }
+
     async fn resolve_claude_api_format(
         &self,
         provider: &Provider,
@@ -2335,17 +2541,24 @@ impl RequestForwarder {
             return super::providers::get_claude_api_format(provider).to_string();
         }
 
-        let model = body.get("model").and_then(|value| value.as_str());
-        if let Some(model_id) = model {
-            if self
-                .is_copilot_openai_vendor_model(provider, model_id)
-                .await
-            {
-                return "openai_responses".to_string();
-            }
-        }
+        self.resolve_copilot_api_format(provider, body)
+            .await
+            .to_string()
+    }
 
-        "openai_chat".to_string()
+    async fn resolve_copilot_api_format(&self, provider: &Provider, body: &Value) -> &'static str {
+        let model = body.get("model").and_then(|value| value.as_str());
+        let record = match model {
+            Some(model_id) => self.copilot_model_record(provider, model_id).await,
+            None => None,
+        };
+        copilot_api_format_for_model(
+            record.as_ref().map(|model| model.vendor.as_str()),
+            record
+                .as_ref()
+                .map(|model| model.supported_endpoints.as_slice())
+                .unwrap_or_default(),
+        )
     }
 
     /// 用 Copilot live `/models` 列表确认 model ID 真实可用，找不到时按 family 降级。
@@ -2387,35 +2600,39 @@ impl RequestForwarder {
         }
     }
 
-    async fn is_copilot_openai_vendor_model(&self, provider: &Provider, model_id: &str) -> bool {
+    async fn copilot_model_record(
+        &self,
+        provider: &Provider,
+        model_id: &str,
+    ) -> Option<super::providers::copilot_auth::CopilotModel> {
         let copilot_auth = self.copilot_auth_state.read().await;
         let account_id = provider
             .meta
             .as_ref()
             .and_then(|m| m.managed_account_id_for("github_copilot"));
 
-        let vendor_result = match account_id.as_deref() {
+        let record_result = match account_id.as_deref() {
             Some(id) => {
                 copilot_auth
-                    .get_model_vendor_for_account(id, model_id)
+                    .get_model_record_for_account(id, model_id)
                     .await
             }
-            None => copilot_auth.get_model_vendor(model_id).await,
+            None => copilot_auth.get_model_record(model_id).await,
         };
 
-        match vendor_result {
-            Ok(Some(vendor)) => vendor.eq_ignore_ascii_case("openai"),
+        match record_result {
+            Ok(Some(record)) => Some(record),
             Ok(None) => {
                 log::debug!(
                     "[Copilot] Model vendor unavailable for {model_id}, fallback to chat/completions"
                 );
-                false
+                None
             }
             Err(err) => {
                 log::warn!(
                     "[Copilot] Failed to resolve model vendor for {model_id}, fallback to chat/completions: {err}"
                 );
-                false
+                None
             }
         }
     }
@@ -2785,6 +3002,129 @@ fn rewrite_codex_responses_endpoint_to_anthropic(endpoint: &str) -> (String, Opt
         _ => target_path.to_string(),
     };
     (rewritten, passthrough_query)
+}
+
+fn is_managed_copilot_request(app_type: &AppType, provider: &Provider, base_url: &str) -> bool {
+    provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.provider_type.as_deref())
+        == Some("github_copilot")
+        || (!matches!(app_type, AppType::Codex) && base_url.contains("githubcopilot.com"))
+}
+
+fn codex_copilot_lookup_error(model_id: &str, error: CopilotAuthError) -> ProxyError {
+    let message =
+        format!("Failed to resolve GitHub Copilot capabilities for model {model_id}: {error}");
+    match error {
+        CopilotAuthError::AuthorizationPending
+        | CopilotAuthError::AccessDenied
+        | CopilotAuthError::ExpiredToken
+        | CopilotAuthError::GitHubTokenInvalid
+        | CopilotAuthError::NoCopilotSubscription
+        | CopilotAuthError::AccountNotFound(_) => ProxyError::AuthError(message),
+        CopilotAuthError::NetworkError(_) | CopilotAuthError::CopilotTokenFetchFailed(_) => {
+            ProxyError::ForwardFailed(message)
+        }
+        CopilotAuthError::ParseError(_) | CopilotAuthError::IoError(_) => {
+            ProxyError::ConfigError(message)
+        }
+    }
+}
+
+fn apply_codex_copilot_model(
+    body: &mut Value,
+    resolved: Option<ResolvedCopilotModel>,
+    api_format: CodexCopilotApiFormat,
+) -> Result<CopilotTransport, ProxyError> {
+    let requested = match api_format {
+        CodexCopilotApiFormat::Auto => "a Responses or Chat Completions endpoint",
+        CodexCopilotApiFormat::OpenaiResponses => {
+            "the requested Responses endpoint (codexCopilotApiFormat=openai_responses)"
+        }
+        CodexCopilotApiFormat::OpenaiChat => {
+            "the requested Chat Completions endpoint (codexCopilotApiFormat=openai_chat)"
+        }
+    };
+    let Some(resolved) = resolved else {
+        let model = body
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("<missing>");
+        return Err(ProxyError::ConfigError(format!(
+            "GitHub Copilot model {model} is unavailable for {requested} in this provider's catalogue"
+        )));
+    };
+    let Some(transport) = resolved.transport else {
+        return Err(ProxyError::ConfigError(format!(
+            "GitHub Copilot model {} does not advertise {requested}",
+            resolved.id
+        )));
+    };
+    body["model"] = Value::String(resolved.id);
+    Ok(transport)
+}
+
+fn rewrite_codex_endpoint_for_copilot(
+    inbound_endpoint: &str,
+    supported_endpoint: &str,
+) -> (String, Option<String>) {
+    let (inbound_path, query) = split_endpoint_and_query(inbound_endpoint);
+    let passthrough_query = query.map(ToString::to_string);
+    let mut target_path = supported_endpoint.trim_end_matches('/').to_string();
+    if inbound_path.ends_with("/responses/compact")
+        && matches!(target_path.as_str(), "/responses" | "/v1/responses")
+    {
+        target_path.push_str("/compact");
+    }
+    let rewritten = match passthrough_query.as_deref() {
+        Some(query) if !query.is_empty() => format!("{target_path}?{query}"),
+        _ => target_path,
+    };
+    (rewritten, passthrough_query)
+}
+
+/// Providers whose errors can come from an Anthropic Messages endpoint and therefore
+/// need the thinking signature / budget rectifiers. GitHub Copilot passes Anthropic
+/// models through to its native `/v1/messages`, where history replayed from another
+/// provider or from the Responses bridge fails signature validation; errors from its
+/// Chat / Responses bridges never match the rectifier keywords.
+fn uses_anthropic_rectifiers(provider_type: ProviderType) -> bool {
+    matches!(
+        provider_type,
+        ProviderType::Claude | ProviderType::ClaudeAuth | ProviderType::GitHubCopilot
+    )
+}
+
+/// Pick the Copilot upstream protocol for a Claude-client request.
+///
+/// Anthropic models that advertise `/v1/messages` are passed through natively:
+/// the Chat Completions bridge drops `cache_control` breakpoints and Copilot's
+/// chat endpoint stops prefix caching at the first mid-conversation `system`
+/// message Claude Code inserts, so every turn re-bills the whole history.
+fn copilot_api_format_for_model(
+    vendor: Option<&str>,
+    supported_endpoints: &[String],
+) -> &'static str {
+    if vendor.is_some_and(|vendor| vendor.eq_ignore_ascii_case("openai")) {
+        "openai_responses"
+    } else if vendor.is_some_and(|vendor| vendor.eq_ignore_ascii_case("anthropic"))
+        && supported_endpoints
+            .iter()
+            .any(|endpoint| endpoint.trim_end_matches('/') == "/v1/messages")
+    {
+        "anthropic"
+    } else {
+        "openai_chat"
+    }
+}
+
+fn build_copilot_unversioned_url(base_url: &str, endpoint: &str) -> String {
+    format!(
+        "{}/{}",
+        base_url.trim_end_matches('/'),
+        endpoint.trim_start_matches('/')
+    )
 }
 
 fn rewrite_claude_transform_endpoint(
@@ -4248,5 +4588,335 @@ mod tests {
             ),
             ErrorCategory::NonRetryable
         );
+    }
+
+    /// Codex → Copilot 用例（上游 f9db9f70、9403960f）：只测纯函数，不构造转发器。
+    fn copilot_test_provider(provider_type: Option<&str>) -> Provider {
+        let mut provider = Provider::with_id(
+            "copilot-test".to_string(),
+            "Copilot".to_string(),
+            json!({}),
+            None,
+        );
+        provider.meta = provider_type.map(|provider_type| crate::provider::ProviderMeta {
+            provider_type: Some(provider_type.to_string()),
+            ..Default::default()
+        });
+        provider
+    }
+
+    #[test]
+    fn anthropic_rectifiers_cover_copilot_native_messages() {
+        for provider_type in [
+            ProviderType::Claude,
+            ProviderType::ClaudeAuth,
+            ProviderType::GitHubCopilot,
+        ] {
+            assert!(uses_anthropic_rectifiers(provider_type));
+        }
+        for provider_type in [
+            ProviderType::Codex,
+            ProviderType::OpenRouter,
+            ProviderType::CodexOAuth,
+        ] {
+            assert!(!uses_anthropic_rectifiers(provider_type));
+        }
+    }
+
+    #[test]
+    fn copilot_transport_selects_protocol_by_vendor_and_endpoints() {
+        let messages = vec!["/v1/messages".to_string(), "/chat/completions".to_string()];
+        let chat_only = vec!["/chat/completions".to_string()];
+        assert_eq!(
+            copilot_api_format_for_model(Some("OpenAI"), &chat_only),
+            "openai_responses"
+        );
+        assert_eq!(
+            copilot_api_format_for_model(Some("Anthropic"), &messages),
+            "anthropic"
+        );
+        assert_eq!(
+            copilot_api_format_for_model(Some("Anthropic"), &chat_only),
+            "openai_chat"
+        );
+        assert_eq!(
+            copilot_api_format_for_model(Some("Anthropic"), &[]),
+            "openai_chat"
+        );
+        assert_eq!(copilot_api_format_for_model(None, &messages), "openai_chat");
+    }
+
+    #[test]
+    fn copilot_unversioned_url_does_not_add_v1_prefix() {
+        assert_eq!(
+            build_copilot_unversioned_url(
+                "https://api.githubcopilot.com/",
+                "/chat/completions?client_version=0.149"
+            ),
+            "https://api.githubcopilot.com/chat/completions?client_version=0.149"
+        );
+        assert_eq!(
+            build_copilot_unversioned_url(
+                "https://api.githubcopilot.com",
+                "/responses?client_version=0.149"
+            ),
+            "https://api.githubcopilot.com/responses?client_version=0.149"
+        );
+    }
+
+    #[test]
+    fn codex_copilot_lookup_errors_preserve_cause_and_allow_failover() {
+        let copilot = copilot_test_provider(Some("github_copilot"));
+        for (cause, expected_kind) in [
+            (CopilotAuthError::AuthorizationPending, "auth"),
+            (CopilotAuthError::AccessDenied, "auth"),
+            (CopilotAuthError::ExpiredToken, "auth"),
+            (CopilotAuthError::GitHubTokenInvalid, "auth"),
+            (CopilotAuthError::NoCopilotSubscription, "auth"),
+            (CopilotAuthError::AccountNotFound("missing".into()), "auth"),
+            (
+                CopilotAuthError::NetworkError("connection reset".into()),
+                "upstream",
+            ),
+            (
+                CopilotAuthError::CopilotTokenFetchFailed("models HTTP 503".into()),
+                "upstream",
+            ),
+            (
+                CopilotAuthError::ParseError("invalid models JSON".into()),
+                "config",
+            ),
+            (
+                CopilotAuthError::IoError("permission denied".into()),
+                "config",
+            ),
+        ] {
+            let cause_text = cause.to_string();
+            let error = codex_copilot_lookup_error("gpt-5.5", cause);
+            let (kind, message) = match &error {
+                ProxyError::AuthError(message) => ("auth", message),
+                ProxyError::ForwardFailed(message) => ("upstream", message),
+                ProxyError::ConfigError(message) => ("config", message),
+                _ => panic!("unexpected capability error: {error}"),
+            };
+            assert_eq!(kind, expected_kind, "{error}");
+            assert!(message.contains(&cause_text), "{message}");
+            assert!(message.contains("gpt-5.5"), "{message}");
+            assert!(!message.contains("unavailable"), "{message}");
+            assert_eq!(
+                RequestForwarder::categorize_proxy_error(&error, &copilot),
+                ErrorCategory::Retryable
+            );
+        }
+    }
+
+    #[test]
+    fn codex_copilot_unavailable_model_is_provider_scoped() {
+        let copilot = copilot_test_provider(Some("github_copilot"));
+        for api_format in [
+            CodexCopilotApiFormat::Auto,
+            CodexCopilotApiFormat::OpenaiResponses,
+            CodexCopilotApiFormat::OpenaiChat,
+        ] {
+            let mut body = json!({"model": "gpt-6-astra"});
+            let error = apply_codex_copilot_model(&mut body, None, api_format).unwrap_err();
+            assert!(matches!(&error, ProxyError::ConfigError(message)
+                if message.contains("gpt-6-astra") && message.contains("unavailable")));
+            assert_eq!(
+                RequestForwarder::categorize_proxy_error(&error, &copilot),
+                ErrorCategory::Retryable
+            );
+            assert_eq!(body["model"], "gpt-6-astra");
+        }
+    }
+
+    #[test]
+    fn codex_copilot_metadata_selects_advertised_transport_at_forwarding_seam() {
+        use super::super::providers::copilot_auth::CopilotModel;
+        use super::super::providers::copilot_model_map::resolve_model_with_format;
+        use crate::provider::ProviderMeta;
+
+        let copilot = copilot_test_provider(Some("github_copilot"));
+        for (metadata, endpoints, expected) in [
+            (
+                json!({}),
+                vec!["/responses", "/chat/completions"],
+                Some((CopilotProtocol::Responses, "/responses")),
+            ),
+            (
+                json!({"apiFormat": "openai_chat"}),
+                vec!["/v1/chat/completions", "/v1/responses"],
+                Some((CopilotProtocol::Responses, "/v1/responses")),
+            ),
+            (
+                json!({"apiFormat": "openai_responses"}),
+                vec!["/chat/completions"],
+                Some((CopilotProtocol::Chat, "/chat/completions")),
+            ),
+            (
+                json!({"codexCopilotApiFormat": "auto"}),
+                vec!["/chat/completions", "/responses"],
+                Some((CopilotProtocol::Responses, "/responses")),
+            ),
+            (
+                json!({"codexCopilotApiFormat": "auto"}),
+                vec!["/v1/messages", "/v1/chat/completions"],
+                Some((CopilotProtocol::Chat, "/v1/chat/completions")),
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_chat"}),
+                vec!["/responses", "/chat/completions"],
+                Some((CopilotProtocol::Chat, "/chat/completions")),
+            ),
+            (
+                json!({"apiFormat": "openai_responses", "codexCopilotApiFormat": "openai_chat"}),
+                vec!["/v1/responses", "/v1/chat/completions"],
+                Some((CopilotProtocol::Chat, "/v1/chat/completions")),
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_responses"}),
+                vec!["/chat/completions", "/responses"],
+                Some((CopilotProtocol::Responses, "/responses")),
+            ),
+            (
+                json!({"apiFormat": "openai_chat", "codexCopilotApiFormat": "openai_responses"}),
+                vec!["/v1/chat/completions", "/v1/responses/"],
+                Some((CopilotProtocol::Responses, "/v1/responses")),
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_chat"}),
+                vec!["/responses"],
+                None,
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_responses"}),
+                vec!["/v1/chat/completions"],
+                None,
+            ),
+            (
+                json!({"codexCopilotApiFormat": "auto"}),
+                vec!["/v1/messages"],
+                None,
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_chat"}),
+                vec!["/v1/messages"],
+                None,
+            ),
+            (
+                json!({"codexCopilotApiFormat": "openai_responses"}),
+                vec![],
+                None,
+            ),
+        ] {
+            let meta: ProviderMeta = serde_json::from_value(metadata.clone()).unwrap();
+            let api_format = CodexCopilotApiFormat::from_meta(Some(&meta));
+            let models = [CopilotModel {
+                id: "gpt-5.6".to_string(),
+                name: "GPT-5.6".to_string(),
+                vendor: "OpenAI".to_string(),
+                model_picker_enabled: false,
+                context_window: Some(400_000),
+                supported_endpoints: endpoints.into_iter().map(str::to_string).collect(),
+                supports_parallel_tool_calls: None,
+                reasoning_effort: None,
+            }];
+            let mut body = json!({"model": "GPT-5.6", "input": "Hello"});
+            let resolved = resolve_model_with_format("GPT-5.6", &models, api_format);
+            let result = apply_codex_copilot_model(&mut body, resolved, api_format);
+            if let Some((protocol, endpoint)) = expected {
+                let transport = result.unwrap();
+                assert_eq!(transport.protocol, protocol, "{metadata}");
+                assert_eq!(transport.endpoint, endpoint, "{metadata}");
+                assert_eq!(body["model"], "gpt-5.6");
+                assert_eq!(body["input"], "Hello");
+                let expected_compact = if protocol == CopilotProtocol::Responses {
+                    "/compact"
+                } else {
+                    ""
+                };
+                assert_eq!(
+                    rewrite_codex_endpoint_for_copilot(
+                        "/v1/responses/compact?x=1",
+                        &transport.endpoint
+                    ),
+                    (
+                        format!("{endpoint}{expected_compact}?x=1"),
+                        Some("x=1".to_string())
+                    ),
+                    "{metadata}"
+                );
+            } else {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    RequestForwarder::categorize_proxy_error(&error, &copilot),
+                    ErrorCategory::Retryable,
+                    "{metadata}: {error}"
+                );
+                let ProxyError::ConfigError(message) = error else {
+                    panic!("expected provider ConfigError for {metadata}");
+                };
+                assert!(message.contains("gpt-5.6"), "{message}");
+                assert!(message.contains("does not advertise"), "{message}");
+                if api_format != CodexCopilotApiFormat::Auto {
+                    assert!(
+                        message.contains(metadata["codexCopilotApiFormat"].as_str().unwrap()),
+                        "{message}"
+                    );
+                }
+                assert_eq!(body["model"], "GPT-5.6");
+            }
+        }
+    }
+
+    #[test]
+    fn copilot_endpoint_rewrite_preserves_advertised_version_and_compact() {
+        assert_eq!(
+            rewrite_codex_endpoint_for_copilot("/v1/responses?x=1", "/responses"),
+            ("/responses?x=1".to_string(), Some("x=1".to_string()))
+        );
+        assert_eq!(
+            rewrite_codex_endpoint_for_copilot("/responses", "/v1/responses"),
+            ("/v1/responses".to_string(), None)
+        );
+        assert_eq!(
+            rewrite_codex_endpoint_for_copilot("/v1/responses/compact", "/responses"),
+            ("/responses/compact".to_string(), None)
+        );
+    }
+
+    #[test]
+    fn copilot_detection_via_provider_type() {
+        let provider = copilot_test_provider(Some("github_copilot"));
+        assert!(is_managed_copilot_request(
+            &AppType::Codex,
+            &provider,
+            "https://copilot-api.corp.example.com"
+        ));
+    }
+
+    #[test]
+    fn copilot_detection_via_base_url() {
+        let ordinary = copilot_test_provider(None);
+        assert!(is_managed_copilot_request(
+            &AppType::Claude,
+            &ordinary,
+            "https://api.githubcopilot.com"
+        ));
+        assert!(!is_managed_copilot_request(
+            &AppType::Codex,
+            &ordinary,
+            "https://api.githubcopilot.com"
+        ));
+        assert!(!is_managed_copilot_request(
+            &AppType::Codex,
+            &ordinary,
+            "https://copilot-api.example.com"
+        ));
+        assert!(!is_managed_copilot_request(
+            &AppType::Claude,
+            &ordinary,
+            "https://api.anthropic.com"
+        ));
     }
 }

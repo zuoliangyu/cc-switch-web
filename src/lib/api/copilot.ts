@@ -9,11 +9,25 @@ import { invoke } from "@/lib/runtime/client/core";
 /**
  * Copilot 可用模型
  */
+export type CopilotReasoningEffort =
+  | "none"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max"
+  | "ultra";
+
 export interface CopilotModel {
   id: string;
   name: string;
   vendor: string;
   model_picker_enabled: boolean;
+  context_window?: number;
+  supported_endpoints?: string[];
+  supports_parallel_tool_calls?: boolean;
+  reasoning_effort?: CopilotReasoningEffort[];
 }
 
 /**

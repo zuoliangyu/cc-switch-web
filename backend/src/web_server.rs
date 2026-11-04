@@ -3637,6 +3637,9 @@ struct GeminiEditorViewRequest {
     settings: serde_json::Value,
     category: Option<String>,
     provider_id: Option<String>,
+    /// Codex 草稿的 meta（GitHub Copilot 托管身份）；给了就优先于已存卡片的 meta
+    #[serde(default)]
+    meta: Option<crate::provider::ProviderMeta>,
 }
 
 /// 同步供应商服务会等待模式锁、后台模型读取或服务停止；保持 Tokio 调度线程可运行。
@@ -3700,28 +3703,30 @@ async fn codex_editor_view(
     State(state): State<WebApiState>,
     Json(payload): Json<GeminiEditorViewRequest>,
 ) -> Result<Json<crate::services::provider::claude_editor::EditorView>, ApiError> {
-    let category = if let Some(id) = payload.provider_id.as_deref() {
-        let row = state
+    let row = match payload.provider_id.as_deref() {
+        Some(id) => state
             .app_state
             .db
             .get_provider_by_id(id, "codex")
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-        if row
-            .as_ref()
-            .is_some_and(crate::services::provider::codex_direct::is_official)
-        {
-            Some("official".to_string())
-        } else {
-            payload.category
-        }
+            .map_err(|e| ApiError::internal(e.to_string()))?,
+        None => None,
+    };
+    let category = if row
+        .as_ref()
+        .is_some_and(crate::services::provider::codex_direct::is_official)
+    {
+        Some("official".to_string())
     } else {
         payload.category
     };
+    // 显式传来的草稿 meta（含空值）优先；没传时沿用已存卡片的 meta
+    let meta = payload.meta.or_else(|| row.and_then(|row| row.meta));
     blocking_json(move || {
-        crate::services::provider::ProviderService::codex_editor_view(
+        crate::services::provider::ProviderService::codex_editor_view_with_meta(
             state.app_state.as_ref(),
             &payload.settings,
             category.as_deref(),
+            meta.as_ref(),
         )
     })
     .await

@@ -7,6 +7,13 @@ use crate::provider::Provider;
 use crate::proxy::error::ProxyError;
 use serde_json::Value;
 
+/// Header value from a credential: reject material that cannot live in an HTTP
+/// header value (control bytes, CR/LF, non-ASCII) as a 401 instead of panicking.
+pub fn auth_header_value(s: &str) -> Result<http::HeaderValue, ProxyError> {
+    http::HeaderValue::from_str(s)
+        .map_err(|e| ProxyError::AuthError(format!("invalid auth header value: {e}")))
+}
+
 /// 供应商适配器 Trait
 ///
 /// 所有供应商适配器都需要实现此 trait，提供统一的接口来处理：

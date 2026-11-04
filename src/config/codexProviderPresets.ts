@@ -39,8 +39,9 @@ export interface CodexProviderPreset extends PresetFamilyFields {
   iconColor?: string; // 图标颜色
   // Codex API 格式
   apiFormat?: CodexApiFormat;
-  // 托管账号预设：目前仅 xAI OAuth（Grok 订阅经本地代理注入 token 直连 api.x.ai）
-  providerType?: "xai_oauth";
+  // 托管账号预设：xAI OAuth（Grok 订阅经本地代理注入 token 直连 api.x.ai）与
+  // GitHub Copilot（托管 GitHub 账号，经本地代理按模型选 Responses / Chat）
+  providerType?: "xai_oauth" | "github_copilot";
   // OAuth 预设：隐藏 API Key 输入，保存前要求已登录托管账号
   requiresOAuth?: boolean;
   // Codex Chat 本地路由模式下的模型目录
@@ -149,6 +150,67 @@ export const codexProviderPresets: CodexProviderPreset[] = [
     iconColor: "#00A67E",
   },
   // ===== 上游预设数据；Web 统一按显示名称 A–Z 排序 =====
+  {
+    name: "GitHub Copilot",
+    websiteUrl: "https://github.com/features/copilot",
+    auth: {},
+    // Codex talks Responses to the local proxy. The proxy selects Copilot's
+    // native Responses or Chat Completions transport from model capabilities.
+    config: generateThirdPartyConfig(
+      "github-copilot",
+      "https://api.githubcopilot.com",
+      "gpt-6-astra",
+      { requiresOpenAiAuth: false },
+    ),
+    endpointCandidates: ["https://api.githubcopilot.com"],
+    providerType: "github_copilot",
+    requiresOAuth: true,
+    modelCatalog: modelCatalog([
+      {
+        model: "gpt-6-astra",
+        displayName: "GPT-6 Astra",
+        contextWindow: 272000,
+        reasoningLevels: ["low", "medium", "high", "xhigh", "max"],
+        supportsParallelToolCalls: true,
+        inputModalities: ["text"],
+      },
+      {
+        model: "gpt-5.6-sol",
+        displayName: "GPT-5.6 Sol",
+        contextWindow: 272000,
+        reasoningLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+        supportsParallelToolCalls: true,
+        inputModalities: ["text"],
+      },
+      {
+        model: "gpt-5.6-terra",
+        displayName: "GPT-5.6 Terra",
+        contextWindow: 272000,
+        reasoningLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+        supportsParallelToolCalls: true,
+        inputModalities: ["text"],
+      },
+      {
+        model: "gpt-5.6-luna",
+        displayName: "GPT-5.6 Luna",
+        contextWindow: 200000,
+        reasoningLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+        supportsParallelToolCalls: true,
+        inputModalities: ["text"],
+      },
+      {
+        model: "gpt-5.5",
+        displayName: "GPT-5.5",
+        contextWindow: 272000,
+        reasoningLevels: ["none", "low", "medium", "high", "xhigh"],
+        supportsParallelToolCalls: true,
+        inputModalities: ["text"],
+      },
+    ]),
+    category: "third_party",
+    icon: "github",
+    iconColor: "#000000",
+  },
   {
     name: "Kimi",
     family: "kimi",

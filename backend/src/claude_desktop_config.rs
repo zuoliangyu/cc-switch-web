@@ -1177,24 +1177,9 @@ pub fn proxy_gateway_base_url_from_db(db: &Database) -> Result<String, AppError>
     }
     Ok(format!(
         "{}{}",
-        proxy_origin_from_parts(&config.listen_address, config.listen_port),
+        crate::services::proxy::client_origin(&config.listen_address, config.listen_port),
         CLAUDE_DESKTOP_PROXY_PREFIX
     ))
-}
-
-fn proxy_origin_from_parts(listen_address: &str, listen_port: u16) -> String {
-    let connect_host = match listen_address {
-        "0.0.0.0" => "127.0.0.1",
-        "::" => "::1",
-        value => value,
-    };
-    let connect_host_for_url = if connect_host.contains(':') && !connect_host.starts_with('[') {
-        format!("[{connect_host}]")
-    } else {
-        connect_host.to_string()
-    };
-
-    format!("http://{}:{}", connect_host_for_url, listen_port)
 }
 
 /// 直连那家的网关 profile：地址和 Key 直接写进去。模型映射卡、托管 OAuth 要经路由，拒绝。

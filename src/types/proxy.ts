@@ -170,6 +170,12 @@ export interface AppModeSubagentModel {
   defaultEffort?: string;
 }
 
+/** 在后端切换锁里算出的实际结果，不按界面上可能过时的模式推断。 */
+export interface RouteSwitchResult {
+  kind: "remembered" | "route" | "stack";
+  clientConfigChanged: boolean;
+}
+
 export interface AppModeView {
   startupError?: string | null;
   mode: AppMode;

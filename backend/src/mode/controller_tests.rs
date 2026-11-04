@@ -1223,3 +1223,139 @@ async fn claude_route_keeps_api_key_rows_off_the_local_hop() {
     assert!(live["env"].get("ANTHROPIC_API_KEY").is_none(), "{live}");
     exit(state, &AppType::Claude).await.unwrap();
 }
+
+// ── 路由切换结果（上游 5cc94b8d）：按应用切换锁里实际生效的模式给出，不按界面上看的标签页 ──
+
+#[test]
+fn route_switch_results_serialize_the_renderer_contract() {
+    for (kind, name) in [
+        (RouteSwitchKind::Remembered, "remembered"),
+        (RouteSwitchKind::Route, "route"),
+        (RouteSwitchKind::Stack, "stack"),
+    ] {
+        for changed in [false, true] {
+            let result = RouteSwitchResult {
+                kind: kind.clone(),
+                client_config_changed: changed,
+            };
+            assert_eq!(
+                serde_json::to_value(result).unwrap(),
+                json!({ "kind": name, "clientConfigChanged": changed })
+            );
+        }
+    }
+    // 直连切换的结果照旧只有 warnings。
+    assert_eq!(
+        serde_json::to_value(crate::services::provider::SwitchResult::default()).unwrap(),
+        json!({ "warnings": [] })
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn route_switch_results_follow_the_applied_mode() {
+    let f = setup();
+    let state = &f.state;
+    // c 和 a 同名：`/model` 的说明带供应商名，其余字段走本地路由，契约和 a 一样。
+    let mut c = row("c");
+    c.name = "a".into();
+    state.db.save_provider("claude", &c).unwrap();
+    let path = crate::config::get_claude_settings_path();
+    let unchanged = std::fs::read(&path).unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            set_route(state, &AppType::Claude, "b").await.unwrap(),
+            RouteSwitchResult {
+                kind: RouteSwitchKind::Remembered,
+                client_config_changed: false,
+            }
+        );
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), unchanged);
+    assert!(!current::is_proxy(&AppType::Claude));
+
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    enter(state, &AppType::Claude, Some("a")).await.unwrap();
+    assert_eq!(
+        set_route(state, &AppType::Claude, "c").await.unwrap(),
+        RouteSwitchResult {
+            kind: RouteSwitchKind::Route,
+            client_config_changed: false,
+        }
+    );
+    assert_eq!(
+        set_route(state, &AppType::Claude, "b").await.unwrap(),
+        RouteSwitchResult {
+            kind: RouteSwitchKind::Route,
+            client_config_changed: true,
+        }
+    );
+    let result =
+        crate::services::provider::ProviderService::switch(state, AppType::Claude, "a").unwrap();
+    assert_eq!(
+        result.route,
+        Some(RouteSwitchResult {
+            kind: RouteSwitchKind::Route,
+            client_config_changed: true,
+        })
+    );
+
+    enter_mode(state, &AppType::Claude, None, true)
+        .await
+        .unwrap();
+    let result =
+        crate::services::provider::ProviderService::switch(state, AppType::Claude, "b").unwrap();
+    assert_eq!(result.route.unwrap().kind, RouteSwitchKind::Stack);
+
+    exit(state, &AppType::Claude).await.unwrap();
+    let result =
+        crate::services::provider::ProviderService::switch(state, AppType::Claude, "b").unwrap();
+    assert!(result.route.is_none());
+}
+
+/// 客户端地址存在本机 settings.json，不进会同步的库；保存时重写接上路由的客户端，第一次重写
+/// 失败后改好客户端文件、原样再保存一次就是重试（上游 f88068b9）。
+#[tokio::test]
+#[serial]
+async fn saving_the_client_host_rewrites_routed_clients_and_retries_on_the_same_value() {
+    let f = setup();
+    let state = &f.state;
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    enter(state, &AppType::Claude, Some("b")).await.unwrap();
+    let path = crate::config::get_claude_settings_path();
+    let routed = std::fs::read_to_string(&path).unwrap();
+    assert!(routed.contains("http://127.0.0.1:"), "{routed}");
+
+    std::fs::write(&path, "not json").unwrap();
+    set_proxy_client_host(state, " 172.25.144.1 ")
+        .await
+        .expect_err("claude settings unreadable");
+    assert_eq!(
+        crate::settings::get_proxy_client_host().as_deref(),
+        Some("172.25.144.1")
+    );
+
+    std::fs::write(&path, &routed).unwrap();
+    set_proxy_client_host(state, "172.25.144.1")
+        .await
+        .expect("retry the same save");
+    let settings = std::fs::read_to_string(&path).unwrap();
+    assert!(settings.contains("http://172.25.144.1:"), "{settings}");
+    // Codex 休眠表、Claude Desktop 网关这些不经运行中服务的地址也按它生成。
+    assert_eq!(
+        crate::services::proxy::client_origin("0.0.0.0", 15721),
+        "http://172.25.144.1:15721"
+    );
+
+    set_proxy_client_host(state, "")
+        .await
+        .expect("clear the client host");
+    assert_eq!(crate::settings::get_proxy_client_host(), None);
+    let settings = std::fs::read_to_string(&path).unwrap();
+    assert!(settings.contains("http://127.0.0.1:"), "{settings}");
+    exit(state, &AppType::Claude).await.unwrap();
+}

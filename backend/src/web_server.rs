@@ -4044,6 +4044,27 @@ async fn get_global_proxy_config(
     Ok(Json(config))
 }
 
+#[derive(Debug, Deserialize)]
+struct ProxyClientHostRequest {
+    host: String,
+}
+
+/// 客户端地址：写进客户端配置的代理主机，空表示按监听地址推。
+async fn get_proxy_client_host() -> Json<String> {
+    Json(crate::settings::get_proxy_client_host().unwrap_or_default())
+}
+
+/// 保存客户端地址并按新地址重写接上路由的客户端；重写失败时地址也已经存下，原样再保存就是重试。
+async fn set_proxy_client_host(
+    State(state): State<WebApiState>,
+    Json(payload): Json<ProxyClientHostRequest>,
+) -> Result<StatusCode, ApiError> {
+    crate::mode::controller::set_proxy_client_host(state.app_state.as_ref(), &payload.host)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to save proxy client host: {e}")))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn get_proxy_config_for_app(
     State(state): State<WebApiState>,
     Path(app): Path<String>,
@@ -4184,11 +4205,11 @@ async fn set_proxy_takeover_for_app(
 async fn switch_proxy_provider(
     State(state): State<WebApiState>,
     Path((app, id)): Path<(String, String)>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<crate::mode::controller::RouteSwitchResult>, ApiError> {
     crate::commands::switch_proxy_provider_internal(state.app_state.as_ref(), app, id)
         .await
-        .map_err(|e| ApiError::internal(format!("failed to switch proxy provider: {e}")))?;
-    Ok(StatusCode::NO_CONTENT)
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to switch proxy provider: {e}")))
 }
 
 async fn get_pricing_model_source(
@@ -5273,6 +5294,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/proxy/global-config",
             get(get_global_proxy_config).put(update_global_proxy_config),
+        )
+        .route(
+            "/api/proxy/client-host",
+            get(get_proxy_client_host).put(set_proxy_client_host),
         )
         .route(
             "/api/proxy/global-url",

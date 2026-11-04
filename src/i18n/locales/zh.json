@@ -943,7 +943,18 @@
     "toolUpgradeConfirmBtn": "确认升级",
     "toolUpgradeUnanchoredHint": "无法确定命令行实际使用哪处，将执行默认升级命令（可能装到 PATH 上第一个 npm）。",
     "toolUpgradeUnmanagedTitle": "以下工具已跳过升级",
-    "toolUpgradeUnmanagedDetail": "{{tool}}（{{path}}）不是通过 npm 或可识别的安装器安装的，CC Switch 无法判断如何升级它。请用你原来的安装方式升级（例如 winget、Scoop 或重新运行官方安装脚本）。"
+    "toolUpgradeUnmanagedDetail": "{{tool}}（{{path}}）不是通过 npm 或可识别的安装器安装的，CC Switch 无法判断如何升级它。请用你原来的安装方式升级（例如 winget、Scoop 或重新运行官方安装脚本）。",
+    "codexQuotaProtection": {
+      "title": "官方额度保护",
+      "help": "达到任一使用率阈值时暂停新的官方请求，第三方模型仍可使用。仅保护经过 CC Switch 本地路由的 Codex 官方请求。使用率直接读取官方响应里自带的额度信息，正常使用时不会多发请求；只有刚开始使用或空闲约 5 分钟后，才会先单独查询一次。查不到额度（网络问题、登录过期等）时照常放行，不会误挡。已放行的请求和其他应用仍可能把额度用过阈值；暂停期间不会因正常额度耗尽而进入 Luna Reserve。",
+      "thresholds": "暂停官方请求的使用率",
+      "fiveHour": "五小时使用率（%）",
+      "weekly": "周使用率（%）",
+      "save": "保存阈值",
+      "reset": "恢复默认值",
+      "hint": "任一达到即暂停。默认 95% / 98%，保存后立即对新请求生效。",
+      "invalid": "请输入 1–99 的整数。"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2975,7 +2986,13 @@
       "invalidAddress": "地址无效，请输入有效的 IP 地址（如 127.0.0.1）或 localhost",
       "configSaved": "代理配置已保存",
       "configSaveFailed": "保存配置失败",
-      "restartRequired": "修改地址或端口后需要重启代理服务才能生效"
+      "restartRequired": "修改地址或端口后需要重启代理服务才能生效",
+      "clientHost": {
+        "label": "连接地址",
+        "hint": "客户端连路由用的地址；留空按监听地址",
+        "invalid": "请输入客户端能访问到的 IP 地址或主机名",
+        "help": "CC Switch 写进客户端配置的代理主机（含 Claude Desktop 的网关地址），只存在本机、不随同步。客户端无法通过本机回环访问时填写，例如 WSL2（NAT 模式）里的会话：把监听地址设为 0.0.0.0，在这里填 WSL 能访问到的 Windows IP（如 vEthernet (WSL) 网卡的地址），并在防火墙中放行端口。保存后会按新地址重写已接上路由的客户端。"
+      }
     },
     "switchFailed": "切换失败: {{error}}",
     "takeover": {
@@ -3841,6 +3858,22 @@
       "autoReviewDefaultMain": "主模型自己审批（默认）",
       "autoReviewUnavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），审批暂时用默认模型；加回来后自动恢复。",
       "saveFailed": "保存失败：{{error}}"
+    },
+    "toast": {
+      "routeRemembered": "已记住供应商 {{provider}}，客户端接入路由或聚合后使用。",
+      "routeTargetChanged": "路由目标已设为 {{provider}}。",
+      "routeSwitched": "路由已切换至 {{provider}}，后续新请求将使用该供应商。",
+      "stackDefaultChanged": "聚合默认供应商已设为 {{provider}}；已选聚合模型仍使用各自的供应商。",
+      "clientConfigChanged": "客户端配置也已更新；重启 {{app}} 以加载更新后的配置。"
+    },
+    "exit": {
+      "title": "把 {{app}} 从「{{from}}」切回直连？",
+      "lead": "{{app}} 会直接连接 {{provider}}，请求不再经过 CC Switch。",
+      "noteFile": "会把 {{file}} 里的地址和密钥改回 {{provider}} 的，其他设置不动。",
+      "noteDesktop": "会把 Claude Desktop 的网关配置改回 {{provider}}，重启 Claude Desktop 后生效。",
+      "routeKept": "路由目标、故障转移队列和设置都会保留，下次开始路由时恢复。",
+      "leaveStackNote": "以 ccs- 开头的聚合模型会从模型列表里消失；聚合名单不会删，切回聚合模式就回来。正在用其中某个的话，要在客户端里换回普通模型。",
+      "confirm": "回到直连"
     }
   },
   "quota": {

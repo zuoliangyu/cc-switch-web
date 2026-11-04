@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { AppId } from "@/lib/api";
-import type { AppMode } from "@/types/proxy";
+import type { AppMode, RouteSwitchResult } from "@/types/proxy";
 import { proxyApi } from "@/lib/api/proxy";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
@@ -12,7 +12,8 @@ type Action =
   | { kind: "restartDaemon" }
   | { kind: "adoptCatalog" }
   | { kind: "acknowledgeStale" }
-  | { kind: "mode"; mode: AppMode; route?: string }
+  /** `quiet`：错误由调用方就地显示（确认框里），不再弹 toast */
+  | { kind: "mode"; mode: AppMode; route?: string; quiet?: boolean }
   | { kind: "member"; id: string; enabled: boolean }
   | { kind: "route"; id: string };
 
@@ -25,7 +26,7 @@ export function useAppMode(app: AppId) {
     refetchInterval: 3000,
   });
   const mutation = useMutation({
-    mutationFn: (action: Action) => {
+    mutationFn: (action: Action): Promise<RouteSwitchResult | void> => {
       if (action.kind === "restartDaemon")
         return proxyApi.restartCodexDaemon().then(() => {});
       if (action.kind === "adoptCatalog")
@@ -38,7 +39,10 @@ export function useAppMode(app: AppId) {
         return proxyApi.setAggregationMember(app, action.id, action.enabled);
       return proxyApi.setRoute(app, action.id);
     },
-    onError: (error) => toast.error(extractErrorMessage(error)),
+    onError: (error, action) => {
+      if (action.kind === "mode" && action.quiet) return;
+      toast.error(extractErrorMessage(error));
+    },
     onSettled: async () => {
       await Promise.all(
         [
@@ -55,5 +59,10 @@ export function useAppMode(app: AppId) {
     ...query,
     pending: mutation.isPending,
     change: mutation.mutateAsync,
+    /** 指定路由目标（聚合模式下是默认那家），返回后端实际生效的结果 */
+    setRoute: (id: string) =>
+      mutation
+        .mutateAsync({ kind: "route", id })
+        .then((result) => result as RouteSwitchResult),
   };
 }

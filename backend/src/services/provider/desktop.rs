@@ -87,12 +87,15 @@ impl ProviderService {
         provider: &Provider,
     ) -> Result<SwitchResult, AppError> {
         if crate::mode::current::is_proxy(&AppType::ClaudeDesktop) {
-            futures::executor::block_on(crate::mode::controller::set_route_locked(
+            let route = futures::executor::block_on(crate::mode::controller::set_route_locked(
                 state,
                 &AppType::ClaudeDesktop,
                 &provider.id,
             ))?;
-            return Ok(SwitchResult::default());
+            return Ok(SwitchResult {
+                route: Some(route),
+                ..Default::default()
+            });
         }
         let _app = futures::executor::block_on(state.proxy_service.lock_switch_for_app(APP));
         crate::mode::operation::settle(&state.db, APP)?;

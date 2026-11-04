@@ -1512,6 +1512,8 @@ impl RequestForwarder {
         };
         let codex_official_auth_passthrough = matches!(app_type, AppType::Codex)
             && super::providers::is_codex_official_provider(provider);
+        // 官方请求的账号令牌：额度保护按它放行，并从响应头记下这个账号的用量。
+        let mut quota_token = None;
         if codex_official_auth_passthrough {
             // 共享 workspace 下本地账号 ID 与 ChatGPT workspace ID 分离：请求头比对
             // workspace，bearer 必须与该账号记录的 live 会话一致（上游 c2ec78dd）。
@@ -1552,6 +1554,12 @@ impl RequestForwarder {
                 expected_chatgpt_account_id.as_deref(),
                 managed_session_matches,
             )?;
+            // forward 只发 POST：每个官方请求都过一遍额度保护（关着或用量未知时直接放行）。
+            let token = codex_bearer_access_token(headers).ok_or_else(|| {
+                ProxyError::AuthError("Codex official route requires a bearer token".to_string())
+            })?;
+            super::codex_quota_protection::admit(token, headers).await?;
+            quota_token = Some(token);
         }
         let codex_impersonate_claude_code = codex_responses_to_anthropic
             && provider
@@ -2425,6 +2433,11 @@ impl RequestForwarder {
             )
             .await?
         };
+
+        // 官方响应（含错误响应）带着这个账号的用量头：下一个请求的额度判断直接用，不用另查。
+        if let Some(token) = quota_token {
+            super::codex_quota_protection::observe_response(token, headers, response.headers());
+        }
 
         // 检查响应状态
         let status = response.status();

@@ -1711,3 +1711,26 @@ fn migration_v20_to_v21_adds_dsh_flags_and_parser_state_preserving_cursors() {
         .expect("read cursor");
     assert_eq!(cursor, (11, 123, None));
 }
+
+/// 排序只改 `sort_index`（上游 71524045）：和删除、编辑并发时不复活删掉的行，也不盖掉别处刚存的字段。
+#[test]
+fn sort_index_updates_touch_only_existing_rows_and_the_index() {
+    let db = Database::memory().unwrap();
+    for id in ["a", "b"] {
+        let provider = Provider::with_id(id.into(), id.into(), json!({ "env": {} }), None);
+        db.save_provider("claude", &provider).unwrap();
+    }
+    // 拖动开始后 b 被删、a 被改名：排序写入只动 a 的 sort_index。
+    db.delete_provider("claude", "b").unwrap();
+    let mut renamed = db.get_provider_by_id("a", "claude").unwrap().unwrap();
+    renamed.name = "renamed".into();
+    db.save_provider("claude", &renamed).unwrap();
+
+    db.update_provider_sort_indexes("claude", &[("b".into(), 0), ("a".into(), 1)])
+        .unwrap();
+
+    assert!(db.get_provider_by_id("b", "claude").unwrap().is_none());
+    let a = db.get_provider_by_id("a", "claude").unwrap().unwrap();
+    assert_eq!(a.sort_index, Some(1));
+    assert_eq!(a.name, "renamed");
+}

@@ -77,6 +77,28 @@ pub struct ProxyService {
     switch_locks: SwitchLockManager,
 }
 
+/// 客户端连接代理用的地址。`host` 是设置里的客户端地址，没设时是监听地址，后者可能是
+/// `0.0.0.0` / `::`（监听所有网卡），客户端连不上这个地址，改用本机回环；IPv6 加方括号。
+pub(crate) fn proxy_origin(host: &str, port: u16) -> String {
+    let host = match host {
+        "0.0.0.0" => "127.0.0.1",
+        "::" => "::1",
+        other => other,
+    };
+    if host.contains(':') && !host.starts_with('[') {
+        format!("http://[{host}]:{port}")
+    } else {
+        format!("http://{host}:{port}")
+    }
+}
+
+/// 写进客户端配置的代理地址：本机设了客户端地址（settings.json）就用它，否则按监听地址。
+pub(crate) fn client_origin(listen_address: &str, port: u16) -> String {
+    let host =
+        crate::settings::get_proxy_client_host().unwrap_or_else(|| listen_address.to_string());
+    proxy_origin(&host, port)
+}
+
 impl ProxyService {
     #[cfg(test)]
     pub fn new(db: Arc<Database>) -> Self {
@@ -861,24 +883,11 @@ impl ProxyService {
         Ok(())
     }
 
-    /// 构造写入 Live 的代理地址（处理 0.0.0.0 / IPv6 等特殊情况）
+    /// 构造写入 Live 的代理地址（客户端地址、0.0.0.0 / IPv6 见 [`client_origin`]）
     async fn build_proxy_urls(&self) -> Result<(String, String), String> {
         let config = self.load_proxy_config_view().await?;
 
-        // listen_address 可能是 0.0.0.0（用于监听所有网卡），但客户端无法用 0.0.0.0 连接；
-        // 因此写回到各应用配置时，优先使用本机回环地址。
-        let connect_host = match config.listen_address.as_str() {
-            "0.0.0.0" => "127.0.0.1".to_string(),
-            "::" => "::1".to_string(),
-            _ => config.listen_address.clone(),
-        };
-        let connect_host_for_url = if connect_host.contains(':') && !connect_host.starts_with('[') {
-            format!("[{connect_host}]")
-        } else {
-            connect_host
-        };
-
-        let proxy_origin = format!("http://{}:{}", connect_host_for_url, config.listen_port);
+        let proxy_origin = client_origin(&config.listen_address, config.listen_port);
         let proxy_url = proxy_origin.clone();
         let proxy_codex_base_url = format!("{}/v1", proxy_origin.trim_end_matches('/'));
 

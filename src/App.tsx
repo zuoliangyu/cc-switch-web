@@ -50,6 +50,7 @@ import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { cn } from "@/lib/utils";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
@@ -921,7 +922,18 @@ function App() {
                       }}
                       onAggregationDefault={(id) => {
                         void appMode
-                          .change({ kind: "route", id })
+                          .setRoute(id)
+                          .then((result) =>
+                            toast.success(
+                              routeSwitchNotification(
+                                result,
+                                activeApp,
+                                providers[id]?.name ?? id,
+                                t,
+                              ),
+                              { closeButton: true },
+                            ),
+                          )
                           .catch(() => {});
                       }}
                       providers={providers}

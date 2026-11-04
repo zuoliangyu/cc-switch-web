@@ -366,6 +366,12 @@ export interface Settings {
   codexStackSubagentReasoningEffort?: string;
   // Codex 聚合：自动审批（Auto Review）用的模型（`ccs-<key>/<model>`）；不设时用 Codex 的默认
   codexStackAutoReviewModel?: string;
+  // Codex 本地路由里官方请求的额度耗尽前保护（默认关；阈值是使用率百分比，1–99）
+  codexQuotaProtection?: {
+    enabled: boolean;
+    fiveHourThreshold: number;
+    weeklyThreshold: number;
+  };
   // User has confirmed the local proxy first-run notice
   proxyConfirmed?: boolean;
   // User has confirmed the usage query first-run notice

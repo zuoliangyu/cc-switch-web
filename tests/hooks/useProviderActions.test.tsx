@@ -179,6 +179,49 @@ describe("useProviderActions", () => {
     expect(switchProviderMutateAsync).toHaveBeenCalledWith(provider.id);
   });
 
+  // 上游 5cc94b8d：路由下的切换按后端实际生效的结果提示，客户端文件没改写就不提示重启
+  it("routed switches report the applied result without an unconditional restart prompt", async () => {
+    const { wrapper } = createWrapper();
+    const provider = createProvider({ category: "custom", name: "B" });
+    const { result } = renderHook(() => useProviderActions("gemini"), {
+      wrapper,
+    });
+
+    switchProviderMutateAsync.mockResolvedValueOnce({
+      warnings: [],
+      route: { kind: "route", clientConfigChanged: false },
+    });
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+    expect(toastInfoMock).not.toHaveBeenCalled();
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+    expect(toastSuccessMock.mock.calls[0]?.[0]).toBe(
+      "webMode.toast.routeSwitched",
+    );
+
+    switchProviderMutateAsync.mockResolvedValueOnce({
+      warnings: [],
+      route: { kind: "route", clientConfigChanged: true },
+    });
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+    expect(toastSuccessMock.mock.calls[1]?.[0]).toBe(
+      "webMode.toast.routeTargetChangedwebMode.toast.clientConfigChanged",
+    );
+
+    // 直连切换照旧
+    switchProviderMutateAsync.mockResolvedValueOnce({ warnings: [] });
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+    expect(toastInfoMock).toHaveBeenCalledWith(
+      "notifications.geminiRestart",
+      expect.anything(),
+    );
+  });
+
   it("blocks switching providers that require proxy when proxy is not running", async () => {
     const { wrapper } = createWrapper();
     const provider = createProvider({

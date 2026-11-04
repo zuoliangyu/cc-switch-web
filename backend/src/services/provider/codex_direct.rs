@@ -54,19 +54,13 @@ fn managed_account(provider: &Provider) -> Option<String> {
     ProviderService::managed_codex_oauth_account_id(provider)
 }
 
+/// 本地代理给 Codex 的地址（带 `/v1`，客户端地址优先），不需要代理在运行：官方直连时写休眠表用。
 fn configured_proxy_base_url(db: &Database) -> Result<String, AppError> {
     let config = db.get_global_proxy_config_sync()?;
-    let host = match config.listen_address.as_str() {
-        "0.0.0.0" => "127.0.0.1",
-        "::" => "[::1]",
-        host => host,
-    };
-    let host = if host.contains(':') && !host.starts_with('[') {
-        format!("[{host}]")
-    } else {
-        host.to_string()
-    };
-    Ok(format!("http://{}:{}/v1", host, config.listen_port))
+    Ok(format!(
+        "{}/v1",
+        crate::services::proxy::client_origin(&config.listen_address, config.listen_port)
+    ))
 }
 /// 官方代理契约没有占位 Key，按监听地址识别，避免把其它本地网关误当接管残留。
 pub(crate) fn routes_official_to_proxy(db: &Database, text: &str) -> bool {

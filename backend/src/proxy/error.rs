@@ -63,6 +63,10 @@ pub enum ProxyError {
     #[error("认证失败: {0}")]
     AuthError(String),
 
+    /// 本地的额度耗尽前保护，不是上游的用量上限响应。
+    #[error("Codex 官方额度保护 (quota protection): {0}")]
+    CodexQuotaProtection(String),
+
     #[error("内部错误: {0}")]
     Internal(String),
 }
@@ -138,6 +142,9 @@ impl IntoResponse for ProxyError {
                     ProxyError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
                     ProxyError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, self.to_string()),
                     ProxyError::AuthError(_) => (StatusCode::UNAUTHORIZED, self.to_string()),
+                    ProxyError::CodexQuotaProtection(_) => {
+                        (StatusCode::FORBIDDEN, self.to_string())
+                    }
                     ProxyError::Internal(_) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
                     }
@@ -147,12 +154,16 @@ impl IntoResponse for ProxyError {
                     ProxyError::UpstreamError { .. } => unreachable!(),
                 };
 
-                let error_body = json!({
+                let mut error_body = json!({
                     "error": {
                         "message": message,
                         "type": "proxy_error",
                     }
                 });
+                // 本地暂停官方请求：带上专用错误码，客户端和日志能和上游 403 区分开。
+                if matches!(self, ProxyError::CodexQuotaProtection(_)) {
+                    error_body["error"]["code"] = json!("cc_switch_codex_quota_protection");
+                }
 
                 (http_status, error_body)
             }
@@ -212,6 +223,19 @@ mod tests {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             Some(&self.0)
         }
+    }
+
+    /// 额度保护是本地拒绝：403 带专用错误码，和上游的 403 区分开（上游 aa42a93d）。
+    #[tokio::test]
+    async fn codex_quota_protection_is_a_local_forbidden_with_its_own_code() {
+        use http_body_util::BodyExt;
+
+        let response = ProxyError::CodexQuotaProtection("5h: 96%".into()).into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["code"], "cc_switch_codex_quota_protection");
+        assert_eq!(body["error"]["type"], "proxy_error");
     }
 
     #[test]

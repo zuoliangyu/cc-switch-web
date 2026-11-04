@@ -5,6 +5,7 @@ import type {
   UniversalProvidersMap,
 } from "@/types";
 import type { AppId } from "./types";
+import type { RouteSwitchResult } from "@/types/proxy";
 
 export interface ProviderEditorSave {
   base: Record<string, unknown>;
@@ -22,6 +23,8 @@ export interface ProviderSortUpdate {
 
 export interface SwitchResult {
   warnings: string[];
+  /** 这次选的是本地路由的目标时才有 */
+  route?: RouteSwitchResult;
 }
 
 export interface OpenTerminalOptions {

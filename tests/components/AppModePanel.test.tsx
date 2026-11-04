@@ -183,6 +183,69 @@ describe("模式与聚合操作", () => {
     client.clear();
   });
 
+  // 上游 f9e0d537：回到直连也先确认，说明连到哪家、改写哪个文件；出错就地显示
+  it("回到直连先确认，写明直连那家和客户端文件，失败时在确认框里显示错误", async () => {
+    const calls: unknown[] = [];
+    let fail = true;
+    server.use(
+      http.post("http://runtime.local/get_app_mode", () =>
+        HttpResponse.json({
+          mode: "routing",
+          attached: true,
+          directProviderId: "a",
+          routeProviderId: "z",
+          eligibleProviderIds: ["z", "a"],
+          aggregation: { active: false, members: [] },
+        }),
+      ),
+      http.post("http://runtime.local/set_app_mode", async ({ request }) => {
+        calls.push(await request.json());
+        if (fail) {
+          fail = false;
+          return HttpResponse.json("client file locked", { status: 500 });
+        }
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ModePanel />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "webMode.direct" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "webMode.activate" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(calls).toEqual([]);
+    expect(dialog).toHaveTextContent("webMode.exit.title");
+    expect(dialog).toHaveTextContent("webMode.exit.noteFile");
+    expect(dialog).toHaveTextContent("webMode.exit.routeKept");
+
+    const confirm = within(dialog).getByRole("button", {
+      name: "webMode.exit.confirm",
+    });
+    fireEvent.click(confirm);
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(calls).toEqual([
+      { appType: "claude", mode: "direct" },
+      { appType: "claude", mode: "direct" },
+    ]);
+    client.clear();
+  });
+
   // 上游 3e9eede4 / b93bf12d：Claude Desktop 也有设备级的直连 / 路由 / 聚合模式
   it("Claude Desktop 提供三种模式，并提示只在启动时读取配置", async () => {
     const calls: unknown[] = [];

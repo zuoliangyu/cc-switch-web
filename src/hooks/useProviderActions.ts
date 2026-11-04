@@ -19,6 +19,7 @@ import {
   useSwitchProviderMutation,
 } from "@/lib/query";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { injectCodingPlanUsageScript } from "@/config/codingPlanProviders";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import {
@@ -269,7 +270,8 @@ export function useProviderActions(
       try {
         const result = await switchProviderMutation.mutateAsync(provider.id);
         await syncClaudePlugin(provider);
-        if (activeApp === "gemini")
+        // 路由下的切换：路由当场换上游，客户端文件改写了才需要重启（提示里会说）
+        if (activeApp === "gemini" && !result?.route)
           toast.info(t("notifications.geminiRestart"), {
             duration: 6000,
             closeButton: true,
@@ -304,7 +306,12 @@ export function useProviderActions(
         }
 
         // 根据供应商类型显示不同的成功提示
-        if (
+        if (result?.route) {
+          toast.success(
+            routeSwitchNotification(result.route, activeApp, provider.name, t),
+            { closeButton: true },
+          );
+        } else if (
           activeApp === "claude" &&
           provider.category !== "official" &&
           (isCopilotProvider ||

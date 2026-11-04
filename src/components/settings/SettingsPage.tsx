@@ -53,6 +53,7 @@ import { UsageDashboard } from "@/components/usage/UsageDashboard";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { CodexHistorySettings } from "@/components/settings/CodexHistorySettings";
+import { CodexQuotaProtectionSettings } from "@/components/settings/CodexQuotaProtectionSettings";
 import { useSettings } from "@/hooks/useSettings";
 import { useInstalledSkills } from "@/hooks/useSkills";
 import { useImportExport } from "@/hooks/useImportExport";
@@ -408,6 +409,12 @@ export function SettingsPage({
                   <AuthCenterPanel />
                   {settings ? (
                     <CodexHistorySettings
+                      settings={settings}
+                      onChange={handleConfirmedAutoSave}
+                    />
+                  ) : null}
+                  {settings ? (
+                    <CodexQuotaProtectionSettings
                       settings={settings}
                       onChange={handleConfirmedAutoSave}
                     />

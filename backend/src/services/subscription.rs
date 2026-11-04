@@ -844,7 +844,7 @@ pub async fn query_codex_quota(
     quota
 }
 
-async fn query_codex_usage(
+pub(crate) async fn query_codex_usage(
     access_token: &str,
     account_id: Option<&str>,
     tool: &str,

@@ -1,5 +1,5 @@
 import type { AppId } from "@/lib/api/types";
-import type { AppMode, AppModeView } from "@/types/proxy";
+import type { AppMode, AppModeView, RouteSwitchResult } from "@/types/proxy";
 import { invoke } from "@/lib/runtime/client/core";
 import type {
   ProxyStatus,
@@ -40,7 +40,8 @@ export const proxyApi = {
   ): Promise<void> {
     return invoke("set_aggregation_member", { appType, providerId, enabled });
   },
-  setRoute(appType: AppId, providerId: string): Promise<void> {
+  /** 指定路由目标：已经接上路由时当场生效，否则只记下来，下次进入路由 / 聚合模式时用 */
+  setRoute(appType: AppId, providerId: string): Promise<RouteSwitchResult> {
     return invoke("switch_proxy_provider", { appType, providerId });
   },
   restartService(config: GlobalProxyConfig): Promise<void> {
@@ -88,6 +89,16 @@ export const proxyApi = {
   // 更新全局代理配置
   async updateGlobalProxyConfig(config: GlobalProxyConfig): Promise<void> {
     return invoke("update_global_proxy_config", { config });
+  },
+
+  // 获取客户端地址（写给客户端的代理主机，空表示按监听地址推）
+  async getProxyClientHost(): Promise<string> {
+    return invoke("get_proxy_client_host");
+  },
+
+  // 保存客户端地址，并按新地址重写接上路由的客户端
+  async setProxyClientHost(host: string): Promise<void> {
+    return invoke("set_proxy_client_host", { host });
   },
 
   // 获取指定应用的代理配置

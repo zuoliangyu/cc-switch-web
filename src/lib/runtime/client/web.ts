@@ -1,5 +1,5 @@
 import type { SkillDiscoveryResult, SkillUpdateCheckResult, SkillAppSyncOutcome } from "@/lib/api/skills";
-import type { AppMode, AppModeView } from "@/types/proxy";
+import type { AppMode, AppModeView, RouteSwitchResult } from "@/types/proxy";
 import type { Settings } from "@/types";
 import type {
   CustomEndpoint,
@@ -1282,8 +1282,8 @@ export async function setWebProxyTakeoverForApp(
 export async function switchWebProxyProvider(
   appId: AppId,
   providerId: string,
-): Promise<void> {
-  return requestWithBody<void>(
+): Promise<RouteSwitchResult> {
+  return requestWithBody<RouteSwitchResult>(
     `/api/proxy/apps/${appId}/providers/${providerId}/switch`,
     "POST",
   );
@@ -1297,6 +1297,16 @@ export async function updateWebGlobalProxyConfig(
   config: GlobalProxyConfig,
 ): Promise<void> {
   return requestWithBody<void>("/api/proxy/global-config", "PUT", config);
+}
+
+/** 客户端地址：写进客户端配置的代理主机，空表示按监听地址推。 */
+export async function getWebProxyClientHost(): Promise<string> {
+  return requestJson<string>("/api/proxy/client-host");
+}
+
+/** 保存客户端地址，后端按新地址重写接上路由的客户端。 */
+export async function setWebProxyClientHost(host: string): Promise<void> {
+  return requestWithBody<void>("/api/proxy/client-host", "PUT", { host });
 }
 
 export async function updateWebProxyConfigForApp(

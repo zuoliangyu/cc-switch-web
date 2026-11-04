@@ -24,9 +24,96 @@ import {
   useGlobalProxyConfig,
   useUpdateGlobalProxyConfig,
   useRestartProxyService,
+  useProxyClientHost,
+  useSetProxyClientHost,
 } from "@/lib/query/proxy";
 import type { ProxyStatus } from "@/types/proxy";
 import { useTranslation } from "react-i18next";
+
+/** 客户端地址：空（按监听地址）、IP 或主机名；`0.0.0.0` / `::` 客户端连不上 */
+const isValidClientHost = (host: string): boolean => {
+  if (host === "") return true;
+  if (host === "0.0.0.0" || host === "::") return false;
+  if (host.includes(":")) return /^[0-9a-f:.]+$/i.test(host);
+  if (/^[\d.]+$/.test(host)) {
+    const parts = host.split(".");
+    return (
+      parts.length === 4 &&
+      parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+    );
+  }
+  return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(
+    host,
+  );
+};
+
+/** 没设客户端地址时写给客户端的主机，和后端 `proxy_origin` 一致 */
+const defaultClientHost = (listenAddress: string): string =>
+  listenAddress === "0.0.0.0"
+    ? "127.0.0.1"
+    : listenAddress === "::"
+      ? "::1"
+      : listenAddress;
+
+/**
+ * 连接地址：写进客户端配置的代理主机（含 Claude Desktop 的网关地址）。只存在本机，保存后
+ * 后端按新地址重写接上路由的客户端，不用重启服务。
+ */
+function ClientHostField({ listenAddress }: { listenAddress: string }) {
+  const { t } = useTranslation();
+  const { data: saved } = useProxyClientHost();
+  const save = useSetProxyClientHost();
+  const [host, setHost] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (saved !== undefined) setHost(saved);
+  }, [saved]);
+
+  const submit = () => {
+    const trimmed = host.trim();
+    const ok = isValidClientHost(trimmed);
+    setError(ok ? null : t("proxy.settings.clientHost.invalid"));
+    if (!ok) return;
+    // useSetProxyClientHost 的 onSuccess / onError 已经弹过 toast
+    void save.mutateAsync(trimmed).catch(() => {});
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="proxy-client-host">
+        {t("proxy.settings.clientHost.label")}
+      </Label>
+      <div className="flex items-start gap-2">
+        <Input
+          id="proxy-client-host"
+          value={host}
+          placeholder={defaultClientHost(listenAddress)}
+          onChange={(event) => setHost(event.target.value)}
+          aria-invalid={error ? true : undefined}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={saved === undefined || save.isPending}
+          onClick={submit}
+        >
+          {t("common.save")}
+        </Button>
+      </div>
+      <p
+        className={
+          error ? "text-xs text-destructive" : "text-xs text-muted-foreground"
+        }
+        role={error ? "alert" : undefined}
+      >
+        {error ?? t("proxy.settings.clientHost.hint")}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {t("proxy.settings.clientHost.help")}
+      </p>
+    </div>
+  );
+}
 
 interface ProxyPanelProps {
   enableLocalProxy: boolean;
@@ -272,6 +359,10 @@ export function ProxyPanel({
               </p>
             </div>
           </div>
+
+          <ClientHostField
+            listenAddress={listenAddress.trim() || "127.0.0.1"}
+          />
 
           <div className="flex justify-end">
             <Button

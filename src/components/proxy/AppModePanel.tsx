@@ -14,7 +14,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { sortProvidersByName } from "@/utils/providerSort";
+import { extractErrorMessage } from "@/utils/errorUtils";
+import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import { CodexStackSettings } from "./CodexStackSettings";
+
+/** 回到直连时改写的客户端文件（确认框里写明，用默认位置）。 */
+const CLIENT_FILE: Partial<Record<AppId, string>> = {
+  claude: "~/.claude/settings.json",
+  codex: "~/.codex/config.toml",
+  gemini: "~/.gemini/.env",
+  grokbuild: "~/.grok/config.toml",
+};
 
 export function AppModePanel({
   app,
@@ -29,6 +39,8 @@ export function AppModePanel({
   const [view, setView] = useState<AppMode | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [restartConfirm, setRestartConfirm] = useState(false);
+  const [exitConfirm, setExitConfirm] = useState(false);
+  const [exitError, setExitError] = useState<string | null>(null);
   const [route, setRoute] = useState("");
   // 关掉的旧客户端提示：同一份（revision 相同）不再显示，目录或登录又变了才重新出现
   const [dismissedStale, setDismissedStale] = useState<string | null>(null);
@@ -69,9 +81,35 @@ export function AppModePanel({
   const subagentModels = (state.data.aggregation.subagentModels ?? []).filter(
     (model) => model.providerId !== routeId,
   );
+  const directName = state.data.directProviderId
+    ? (providers[state.data.directProviderId]?.name ??
+      state.data.directProviderId)
+    : t("webMode.noProvider");
+  const exitNotes = [
+    CLIENT_FILE[app]
+      ? t("webMode.exit.noteFile", {
+          file: CLIENT_FILE[app],
+          provider: directName,
+        })
+      : t("webMode.exit.noteDesktop", { provider: directName }),
+    active === "aggregation"
+      ? t("webMode.exit.leaveStackNote")
+      : t("webMode.exit.routeKept"),
+  ];
+  const confirmExit = () => {
+    setExitError(null);
+    void state
+      .change({ kind: "mode", mode: "direct", quiet: true })
+      .then(() => setExitConfirm(false))
+      .catch((error) =>
+        setExitError(extractErrorMessage(error) || t("common.unknown")),
+      );
+  };
   const begin = () => {
+    // 回到直连也先确认：说明会连到哪家、改写哪个文件、路由设置留不留
     if (selected === "direct") {
-      void state.change({ kind: "mode", mode: "direct" }).catch(() => {});
+      setExitError(null);
+      setExitConfirm(true);
       return;
     }
     const preferred =
@@ -263,6 +301,51 @@ export function AppModePanel({
         </DialogContent>
       </Dialog>
       <Dialog
+        open={exitConfirm}
+        onOpenChange={(open) => !state.pending && setExitConfirm(open)}
+      >
+        <DialogContent className="gap-4 p-6">
+          <DialogTitle>
+            {t("webMode.exit.title", {
+              app: APP_DISPLAY_NAME[app],
+              from: t(`webMode.${active}`),
+            })}
+          </DialogTitle>
+          <DialogDescription>
+            {t("webMode.exit.lead", {
+              app: APP_DISPLAY_NAME[app],
+              provider: directName,
+            })}
+          </DialogDescription>
+          <ul className="space-y-1.5 text-sm text-muted-foreground">
+            {exitNotes.map((note) => (
+              <li key={note} className="flex gap-2">
+                <span aria-hidden="true">·</span>
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+          {exitError && (
+            <p role="alert" className="text-sm text-destructive">
+              {exitError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              autoFocus
+              disabled={state.pending}
+              onClick={() => setExitConfirm(false)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button disabled={state.pending} onClick={confirmExit}>
+              {t("webMode.exit.confirm")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={confirm}
         onOpenChange={(open) => !state.pending && setConfirm(open)}
       >
@@ -271,6 +354,11 @@ export function AppModePanel({
             {t("webMode.activate", { mode: t(`webMode.${selected}`) })}
           </DialogTitle>
           <DialogDescription>{t("webMode.confirm")}</DialogDescription>
+          {active === "aggregation" && selected === "routing" && (
+            <p className="text-sm text-muted-foreground">
+              {t("webMode.exit.leaveStackNote")}
+            </p>
+          )}
           <label className="space-y-2 text-sm">
             {t("webMode.defaultProvider")}
             <select

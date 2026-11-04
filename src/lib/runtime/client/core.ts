@@ -58,6 +58,7 @@ import {
   getWebDefaultConfigDir,
   getWebFailoverQueue,
   getWebGlobalProxyConfig,
+  getWebProxyClientHost,
   getWebGlobalProxyUrl,
   getWebIsLiveTakeoverActive,
   getWebIsProxyRunning,
@@ -181,6 +182,7 @@ import {
   uninstallWebSkillUnified,
   updateWebCircuitBreakerConfig,
   updateWebGlobalProxyConfig,
+  setWebProxyClientHost,
   deleteWebMcpServer,
   deleteWebPrompt,
   deleteWebSkillBackup,
@@ -1127,6 +1129,10 @@ export async function invoke<T>(
       return (await getWebGlobalProxyConfig()) as T;
     case "update_global_proxy_config":
       return (await updateWebGlobalProxyConfig(args?.config as any)) as T;
+    case "get_proxy_client_host":
+      return (await getWebProxyClientHost()) as T;
+    case "set_proxy_client_host":
+      return (await setWebProxyClientHost(args?.host as string)) as T;
     case "get_proxy_config_for_app": {
       const appType = args?.appType as AppId | undefined;
       return (

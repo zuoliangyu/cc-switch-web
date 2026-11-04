@@ -114,7 +114,13 @@ pub(crate) struct Env {
     pub now_ms: Box<dyn Fn() -> u64 + Send + Sync>,
     /// 执行 `codex app-server daemon restart`，参数是超时。
     pub restart: Box<dyn Fn(Duration) -> Result<Output, String> + Send + Sync>,
+    /// 读一次进程表的结果复用多久（毫秒，0 是不复用），见 [`cached_probe`]。
+    pub probe_ttl_ms: u64,
 }
+
+/// 模式面板每 3 秒轮询一次视图，每次都要判断旧客户端：几秒内的轮询共用一次进程表读取（Unix
+/// 上是一次 `ps`）。
+const PROBE_TTL_MS: u64 = 5_000;
 
 impl Env {
     fn real() -> Self {
@@ -128,6 +134,7 @@ impl Env {
                     .unwrap_or_default()
             }),
             restart: Box::new(run_restart),
+            probe_ttl_ms: PROBE_TTL_MS,
         }
     }
 }
@@ -149,6 +156,7 @@ pub(crate) fn set_test_env(env: Env) {
     *env_slot()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Arc::new(env));
+    invalidate_probe();
 }
 
 #[cfg(test)]
@@ -156,6 +164,39 @@ pub(crate) fn reset_test_env() {
     *env_slot()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    invalidate_probe();
+}
+
+/// 上一次读进程表的结果和读到时的时刻（Unix 毫秒）。
+fn probe_slot() -> &'static Mutex<Option<(u64, AppServers)>> {
+    static SLOT: OnceLock<Mutex<Option<(u64, AppServers)>>> = OnceLock::new();
+    SLOT.get_or_init(|| Mutex::new(None))
+}
+
+fn invalidate_probe() {
+    *probe_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+}
+
+/// [`probe`]，结果在 `env.probe_ttl_ms` 内复用：判断用的是进程的启动时刻（绝对时间），几秒前
+/// 读的表照样能用；新开的客户端最多晚几秒才算进来。时钟回拨时重新读。
+fn cached_probe(env: &Env) -> AppServers {
+    if env.probe_ttl_ms == 0 {
+        return probe(env);
+    }
+    let now = (env.now_ms)();
+    let mut slot = probe_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((taken_at, servers)) = slot.as_ref() {
+        if now >= *taken_at && now - *taken_at < env.probe_ttl_ms {
+            return servers.clone();
+        }
+    }
+    let servers = probe(env);
+    *slot = Some((now, servers.clone()));
+    servers
 }
 
 #[cfg(unix)]
@@ -355,7 +396,7 @@ pub(crate) fn stale_clients(store: &DeviceStore, check_catalog: bool) -> Option<
     let current = current_fingerprint();
     // 顺手记一次：兜住在 CC Switch 之外改了目录的情况。
     let history = record(store, &current, (env.now_ms)());
-    let servers = probe(&env);
+    let servers = cached_probe(&env);
     let mut stale = if check_catalog {
         judge(&history, &current, &servers)
     } else {
@@ -618,6 +659,8 @@ pub(crate) fn restart_daemon() -> Result<RestartOutcome, String> {
         return Ok(RestartOutcome::NotRunning);
     }
     let output = (env.restart)(restart_timeout())?;
+    // 守护进程换了：下一次判断重新读进程表，不用重启前的结果。
+    invalidate_probe();
     let stdout = crate::commands::decode_command_output(&output.stdout);
     if !output.status.success() {
         let stderr = crate::commands::decode_command_output(&output.stderr);
@@ -721,6 +764,7 @@ mod tests {
                 restarted.store(true, Ordering::SeqCst);
                 Ok(success(r#"{"status":"restarted","pid":1}"#))
             }),
+            probe_ttl_ms: 0,
         });
     }
 
@@ -739,6 +783,7 @@ mod tests {
                 restarted.store(true, Ordering::SeqCst);
                 Ok(success(r#"{"status":"restarted","pid":1}"#))
             }),
+            probe_ttl_ms: 0,
         });
     }
 
@@ -1126,6 +1171,47 @@ mod tests {
         let history = std::fs::read_to_string(scope.store().file(LOGIN_HISTORY_FILENAME)).unwrap();
         assert!(!history.contains("not-persisted"));
         assert!(!history.contains("shared-workspace"));
+    }
+
+    /// 模式面板每 3 秒轮询：几秒内的判断共用一次进程表读取，过了有效期、时钟回拨或重启过
+    /// 守护进程后重新读。
+    #[test]
+    #[serial]
+    fn polling_reuses_the_process_table_for_a_few_seconds() {
+        let scope = Scope::new();
+        let store = scope.store();
+        let clock = Arc::new(AtomicU64::new(1_000_000));
+        let reads = Arc::new(AtomicU64::new(0));
+        let now = clock.clone();
+        let counter = reads.clone();
+        set_test_env(Env {
+            process_table: Box::new(move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Some(String::new())
+            }),
+            daemon_started: Box::new(|| None),
+            now_ms: Box::new(move || now.load(Ordering::SeqCst)),
+            restart: Box::new(|_| Ok(success(r#"{"status":"restarted","pid":1}"#))),
+            probe_ttl_ms: PROBE_TTL_MS,
+        });
+
+        stale_clients(&store, true);
+        clock.fetch_add(3_000, Ordering::SeqCst);
+        stale_clients(&store, true);
+        assert_eq!(reads.load(Ordering::SeqCst), 1, "3 秒后的轮询复用上一次");
+
+        clock.fetch_add(PROBE_TTL_MS, Ordering::SeqCst);
+        stale_clients(&store, true);
+        assert_eq!(reads.load(Ordering::SeqCst), 2, "过了有效期重新读");
+
+        clock.fetch_sub(60_000, Ordering::SeqCst);
+        stale_clients(&store, true);
+        assert_eq!(reads.load(Ordering::SeqCst), 3, "时钟回拨时重新读");
+
+        // restart_daemon 重启成功后清掉缓存，下一次判断重新读。
+        invalidate_probe();
+        stale_clients(&store, true);
+        assert_eq!(reads.load(Ordering::SeqCst), 4);
     }
 
     #[test]

@@ -32,8 +32,7 @@ pub(super) async fn reject_browser_requests(
     next: Next,
 ) -> Response {
     let listen_address = state.config.read().await.listen_address.clone();
-    // Web 尚未提供独立的客户端连接地址设置（上游 f88068b9，随批次 4 接入）
-    let client_host: Option<String> = None;
+    let client_host = crate::settings::get_proxy_client_host();
     match check_request(
         request.uri().path(),
         request.headers(),

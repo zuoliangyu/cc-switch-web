@@ -943,7 +943,18 @@
     "toolUpgradeConfirmBtn": "Confirm upgrade",
     "toolUpgradeUnanchoredHint": "Can't determine which install your command line uses; will run the default upgrade command (may install to the first npm on PATH).",
     "toolUpgradeUnmanagedTitle": "Skipped upgrading these tools",
-    "toolUpgradeUnmanagedDetail": "{{tool}} ({{path}}) wasn't installed by npm or a recognized installer, so CC Switch can't tell how to upgrade it. Upgrade it the way you installed it (e.g. winget, Scoop, or re-running the official install script)."
+    "toolUpgradeUnmanagedDetail": "{{tool}} ({{path}}) wasn't installed by npm or a recognized installer, so CC Switch can't tell how to upgrade it. Upgrade it the way you installed it (e.g. winget, Scoop, or re-running the official install script).",
+    "codexQuotaProtection": {
+      "title": "Official quota protection",
+      "help": "Pause new official requests when either usage threshold is reached; third-party models remain available. Covers Codex official requests through CC Switch local routing only. Usage is read from the quota information official responses already carry, so normal use adds no extra requests; only the first request, or one after about 5 idle minutes, triggers a separate quota lookup. When usage can't be determined (network problems, expired login, and so on) requests go through as usual instead of being blocked. Requests already admitted and other apps can still push usage past a threshold; while paused, ordinary-quota exhaustion won't activate Luna Reserve.",
+      "thresholds": "Usage cutoffs for official requests",
+      "fiveHour": "5-hour usage (%)",
+      "weekly": "Weekly usage (%)",
+      "save": "Save thresholds",
+      "reset": "Restore defaults",
+      "hint": "Pause at either cutoff. Defaults: 95% / 98%. Saved changes apply to new requests immediately.",
+      "invalid": "Enter whole numbers from 1 to 99."
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2975,7 +2986,13 @@
       "invalidAddress": "Invalid address, please enter a valid IP address (e.g. 127.0.0.1) or localhost",
       "configSaved": "Proxy configuration saved",
       "configSaveFailed": "Failed to save configuration",
-      "restartRequired": "Restart proxy service for address or port changes to take effect"
+      "restartRequired": "Restart proxy service for address or port changes to take effect",
+      "clientHost": {
+        "label": "Connection address",
+        "hint": "Where clients connect. Empty: the listen address",
+        "invalid": "Enter an IP address or hostname that clients can reach",
+        "help": "The host CC Switch writes into client configs (including Claude Desktop's gateway URL). Stored on this machine only and never synced. Set it when clients can't reach this machine through loopback, e.g. sessions inside WSL2 (NAT mode): set the listen address to 0.0.0.0, enter a Windows IP that WSL can reach (such as the vEthernet (WSL) adapter address), and allow the port through the firewall. Saving rewrites routed clients with the new address."
+      }
     },
     "switchFailed": "Switch failed: {{error}}",
     "takeover": {
@@ -3841,6 +3858,22 @@
       "autoReviewDefaultMain": "Main model reviews itself (default)",
       "autoReviewUnavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so approvals use the default reviewer for now. It comes back once you add it again.",
       "saveFailed": "Failed to save: {{error}}"
+    },
+    "toast": {
+      "routeRemembered": "Provider {{provider}} saved for when the client connects through routing or aggregation.",
+      "routeTargetChanged": "Route target set to {{provider}}.",
+      "routeSwitched": "Route switched to {{provider}}. New requests will use this provider.",
+      "stackDefaultChanged": "Aggregation default set to {{provider}}. Selected aggregated models still use their respective providers.",
+      "clientConfigChanged": " Client configuration also changed. Restart {{app}} to load the updated configuration."
+    },
+    "exit": {
+      "title": "Switch {{app}} from “{{from}}” back to direct?",
+      "lead": "{{app}} will connect to {{provider}} directly; requests no longer go through CC Switch.",
+      "noteFile": "Rewrites the address and key in {{file}} back to {{provider}}'s; other settings are untouched.",
+      "noteDesktop": "Rewrites Claude Desktop's gateway configuration back to {{provider}}; restart Claude Desktop to apply.",
+      "routeKept": "The routing target, failover queue and settings are kept and come back the next time you start routing.",
+      "leaveStackNote": "The ccs- aggregated models disappear from the model list. The aggregation list is kept and they come back when you switch to aggregation again. If you're using one of them, pick a regular model in the client.",
+      "confirm": "Back to direct"
     }
   },
   "quota": {

@@ -36,6 +36,9 @@ pub fn map_proxy_error_to_status(error: &ProxyError) -> u16 {
         // 重试耗尽：503 Service Unavailable
         ProxyError::MaxRetriesExceeded => 503,
 
+        // 额度保护：本地拒绝，403 Forbidden
+        ProxyError::CodexQuotaProtection(_) => 403,
+
         // 数据库错误：500 Internal Server Error
         ProxyError::DatabaseError(_) => 500,
 
@@ -74,6 +77,14 @@ pub fn get_error_message(error: &ProxyError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_map_codex_quota_protection_to_forbidden() {
+        assert_eq!(
+            map_proxy_error_to_status(&ProxyError::CodexQuotaProtection("protected".to_string())),
+            403
+        );
+    }
 
     #[test]
     fn test_map_upstream_error() {

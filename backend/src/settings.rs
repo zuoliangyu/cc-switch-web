@@ -224,6 +224,39 @@ pub struct LocalMigrations {
     pub codex_official_history_unify_v1: Option<CodexOfficialHistoryUnifyMigration>,
 }
 
+/// Codex 本地路由里 ChatGPT 官方请求的使用率阈值，两个窗口各自判断。默认关：查不到用量时
+/// 一律放行，不开就什么都不变。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CodexQuotaProtection {
+    pub enabled: bool,
+    pub five_hour_threshold: u8,
+    pub weekly_threshold: u8,
+}
+
+impl Default for CodexQuotaProtection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            five_hour_threshold: 95,
+            weekly_threshold: 98,
+        }
+    }
+}
+
+impl CodexQuotaProtection {
+    pub fn validate(&self) -> Result<(), AppError> {
+        if !(1..=99).contains(&self.five_hour_threshold)
+            || !(1..=99).contains(&self.weekly_threshold)
+        {
+            return Err(AppError::Config(
+                "Codex quota protection thresholds must be integers from 1 to 99".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// 应用设置结构
 ///
 /// 存储设备级别设置，保存在本地 `~/.cc-switch-web/settings.json`，不随数据库同步。
@@ -238,6 +271,14 @@ pub struct AppSettings {
     /// 切换第三方 Codex Provider 时保留原生 ChatGPT 登录材料。
     #[serde(default)]
     pub preserve_codex_official_auth_on_switch: bool,
+    /// Codex 本地路由里 ChatGPT 官方请求的额度耗尽前保护。
+    #[serde(default)]
+    pub codex_quota_protection: CodexQuotaProtection,
+    /// 写给客户端的代理主机（IP 或主机名），空 / 未设时按监听地址推（`0.0.0.0` → `127.0.0.1`）。
+    /// 客户端和代理不在同一个网络栈时用，比如 WSL2 NAT 模式里的会话连不到 Windows 的回环。
+    /// 只对这台机器有意义，所以不放在会随同步覆盖的 proxy_config 表里。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_client_host: Option<String>,
     /// 让官方 Codex 与第三方 Provider 共用稳定的 resume history 桶。
     #[serde(default)]
     pub unify_codex_session_history: bool,
@@ -396,6 +437,8 @@ impl Default for AppSettings {
         Self {
             enable_local_proxy: false,
             preserve_codex_official_auth_on_switch: false,
+            codex_quota_protection: CodexQuotaProtection::default(),
+            proxy_client_host: None,
             unify_codex_session_history: false,
             unify_codex_migrate_existing: None,
             codex_stack_classic_tools: true,
@@ -756,6 +799,7 @@ pub fn get_settings_for_frontend() -> AppSettings {
 }
 
 pub fn update_settings(mut new_settings: AppSettings) -> Result<(), AppError> {
+    new_settings.codex_quota_protection.validate()?;
     new_settings.normalize_paths();
     save_settings_file(&new_settings)?;
 
@@ -867,6 +911,21 @@ pub fn codex_stack_auto_review_model() -> Option<String> {
 
 pub fn preserve_codex_official_auth_on_switch() -> bool {
     get_settings().preserve_codex_official_auth_on_switch
+}
+
+/// 客户端地址（见 [`AppSettings::proxy_client_host`]），去掉首尾空白；没设或为空时是 `None`。
+pub fn get_proxy_client_host() -> Option<String> {
+    get_settings()
+        .proxy_client_host
+        .map(|host| host.trim().to_string())
+        .filter(|host| !host.is_empty())
+}
+
+pub fn set_proxy_client_host(host: &str) -> Result<(), AppError> {
+    let host = host.trim();
+    mutate_settings(|settings| {
+        settings.proxy_client_host = (!host.is_empty()).then(|| host.to_string());
+    })
 }
 
 pub fn unify_codex_migrate_existing_requested() -> bool {

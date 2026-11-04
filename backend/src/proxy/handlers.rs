@@ -1245,6 +1245,16 @@ async fn handle_responses_for_app(
                 ctx.provider = provider;
             }
             log_forward_error(&state, &ctx, is_stream, &err.error).await;
+            if app_type == AppType::Codex {
+                if let Some(response) = codex_context_overflow_response(
+                    &ctx.request_model,
+                    &endpoint,
+                    &err.error,
+                    is_stream,
+                ) {
+                    return Ok(response);
+                }
+            }
             return Err(err.error);
         }
     };
@@ -1676,6 +1686,61 @@ async fn handle_codex_xai_native_responses_rewrite(
 //   事件解析器 + 非流式 TokenUsage 记录
 // - 没有 ActiveConnectionGuard 概念（cc-switch-web 当前 handler 不传 guard）
 // ---------------------------------------------------------------------------
+/// Codex 只把 `response.failed` 流里的上下文超限当成要压缩的信号：光是 HTTP 400，即使错误码
+/// 对，在它看来也只是无效请求。上游输入超限（HTTP 400，错误体规整后是
+/// `context_length_exceeded`，见 [`transform_codex_chat::chat_error_to_response_error`]）时，
+/// 流式的 Responses 请求改回一个失败的流，让 Codex 裁掉历史后重试。别的错误、非流式请求和
+/// 其他端点照旧透传上游错误。
+fn codex_context_overflow_response(
+    model: &str,
+    endpoint: &str,
+    error: &ProxyError,
+    is_stream: bool,
+) -> Option<axum::response::Response> {
+    let ProxyError::UpstreamError {
+        status: 400,
+        body: Some(body),
+    } = error
+    else {
+        return None;
+    };
+    if !is_stream
+        || !matches!(
+            endpoint.split('?').next(),
+            Some("/responses" | "/v1/responses")
+        )
+    {
+        return None;
+    }
+    let parsed = serde_json::from_str::<Value>(body).unwrap_or_else(|_| json!(body));
+    let mut normalized = transform_codex_chat::chat_error_to_response_error(Some(&parsed));
+    if normalized.pointer("/error/code").and_then(Value::as_str) != Some("context_length_exceeded")
+    {
+        return None;
+    }
+    normalized["error"]["upstream_status"] = json!(400);
+    let response = json!({
+        "id": format!("resp_{}", uuid::Uuid::new_v4().simple()),
+        "object": "response",
+        "created_at": chrono::Utc::now().timestamp(),
+        "status": "failed",
+        "model": model,
+        "output": [],
+        "error": normalized["error"],
+    });
+    Some(
+        (
+            StatusCode::OK,
+            [
+                (axum::http::header::CONTENT_TYPE, "text/event-stream"),
+                (axum::http::header::CACHE_CONTROL, "no-cache"),
+            ],
+            super::providers::codex_responses_sse::response_failed(&response),
+        )
+            .into_response(),
+    )
+}
+
 async fn handle_codex_chat_to_responses_transform(
     response: super::hyper_client::ProxyResponse,
     ctx: &RequestContext,
@@ -2230,6 +2295,69 @@ mod stack_tests {
         let status = response.status();
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    /// 上游输入超限：流式 Responses 请求拿到 `response.failed`，Codex 才会压缩历史后重试
+    /// （上游 a94f997f）。非流式、别的端点和别的 400 照旧透传。
+    #[tokio::test]
+    async fn gemini_http_overflow_reaches_codex_as_a_failed_stream() {
+        let model = "ccs-gemini/gemini-3.8-flash-high";
+        let error = ProxyError::UpstreamError {
+            status: 400,
+            body: Some(json!({ "error": {
+                "code": 400, "status": "INVALID_ARGUMENT",
+                "message": "The input token count exceeds the maximum number of tokens allowed 1048576."
+            } }).to_string()),
+        };
+        for endpoint in ["/responses", "/v1/responses?beta=true"] {
+            let response = codex_context_overflow_response(model, endpoint, &error, true).unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()["content-type"], "text/event-stream");
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let sse = String::from_utf8(bytes.to_vec()).unwrap();
+            assert!(sse.starts_with("event: response.failed\n"), "{sse}");
+            let data = sse
+                .lines()
+                .find_map(|line| line.strip_prefix("data: "))
+                .unwrap();
+            let event: Value = serde_json::from_str(data).unwrap();
+            assert_eq!(event["type"], "response.failed");
+            assert_eq!(event["response"]["status"], "failed");
+            assert_eq!(event["response"]["model"], model);
+            assert_eq!(
+                event["response"]["error"]["code"],
+                "context_length_exceeded"
+            );
+            assert_eq!(event["response"]["error"]["upstream_status"], 400);
+            assert!(!sse.contains("response.completed"));
+        }
+        for (endpoint, stream) in [
+            ("/responses", false),
+            ("/responses/compact", true),
+            ("/chat/completions", true),
+        ] {
+            assert!(codex_context_overflow_response(model, endpoint, &error, stream).is_none());
+        }
+        let unrelated = ProxyError::UpstreamError {
+            status: 400,
+            body: Some(
+                json!({ "error": { "code": 400, "message": "Invalid API key" } }).to_string(),
+            ),
+        };
+        assert!(codex_context_overflow_response(model, "/responses", &unrelated, true).is_none());
+        // OpenAI 原生的超限错误码同样转成失败的流。
+        let native = ProxyError::UpstreamError {
+            status: 400,
+            body: Some(
+                json!({ "error": {
+                    "code": "context_length_exceeded",
+                    "type": "invalid_request_error",
+                    "message": "Your input exceeds the context window of this model."
+                } })
+                .to_string(),
+            ),
+        };
+        assert!(codex_context_overflow_response(model, "/responses", &native, true).is_some());
     }
 
     #[tokio::test]

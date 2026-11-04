@@ -92,6 +92,9 @@ pub struct ProviderService;
 #[serde(rename_all = "camelCase")]
 pub struct SwitchResult {
     pub warnings: Vec<String>,
+    /// 这次选的是本地路由的目标时才有：实际生效的是什么、客户端文件有没有改写。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<crate::mode::controller::RouteSwitchResult>,
 }
 
 /// Claude Desktop 直连模式下用不了要经路由的卡。
@@ -2923,6 +2926,38 @@ impl ProviderService {
     ///    d. Write target provider config to live files
     ///    e. Sync MCP configuration
     pub fn switch(state: &AppState, app_type: AppType, id: &str) -> Result<SwitchResult, AppError> {
+        let app = app_type.as_str().to_string();
+        let result = Self::switch_inner(state, app_type, id);
+        match &result {
+            Ok(result) if result.warnings.is_empty() => {
+                log::info!("[SWITCH] {app} 切到 {id} 完成");
+            }
+            Ok(result) => {
+                log::warn!(
+                    "[SWITCH] {app} 切到 {id} 完成，有警告: {:?}",
+                    result.warnings
+                );
+            }
+            // 规则拒绝：什么都没改。
+            Err(error @ AppError::Localized { key, .. })
+                if *key == "provider.switch.official_blocked_by_proxy"
+                    || *key == "switch.desktop_needs_routing" =>
+            {
+                log::info!("[SWITCH] {app} 拒绝切到 {id}: {error}");
+            }
+            Err(error) => log::error!(
+                "[SWITCH] {app} 切到 {id} 失败: {}",
+                crate::error_for_log(&error.to_string())
+            ),
+        }
+        result
+    }
+
+    fn switch_inner(
+        state: &AppState,
+        app_type: AppType,
+        id: &str,
+    ) -> Result<SwitchResult, AppError> {
         if app_type == AppType::Pi {
             return pi::enable(state, id);
         }
@@ -2994,10 +3029,22 @@ impl ProviderService {
         }
 
         if crate::mode::current::mode_state(&app_type).is_proxy() {
-            futures::executor::block_on(crate::mode::controller::set_route_locked(
+            log::info!(
+                "[SWITCH] {} 代理模式：路由 {} → {id}",
+                app_type.as_str(),
+                crate::mode::current::mode_state(&app_type)
+                    .proxy_route
+                    .as_deref()
+                    .unwrap_or("（无）")
+            );
+            let route = futures::executor::block_on(crate::mode::controller::set_route_locked(
                 state, &app_type, id,
             ))?;
-            return Ok(SwitchResult::default());
+            // MCP 不随路由变：客户端文件没按直连重写。
+            return Ok(SwitchResult {
+                route: Some(route),
+                ..Default::default()
+            });
         }
 
         // OMO providers are switched through their own exclusive path.
@@ -4175,15 +4222,13 @@ impl ProviderService {
         app_type: AppType,
         updates: Vec<ProviderSortUpdate>,
     ) -> Result<bool, AppError> {
-        let mut providers = state.db.get_all_providers(app_type.as_str())?;
-
-        for update in updates {
-            if let Some(provider) = providers.get_mut(&update.id) {
-                provider.sort_index = Some(update.sort_index);
-                state.db.save_provider(app_type.as_str(), provider)?;
-            }
-        }
-
+        let updates: Vec<(String, usize)> = updates
+            .into_iter()
+            .map(|update| (update.id, update.sort_index))
+            .collect();
+        state
+            .db
+            .update_provider_sort_indexes(app_type.as_str(), &updates)?;
         Ok(true)
     }
 

@@ -187,12 +187,13 @@ pub(crate) async fn is_live_takeover_active_internal(state: &AppState) -> Result
     Ok(status.claude || status.codex || status.gemini || status.grokbuild)
 }
 
-/// 代理模式下切换供应商（热切换）
+/// 指定路由目标（聚合模式下是默认那家）：已经接上路由时当场生效，否则只记下来。返回这次
+/// 实际生效的是什么、客户端文件有没有改写（前端据此决定要不要提示重启）。
 pub(crate) async fn switch_proxy_provider_internal(
     state: &AppState,
     app_type: String,
     provider_id: String,
-) -> Result<(), String> {
+) -> Result<controller::RouteSwitchResult, String> {
     let app = AppType::from_str(&app_type).map_err(|e| e.to_string())?;
     controller::set_route(state, &app, &provider_id)
         .await

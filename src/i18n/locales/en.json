@@ -254,7 +254,30 @@
         "envFile": "Launcher environment variables",
         "envFileHint": "When agy is started from the card's \"Open Terminal\", CC Switch passes the API key and endpoint to that one agy process only and never writes them to a file. Other environment variables are not applied."
       }
-    }
+    },
+    "openTerminalDialog": {
+      "title": "Open a terminal in which folder?",
+      "description": "A terminal opens in the folder you pick and starts {{app}} with \"{{name}}\"'s settings. Usually you'd pick your project folder.",
+      "isolationTitle": "This terminal is isolated",
+      "isolationBody": "It stays on \"{{name}}\": switching providers in CC Switch later won't affect it, and it won't change the provider CC Switch is currently using.",
+      "isolationBodyAgy": "The key and endpoint of \"{{name}}\" go only to agy in this terminal and are never written to a file; running agy directly in another terminal still uses your Google sign-in.",
+      "dirLabel": "Folder",
+      "dirPlaceholder": "e.g. /home/me/project or D:\\work\\project",
+      "dirHint": "The terminal opens on the computer running the CC Switch service, so enter a folder path on that computer.",
+      "recent": "Recent",
+      "forget": "Remove from recent",
+      "confirm": "Open Terminal",
+      "skipPermissions": "Skip permission prompts",
+      "extraArgs": "Extra arguments (optional)",
+      "extraArgsPlaceholder": "e.g. --debug --append-system-prompt \"Be brief\"",
+      "extraArgsHint": "Added after the launch command, for this terminal only. Separate with spaces; quote values that contain spaces.",
+      "agySwitchTitle": "This switches agy's sign-in",
+      "agySwitchBody": "Before opening, agy's sign-in switches to {{account}}, and agy sessions started afterwards use this account.",
+      "agySwitchRunning": "agy is running: open agy sessions keep the previous account and may write it back. Quit them first if you can."
+    },
+    "openTerminalIsolated": "Open Terminal (isolated)",
+    "deleteBlockedInUse": "The provider in use can't be deleted. Switch to another one first.",
+    "deleteBlockedDirectDefault": "Leaving routing switches back to this provider, so it can't be deleted. Go back to direct and switch to another provider first."
   },
   "notifications": {
     "providerAdded": "Provider added",
@@ -304,7 +327,9 @@
     "codexAuthCleanupFailed": "Switched successfully, but auth.json could not be removed — the official login credentials are still on disk; delete auth.json from the Codex config directory to remove them",
     "geminiRestart": "Restart Gemini CLI to apply the switched configuration.",
     "proxyReasonDesktopMapping": "uses model mapping (Claude Desktop only accepts Claude model names)",
-    "proxyReasonRoutingRequired": "requires local routing to process requests"
+    "proxyReasonRoutingRequired": "requires local routing to process requests",
+    "removeFromConfigFailed": "Could not remove provider",
+    "openclawModelNotFound": "The selected model no longer exists. Refresh and try again."
   },
   "confirm": {
     "deleteProvider": "Delete Provider",

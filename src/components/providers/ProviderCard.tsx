@@ -27,9 +27,14 @@ import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
 import { getRoutingReason } from "@/utils/routingReason";
 import {
+  terminalAvailable,
+  terminalIsIsolated,
+} from "@/components/providers/OpenTerminalDialog";
+import {
   isKimiOfficialAccount,
   providerNeedsRouting,
   resolveCodexOfficialIdentity,
+  supportsConnectivityCheck,
   supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 import { useProviderHealth } from "@/lib/query/failover";
@@ -37,7 +42,8 @@ import { useUsageQuery } from "@/lib/query/queries";
 
 interface ProviderCardProps {
   aggregation?: AggregationActions;
-  deleteDisabled?: boolean;
+  /** 删不掉时的原因（直连指针 / 正在路由的那家） */
+  deleteDisabledReason?: string;
   provider: Provider;
   isCurrent: boolean;
   appId: AppId;
@@ -65,7 +71,8 @@ interface ProviderCardProps {
   activeProviderId?: string; // 代理当前实际使用的供应商 ID（用于故障转移模式下标注绿色边框）
   // OpenClaw: default model
   isDefaultModel?: boolean;
-  onSetAsDefault?: () => void;
+  onSetAsDefault?: (modelId?: string) => void;
+  defaultModelOptions?: { id: string; name?: string }[];
 }
 
 const extractApiUrl = (provider: Provider, fallbackText: string) => {
@@ -157,7 +164,7 @@ function extractAgyModel(provider: Provider): string | null {
 
 export function ProviderCard({
   aggregation,
-  deleteDisabled,
+  deleteDisabledReason,
   provider,
   isCurrent,
   appId,
@@ -186,6 +193,7 @@ export function ProviderCard({
   // OpenClaw: default model
   isDefaultModel,
   onSetAsDefault,
+  defaultModelOptions,
 }: ProviderCardProps) {
   const { t } = useTranslation();
 
@@ -335,13 +343,15 @@ export function ProviderCard({
     ? isCurrent
     : appId === "openclaw"
       ? Boolean(isDefaultModel)
-      : appId === "opencode" || appId === "mcode" || appId === "dsh"
-        ? false
-        : appId === "pi" || appId === "omp"
+      : appId === "opencode"
+        ? Boolean(isDefaultModel)
+        : appId === "mcode" || appId === "dsh"
           ? false
-          : isAutoFailoverEnabled
-            ? activeProviderId === provider.id
-            : isCurrent;
+          : appId === "pi" || appId === "omp"
+            ? false
+            : isAutoFailoverEnabled
+              ? activeProviderId === provider.id
+              : isCurrent;
 
   const shouldUseViolet = Boolean(aggregation?.member);
   const shouldUseGreen =
@@ -599,8 +609,9 @@ export function ProviderCard({
                 appId === "codex" &&
                 resolveCodexOfficialIdentity(appId, provider) !== null
               }
+              deleteDisabledReason={deleteDisabledReason}
               deleteDisabled={
-                deleteDisabled ||
+                Boolean(deleteDisabledReason) ||
                 // 仍在 Kimi 里的官方卡不能直接删：删号在授权中心（连登录一起删）
                 (appId === "kimi" && isOfficial && isInConfig)
               }
@@ -620,9 +631,7 @@ export function ProviderCard({
               }
               onTest={
                 onTest &&
-                appId !== "mcode" &&
-                appId !== "kimi" &&
-                appId !== "dsh" &&
+                supportsConnectivityCheck(appId, provider) &&
                 !isOfficial &&
                 !isCopilot &&
                 !isCodexOauth &&
@@ -646,14 +655,17 @@ export function ProviderCard({
               }
               onDisableOmo={handleDisableAnyOmo}
               onOpenTerminal={
-                onOpenTerminal ? () => onOpenTerminal(provider) : undefined
+                onOpenTerminal && terminalAvailable(provider, appId, isCurrent)
+                  ? () => onOpenTerminal(provider)
+                  : undefined
               }
+              openTerminalIsolated={terminalIsIsolated(provider, appId)}
               isAutoFailoverEnabled={isAutoFailoverEnabled}
               isInFailoverQueue={isInFailoverQueue}
               onToggleFailover={onToggleFailover}
-              // OpenClaw: default model
               isDefaultModel={isDefaultModel}
               onSetAsDefault={onSetAsDefault}
+              defaultModelOptions={defaultModelOptions}
             />
           </div>
         </div>

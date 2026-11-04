@@ -54,6 +54,7 @@ vi.mock("@/lib/query", () => ({
 }));
 
 const providersApiUpdateMock = vi.fn();
+const providersApiSetOpenCodeDefaultModelMock = vi.fn();
 const openclawApiGetModelCatalogMock = vi.fn();
 const openclawApiGetDefaultModelMock = vi.fn();
 const openclawApiSetDefaultModelMock = vi.fn();
@@ -61,6 +62,8 @@ const openclawApiSetDefaultModelMock = vi.fn();
 vi.mock("@/lib/api", () => ({
   providersApi: {
     update: (...args: unknown[]) => providersApiUpdateMock(...args),
+    setOpenCodeDefaultModel: (...args: unknown[]) =>
+      providersApiSetOpenCodeDefaultModelMock(...args),
   },
   openclawApi: {
     getModelCatalog: (...args: unknown[]) =>
@@ -102,6 +105,7 @@ beforeEach(() => {
   deleteProviderMutateAsync.mockReset();
   switchProviderMutateAsync.mockReset();
   providersApiUpdateMock.mockReset();
+  providersApiSetOpenCodeDefaultModelMock.mockReset();
   openclawApiGetModelCatalogMock.mockReset();
   openclawApiGetDefaultModelMock.mockReset();
   openclawApiSetDefaultModelMock.mockReset();
@@ -499,6 +503,55 @@ describe("useProviderActions", () => {
     });
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
     expect(toastSuccessMock.mock.calls[0]?.[1]).toEqual({ closeButton: true });
+  });
+
+  it("uses the model picked in the menu as the OpenClaw primary", async () => {
+    openclawApiSetDefaultModelMock.mockResolvedValueOnce({ warnings: [] });
+    const { wrapper } = createWrapper();
+    const provider = createProvider({
+      settingsConfig: {
+        models: [{ id: "gpt-4.1" }, { id: "gpt-4.1-mini" }],
+      },
+    });
+    const { result } = renderHook(() => useProviderActions("openclaw"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.setAsDefaultModel(provider, "gpt-4.1-mini");
+    });
+
+    expect(openclawApiSetDefaultModelMock).toHaveBeenCalledWith({
+      primary: "provider-1/gpt-4.1-mini",
+      fallbacks: ["provider-1/gpt-4.1"],
+    });
+  });
+
+  it("writes OpenCode's top-level model as <provider>/<model>", async () => {
+    providersApiSetOpenCodeDefaultModelMock.mockResolvedValueOnce(undefined);
+    const { wrapper } = createWrapper();
+    const provider = createProvider({
+      settingsConfig: {
+        npm: "@ai-sdk/openai-compatible",
+        models: { "m-1": {}, "m-2": {} },
+      },
+    });
+    const { result } = renderHook(() => useProviderActions("opencode"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.setAsDefaultModel(provider, "m-2");
+    });
+    expect(providersApiSetOpenCodeDefaultModelMock).toHaveBeenCalledWith(
+      "provider-1/m-2",
+    );
+
+    await act(async () => {
+      await result.current.setAsDefaultModel(provider, "gone");
+    });
+    expect(providersApiSetOpenCodeDefaultModelMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock).toHaveBeenCalled();
   });
 });
 it("clears loading flag when all mutations idle", () => {

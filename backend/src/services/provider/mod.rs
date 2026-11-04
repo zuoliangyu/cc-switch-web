@@ -14,6 +14,7 @@ mod codex_login;
 pub(crate) mod codex_official_models;
 #[cfg(test)]
 mod codex_runtime_tests;
+pub(crate) mod codex_terminal;
 #[cfg(test)]
 mod common_config_tests;
 mod desktop;

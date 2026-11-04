@@ -215,6 +215,11 @@ struct CustomEndpointUrlRequest {
 #[serde(rename_all = "camelCase")]
 struct OpenProviderTerminalRequest {
     cwd: Option<String>,
+    /// 只给这一次启动加跳过权限确认的参数
+    #[serde(default)]
+    skip_permissions: bool,
+    /// 接在生成的参数后面的附加参数（按空白拆开，引号括住的算一个）
+    extra_args: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1488,6 +1493,26 @@ async fn fetch_provider_models(
     .await
     .map_err(ApiError::bad_request)?;
     Ok(Json(models))
+}
+
+/// OpenCode 顶层 `model`（`<provider>/<model>`），没写时为 null
+async fn get_opencode_default_model() -> Result<Json<Option<String>>, ApiError> {
+    crate::opencode_config::get_default_model()
+        .map(Json)
+        .map_err(|e| ApiError::internal(e.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenCodeDefaultModelRequest {
+    model: String,
+}
+
+async fn set_opencode_default_model(
+    Json(payload): Json<OpenCodeDefaultModelRequest>,
+) -> Result<Json<bool>, ApiError> {
+    crate::opencode_config::set_default_model(&payload.model)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    Ok(Json(true))
 }
 
 async fn get_opencode_models() -> Result<Json<Vec<crate::commands::OpenCodeModelRef>>, ApiError> {
@@ -3960,6 +3985,8 @@ async fn open_provider_terminal(
         app,
         id,
         payload.cwd,
+        payload.skip_permissions,
+        payload.extra_args,
     )
     .map_err(|e| ApiError::internal(format!("failed to open provider terminal: {e}")))?;
     Ok(Json(opened))
@@ -5071,6 +5098,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/providers/models/fetch", post(fetch_provider_models))
         .route("/api/opencode/models", get(get_opencode_models))
+        .route(
+            "/api/opencode/default-model",
+            get(get_opencode_default_model).put(set_opencode_default_model),
+        )
         .route("/api/providers/endpoints/test", post(test_api_endpoints))
         .route(
             "/api/providers/:app/:id/custom-endpoints",

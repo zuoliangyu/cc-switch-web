@@ -227,6 +227,14 @@ export const useUpdateProviderMutation = (appId: AppId) => {
         }),
       );
     },
+    onSettled: async () => {
+      if (appId === "kimi") {
+        // 默认模型可能在 Kimi Code 里改过：失败时也重读，页面上的「默认」才跟得上
+        await queryClient.invalidateQueries({
+          queryKey: ["providers", "kimi"],
+        });
+      }
+    },
   });
 };
 
@@ -295,6 +303,14 @@ export const useDeleteProviderMutation = (appId: AppId) => {
           error: detail,
         }),
       );
+    },
+    onSettled: async () => {
+      if (appId === "kimi") {
+        // 默认模型可能在 Kimi Code 里改过：失败时也重读，页面上的「默认」才跟得上
+        await queryClient.invalidateQueries({
+          queryKey: ["providers", "kimi"],
+        });
+      }
     },
   });
 };

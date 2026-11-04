@@ -39,7 +39,8 @@ import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { piApi } from "@/lib/api/pi";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
-import { APP_IDS } from "@/config/appConfig";
+import { APP_IDS, isPiFamilyApp } from "@/config/appConfig";
+import { OpenTerminalDialog } from "@/components/providers/OpenTerminalDialog";
 import {
   hermesKeys,
   useHermesHealth,
@@ -48,7 +49,11 @@ import {
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
-import { extractErrorMessage } from "@/utils/errorUtils";
+import {
+  extractErrorMessage,
+  translateKimiProviderMutationError,
+  translatePiProviderMutationError,
+} from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
 import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { cn } from "@/lib/utils";
@@ -587,6 +592,41 @@ function App() {
     setEditingProvider(null);
   };
 
+  // 累加式应用的「已添加」和「默认」都现读客户端文件，移除前后重读一遍
+  const refreshAdditiveLiveState = async (app: AppId) => {
+    if (app === "opencode") {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["opencodeLiveProviderIds"],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["opencodeDefaultModel"] }),
+      ]);
+    } else if (app === "openclaw") {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: openclawKeys.liveProviderIds,
+        }),
+        queryClient.invalidateQueries({ queryKey: openclawKeys.defaultModel }),
+        queryClient.invalidateQueries({ queryKey: openclawKeys.health }),
+      ]);
+    } else if (app === "hermes") {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: hermesKeys.liveProviderIds }),
+        queryClient.invalidateQueries({ queryKey: hermesKeys.modelConfig }),
+      ]);
+    } else if (app === "pi") {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["piLiveProviderIds"] }),
+        queryClient.invalidateQueries({ queryKey: ["pi", "state"] }),
+      ]);
+    } else if (app === "omp") {
+      await queryClient.invalidateQueries({ queryKey: ["omp", "state"] });
+    } else if (app === "mcode" || app === "kimi" || app === "dsh") {
+      // MiniMax Code / Kimi Code / DeepSeek Harness 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
+      await queryClient.invalidateQueries({ queryKey: ["providers", app] });
+    }
+  };
+
   const handleConfirmAction = async () => {
     if (!confirmAction) return;
     const { provider, action } = confirmAction;
@@ -594,40 +634,25 @@ function App() {
     if (action === "remove") {
       // Remove from live config only (for additive mode apps like OpenCode/OpenClaw)
       // Does NOT delete from database - provider remains in the list
-      await providersApi.removeFromLiveConfig(provider.id, activeApp);
-      // Invalidate queries to refresh the isInConfig state
-      if (activeApp === "opencode") {
-        await queryClient.invalidateQueries({
-          queryKey: ["opencodeLiveProviderIds"],
+      try {
+        await providersApi.removeFromLiveConfig(provider.id, activeApp);
+      } catch (error) {
+        const detail = extractErrorMessage(error);
+        const description =
+          (isPiFamilyApp(activeApp)
+            ? translatePiProviderMutationError(detail, t)
+            : activeApp === "kimi"
+              ? translateKimiProviderMutationError(detail, t)
+              : "") || detail;
+        // 默认模型可能在客户端里改过、页面还是旧的：失败了也重读，让「默认」和移除按钮跟上
+        void refreshAdditiveLiveState(activeApp).catch(() => undefined);
+        toast.error(t("notifications.removeFromConfigFailed"), {
+          description: description || t("common.unknown"),
+          closeButton: true,
         });
-      } else if (activeApp === "openclaw") {
-        await queryClient.invalidateQueries({
-          queryKey: openclawKeys.liveProviderIds,
-        });
-        await queryClient.invalidateQueries({
-          queryKey: openclawKeys.health,
-        });
-      } else if (activeApp === "hermes") {
-        await queryClient.invalidateQueries({
-          queryKey: hermesKeys.liveProviderIds,
-        });
-      } else if (activeApp === "pi") {
-        await queryClient.invalidateQueries({
-          queryKey: ["piLiveProviderIds"],
-        });
-        await queryClient.invalidateQueries({ queryKey: ["pi", "state"] });
-      } else if (activeApp === "omp") {
-        await queryClient.invalidateQueries({ queryKey: ["omp", "state"] });
-      } else if (
-        activeApp === "mcode" ||
-        activeApp === "kimi" ||
-        activeApp === "dsh"
-      ) {
-        // MiniMax Code / Kimi Code / DeepSeek Harness 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
-        await queryClient.invalidateQueries({
-          queryKey: ["providers", activeApp],
-        });
+        return;
       }
+      await refreshAdditiveLiveState(activeApp);
       toast.success(
         t("notifications.removeFromConfigSuccess", {
           defaultValue: "已从配置移除",
@@ -788,23 +813,12 @@ function App() {
     await addProvider(duplicatedProvider);
   };
 
-  const handleOpenTerminal = async (provider: Provider) => {
-    try {
-      await providersApi.openTerminal(provider.id, activeApp);
-      toast.success(
-        t("provider.terminalOpened", {
-          defaultValue: "终端已打开",
-        }),
-      );
-    } catch (error) {
-      console.error("[App] Failed to open terminal", error);
-      const errorMessage = extractErrorMessage(error);
-      toast.error(
-        t("provider.terminalOpenFailed", {
-          defaultValue: "打开终端失败",
-        }) + (errorMessage ? `: ${errorMessage}` : ""),
-      );
-    }
+  // 「打开终端」先弹对话框选目录，再由对话框去打开
+  const [terminalProvider, setTerminalProvider] = useState<Provider | null>(
+    null,
+  );
+  const handleOpenTerminal = (provider: Provider) => {
+    setTerminalProvider(provider);
   };
 
   const handleImportSuccess = async () => {
@@ -994,13 +1008,15 @@ function App() {
                       onConfigureUsage={setUsageProvider}
                       onOpenWebsite={handleOpenWebsite}
                       onOpenTerminal={
-                        activeApp === "claude" || activeApp === "agy"
+                        activeApp === "claude" ||
+                        activeApp === "codex" ||
+                        activeApp === "agy"
                           ? handleOpenTerminal
                           : undefined
                       }
                       onCreate={() => setIsAddOpen(true)}
                       onSetAsDefault={
-                        activeApp === "openclaw"
+                        activeApp === "openclaw" || activeApp === "opencode"
                           ? setAsDefaultModel
                           : activeApp === "hermes" || activeApp === "kimi"
                             ? switchProvider
@@ -1695,6 +1711,11 @@ function App() {
         }
         onConfirm={() => void handleConfirmAction()}
         onCancel={() => setConfirmAction(null)}
+      />
+      <OpenTerminalDialog
+        provider={terminalProvider}
+        appId={activeApp}
+        onClose={() => setTerminalProvider(null)}
       />
       <ConfirmDialog
         isOpen={pendingLeave !== null}

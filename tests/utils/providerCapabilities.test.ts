@@ -3,6 +3,7 @@ import type { Provider } from "@/types";
 import {
   providerNeedsRouting,
   resolveCodexOfficialIdentity,
+  supportsConnectivityCheck,
   supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 
@@ -184,5 +185,37 @@ describe("providerNeedsRouting for Claude Desktop", () => {
         }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("supportsConnectivityCheck", () => {
+  it("第三方 OpenCode 供应商可以检测连通", () => {
+    expect(
+      supportsConnectivityCheck(
+        "opencode",
+        provider({
+          settingsConfig: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { baseURL: "http://127.0.0.1:8317/v1" },
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each(["official", "omo", "omo-slim"] as const)(
+    "%s 卡片没有可探测的上游地址",
+    (category) => {
+      expect(
+        supportsConnectivityCheck(
+          "opencode",
+          provider({ category, settingsConfig: {} }),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it.each(["mcode", "dsh", "kimi"] as const)("%s 不支持连通检测", (appId) => {
+    expect(supportsConnectivityCheck(appId, provider())).toBe(false);
   });
 });

@@ -64,6 +64,23 @@ export const SKILLS_APP_IDS = [
   "omp",
 ] as const satisfies readonly AppId[];
 
+/** 累加式应用：多家供应商同时写进客户端配置，卡片是「添加 / 移除」而不是「启用」 */
+export const ADDITIVE_APP_IDS = [
+  "mcode",
+  "kimi",
+  "dsh",
+  "opencode",
+  "openclaw",
+  "hermes",
+  "pi",
+  "omp",
+] as const satisfies readonly AppId[];
+export type AdditiveAppId = (typeof ADDITIVE_APP_IDS)[number];
+
+export function isAdditiveAppId(appId: string): appId is AdditiveAppId {
+  return (ADDITIVE_APP_IDS as readonly string[]).includes(appId);
+}
+
 export function getAppLabel(appId: string): string {
   return APP_ICON_MAP[appId as AppId]?.label ?? appId;
 }

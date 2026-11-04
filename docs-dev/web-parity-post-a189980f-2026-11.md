@@ -451,7 +451,7 @@
 | `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位；上游 presetRows 金样测试依赖桌面分组布局，不迁移 | 已迁移 |
 | `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 1d：卸载测试放宽 Windows 路径解析超时（随测试最终版本） | 已迁移 |
 | `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsagePage.tsx`、`hooks/useUsageAutoRefresh.ts`等 3 个 | 待迁移 |
-| `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2：OpenCode SiliconFlow 预设此前已是上游最终版本；本批补上游 limit 完整性与 SiliconFlow 预设用例，「两个区域合成一行」用例依赖 Web 尚无的预设分组选择器（presetGroups），随 5a3 | 已迁移 |
+| `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2：OpenCode SiliconFlow 预设此前已是上游最终版本；本批补上游 limit 完整性与 SiliconFlow 预设用例；「两个区域合成一行」用例依赖预设分组选择器（presetGroups），Web 没有该选择器，放弃该用例 | 已迁移 |
 | `f7696fa8` | v4.0.12 | feat(apps): move uninstall into a per-row overflow menu | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e5eeb166` | v4.0.12 | fix(i18n): clarify what hiding an app in the Apps page does | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `5b6d317f` | v4.0.12 | fix(i18n): drop the community translation suffix from the Turkish option | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
@@ -503,7 +503,7 @@
 | `d4f2d4e4` | v4.0.14 | fix(claude-desktop): show one picker row per 1M model | 4 模式/路由 | 4c：Desktop 每个 1M 模型在选择器里只显示一行（prefer1m） | 已迁移 |
 | `a756a1aa` | v4.0.14 | docs(readme): remove TokenFactory sponsor entry | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `a96e2fcc` | v4.0.14 | fix(presets): drop TokenFactory sponsor status and localize its name | 1a 预设/定价/图标 | 1a：补齐 `providerForm.presets.tokenfactory` 三语名称；赞助身份字段仅兼容不展示 | 已迁移 |
-| `8c2c89e0` | v4.0.14 | feat(providers): explain and remember the folder for Open Terminal | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx` | 待迁移 |
+| `8c2c89e0` | v4.0.14 | feat(providers): explain and remember the folder for Open Terminal | 5a 供应商与全局 UI | 5a3b：新增 OpenTerminalDialog：先说明要选启动 CLI 的目录再打开，默认填上次成功打开的目录、最近 5 个一点即换、可从最近用过里移除；Web 版终端开在 CC Switch 服务所在电脑上、浏览器选不了那边的文件夹，目录改为手填（dirLabel/dirHint 新文案），不用系统选文件夹窗口 | 已迁移 |
 | `e97fc33d` | v4.0.14 | fix(misc): only treat shell command-missing output as not installed in WSL probe (#8167) | 1d 资源/设置/工具 | 1d：WSL 探测只把 shell 的命令缺失输出视为未安装（tool_management.rs） | 已迁移 |
 | `09bce301` | v4.0.14 | feat(pricing): seed Gemini 4 Argon (#8356) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `e1864ac1` | v4.0.14 | fix(usage): make exact model pricing lookup case-insensitive (#8414) | 1c 会话/用量导入 | 1c：精确定价查询大小写不敏感 | 已迁移 |
@@ -523,8 +523,8 @@
 | `25310890` | v4.0.14 | feat(icons): switch Pi to the three-color pi.dev mark | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `f2906db6` | v4.0.14 | fix(proxy): round-trip Gemini thought signatures on Codex chat tool calls | 1b 代理协议 | 1b：Gemini thought signature（extra_content）在 Chat 工具调用与 Responses 调用条目间往返；Web 无 CodexChatHistoryStore，靠调用条目随历史回放携带 | 已迁移 |
 | `0d326a4c` | v4.0.14 | fix(proxy): keep the underlying cause in upstream connection errors | 1b 代理协议 | 1b：上游连接错误保留原因链；Web reqwest 路径同时去掉错误文本中的 URL | 已迁移 |
-| `122423ca` | v4.0.14 | fix(providers): explain why the direct provider can't be deleted while routing | 5a 供应商与全局 UI | 需新建或映射：`components/providers/presentation.ts` | 待迁移 |
-| `8b4b92c6` | v4.0.14 | fix(failover): keep queue positions distinct when reordering | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx`、`components/providers/presentation.ts` | 待迁移 |
+| `122423ca` | v4.0.14 | fix(providers): explain why the direct provider can't be deleted while routing | 5a 供应商与全局 UI | 5a3b：直连指针 / 正在路由的那家删不掉时，删除按钮提示里写明原因；路由 / 聚合时直连那家单独说明「退出路由会回到这家」（provider.deleteBlockedDirectDefault），措辞按 Web 的「回到直连」入口改写 | 已迁移 |
+| `8b4b92c6` | v4.0.14 | fix(failover): keep queue positions distinct when reordering | 5a 供应商与全局 UI | 5a3b：Web 没有故障转移队列的上移 / 下移（队列按 sort_index、列表按名称排序），无 queueMoveSortUpdates 可迁 | 不适用 |
 | `2e03d8ce` | v4.0.14 | fix(sessions): merge Windows project groups that differ only in path case | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `07a9c459` | v4.0.14 | fix(openclaw): keep the User-Agent switch in sync with JSON header edits | 5a 供应商与全局 UI | 5a2：直接编辑 OpenClaw 的 JSON 请求头时 UA 开关随之同步（接在 Web 的 handleSettingsConfigChange 之后） | 已迁移 |
 | `898dd002` | v4.0.14 | fix(codex): keep retry and stream timeout keys in the proxy route table | 4 模式/路由 | 4b：代理路由表照搬路由那家的 request_max_retries、stream_max_retries、stream_idle_timeout_ms | 已迁移 |
@@ -547,10 +547,10 @@
 | `97daccb6` | v4.0.15 | fix(settings): keep settings when an old save left a trailing tail | 1d 资源/设置/工具 | 1d：旧版保存残留尾巴时只取开头完整对象（随 8a06838d 的最终实现一并移植） | 已迁移 |
 | `ecb449f4` | v4.0.15 | fix(terminal): give Windows provider terminals the restored user PATH | 1d 资源/设置/工具 | 1d：Windows 供应商终端使用补全后的用户 PATH | 已迁移 |
 | `eb09fbb1` | v4.0.15 | fix(tools): add missing exited_with_error to the Windows WSL uninstall candidate | 1d 资源/设置/工具 | 1d：Windows WSL 卸载候选补 exited_with_error（随最终版本） | 已迁移 |
-| `415e8994` | v4.0.15 | fix(failover): refresh the routing marker after the proxy fails over | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `415e8994` | v4.0.15 | fix(failover): refresh the routing marker after the proxy fails over | 5a 供应商与全局 UI | 5a3b：Web 没有 provider-switched 事件推送；模式视图（路由标记）由 useAppMode 每 3 秒轮询，故障转移后自然刷新 | 不适用 |
 | `ff3e33a8` | v4.0.15 | feat(hermes): declare image input per model | 5a 供应商与全局 UI | 5a2：Hermes 每个模型可声明支持图片输入（supports_vision，关掉时删键交回 Hermes 判断）；预设与元数据填充此前已迁入 | 已迁移 |
 | `93f1688a` | v4.0.15 | chore(providers): follow up on panel transition cleanup (#8260) | 5a 供应商与全局 UI | 5a3a：面板动画预设只留 none / slide-from-right；每日记忆注释整理随 d9a62313 一并处理 | 已迁移 |
-| `afbf073b` | v4.0.15 | fix(provider): prevent card stretching and overlap during drag sorting (#8315) | 5a 供应商与全局 UI | 卡片拖拽排序防拉伸重叠，属列表 UI，转入 5a | 待迁移 |
+| `afbf073b` | v4.0.15 | fix(provider): prevent card stretching and overlap during drag sorting (#8315) | 5a 供应商与全局 UI | 5a3b：Web 供应商卡片没有拖动排序（无 dnd-kit 列表），无卡片拉伸问题 | 不适用 |
 | `ad9f0f20` | v4.0.15 | perf(usage): cache Claude pricing within each import transaction (#8226) | 1c 会话/用量导入 | 1c：Claude 会话导入在每个事务内缓存模型定价（含流式补全） | 已迁移 |
 | `2bc380b2` | v4.0.15 | fix(proxy): keep Codex Responses beta marker in stack mode (#8437) | 1b 代理协议 | 1b：聚合模式发往原生 Responses 第三方时保留 x-codex-beta-features，其余身份头仍剥离 | 已迁移 |
 | `d1856448` | v4.0.15 | fix(usage): count Pi subagent usage from the child session files (#8318) | 1c 会话/用量导入 | 1c：Pi 子 agent 用量从子会话文件计入；测试夹具补 TestAgentDir::at | 已迁移 |
@@ -598,7 +598,7 @@
 | `f3d9e8c6` | v4.0.16 | fix(settings): render the About card logo from the vector mark | 5a 供应商与全局 UI | 关于页 logo 改矢量；上游删除 app-icon.png，Web 仍引用 | 待迁移 |
 | `3b1f11b6` | v4.0.16 | fix(detect): find fnm-managed Node CLIs on Windows | 1d 资源/设置/工具 | 1d：Windows 有效 PATH 末尾追加 fnm 默认 Node 别名目录（misc.rs 与 tool_management.rs 两处） | 已迁移 |
 | `56ac4f9a` | v4.0.16 | fix(providers): let an idle card be deleted when only the stale DB current flag points at it | 1d 资源/设置/工具 | 1d：删除检查只看直连指针与代理路由，不再单独看 DB 的 is_current；上游的 Desktop 旧映射卡迁移用例依赖桌面启动迁移，未迁移 | 已迁移 |
-| `eadfc151` | v4.0.16 | feat(opencode): set the default model from an added provider card | 5a 供应商与全局 UI | 从卡片设为 OpenCode 默认模型依赖 presentation.ts 与 ProviderList 结构，随 5a 处理 | 待迁移 |
+| `eadfc151` | v4.0.16 | feat(opencode): set the default model from an added provider card | 5a 供应商与全局 UI | 5a3b：OpenCode 从已添加的卡设默认模型：后端 opencode_config::{get,set}_default_model 只改顶层 model（保留注释、small_model 不动，拒收非 <provider>/<model>），新增 GET/PUT /api/opencode/default-model；前端 getOpencodeDeclaredModels（解包完整配置、跳过 disabled 模型）、默认那家标记与蓝色高亮、没声明模型的内置供应商不给按钮；补后端与 hook 用例 | 已迁移 |
 | `a9a93f06` | v4.0.16 | test(skill): isolate HOME before touching the skill storage location | 1d 资源/设置/工具 | 仅调整上游 Skill 测试的 HOME 隔离顺序；对应用例 Web 没有，Web 测试已在设置存储位置前隔离 HOME | 不适用 |
 | `8d7a7415` | v4.0.16 | fix(models): cap only borrowed GPT windows and warn on oversized entries | 1a 预设/定价/图标 | 1a：`lib/modelMetadata.ts` 的 GPT 窗口上限已同步；各表单的超大窗口提示组件转入 5a | 部分迁移 |
 | `f3d4fe53` | v4.0.16 | fix(presets): restore 1.05M GPT windows on API-billed platforms | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -673,15 +673,15 @@
 | `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 5a1：填取到模型元数据时不把图片输入关掉（modelMetadataFill 此前批次已是上游最终版本） | 已迁移 |
 | `e88ff540` | v4.0.19 | test(usage): scope Codex parent-cache count assertions to each test's dir | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `cdd2190d` | v4.0.19 | feat(kimi): identify, remove and show quota for official accounts | 2b Kimi Code | 2b：识别、移除、显示官方账号额度；账号组支持逐行删除文案与不可删原因 | 已迁移 |
-| `e12415b5` | v4.0.19 | refactor(providers): move OpenCode/OpenClaw set-default into the more menu | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
+| `e12415b5` | v4.0.19 | refactor(providers): move OpenCode/OpenClaw set-default into the more menu | 5a 供应商与全局 UI | 5a3b：OpenCode / OpenClaw 的「设为默认」收进卡片「更多」菜单，多个模型时展开子菜单选（名称 + ID）；OpenClaw 选中的模型作主模型、这家其余模型作备选；卡上只留「移除」，默认那家改为「● 当前默认」状态 | 已迁移 |
 | `c49c2be9` | v4.0.19 | refactor(kimi): render Auth Center accounts with the shared account group | 2b Kimi Code | 2b：Kimi 账号用共享账号组渲染（Web 账号组新增 defaultLabel/setDefaultLabel） | 已迁移 |
 | `44e0fc96` | v4.0.19 | feat(kimi): name separate official accounts "Kimi 订阅 <nickname>" | 2b Kimi Code | 2b：独立官方账号命名为“Kimi 订阅 <昵称>”；Web 无托盘，按设置里的界面语言取文案 | 已迁移 |
 | `d6a23241` | v4.0.19 | feat(kimi): give provider cards real add/remove actions | 2b Kimi Code | 2b：卡片“添加/移除”真实动作；Web 沿用 OpenClaw 式卡片：添加只写 config.toml，设为默认走切换，仍在 Kimi 中的官方卡不能直接删除、不能复制 | 已迁移 |
-| `7cc3141c` | v4.0.19 | style(providers): mark additive default providers in blue | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
+| `7cc3141c` | v4.0.19 | style(providers): mark additive default providers in blue | 5a 供应商与全局 UI | 5a3b：累加应用默认那家用蓝色标记：Web 的 OpenClaw / Hermes / Kimi 本来就是蓝色高亮，本批让 OpenCode 默认那家也按 isDefaultModel 高亮，状态点为蓝色；docs/ 不适用 | 已迁移 |
 | `f4e9211a` | v4.0.19 | fix(panel): let Escape close only the topmost full-screen panel | 5a 供应商与全局 UI | 5a3a：面板栈只让最上层响应 Esc，一次只退一层；body 滚动锁按计数（嵌套面板关掉一层不解锁）；补用例 | 已迁移 |
 | `29f8bef3` | v4.0.19 | fix(usage): clamp the request log page when the total shrinks | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `c6f85464` | v4.0.19 | style(usage): restore the original trend chart and heatmap colors | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `1c52fa91` | v4.0.19 | fix(providers): reread additive client state when a removal is refused | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `1c52fa91` | v4.0.19 | fix(providers): reread additive client state when a removal is refused | 5a 供应商与全局 UI | 5a3b：从配置移除被拒时显示「无法移除供应商」与译好的原因（Pi / Kimi），并照样重读累加应用的现读状态（含 OpenCode / OpenClaw / Hermes 默认模型）；Kimi 改卡 / 删卡失败后也重读；Web 之前移除失败不报错、确认框卡住，一并修好；Kimi 错误映射与文案此前已迁入 | 已迁移 |
 | `93e33d11` | v4.0.19 | fix(apps): drop the redundant not-installed error line under uninstalled tools | 1d 资源/设置/工具 | 1d：未安装工具下方不再重复显示未安装错误行（tool_management.rs） | 已迁移 |
 | `b61e2767` | v4.0.19 | feat(kimi): fetch the model list and fill parameters from models.dev | 2b Kimi Code | 2b：拉取模型列表并按 models.dev 补参数（fillKimiModel、useModelMetadataFill silent 选项）；上游的弹出式选择器（带参数预览）随 5a，Web 用“获取模型”按钮 + 内联勾选 | 部分迁移 |
 | `535d1283` | v4.0.19 | fix(models): match old OpenCode Zen/Go addresses to the moved models.dev entries | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -759,17 +759,17 @@
 | `da0c84e4` | v4.0.21 | fix(tray): keep lightweight mode across restarts | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `4dc05a9a` | v4.0.21 | feat(claude): switch between multiple official subscription accounts | 3 官方账号 | 3b：Claude 官方订阅多账号（services/claude_account、claude_official 上游最终版本；授权中心 Claude 账号组、官方卡绑定账号、卡片副标题）；Web 账号管理器为进程单例，登录在服务端跑 claude auth login 且从不在服务端开浏览器，授权页地址交给前端，回调回不到服务端本机时把落地页地址或代码贴回（/api/auth/claude/paste）；Web 无表单跳授权中心入口 | 已迁移 |
 | `58fee0db` | v4.0.21 | fix(claude): close gaps in official account switching | 3 官方账号 | 3b：账号切换的遗漏修补（编辑器保存后同步各账号目录；上游集成用例改写为 claude_runtime_tests） | 已迁移 |
-| `62324686` | v4.0.21 | feat(providers): move Open Terminal out of the more menu | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx` | 待迁移 |
+| `62324686` | v4.0.21 | feat(providers): move Open Terminal out of the more menu | 5a 供应商与全局 UI | 5a3b：Web 的「打开终端」本来就是卡片上的独立图标按钮，不在更多菜单里，无需改动 | 已迁移 |
 | `1409bad9` | v4.0.21 | feat(claude): switch Claude Code's sign-in when switching official cards | 3 官方账号 | 3b：切官方卡时切换 Claude Code 登录（claude_direct/claude_editor/模式退出写 live 前后 with_login_switch；GET /api/auth/claude/login-switch，WSL/覆盖目录时提示不切） | 已迁移 |
 | `e550adcf` | v4.0.21 | feat(claude): switch the sign-in whenever an official card has an account | 3 官方账号 | 3b：官方卡带账号时总是切换登录（claude_direct 上游最终版本） | 已迁移 |
 | `1ddb14e1` | v4.0.21 | fix(claude): keep account profiles consistent when recovering or parking | 3 官方账号 | 3b：恢复或暂存时保持账号资料一致（snapshot 上游最终版本） | 已迁移 |
-| `3837f460` | v4.0.21 | feat(claude): show the bound account in the card subtitle | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
+| `3837f460` | v4.0.21 | feat(claude): show the bound account in the card subtitle | 5a 供应商与全局 UI | 5a3b：Claude 卡副标题显示绑定账号此前已迁入（ClaudeBoundAccountLine）；Web 按账号查额度（ClaudeAccountQuotaFooter），不需要上游的 ClaudeBoundAccountQuotaGate，本批无改动 | 已迁移 |
 | `0d6386ed` | v4.0.21 | feat(claude): show each bound account's quota on its card | 3 官方账号 | 3b：绑号卡按账号查额度（GET /api/auth/claude/quota，令牌过期时借 Claude Code 的 /usage 缓存）；Web 无托盘额度缓存，不写缓存 | 已迁移 |
-| `b3eb2ad1` | v4.0.21 | feat(claude): show each account's quota in the auth center | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
+| `b3eb2ad1` | v4.0.21 | feat(claude): show each account's quota in the auth center | 5a 供应商与全局 UI | 5a3b：授权中心逐账号额度（ClaudeAccountQuota）此前已迁入，本批无改动 | 已迁移 |
 | `e29968f5` | v4.0.21 | fix(claude): don't show a stale quota when the account's login has lapsed | 3 官方账号 | 3b：登录失效时不显示过期额度 | 已迁移 |
-| `50395742` | v4.0.21 | refactor(claude): match the auth center header changes on main | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
-| `0c07d509` | v4.0.21 | fix(providers): keep the usage column aligned when a card's status changes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx` | 待迁移 |
-| `ee2ef72f` | v4.0.21 | fix(hermes): move set-default into the more menu like other additive apps | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
+| `50395742` | v4.0.21 | refactor(claude): match the auth center header changes on main | 5a 供应商与全局 UI | 5a3b：ClaudeOfficialSection 去掉表头「全部删除」与空状态登录文案此前已与上游最终版本一致，本批无改动 | 已迁移 |
+| `0c07d509` | v4.0.21 | fix(providers): keep the usage column aligned when a card's status changes | 5a 供应商与全局 UI | 5a3b：Web 卡片操作区是按钮行而非上游的「主操作位 + 用量列」布局，无定宽问题；新加的「● 当前默认」状态放在按钮行左侧，不推动用量块 | 部分迁移 |
+| `ee2ef72f` | v4.0.21 | fix(hermes): move set-default into the more menu like other additive apps | 5a 供应商与全局 UI | 5a3b：Hermes 的「设为默认」（原行内「启用」按钮）收进更多菜单，默认那家显示「当前默认」且不能移除；Kimi 同样改为更多菜单 | 已迁移 |
 | `03337b7e` | v4.0.21 | feat(presets): allow max reasoning effort for MiniMax Flash in OpenClaw | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `88c878ac` | v4.0.21 | feat(claude): show the subscription plan on official cards | 3 官方账号 | 3b：官方卡显示订阅套餐（GET /api/auth/claude/default-plan；默认登录在 macOS 先读钥匙串再读 .credentials.json） | 已迁移 |
 | `6837f361` | v4.0.21 | fix(claude-desktop): use the documented OpenCode Go base URL (#8720) | 5a 供应商与全局 UI | 5a2：OpenCode Go 的用量检测（后端 coding_plan 与前端 codingPlanProviders）同时认现行的 /inference/go 入口；Claude Desktop 预设此前已是 /inference/go/anthropic，补预设用例 | 已迁移 |
@@ -777,13 +777,13 @@
 | `a56dddb9` | v4.0.21 | feat(presets): add TeamoRouter Claude presets and update promotion text (#8266) | 1a 预设/定价/图标 | 1a：TeamoRouter Claude 预设已同步；推广文案不迁移 | 已迁移 |
 | `f20a2b29` | v4.0.21 | fix(windows): gate Unix-only Claude login opener constant (#8898) | 3 官方账号 | 3b：Windows 下仅 Unix 的登录打开器常量加 cfg（login.rs 上游最终版本） | 已迁移 |
 | `74a98fdd` | v4.0.21 | fix(gemini): read export KEY=value lines in ~/.gemini/.env (#8862) | 1d 资源/设置/工具 | 1d：读取 ~/.gemini/.env 时识别 export KEY=value 行 | 已迁移 |
-| `66510775` | v4.0.21 | fix(opencode): hide connectivity check for OMO profiles (#8842) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerCapabilities.test.ts` | 待迁移 |
+| `66510775` | v4.0.21 | fix(opencode): hide connectivity check for OMO profiles (#8842) | 5a 供应商与全局 UI | 5a3b：新增 supportsConnectivityCheck（官方、OMO / OMO Slim、mcode / dsh / kimi 不做连通检测），卡片改用它；补上游用例 | 已迁移 |
 | `ec5c5f8a` | v4.0.21 | fix(forms): align Claude Desktop Copilot URL detection and sync zh/en/ja manuals (#8838) | 5a 供应商与全局 UI | 5a2：Claude Desktop 手填 Copilot 地址时也按 Copilot 自动选格式，Codex / xAI OAuth 卡忽略 Copilot 地址；用例按 Web 的必填标签与 OAuth 区块替身改写；docs/ 不适用 | 已迁移 |
 | `d2008fdb` | v4.0.21 | fix(i18n): complete Turkish catalog follow-ups (#8836) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `238d8a71` | v4.0.21 | test(proxy): add end-to-end regression tests for inline <think> block conversion (#8835) | 1b 代理协议 | 1b：内联 <think> 转换端到端回归（适配 Web 代理构造参数） | 已迁移 |
 | `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 5a1：Claude 官方卡账号选择器已随 3b 取上游最终版本；「添加或管理 Claude 账号」从表单跳授权中心的入口 Web 基线前就没有（Codex / Copilot 选择器同样没有），账号在设置 → 授权中心添加 | 部分迁移 |
 | `ea1645f9` | v4.0.21 | fix(auth): align quota bars across accounts in the auth center | 3 官方账号 | 3a：授权中心各账号的额度列定宽对齐（.auth-quota-col 与分组卡片 container query） | 已迁移 |
-| `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx`、`components/providers/ProviderCardActions.tsx` | 待迁移 |
+| `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 5a3b：终端隔离判定 terminalIsIsolated（Claude 带地址与凭据 / 官方卡绑账号、agy Key 卡、Codex 带路由表的第三方卡），对话框显示隔离说明，卡片终端按钮提示带「环境隔离」 | 已迁移 |
 | `5f0fc253` | v4.0.21 | fix(apps): count Hermes's leftover hermes.cmd beside hermes.exe as one install | 1d 资源/设置/工具 | 1d：Hermes 的 hermes.exe 旁残留 hermes.cmd 按一处安装计（tool_management.rs） | 已迁移 |
 | `cfc64971` | v4.0.21 | fix(mcp): drop timeout/autoApprove from Codex MCP entries | 1d 资源/设置/工具 | 1d：写入 Codex MCP 条目时去掉 timeout/autoApprove（Web 只有单服务器写入路径） | 已迁移 |
 | `618af9d9` | v4.0.21 | fix(apps): allow OpenCode's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 OpenCode postinstall（后端安装命令与前端一键命令） | 已迁移 |
@@ -824,8 +824,8 @@
 | `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 3a：跳到某个授权分组时只滚动面板正文（新增 AuthCenterPanel 测试） | 已迁移 |
 | `67cce7ad` | v4.0.22 | fix(usage): show bound Claude official account quota in tray and usage settings | 3 官方账号 | 3b：用量脚本弹窗按绑定账号测试；托盘与用量缓存不适用 | 部分迁移 |
 | `e78f641c` | v4.0.22 | fix(apps): report a CLI that is present but yields no version as not runnable | 1d 资源/设置/工具 | 1d：存在但不输出版本的 CLI 报告为不可运行 | 已迁移 |
-| `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
-| `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
+| `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 5a3b：打开终端可勾「跳过权限确认」（Claude / agy 用 --dangerously-skip-permissions，Codex 用 --dangerously-bypass-approvals-and-sandbox），按应用记住；后端 open_provider_terminal 收 skipPermissions，只加给这一次启动 | 已迁移 |
+| `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 5a3b：Codex 卡可开终端：新增 services/provider/codex_terminal（上游同名模块，需要路由的判定在模块内实现，与前端 providerNeedsRouting 同规则），用 codex -c 只对这个进程换成这张卡，Key 经 CC_SWITCH_CODEX_API_KEY 环境变量传，覆盖不掉的残留键拒绝打开，CODEX_HOME 定到 CC Switch 管的目录；PROXY_KEPT_CLIENT_KEYS / project / exclusive_of 改为 pub(super)，新增 codex_single_model_catalog；临时模型目录退出后删除（Windows 用 call codex + %~dp0 引用）；前端 terminalAvailable 控制按钮 | 已迁移 |
 | `7f82b85b` | v4.0.22 | fix(sidebar): inset today's usage text to align with mode badge text | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
 | `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | 3c：Anthropic 模型声明 /v1/messages 时原生透传、响应转换按每次请求解析的格式、Copilot 纳入 thinking 签名 / budget 整流；Claude 路径未接优化器，“只在 OpenAI 桥接上剥离 thinking”不适用 | 部分迁移 |
 | `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 5a1：数组表头 [[...]] 也算表头，base_url 不会写进 [[skills.config]]，已误写的移回 custom 表 | 已迁移 |
@@ -839,7 +839,7 @@
 | `326b394b` | v4.0.22 | fix(proxy): map Claude WebSearch blocked_domains to Responses filters | 1b 代理协议 | 1b：Claude WebSearch blocked_domains 映射为 Responses 过滤 | 已迁移 |
 | `064ae422` | v4.0.22 | fix(proxy): split trailing text out of Gemini function-response turns | 1b 代理协议 | 1b：Gemini 函数响应回合拆出尾随文本 | 已迁移 |
 | `6c998b4d` | v4.0.22 | fix(claude-account): write oversized credentials to the keychain via argv | 3 官方账号 | 3b：超长凭据经 argv 写入钥匙串（keychain.rs 上游最终版本） | 已迁移 |
-| `ebb00da1` | v4.0.22 | feat(terminal): let users append extra arguments when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
+| `ebb00da1` | v4.0.22 | feat(terminal): let users append extra arguments when opening a terminal | 5a 供应商与全局 UI | 5a3b：打开终端可填附加参数（split_launch_args 按空白拆、引号括住算一个、不经 shell，最多 16 个，Windows 拒收 " % ^ 并补齐收尾反斜杠），按应用记住；Claude --settings、Claude 账号、agy、Codex 四条启动路径都接上 | 已迁移 |
 | `6282108e` | v4.0.22 | fix(proxy): mount thoughtSignature at Part level instead of inside functionCall (#6690) | 1b 代理协议 | 1b：thoughtSignature 挂在 Part 层 | 已迁移 |
 | `df753b5e` | v4.0.22 | fix(proxy): fall back to Gemini's skip signature on the Gemini Native path | 1b 代理协议 | 1b：Gemini Native 路径缺签名时回退 skip 签名 | 已迁移 |
 | `8355f1f1` | v4.0.22 | fix(proxy): filter unsupported xAI Responses include marker (#8997) | 1b 代理协议 | 1b：过滤 xAI Responses 不支持的 include 标记 | 已迁移 |
@@ -934,7 +934,7 @@
 | `f8f487b1` | v4.0.25 | fix(tray): show the tray panel without waiting for its data (#9154) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `ef7b77de` | v4.0.25 | fix(deps): update smol-toml to 1.9.1 (#9155) | 1d 资源/设置/工具 | 1d：smol-toml 升级到 1.9.1 | 已迁移 |
 | `0b274ec3` | v4.0.25 | fix(usage): dedupe Codex request model aliases (#7643) | 1c 会话/用量导入 | 1c：Codex 会话按代理行 request_model 匹配客户端别名去重（导入跳过、逐行过滤、区间 JOIN 三处），DedupKey 增加 data_source | 已迁移 |
-| `f332b472` | v4.0.25 | fix(codex): hide the forced-v2 warning as soon as classic tools turn off | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/StackSubagentFields.tsx` | 待迁移 |
+| `f332b472` | v4.0.25 | fix(codex): hide the forced-v2 warning as soon as classic tools turn off | 5a 供应商与全局 UI | 5a3b：Web 的 CodexStackSettings 此前已按 classic && forcesMultiAgentV2 判断，无需改动 | 已迁移 |
 | `fb241637` | v4.0.25 | test(mcp): run the login PATH fixture through a wrapper script | 1d 资源/设置/工具 | 1d：登录 PATH 夹具改经包装脚本运行（随测试最终版本） | 已迁移 |
 | `05824df3` | v4.0.25 | chore(release): v4.0.25 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `a3eafa40` | v4.0.25 | docs(release): add v4.0.25 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -1110,3 +1110,11 @@
   - 部分迁移的原因：Web 没有上游的侧栏/托盘导航与页头标题栏；设置页、空状态、定价等页面布局不同，文案精简只迁了表单部分。
   - 依赖：新增 `png = "0.18"`，`Cargo.lock` 只加 png 0.18.1 与 fdeflate 0.3.7（校验和与上游一致），未升级其他依赖。
   - 验证：`cargo test --locked --lib` 3577 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --locked --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 209 个文件 2193 项通过、2 项跳过。
+- 2026-11-05：完成批次 5a3b（21 项：17 项已迁移、1 项部分迁移、3 项不适用）。
+  - 打开终端：先弹对话框，默认填上次成功打开的目录、可从最近 5 个里选；Web 的终端开在服务所在电脑上，浏览器选不了那边的文件夹，目录改为手填。可勾「跳过权限确认」、可填附加参数（按空白拆、不经 shell，最多 16 个，Windows 拒收 `"` `%` `^`），均按应用记住、只用于这一次启动；对话框与按钮提示说明终端是否环境隔离。
+  - Codex 卡可开终端：新增 `services/provider/codex_terminal`，用 `codex -c` 只对这个进程换成这张卡，Key 经环境变量传，覆盖不掉的残留键拒绝打开。
+  - 累加应用：OpenCode 可从卡片设默认模型（新增 `GET`/`PUT /api/opencode/default-model`，只改顶层 `model`、保留注释）；OpenCode / OpenClaw / Hermes / Kimi 的「设为默认」收进更多菜单，默认那家蓝色标记；移除被拒时提示原因并重读状态。
+  - 其他：直连那家删不掉时提示原因；官方卡、OMO 等不做连通检测。
+  - 遗留核对：Web 的 ProviderActions 漏判 mcode 为累加应用（MiniMax Code 卡显示「启用 / 使用中」、当前那张删不掉），改用共用的 `ADDITIVE_APP_IDS`；dsh 本来就在。5a2 顺延的 SiliconFlow 区域合并用例依赖 Web 没有的预设分组选择器，放弃。
+  - 不适用：故障转移队列的上移 / 下移、provider-switched 事件推送、卡片拖动排序，Web 都没有。
+  - 验证：`cargo test --locked --lib` 3589 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --locked --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 212 个文件 2226 项通过、2 项跳过，1 项失败为既有的时间敏感用例（`modelsDevAutoSync` 的同步间隔边界只差 1 毫秒），单独重跑通过。

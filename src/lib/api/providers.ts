@@ -29,6 +29,10 @@ export interface SwitchResult {
 
 export interface OpenTerminalOptions {
   cwd?: string;
+  /** 只给这一次启动加跳过权限确认的参数 */
+  skipPermissions?: boolean;
+  /** 接在生成的参数后面的附加参数 */
+  extraArgs?: string;
 }
 
 export const providersApi = {
@@ -176,11 +180,13 @@ export const providersApi = {
     appId: AppId,
     options?: OpenTerminalOptions,
   ): Promise<boolean> {
-    const { cwd } = options ?? {};
+    const { cwd, skipPermissions, extraArgs } = options ?? {};
     return await invoke("open_provider_terminal", {
       providerId,
       app: appId,
       cwd,
+      skipPermissions,
+      extraArgs,
     });
   },
 
@@ -209,6 +215,15 @@ export const providersApi = {
    */
   async getOpenCodeLiveProviderIds(): Promise<string[]> {
     return await invoke("get_opencode_live_provider_ids");
+  },
+
+  /** OpenCode 顶层 model（`<provider>/<model>`），没写时为 null */
+  async getOpenCodeDefaultModel(): Promise<string | null> {
+    return await invoke("get_opencode_default_model");
+  },
+
+  async setOpenCodeDefaultModel(model: string): Promise<void> {
+    await invoke("set_opencode_default_model", { model });
   },
 
   /**

@@ -254,7 +254,30 @@
         "envFile": "起動時の環境変数",
         "envFileHint": "カードの「ターミナルを開く」から agy を起動すると、CC Switch は API キーとエンドポイントをその agy プロセスだけに渡し、ファイルには書き込みません。他の環境変数は適用されません。"
       }
-    }
+    },
+    "openTerminalDialog": {
+      "title": "どのフォルダでターミナルを開きますか？",
+      "description": "選んだフォルダでターミナルを開き、「{{name}}」の設定で {{app}} を起動します。通常はプロジェクトのフォルダを選びます。",
+      "isolationTitle": "このターミナルは分離されています",
+      "isolationBody": "常に「{{name}}」を使います。あとで CC Switch でプロバイダーを切り替えても影響を受けず、CC Switch で使用中のプロバイダーも変更しません。",
+      "isolationBodyAgy": "「{{name}}」のキーとエンドポイントはこのターミナルの agy にだけ渡され、ファイルには書き込まれません。別のターミナルで直接 agy を実行した場合は Google ログインのままです。",
+      "dirLabel": "フォルダ",
+      "dirPlaceholder": "例: /home/me/project や D:\\work\\project",
+      "dirHint": "ターミナルは CC Switch サービスが動いているコンピューターで開きます。そのコンピューター上のフォルダのパスを入力してください。",
+      "recent": "最近使ったフォルダ",
+      "forget": "最近使ったフォルダから削除",
+      "confirm": "ターミナルを開く",
+      "skipPermissions": "権限の確認をスキップ",
+      "extraArgs": "追加の引数（任意）",
+      "extraArgsPlaceholder": "例: --debug --append-system-prompt \"簡潔に答えて\"",
+      "extraArgsHint": "起動コマンドの後ろに付け、今回開くターミナルだけで使います。スペースで区切り、スペースを含む値は引用符で囲んでください。",
+      "agySwitchTitle": "agy のログインを切り替えます",
+      "agySwitchBody": "開く前に agy のログインを {{account}} に切り替えます。以降に起動する agy はこのアカウントを使います。",
+      "agySwitchRunning": "agy が実行中です。開いている agy は元のアカウントのままで、元のアカウントを書き戻す可能性があります。できれば先に終了してください。"
+    },
+    "openTerminalIsolated": "ターミナルを開く（環境を分離）",
+    "deleteBlockedInUse": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。",
+    "deleteBlockedDirectDefault": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続に戻してほかのプロバイダーに切り替えてください。"
   },
   "notifications": {
     "providerAdded": "プロバイダーを追加しました",
@@ -304,7 +327,9 @@
     "codexAuthCleanupFailed": "切り替えは成功しましたが、auth.json を削除できませんでした。公式ログイン資格情報がディスクに残っています。完全に削除するには Codex 設定ディレクトリの auth.json を手動で削除してください",
     "geminiRestart": "切り替えた設定を反映するには Gemini CLI を再起動してください。",
     "proxyReasonDesktopMapping": "モデルマッピングを使っており（Claude Desktop は Claude のモデル名しか受け付けません）",
-    "proxyReasonRoutingRequired": "リクエスト処理にローカルルーティングが必要であり"
+    "proxyReasonRoutingRequired": "リクエスト処理にローカルルーティングが必要であり",
+    "removeFromConfigFailed": "プロバイダーを削除できません",
+    "openclawModelNotFound": "選択したモデルは存在しません。更新してからもう一度お試しください。"
   },
   "confirm": {
     "deleteProvider": "プロバイダーを削除",

@@ -21,6 +21,7 @@ import {
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { injectCodingPlanUsageScript } from "@/config/codingPlanProviders";
+import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import { getRoutingReason } from "@/utils/routingReason";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
@@ -346,8 +347,63 @@ export function useProviderActions(
   );
 
   // Set provider as default model (OpenClaw only)
+  // OpenCode：只写 opencode.json 顶层 model，small_model 不动
+  const setOpenCodeDefaultModel = useCallback(
+    async (provider: Provider, modelId?: string) => {
+      const modelIds = getOpencodeDeclaredModels(
+        provider.id,
+        provider.settingsConfig,
+      ).map((model) => model.id);
+      if (modelIds.length === 0) {
+        toast.error(
+          t("notifications.openclawNoModels", {
+            defaultValue: "该供应商没有配置模型",
+          }),
+        );
+        return;
+      }
+      const selected = modelId ?? modelIds[0];
+      if (!modelIds.includes(selected)) {
+        toast.error(
+          t("notifications.openclawModelNotFound", {
+            defaultValue: "所选模型已不存在，请刷新后重试",
+          }),
+        );
+        return;
+      }
+
+      try {
+        await providersApi.setOpenCodeDefaultModel(
+          `${provider.id}/${selected}`,
+        );
+        await queryClient.invalidateQueries({
+          queryKey: ["opencodeDefaultModel"],
+        });
+        toast.success(
+          t("notifications.openclawDefaultModelSet", {
+            defaultValue: "已设为默认模型",
+          }),
+          { closeButton: true },
+        );
+      } catch (error) {
+        toast.error(
+          extractErrorMessage(error) ||
+            t("notifications.openclawDefaultModelSetFailed", {
+              defaultValue: "设置默认模型失败",
+            }),
+        );
+      }
+    },
+    [queryClient, t],
+  );
+
+  // Set provider as default model (OpenClaw / OpenCode)
   const setAsDefaultModel = useCallback(
-    async (provider: Provider) => {
+    async (provider: Provider, modelId?: string) => {
+      if (activeApp === "opencode") {
+        await setOpenCodeDefaultModel(provider, modelId);
+        return;
+      }
       const config = provider.settingsConfig as OpenClawProviderConfig;
       if (!config.models || config.models.length === 0) {
         toast.error(
@@ -357,10 +413,24 @@ export function useProviderActions(
         );
         return;
       }
+      const selectedIndex = modelId
+        ? config.models.findIndex((model) => model.id === modelId)
+        : 0;
+      if (selectedIndex < 0) {
+        toast.error(
+          t("notifications.openclawModelNotFound", {
+            defaultValue: "所选模型已不存在，请刷新后重试",
+          }),
+        );
+        return;
+      }
 
+      // 选中的模型作主模型，这家其余模型依次作备选
       const model: OpenClawDefaultModel = {
-        primary: `${provider.id}/${config.models[0].id}`,
-        fallbacks: config.models.slice(1).map((m) => `${provider.id}/${m.id}`),
+        primary: `${provider.id}/${config.models[selectedIndex].id}`,
+        fallbacks: config.models
+          .filter((_, index) => index !== selectedIndex)
+          .map((m) => `${provider.id}/${m.id}`),
       };
 
       try {
@@ -386,7 +456,7 @@ export function useProviderActions(
         toast.error(detail);
       }
     },
-    [queryClient, t],
+    [activeApp, queryClient, setOpenCodeDefaultModel, t],
   );
 
   return {

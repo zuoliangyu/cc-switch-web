@@ -12,6 +12,8 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { sortProvidersByName } from "@/utils/providerSort";
+import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
+import type { OpenClawProviderConfig } from "@/types";
 import {
   useOpenClawLiveProviderIds,
   useOpenClawDefaultModel,
@@ -71,7 +73,8 @@ interface ProviderListProps {
   isProxyRunning?: boolean; // 代理服务运行状态
   isProxyTakeover?: boolean; // 代理接管模式（Live配置已被接管）
   activeProviderId?: string; // 代理当前实际使用的供应商 ID（用于故障转移模式下标注绿色边框）
-  onSetAsDefault?: (provider: Provider) => void; // OpenClaw: set as default model
+  /** OpenClaw / OpenCode / Hermes / Kimi：设为默认（OpenClaw / OpenCode 可指定模型） */
+  onSetAsDefault?: (provider: Provider, modelId?: string) => void;
 }
 
 export function ProviderList({
@@ -170,12 +173,45 @@ export function ProviderList({
     appId === "openclaw",
   );
 
+  // OpenCode：顶层 model（`<provider>/<model>`）属于哪家
+  const { data: opencodeDefaultModel } = useQuery({
+    queryKey: ["opencodeDefaultModel"],
+    queryFn: () => providersApi.getOpenCodeDefaultModel(),
+    enabled: appId === "opencode",
+  });
+
   const isProviderDefaultModel = useCallback(
     (providerId: string): boolean => {
-      if (appId !== "openclaw" || !openclawDefaultModel?.primary) return false;
-      return openclawDefaultModel.primary.startsWith(providerId + "/");
+      const primary =
+        appId === "openclaw"
+          ? openclawDefaultModel?.primary
+          : appId === "opencode"
+            ? opencodeDefaultModel
+            : undefined;
+      if (!primary) return false;
+      return primary.startsWith(providerId + "/");
     },
-    [appId, openclawDefaultModel],
+    [appId, openclawDefaultModel, opencodeDefaultModel],
+  );
+
+  // OpenClaw / OpenCode：「设为默认」可选的模型
+  const defaultModelOptions = useCallback(
+    (provider: Provider): { id: string; name?: string }[] | undefined => {
+      if (appId === "opencode") {
+        return getOpencodeDeclaredModels(provider.id, provider.settingsConfig);
+      }
+      if (appId === "openclaw") {
+        const models = (provider.settingsConfig as OpenClawProviderConfig)
+          ?.models;
+        return Array.isArray(models)
+          ? models
+              .filter((model) => typeof model?.id === "string" && model.id)
+              .map((model) => ({ id: model.id, name: model.name }))
+          : [];
+      }
+      return undefined;
+    },
+    [appId],
   );
 
   // 故障转移相关
@@ -501,10 +537,17 @@ export function ProviderList({
             isTesting={isChecking(provider.id)}
             isProxyRunning={isProxyRunning}
             isProxyTakeover={isProxyTakeover}
-            deleteDisabled={
-              provider.id === modeView?.directProviderId ||
-              (provider.id === modeView?.routeProviderId &&
-                modeView?.mode !== "direct")
+            deleteDisabledReason={
+              // 后端 is_referenced：直连指针指着的、路由 / 聚合时正在路由的都删不掉。
+              // 路由 / 聚合时直连那家不算「正在用」，单独说明退出路由会回到它
+              modeView?.mode !== "direct" &&
+              provider.id === modeView?.routeProviderId
+                ? t("provider.deleteBlockedInUse")
+                : provider.id === modeView?.directProviderId
+                  ? modeView?.mode === "direct"
+                    ? t("provider.deleteBlockedInUse")
+                    : t("provider.deleteBlockedDirectDefault")
+                  : undefined
             }
             aggregation={
               modeView?.mode === "aggregation"
@@ -543,8 +586,11 @@ export function ProviderList({
                   : isProviderDefaultModel(provider.id)
             }
             onSetAsDefault={
-              onSetAsDefault ? () => onSetAsDefault(provider) : undefined
+              onSetAsDefault
+                ? (modelId?: string) => onSetAsDefault(provider, modelId)
+                : undefined
             }
+            defaultModelOptions={defaultModelOptions(provider)}
           />
         );
       })}

@@ -796,6 +796,16 @@ export async function restoreWebEnvBackup(backupPath: string): Promise<void> {
   return requestWithBody<void>("/api/env/restore", "POST", { backupPath });
 }
 
+export async function getWebOpenCodeDefaultModel(): Promise<string | null> {
+  return requestJson<string | null>("/api/opencode/default-model");
+}
+
+export async function setWebOpenCodeDefaultModel(model: string): Promise<void> {
+  await requestWithBody<boolean>("/api/opencode/default-model", "PUT", {
+    model,
+  });
+}
+
 export async function getWebLiveProviderIds(appId: AppId): Promise<string[]> {
   try {
     return await requestJson<string[]>(
@@ -1826,11 +1836,13 @@ export async function openWebProviderTerminal(
   appId: AppId,
   providerId: string,
   cwd?: string,
+  skipPermissions?: boolean,
+  extraArgs?: string,
 ): Promise<boolean> {
   return requestWithBody<boolean>(
     `/api/providers/${appId}/${encodeURIComponent(providerId)}/open-terminal`,
     "POST",
-    { cwd },
+    { cwd, skipPermissions, extraArgs },
   );
 }
 

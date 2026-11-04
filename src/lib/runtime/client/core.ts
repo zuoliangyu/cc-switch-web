@@ -271,6 +271,8 @@ import {
   saveWebPiPromptTemplate,
   deleteWebPiPromptTemplate,
   getWebPiSessionDiscovery,
+  getWebOpenCodeDefaultModel,
+  setWebOpenCodeDefaultModel,
 } from "./web";
 
 type InvokeArgs = Record<string, unknown> | undefined;
@@ -545,6 +547,8 @@ export async function invoke<T>(
         args?.app as AppId,
         args?.providerId as string,
         args?.cwd as string | undefined,
+        args?.skipPermissions as boolean | undefined,
+        args?.extraArgs as string | undefined,
       )) as T;
     case "get_universal_providers":
       return (await getWebUniversalProviders()) as T;
@@ -570,6 +574,10 @@ export async function invoke<T>(
       )) as T;
     case "delete_custom_icon":
       return (await deleteWebCustomIcon(args?.id as string)) as T;
+    case "get_opencode_default_model":
+      return (await getWebOpenCodeDefaultModel()) as T;
+    case "set_opencode_default_model":
+      return (await setWebOpenCodeDefaultModel(args?.model as string)) as T;
     case "get_opencode_live_provider_ids":
       return (await getWebLiveProviderIds("opencode")) as T;
     case "get_openclaw_live_provider_ids":

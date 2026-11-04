@@ -1266,9 +1266,19 @@ pub(crate) fn open_provider_terminal_internal(
     app: String,
     provider_id: String,
     cwd: Option<String>,
+    skip_permissions: bool,
+    extra_args: Option<String>,
 ) -> Result<bool, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     let launch_cwd = resolve_launch_cwd(cwd)?;
+    // 先拆参数：填错了直接报错，不必等到切完 agy 登录、写完临时文件。
+    let extra_args = split_launch_args(extra_args.as_deref().unwrap_or_default())?;
+    let program = match app_type {
+        AppType::Agy => "agy",
+        AppType::Codex => "codex",
+        _ => "claude",
+    };
+    let user_args = terminal_user_args(program, skip_permissions, extra_args)?;
 
     let providers = ProviderService::list(state, app_type.clone())
         .map_err(|e| format!("获取提供商列表失败: {e}"))?;
@@ -1278,7 +1288,12 @@ pub(crate) fn open_provider_terminal_internal(
 
     if app_type == AppType::Agy {
         futures::executor::block_on(switch_agy_to_bound_account(provider))?;
-        open_agy_terminal(provider, None, launch_cwd.as_deref())?;
+        open_agy_terminal(provider, None, &user_args, launch_cwd.as_deref())?;
+        return Ok(true);
+    }
+
+    if app_type == AppType::Codex {
+        open_codex_terminal(state, provider, &user_args, launch_cwd.as_deref())?;
         return Ok(true);
     }
 
@@ -1299,7 +1314,7 @@ pub(crate) fn open_provider_terminal_internal(
             None => None,
         };
         if let Some(config_dir) = config_dir {
-            let command = claude_account_launch_command(&provider.id, config_dir)?;
+            let command = claude_account_launch_command(&provider.id, config_dir, &user_args)?;
             launch_terminal_command(&command, launch_cwd.as_deref(), None)
                 .map_err(|e| format!("启动终端失败: {e}"))?;
             return Ok(true);
@@ -1323,11 +1338,229 @@ pub(crate) fn open_provider_terminal_internal(
         &provider_id,
         &provider.name,
         &drops,
+        &user_args,
         launch_cwd.as_deref(),
     )
     .map_err(|e| format!("启动终端失败: {e}"))?;
 
     Ok(true)
+}
+
+/// 跳过权限确认的参数：Claude Code 和 agy 同名，Codex 跳过确认的同时也关掉沙箱。
+fn skip_permissions_flag(program: &str) -> &'static str {
+    match program {
+        "codex" => "--dangerously-bypass-approvals-and-sandbox",
+        _ => "--dangerously-skip-permissions",
+    }
+}
+
+/// 附加参数的个数上限（各平台一样）。
+const MAX_USER_ARGS: usize = 16;
+
+/// 「打开终端」里勾的跳过权限确认和填的附加参数，接在 CC Switch 生成的参数后面，只给这一次
+/// 启动，不写进任何配置。Windows 上每个参数用引号包住写进 .bat，cmd 的 `&`、`|` 之类不会接出
+/// 别的命令；`"`、`%`、`^` 在引号里也会被 cmd 改写（Codex 的启动行还带 `call`），直接拒绝。
+fn terminal_user_args(
+    program: &str,
+    skip_permissions: bool,
+    extra_args: Vec<String>,
+) -> Result<Vec<String>, String> {
+    if cfg!(target_os = "windows") && extra_args.iter().any(|arg| arg.contains(['"', '%', '^'])) {
+        return Err("附加参数里有 Windows 终端传不过去的字符（\" % ^）".to_string());
+    }
+    let mut args = Vec::with_capacity(extra_args.len() + 1);
+    if skip_permissions {
+        args.push(skip_permissions_flag(program).to_string());
+    }
+    for arg in extra_args {
+        if cfg!(target_os = "windows") {
+            // 程序按 Windows 的规则拆命令行：收尾引号前的反斜杠要成对，否则 `C:\work\` 会把
+            // 引号当成内容吞掉。
+            let trailing = arg.len() - arg.trim_end_matches('\\').len();
+            args.push(format!("{arg}{}", "\\".repeat(trailing)));
+        } else {
+            args.push(arg);
+        }
+    }
+    Ok(args)
+}
+
+/// 把附加参数按空白拆开：单引号或双引号括起来的部分算同一个参数（引号本身去掉），没有
+/// 反斜杠转义（Windows 路径里全是反斜杠）。只拆成参数，不经 shell，`;`、`&`、`|` 原样交给 CLI。
+fn split_launch_args(input: &str) -> Result<Vec<String>, String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_word = false;
+    let mut quote: Option<char> = None;
+    for c in input.chars() {
+        if c.is_control() && !(quote.is_none() && c.is_whitespace()) {
+            return Err("附加参数里不能有换行等控制字符".to_string());
+        }
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => current.push(c),
+            None if c == '"' || c == '\'' => {
+                quote = Some(c);
+                in_word = true;
+            }
+            None if c.is_whitespace() => {
+                if in_word {
+                    args.push(std::mem::take(&mut current));
+                    in_word = false;
+                }
+            }
+            None => {
+                current.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if quote.is_some() {
+        return Err("附加参数里的引号没有配对".to_string());
+    }
+    if in_word {
+        args.push(current);
+    }
+    if args.len() > MAX_USER_ARGS {
+        return Err(format!("附加参数最多 {MAX_USER_ARGS} 个"));
+    }
+    Ok(args)
+}
+
+/// Codex 的「打开终端」（上游 codex_terminal_launch 的 Web 版）：卡就是当前直连的那家时直接跑
+/// `codex`；否则用 `-c` 只对这个进程换成它，Key 经环境变量传（见 `codex_terminal`），不改
+/// `config.toml`。这次生成的模型目录写进临时文件，Codex 退出后删掉。
+fn open_codex_terminal(
+    state: &AppState,
+    provider: &crate::provider::Provider,
+    user_args: &[String],
+    cwd: Option<&Path>,
+) -> Result<(), String> {
+    use crate::services::provider::codex_terminal;
+    let plan =
+        codex_terminal::terminal_launch(state.db.as_ref(), provider).map_err(|e| e.to_string())?;
+    // cmd 不认 `\"`，值里有双引号就会把后面的 `&` 等字符露在引号外面；`call` 会把 `%` 再展开
+    // 一遍、把引号里的 `^` 加倍。
+    if cfg!(target_os = "windows")
+        && plan
+            .overrides
+            .iter()
+            .any(|value| value.contains(['"', '%', '^']))
+    {
+        return Err(format!(
+            "「{}」的 Codex 配置里有 Windows 终端传不过去的字符（\" % ^），请先切换到这张卡再打开终端",
+            provider.name
+        ));
+    }
+    let catalog = match plan.catalog {
+        Some(bytes) => {
+            let path = std::env::temp_dir().join(format!(
+                "cc_switch_codex_catalog_{}_{}.json",
+                std::process::id(),
+                chrono::Utc::now().timestamp_millis()
+            ));
+            std::fs::write(&path, bytes).map_err(|e| format!("写入临时模型目录失败: {e}"))?;
+            Some(path)
+        }
+        None => None,
+    };
+    let result = codex_launch_command(
+        &provider.id,
+        &plan.overrides,
+        catalog.as_deref(),
+        user_args,
+        &plan.env,
+    )
+    .and_then(|command| {
+        launch_terminal_command(&command, cwd, None).map_err(|e| format!("启动终端失败: {e}"))
+    });
+    if result.is_err() {
+        if let Some(path) = &catalog {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    result
+}
+
+/// `-c` 参数：卡要覆盖的配置项，再接用户参数。
+fn codex_args(overrides: &[String], user_args: &[String]) -> Vec<String> {
+    let mut args = Vec::with_capacity(overrides.len() * 2 + user_args.len());
+    for value in overrides {
+        args.push("-c".to_string());
+        args.push(value.clone());
+    }
+    args.extend(user_args.iter().cloned());
+    args
+}
+
+/// macOS / Linux：`-c` 的值逐个加引号交给 shell，Codex 退出后删掉临时模型目录。
+#[cfg(not(target_os = "windows"))]
+fn codex_launch_command(
+    provider_id: &str,
+    overrides: &[String],
+    catalog: Option<&Path>,
+    user_args: &[String],
+    env: &[(&'static str, Option<String>)],
+) -> Result<String, String> {
+    let mut overrides = overrides.to_vec();
+    if let Some(path) = catalog {
+        overrides.push(crate::services::provider::codex_terminal::catalog_override(
+            &path.to_string_lossy(),
+        ));
+    }
+    let mut command = env_launch_command(
+        "codex",
+        provider_id,
+        &codex_args(&overrides, user_args),
+        env,
+    )?;
+    if let Some(path) = catalog {
+        command.push_str(&format!(
+            "; rm -f {}",
+            shell_single_quote(&path.to_string_lossy())
+        ));
+    }
+    Ok(command)
+}
+
+/// Windows：npm 装的是 codex.cmd，不加 `call` 跑完不回到启动 .bat，后面删临时文件（含 Key 的
+/// .bat 本身）的几行就不执行了。临时模型目录和启动 .bat 同在 %TEMP%，经 `%~dp0` 引用：目录由
+/// cmd 运行时展开，不进 .bat 字节，非 ASCII 用户名下也不会乱码。
+#[cfg(target_os = "windows")]
+fn codex_launch_command(
+    provider_id: &str,
+    overrides: &[String],
+    catalog: Option<&Path>,
+    user_args: &[String],
+    env: &[(&'static str, Option<String>)],
+) -> Result<String, String> {
+    const CATALOG_VAR: &str = "CC_SWITCH_CODEX_CATALOG";
+    let mut command = env_launch_command(
+        "call codex",
+        provider_id,
+        &codex_args(overrides, user_args),
+        env,
+    )?;
+    if let Some(path) = catalog {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // 指针不经 env_launch_command 的转义：`%CC_SWITCH_CODEX_CATALOG%` 要留给 cmd 展开。
+        let pointer = crate::services::provider::codex_terminal::catalog_override(&format!(
+            "%{CATALOG_VAR}%"
+        ));
+        command = command.replacen(
+            "call codex",
+            &format!(
+                "set \"{CATALOG_VAR}=%~dp0{}\"\r\ncall codex \"-c\" \"{pointer}\"",
+                escape_windows_batch_value(&name)
+            ),
+            1,
+        );
+        command.push_str(&format!("\r\ndel \"%{CATALOG_VAR}%\" >nul 2>&1"));
+    }
+    Ok(command)
 }
 
 /// 绑了 Antigravity 账号的官方卡：打开终端前先把 agy 的全局登录切到那个账号（只支持 macOS 钥匙串，
@@ -1380,6 +1613,7 @@ async fn switch_agy_to_bound_account(provider: &crate::provider::Provider) -> Re
 pub(crate) fn open_agy_terminal(
     provider: &crate::provider::Provider,
     conversation: Option<&str>,
+    user_args: &[String],
     cwd: Option<&Path>,
 ) -> Result<(), String> {
     let launch = crate::services::provider::agy_direct::terminal_launch(provider)
@@ -1401,6 +1635,7 @@ pub(crate) fn open_agy_terminal(
     if let Some(conversation) = conversation {
         args.push(format!("--conversation={conversation}"));
     }
+    args.extend(user_args.iter().cloned());
     let command = env_launch_command("agy", &provider.id, &args, &launch.env)?;
     launch_terminal_command(&command, cwd, None).map_err(|e| format!("启动终端失败: {e}"))
 }
@@ -1413,7 +1648,7 @@ pub(crate) fn open_agy_resume_terminal(
     cwd: Option<String>,
 ) -> Result<(), String> {
     let cwd = resolve_launch_cwd(cwd)?;
-    open_agy_terminal(provider, Some(conversation), cwd.as_deref())
+    open_agy_terminal(provider, Some(conversation), &[], cwd.as_deref())
 }
 
 /// macOS / Linux：环境变量写进只有本人可读的临时文件，命令里先读入再删掉（启动脚本本身是 0755，
@@ -1504,6 +1739,7 @@ fn env_launch_command(
 fn claude_account_launch_command(
     provider_id: &str,
     config_dir: Option<std::path::PathBuf>,
+    user_args: &[String],
 ) -> Result<String, String> {
     let mut env: Vec<(&'static str, Option<String>)> =
         crate::services::claude_account::login::CLAUDE_ACCOUNT_UNSET
@@ -1514,7 +1750,7 @@ fn claude_account_launch_command(
         "CLAUDE_CONFIG_DIR",
         config_dir.map(|dir| dir.to_string_lossy().into_owned()),
     ));
-    env_launch_command("claude", provider_id, &[], &env)
+    env_launch_command("claude", provider_id, user_args, &env)
 }
 
 pub(crate) fn launch_terminal_command_internal(
@@ -1659,6 +1895,7 @@ fn launch_terminal_with_env(
     provider_id: &str,
     provider_name: &str,
     drops: &crate::services::provider::SwitchDrops,
+    user_args: &[String],
     cwd: Option<&Path>,
 ) -> Result<(), String> {
     let temp_dir = std::env::temp_dir();
@@ -1672,19 +1909,19 @@ fn launch_terminal_with_env(
 
     #[cfg(target_os = "macos")]
     {
-        launch_macos_terminal(&config_file, cwd)?;
+        launch_macos_terminal(&config_file, user_args, cwd)?;
         Ok(())
     }
 
     #[cfg(target_os = "linux")]
     {
-        launch_linux_terminal(&config_file, cwd)?;
+        launch_linux_terminal(&config_file, user_args, cwd)?;
         Ok(())
     }
 
     #[cfg(target_os = "windows")]
     {
-        launch_windows_terminal(&temp_dir, &config_file, cwd)?;
+        launch_windows_terminal(&temp_dir, &config_file, user_args, cwd)?;
         Ok(())
     }
 
@@ -1932,7 +2169,11 @@ fn launch_windows_command_terminal(command: &str, cwd: Option<&Path>) -> Result<
 }
 
 #[cfg(target_os = "macos")]
-fn launch_macos_terminal(config_file: &Path, cwd: Option<&Path>) -> Result<(), String> {
+fn launch_macos_terminal(
+    config_file: &Path,
+    user_args: &[String],
+    cwd: Option<&Path>,
+) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
 
     let preferred = crate::settings::get_preferred_terminal();
@@ -1949,12 +2190,13 @@ trap 'rm -f "{config_path}" "{script_file}"' EXIT
 {cd_command}
 echo "Using provider-specific claude config:"
 echo "{config_path}"
-claude --settings "{config_path}"
+claude --settings "{config_path}"{user_args}
 exec bash --norc --noprofile
 "#,
         config_path = config_path,
         script_file = script_file.display(),
         cd_command = cd_command,
+        user_args = shell_user_args(user_args),
     );
 
     std::fs::write(&script_file, &script_content).map_err(|e| format!("写入启动脚本失败: {e}"))?;
@@ -2015,7 +2257,11 @@ end tell"#,
 }
 
 #[cfg(target_os = "linux")]
-fn launch_linux_terminal(config_file: &Path, cwd: Option<&Path>) -> Result<(), String> {
+fn launch_linux_terminal(
+    config_file: &Path,
+    user_args: &[String],
+    cwd: Option<&Path>,
+) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
 
@@ -2043,12 +2289,13 @@ trap 'rm -f "{config_path}" "{script_file}"' EXIT
 {cd_command}
 echo "Using provider-specific claude config:"
 echo "{config_path}"
-claude --settings "{config_path}"
+claude --settings "{config_path}"{user_args}
 exec bash --norc --noprofile
 "#,
         config_path = config_path,
         script_file = script_file.display(),
         cd_command = cd_command,
+        user_args = shell_user_args(user_args),
     );
 
     std::fs::write(&script_file, &script_content).map_err(|e| format!("写入启动脚本失败: {e}"))?;
@@ -2121,6 +2368,7 @@ fn which_command(cmd: &str) -> bool {
 fn launch_windows_terminal(
     temp_dir: &Path,
     config_file: &Path,
+    user_args: &[String],
     cwd: Option<&Path>,
 ) -> Result<(), String> {
     let preferred = crate::settings::get_preferred_terminal();
@@ -2142,9 +2390,13 @@ fn launch_windows_terminal(
         .collect();
 
     let content = format!(
-        "@echo off\r\n{cwd_command}echo Using provider-specific claude config:\r\necho \"{config_path}\"\r\nclaude --settings \"{config_path}\"\r\ndel \"{config_path}\" >nul 2>&1\r\ndel \"%~f0\" >nul 2>&1\r\n",
+        "@echo off\r\n{cwd_command}echo Using provider-specific claude config:\r\necho \"{config_path}\"\r\nclaude --settings \"{config_path}\"{user_args}\r\ndel \"{config_path}\" >nul 2>&1\r\ndel \"%~f0\" >nul 2>&1\r\n",
         cwd_command = cwd_command,
         config_path = config_path_for_batch,
+        user_args = user_args
+            .iter()
+            .map(|arg| format!(" \"{arg}\""))
+            .collect::<String>(),
     );
 
     std::fs::write(&bat_file, &content).map_err(|e| format!("写入批处理文件失败: {e}"))?;
@@ -2363,6 +2615,14 @@ fn build_shell_cd_command(cwd: Option<&Path>) -> String {
 }
 
 #[cfg_attr(target_os = "windows", allow(dead_code))]
+/// 用户参数接在 `claude --settings` 后面（启动脚本由用户 shell 执行，逐个加引号）。
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn shell_user_args(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| format!(" {}", shell_single_quote(arg)))
+        .collect()
+}
+
 fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
@@ -2493,6 +2753,42 @@ fn run_windows_start_command_with_env(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn split_launch_args_keeps_quoted_words_together() {
+        assert_eq!(
+            super::split_launch_args(r#"--model opus "a b" 'c d' x;y"#).unwrap(),
+            vec!["--model", "opus", "a b", "c d", "x;y"]
+        );
+        assert!(super::split_launch_args("").unwrap().is_empty());
+        assert!(super::split_launch_args("\"open").is_err());
+        assert!(super::split_launch_args("a\u{1b}b").is_err());
+        let many = vec!["x"; super::MAX_USER_ARGS + 1].join(" ");
+        assert!(super::split_launch_args(&many).is_err());
+    }
+
+    #[test]
+    fn skip_permissions_flag_comes_before_user_args() {
+        let args = super::terminal_user_args("claude", true, vec!["--model".into(), "opus".into()])
+            .unwrap();
+        assert_eq!(
+            args,
+            vec!["--dangerously-skip-permissions", "--model", "opus"]
+        );
+        let codex = super::terminal_user_args("codex", true, Vec::new()).unwrap();
+        assert_eq!(codex, vec!["--dangerously-bypass-approvals-and-sandbox"]);
+        assert!(super::terminal_user_args("agy", false, Vec::new())
+            .unwrap()
+            .is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_user_args_refuse_cmd_specials_and_pair_trailing_backslashes() {
+        assert!(super::terminal_user_args("claude", false, vec!["50%".into()]).is_err());
+        let args = super::terminal_user_args("claude", false, vec![r"C:\work\".into()]).unwrap();
+        assert_eq!(args, vec![r"C:\work\\"]);
+    }
+
     /// 写出临时 settings 并读回（上游 3071cae9 的终端配置用例，Web 直接测写文件这一步）。
     fn written_claude_config(
         env: &[(&str, &str)],

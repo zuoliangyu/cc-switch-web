@@ -61,6 +61,11 @@ export const settingsApi = {
     return await invoke("has_codex_unify_history_backup");
   },
 
+  /** Codex 的 config.toml 用 `[features] multi_agent_v2` 强制了新版子 agent 工具。 */
+  async codexForcesMultiAgentV2(): Promise<boolean> {
+    return await invoke("codex_forces_multi_agent_v2");
+  },
+
   async restoreCodexUnifiedHistory(): Promise<CodexUnifyHistoryRestoreResult> {
     return await invoke("restore_codex_unified_history");
   },

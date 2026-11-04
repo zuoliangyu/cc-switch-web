@@ -2888,10 +2888,22 @@ async fn save_settings(
     State(state): State<WebApiState>,
     Json(settings): Json<crate::settings::AppSettings>,
 ) -> Result<Json<bool>, ApiError> {
-    blocking_json(move || {
-        crate::commands::save_settings_internal(state.app_state.as_ref(), settings)
+    let existing = crate::settings::get_settings();
+    let app_state = state.app_state.clone();
+    let saved = blocking_json(move || {
+        crate::commands::save_settings_internal(app_state.as_ref(), settings)
     })
-    .await
+    .await?;
+    crate::commands::resync_codex_stack_settings(state.app_state.as_ref(), &existing)
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(saved)
+}
+
+async fn codex_forces_multi_agent_v2() -> Result<Json<bool>, ApiError> {
+    crate::commands::codex_forces_multi_agent_v2_internal()
+        .map(Json)
+        .map_err(ApiError::internal)
 }
 
 async fn has_codex_unify_history_backup() -> Json<bool> {
@@ -3971,6 +3983,30 @@ async fn restart_proxy_service(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Codex 聚合的模型被路由那家自己的模型目录挡住时，改用 CC Switch 生成的目录。返回之后
+/// 还剩的提示。
+async fn adopt_codex_stack_catalog(
+    State(state): State<WebApiState>,
+) -> Result<Json<Option<&'static str>>, ApiError> {
+    crate::mode::controller::adopt_codex_stack_catalog(&state.app_state)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(e.to_string()))
+}
+
+/// 用户关掉「Codex 可能还在用旧的」提示（看不到进程时出的那种）：记下现在的模型目录和文件
+/// 登录，同一份不再提示。
+async fn acknowledge_codex_stale_clients() -> Result<StatusCode, ApiError> {
+    crate::services::provider::codex_direct::off_runtime(|| {
+        crate::services::provider::codex_client_catalog::acknowledge(
+            &crate::live::engine::DeviceStore::for_device(),
+        )
+    })
+    .await
+    .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn restart_codex_daemon(
 ) -> Result<Json<crate::services::provider::codex_client_catalog::RestartOutcome>, ApiError> {
     blocking_json(crate::services::provider::codex_client_catalog::restart_daemon).await
@@ -4726,6 +4762,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             get(has_codex_unify_history_backup),
         )
         .route(
+            "/api/settings/codex-forces-multi-agent-v2",
+            get(codex_forces_multi_agent_v2),
+        )
+        .route(
             "/api/settings/codex-unify-history-restore",
             post(restore_codex_unified_history),
         )
@@ -5217,6 +5257,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/proxy/codex/daemon/restart",
             post(restart_codex_daemon),
+        )
+        .route(
+            "/api/proxy/codex/adopt-catalog",
+            post(adopt_codex_stack_catalog),
+        )
+        .route(
+            "/api/proxy/codex/stale-clients/acknowledge",
+            post(acknowledge_codex_stale_clients),
         )
         .route(
             "/api/proxy/config",

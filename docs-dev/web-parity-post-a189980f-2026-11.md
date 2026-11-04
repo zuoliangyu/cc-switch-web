@@ -205,8 +205,8 @@
 | `7f3fbd06` | v4.0.2 | test(pi): pin image input on official DeepSeek V4.1 Flash preset (#7865) | 1d 资源/设置/工具 | 1d：Pi DeepSeek V4.1 Flash 图片输入断言已随 1a 的预设测试同步 | 已迁移 |
 | `5c573f19` | v4.0.2 | fix(proxy): whitelist fields carried by reasoning replay envelopes (#7876) | 1b 代理协议 | 1b：推理回放信封字段白名单 | 已迁移 |
 | `d455dd85` | v4.0.2 | feat(mcp): sync MCP servers to Pi 1.0's built-in MCP (#7862) | 2a Pi MCP/迁移基线 | 2a：Pi 1.0 内置 MCP 同步（mcp/pi.rs，只替换连接字段、取消勾选改为 enabled:false、拒绝 SSE/非法名/仅 -_ 差异的重名，先写文件后提交数据库）；Web 自有 schema v16→v17 增加 mcp_servers.enabled_pi，并在建表阶段为版本号不低于 v17 却缺该列的桌面端 v17–v19 快照补列；MCP 面板与表单加入 Pi 列（Skills 列顺序不变）；Hermes MCP 在 Web 仍不可用，相关改动不适用 | 已迁移 |
-| `2fdcebf1` | v4.0.2 | fix(codex): let users switch back to CC Switch's model catalog when aggregation is blocked | 4 模式/路由 | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
-| `cad592e0` | v4.0.2 | fix(codex): treat model_catalog_json as a plain key field | 4 模式/路由 | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `2fdcebf1` | v4.0.2 | fix(codex): let users switch back to CC Switch's model catalog when aggregation is blocked | 4 模式/路由 | 4b：聚合模型被默认那家行里的 model_catalog_json 挡住时，模式面板给出「改用 CC Switch 的模型目录」（POST /api/proxy/codex/adopt-catalog：去掉路由行指向别的文件的指针、按 op::CATALOG 强制重写、返回剩余提示）；live 指针处理与编辑器特例随后被 cad592e0 撤掉，按最终状态迁移 | 部分迁移 |
+| `cad592e0` | v4.0.2 | fix(codex): treat model_catalog_json as a plain key field | 4 模式/路由 | 4b：model_catalog_json 当普通关键字段跟目标供应商走（行里自己的指针 > 生成目录时用 CC Switch 的 > 无），不再记进契约独有字段；去掉 configOwnsCatalog 提示 | 已迁移 |
 | `165622b8` | v4.0.2 | feat: show a short summary of what changed after updating | — | 更新后 whats-new 摘要弹窗依赖桌面更新流程；Web 以 CHANGELOG/Release 说明版本 | 不适用 |
 | `f5db60db` | v4.0.2 | feat(ui): fill the icon box with tile-style provider icons | 5a 供应商与全局 UI | 需新建或映射：`components/ProviderIconBox.tsx` | 待迁移 |
 | `20222460` | v4.0.2 | docs(whats-new): add the 4.0.2 summary | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -276,7 +276,7 @@
 | `cf02f670` | v4.0.5 | chore(release): v4.0.5 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `2db86e94` | v4.0.5 | docs(release): add v4.0.5 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `889b797d` | v4.0.6 | fix(claude): allow npm scripts in the primary update path (#7099) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `66144d58` | v4.0.6 | fix(codex): expose cached-account restart notice outside Stack mode (#8006) | 4 模式/路由 | 需新建或映射：`components/providers/CodexStaleClientsNotice.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `66144d58` | v4.0.6 | fix(codex): expose cached-account restart notice outside Stack mode (#8006) | 4 模式/路由 | 4b：Codex 旧客户端检测不再限于聚合：文件登录换过时任何模式都查（StaleClients.auth），模式面板单独给出「可能缓存旧账号」 | 已迁移 |
 | `86421718` | v4.0.6 | fix(proxy): close open content blocks before terminal events in Anthropic SSE (#7986) | 1b 代理协议 | 1b：Anthropic SSE 终止事件前关闭未结束的内容块 | 已迁移 |
 | `ffffd43c` | v4.0.6 | fix(codex): keep tools in third-party compaction summary turns (#7991) | 1b 代理协议 | 1b：原生 Responses 压缩摘要回合保留工具定义并强制 tool_choice=none；Web 压缩 HTTP 回归随之更新 | 已迁移 |
 | `42d47956` | v4.0.6 | ci(release): fail fast when linux deb or rpm package is missing (#7985) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
@@ -284,17 +284,17 @@
 | `b4a07943` | v4.0.6 | fix(codex): stop storing representative apiFormat for Copilot (#7972) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `0be33a84` | v4.0.6 | fix(quota): bring back colored quota numbers and warn below 20% | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `18bdea7c` | v4.0.6 | chore(icons): update DMXAPI logo | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `6760cfbb` | v4.0.6 | feat(codex): add an opt-in classic sub-agent tools toggle for aggregation | 4 模式/路由 | 需新建或映射：`components/settings/CodexAuthSettings.tsx` | 待迁移 |
+| `6760cfbb` | v4.0.6 | feat(codex): add an opt-in classic sub-agent tools toggle for aggregation | 4 模式/路由 | 4b：聚合合并目录每行写 multi_agent_version = "v1" 的设备级开关（按 6aeaeb17 最终形态 codexStackClassicTools，默认开）；[features] multi_agent_v2 强制新版时提示不生效（GET /api/settings/codex-forces-multi-agent-v2）；开关变了立即重写、失败回滚设置 | 已迁移 |
 | `c37a2625` | v4.0.6 | fix(proxy): explain unreadable sub-agent tasks instead of emptying them | 1b 代理协议 | 1b：子 agent 加密任务不被整流清空；解不开时返回中性 400 并说明；原样转发流在首个非生命周期事件前暂存（Web 无首包超时配置，固定上限 10s），新增 ProxyResponse::Streamed | 已迁移 |
 | `4aeaccf1` | v4.0.6 | fix(codex): unbind providers when a managed account is removed | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `449c7e78` | v4.0.6 | docs: add aggregation mode guide and update user manuals | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `1beb8fa8` | v4.0.6 | feat(ui): make the CC Switch update dot green and open About from it | 5a 供应商与全局 UI | 更新点改绿色并跳转关于页；适配 Web UpdateBadge；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
-| `ae934663` | v4.0.6 | fix(codex): build third-party catalog entries from the bundled classic tool template | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `ae934663` | v4.0.6 | fix(codex): build third-party catalog entries from the bundled classic tool template | 4 模式/路由 | 4b：ProxyChat / Copilot 的第三方目录条目一律用内置经典工具模板（unified_exec），不再读 models_cache.json、不再跑 codex 取模板，去掉模板缓存 | 已迁移 |
 | `c1cb531f` | v4.0.6 | feat(skills): update all Skills from the check button and list them before confirming | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `033017b0` | v4.0.6 | fix(skills): stop the import dialog from locking while discover refetches | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `8919d05c` | v4.0.6 | fix(ui): use the action color for the apps page visibility switches | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `4629ee2f` | v4.0.6 | fix(tray): show every quota tier in the app row title | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `dc93c496` | v4.0.6 | fix(codex): keep official models visible in the aggregation catalog | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `dc93c496` | v4.0.6 | fix(codex): keep official models visible in the aggregation catalog | 4 模式/路由 | 4b：官方列表按本机在用的最新 Codex 版本取（PATH 上的 codex 与最近线程的 cli_version）；没有 visibility = list 的列表不合格，退回自带列表并提示 officialModelsOutdated（含 4a 留下的 2e20cdcb 部分） | 已迁移 |
 | `c5efe0ba` | v4.0.6 | feat(providers): add a search button to the provider page header | 5a 供应商与全局 UI | 供应商页头搜索按钮依赖 SwitchModePanel 与 GeneralSection 等 UI 结构，随 5a 处理 | 待迁移 |
 | `ee50c12b` | v4.0.6 | test(apps): expect the action color on the apps page visibility switches | 5a 供应商与全局 UI | 应用页可见性开关配色断言，随 5a 的开关样式改动一起迁移 | 待迁移 |
 | `314968b6` | v4.0.6 | chore(release): v4.0.6 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -303,7 +303,7 @@
 | `3e566a3b` | v4.0.7 | fix(pi): point Volcengine Agent Plan at its own endpoint and add Coding Plan (#8044) | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `8641cd1d` | v4.0.7 | feat(codex): read compressed session rollouts and add a compression toggle | 5a 供应商与全局 UI | 需新建或映射：`codex_rollout_file.rs`、`services/backup_storage.rs`等 5 个 | 待迁移 |
 | `347c60c3` | v4.0.7 | docs(aggregation): add Codex troubleshooting for sub-agent tasks and the official quota lock | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `f264ce62` | v4.0.7 | fix(codex): run stale-client detection outside the aggregate stack view (#7892) | 4 模式/路由 | 需新建或映射：`components/providers/CodexStaleClientsNotice.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `f264ce62` | v4.0.7 | fix(codex): run stale-client detection outside the aggregate stack view (#7892) | 4 模式/路由 | 4b：模型目录的旧客户端检测不分模式（只在默认那家自己管目录时跳过） | 已迁移 |
 | `533055bb` | v4.0.7 | fix(usage): bill Claude 1-hour cache writes at the 1h rate (#7653) | 1c 会话/用量导入 | 1c：Claude 1 小时缓存写入按 1h 价计费（代理解析与会话导入） | 已迁移 |
 | `3da322eb` | v4.0.7 | feat(pricing): seed Claude Sonnet 5.5 and Haiku 5.5 (#8053) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `4bbdbcdd` | v4.0.7 | fix(usage): import Codex cache-write tokens from session rollouts (#7635) | 1c 会话/用量导入 | 1c：从 Codex rollout 导入缓存写入 token 并计费；Web 无 input_token_semantics 列，写入量为 0 的 Codex 代理行一律按早期代理放行去重 | 已迁移 |
@@ -316,7 +316,7 @@
 | `69dbb307` | v4.0.7 | fix(i18n): scope unified Codex session history copy to the CLI | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e06ba573` | v4.0.7 | fix(windows): keep non-ASCII paths out of generated batch files | 1d 资源/设置/工具 | 1d：工具安装/升级批处理先 chcp 65001；Claude 与会话启动器的非 ASCII 目录经环境变量传入、配置文件以 %%~dp0 引用（Web 的会话启动器同样适配） | 已迁移 |
 | `e5b1e096` | v4.0.7 | fix(codex): tell ChatGPT workspaces of the same user apart when switching official cards | 4 模式/路由 | 4a：Codex 登录按「用户 + ChatGPT workspace」认人，同一人的 Plus / Team 是两个登录；登录暂存加版本号，旧暂存读入时按新身份重算并从官方卡行补回被合并掉的 workspace（登出不复活） | 已迁移 |
-| `0fc67c3b` | v4.0.7 | fix(codex): warn about stale Codex clients on Windows without a process table | 4 模式/路由 | 需新建或映射：`components/providers/CodexStaleClientsNotice.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `0fc67c3b` | v4.0.7 | fix(codex): warn about stale Codex clients on Windows without a process table | 4 模式/路由 | 4b：Windows 看不到进程表时按 daemon.pid（pid + 创建时间）判断守护进程；桌面版 / 插件退化为「上次关掉提示后目录或登录变了」（unverified），关掉提示记下当前状态（POST /api/proxy/codex/stale-clients/acknowledge），staleRevision 变了重新显示；windows-sys 加 Win32_System_Threading 特性 | 已迁移 |
 | `b7d548b6` | v4.0.7 | feat(quota): let quota windows show what is used instead of what is left | 5b 用量/额度 UI | 需新建或映射：`components/quota/useQuotaDisplay.ts`、`components/settings/sections/GeneralSection.tsx` | 待迁移 |
 | `e049660a` | v4.0.7 | fix(codex): explain that old third-party sessions cannot continue on the official route | 1b 代理协议 | 1b：官方路由旧第三方会话提示新建会话；对应断言 Web 无此测试 | 已迁移 |
 | `fda103e9` | v4.0.7 | chore(release): v4.0.7 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -339,16 +339,16 @@
 | `5b708ebd` | v4.0.9 | feat(presets): add SoruxGPT presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `fec99c56` | v4.0.9 | feat(presets): add IKunCode presets and SoruxGPT/IKunCode icons | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `d25e8d54` | v4.0.9 | feat(presets): add RunToken presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `2ff37a76` | v4.0.9 | feat(codex): set a default sub-agent model and reasoning effort | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `2ff37a76` | v4.0.9 | feat(codex): set a default sub-agent model and reasoning effort | 4 模式/路由 | 4b：Codex 卡的子代理模型 / 推理强度写进 config.toml 的 [agents]（清空删键、表空删表头）；模型不在映射里时提示并可加进映射；聚合模式下不写行里的子代理设置 | 已迁移 |
 | `89add5de` | v4.0.9 | feat(presets): add Grok Build presets for SoruxGPT, IKunCode and RunToken | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `233310d7` | v4.0.9 | feat(presets): add OpenModel sponsor presets across ten apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `886915a7` | v4.0.9 | feat(presets): add BotCF presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c4770472` | v4.0.9 | feat(presets): add YYLX presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `4f08989a` | v4.0.9 | refactor(stack): explain the default model with a help tip instead of stars | 4 模式/路由 | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
+| `4f08989a` | v4.0.9 | refactor(stack): explain the default model with a help tip instead of stars | 4 模式/路由 | 4b：上游 Stack 布局模型列表的星标改帮助提示；Web 的供应商表单没有 Stack 布局与星标，聚合模型编辑器（ClaudeAggregationModels）本来就是文字说明加「移到首位设为默认」 | 不适用 |
 | `0dae89e2` | v4.0.9 | refactor(codex): move the model list out of the advanced options | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `9f7ac1fa` | v4.0.9 | refactor(codex): make the first row of the model list the default model | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `36e2ce2c` | v4.0.9 | refactor(codex): move field explanations into help tips | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `84ca4f00` | v4.0.9 | refactor(stack): move aggregation layout explanations into help tips | 4 模式/路由 | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
+| `84ca4f00` | v4.0.9 | refactor(stack): move aggregation layout explanations into help tips | 4 模式/路由 | 4b：上游聚合表单布局说明改为帮助提示；Web 的供应商表单没有聚合布局 | 不适用 |
 | `5b78fc62` | v4.0.9 | docs(flatpak): explain skipping updater artifacts without a signing key | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `e615a6f4` | v4.0.9 | refactor(forms): make provider form hints follow the app's actual mode | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx`、`components/providers/forms/shared/DirectModeFormatWarning.tsx` | 待迁移 |
 | `29998ed9` | v4.0.9 | fix(i18n): apply the saved language on cold start | 1d 资源/设置/工具 | 1d：拿到后端设置后用保存的语言校正首屏语言（Web 在 App 读取设置时同步，覆盖访问密钥门之后的首次加载） | 已迁移 |
@@ -472,11 +472,11 @@
 | `81bc1bce` | v4.0.13 | fix(usage): derive opencode session request latency from message times (#8309) | 1c 会话/用量导入 | 1c：OpenCode 会话请求耗时按消息时间推算 | 已迁移 |
 | `76f99d41` | v4.0.13 | fix(cli): avoid quadratic search path deduplication (#8322) | 1d 资源/设置/工具 | 1d：工具搜索路径改用 IndexSet 去重（随 tool_management 同步到上游最终版本） | 已迁移 |
 | `67d63e3e` | v4.0.13 | fix(usage): resolve paginated continuation pages for forked branch threads (#8290) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
-| `16537fd3` | v4.0.13 | fix(codex): preserve compaction preferences in proxy config (#8339) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `16537fd3` | v4.0.13 | fix(codex): preserve compaction preferences in proxy config (#8339) | 4 模式/路由 | 4b：代理路由表保留路由那家的 remote_compaction 能力与「OpenAI」名字开关 | 已迁移 |
 | `09237ebd` | v4.0.13 | fix(windows): avoid native CSS drag regions (#8327) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
 | `be0a9cf0` | v4.0.13 | fix(presets): cap GPT context windows at the 272K subscription window | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/ModeTabs.tsx`等 6 个 | 待迁移 |
-| `e70e844c` | v4.0.13 | feat(codex): let Auto Review use another model | 4 模式/路由 | 需新建或映射：`components/providers/mode/StackSettingsSheet.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b：设备级聚合设置：子代理模型与推理强度（按合并目录校验后写 [agents]）、codexStackClassicTools 默认开；Stack 视图给出 subagentModels；设置变了立即重写、失败回滚。Web 在模式面板的聚合设置区编辑；上游「切换到聚合」确认框里的子代理选择与 ModeTabs / StackSettingsSheet 外壳不迁移；docs/ 用户手册不适用 | 部分迁移 |
+| `e70e844c` | v4.0.13 | feat(codex): let Auto Review use another model | 4 模式/路由 | 4b：自动审批模型：卡上 modelCatalog.autoReviewModel（只能选映射里的，写进目录行 auto_review_model_override，读回时还原）；聚合下用设备级 codexStackAutoReviewModel（按合并目录校验） | 已迁移 |
 | `f9e0d537` | v4.0.13 | feat(mode): confirm before going back to direct | 4 模式/路由 | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx`等 4 个 | 待迁移 |
 | `3e9eede4` | v4.0.13 | feat(claude-desktop): move Desktop into the device-level direct/route mode | 4 模式/路由 | 需新建或映射：`commands/profile.rs` | 待迁移 |
 | `19a3e8d4` | v4.0.13 | feat(claude-desktop): show Desktop with the shared direct/route mode panel | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx`等 9 个 | 待迁移 |
@@ -527,7 +527,7 @@
 | `8b4b92c6` | v4.0.14 | fix(failover): keep queue positions distinct when reordering | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx`、`components/providers/presentation.ts` | 待迁移 |
 | `2e03d8ce` | v4.0.14 | fix(sessions): merge Windows project groups that differ only in path case | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `07a9c459` | v4.0.14 | fix(openclaw): keep the User-Agent switch in sync with JSON header edits | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `898dd002` | v4.0.14 | fix(codex): keep retry and stream timeout keys in the proxy route table | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `898dd002` | v4.0.14 | fix(codex): keep retry and stream timeout keys in the proxy route table | 4 模式/路由 | 4b：代理路由表照搬路由那家的 request_max_retries、stream_max_retries、stream_idle_timeout_ms | 已迁移 |
 | `83f0155f` | v4.0.14 | fix(skills): spool repo archives to disk and lift the 128 MiB download cap | 1d 资源/设置/工具 | 1d：Skill 仓库归档流式落临时文件，下载上限对齐解压预算并单列 ARCHIVE_DOWNLOAD_TOO_LARGE；前端补齐归档类错误码映射与三语文案 | 已迁移 |
 | `5089eb69` | v4.0.14 | fix(proxy): fall back to Gemini's skip signature when a cached one is lost | 1b 代理协议 | 1b：Codex Chat 请求缺 Gemini thought signature 时填 skip 占位 | 已迁移 |
 | `d858ab4c` | v4.0.14 | chore(release): v4.0.14 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -586,7 +586,7 @@
 | `27c42fd1` | v4.0.16 | feat(tray): fade in sub panel content on app switch and close it on other items | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `b76e83c3` | v4.0.16 | fix(usage): shorten CJK four-digit axis ticks and size the Y axis to its labels | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `273d166b` | v4.0.16 | fix(tray): make the macOS panel readable over dark windows | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `8a0eddb0` | v4.0.16 | fix(codex): stop aggregated sessions from compacting on the previous provider | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `8a0eddb0` | v4.0.16 | fix(codex): stop aggregated sessions from compacting on the previous provider | 4 模式/路由 | 4b：第三方路由那家的行在合并目录里也加入 Stack 的 comp_hash（按工具协议分组，补上 91fc2fcb 的路由行部分），官方路由的原生行不改 | 已迁移 |
 | `3168b00f` | v4.0.16 | Revert "fix(sidebar): show only the numbers in the usage Today badge" | — | 侧栏今日用量徽标改动已被上游撤销，净效果为空 | 不适用 |
 | `bb05f9d6` | v4.0.16 | fix(pricing): correct Kimi K3 and Step 5 Preview prices and seed new Qwen models | 1a 预设/定价/图标 | 1a：修正 Kimi K3、Step 5 Preview 价格并新增 Qwen；仅修复仍为旧内置值的行，Web 定价断言随之更新 | 已迁移 |
 | `1e36b107` | v4.0.16 | fix(usage): recover the model name for MiniMax Code usage rows that lack one | 1c 会话/用量导入 | 1c：MiniMax Code 用量行缺模型名时从会话恢复 | 已迁移 |
@@ -1060,3 +1060,10 @@
   - 其他：Codex 状态库在 WSL 路径上跳过；额度未使用时不显示重置倒计时；OpenRouter 上 DeepSeek V4 Flash 0731 的文本模型去图。
   - 未迁移：a94f997f 在 handlers 层把输入超限改写为 `response.failed` 流（Web 的 Codex 代理原样透传上游错误，没有错误规整层）；依赖 dc93c496 的 Outdated 判断与路由行 comp_hash（8a0eddb0）随 4b。
   - 验证：`cargo test --lib` 3485 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 176 个文件 1865 项通过、2 项跳过。
+- 2026-11-04：完成批次 4b（Codex 聚合 / Stack，16 项：12 项已迁移、2 项部分迁移、2 项不适用）。
+  - 目录：`model_catalog_json` 当普通关键字段跟目标供应商走，被行里指针挡住时可一键改用 CC Switch 的目录；第三方条目一律用内置经典工具模板；官方列表按本机在用的最新 Codex 版本取、不合格时提示 `officialModelsOutdated`；路由行与成员行的 comp_hash 按工具协议分组；代理路由表保留压缩能力、重试与流超时键。
+  - 设置（设备级，新增）：`codexStackClassicTools`（默认开）、`codexStackSubagentModel`、`codexStackSubagentReasoningEffort`、`codexStackAutoReviewModel`，在模式面板的聚合设置区（`CodexStackSettings`）编辑；保存设置时聚合设置变了立即重写 Codex，失败回滚并报错。Codex 卡新增子代理模型 / 推理强度与自动审批模型。
+  - 旧客户端提示：账号与目录检测不再限于聚合模式；Windows 按 `daemon.pid` 判断守护进程，看不到的客户端退化为「上次关掉提示后变了」，可关掉提示。
+  - 接口：`POST /api/proxy/codex/adopt-catalog`、`POST /api/proxy/codex/stale-clients/acknowledge`、`GET /api/settings/codex-forces-multi-agent-v2`。
+  - 不适用：Stack 表单布局的帮助提示（4f08989a、84ca4f00，Web 无该布局）；上游 ModeTabs / StackSettingsSheet 外壳与 docs/ 用户手册。
+  - 验证：`cargo test --lib` 3500 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 178 个文件 1878 项通过、2 项跳过。

@@ -14,6 +14,9 @@ import {
   setWebAggregationMember,
   restartWebProxyService,
   restartWebCodexDaemon,
+  adoptWebCodexStackCatalog,
+  acknowledgeWebCodexStaleClients,
+  getWebCodexForcesMultiAgentV2,
   addWebProviderToFailoverQueue,
   addWebProvider,
   getWebClaudeEditorView,
@@ -280,6 +283,8 @@ export async function invoke<T>(
       return (await saveWebSettings(args?.settings as any)) as T;
     case "has_codex_unify_history_backup":
       return (await hasWebCodexUnifyHistoryBackup()) as T;
+    case "codex_forces_multi_agent_v2":
+      return (await getWebCodexForcesMultiAgentV2()) as T;
     case "restore_codex_unified_history":
       return (await restoreWebCodexUnifiedHistory()) as T;
     case "get_common_config_snippet":
@@ -1063,6 +1068,10 @@ export async function invoke<T>(
       return (await getWebAppMode(args?.appType as AppId)) as T;
     case "restart_codex_daemon":
       return (await restartWebCodexDaemon()) as T;
+    case "adopt_codex_stack_catalog":
+      return (await adoptWebCodexStackCatalog()) as T;
+    case "acknowledge_codex_stale_clients":
+      return (await acknowledgeWebCodexStaleClients()) as T;
     case "set_app_mode":
       return (await setWebAppMode(
         args?.appType as AppId,

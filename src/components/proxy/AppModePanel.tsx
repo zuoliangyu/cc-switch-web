@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Layers, Plug, Route } from "lucide-react";
+import { toast } from "sonner";
 import type { AppId } from "@/lib/api";
 import type { Provider } from "@/types";
 import type { AppMode } from "@/types/proxy";
@@ -13,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { sortProvidersByName } from "@/utils/providerSort";
+import { CodexStackSettings } from "./CodexStackSettings";
 
 export function AppModePanel({
   app,
@@ -28,6 +30,8 @@ export function AppModePanel({
   const [confirm, setConfirm] = useState(false);
   const [restartConfirm, setRestartConfirm] = useState(false);
   const [route, setRoute] = useState("");
+  // 关掉的旧客户端提示：同一份（revision 相同）不再显示，目录或登录又变了才重新出现
+  const [dismissedStale, setDismissedStale] = useState<string | null>(null);
   const active = state.data?.mode ?? "direct";
   const selected = view ?? active;
   const choices = sortProvidersByName(Object.values(providers)).filter((p) =>
@@ -51,6 +55,20 @@ export function AppModePanel({
     active === "direct"
       ? state.data.directProviderId
       : state.data.routeProviderId;
+  const stale = state.data.aggregation.staleClients;
+  const staleRevision = state.data.aggregation.staleRevision ?? "";
+  const showStale = !!stale && dismissedStale !== staleRevision;
+  const dismissStale = () => {
+    if (stale?.unverified) {
+      void state.change({ kind: "acknowledgeStale" }).catch(() => {});
+    }
+    setDismissedStale(staleRevision);
+  };
+  const routeId = state.data.routeProviderId;
+  // 默认那家不发布 `ccs-*` 模型，选了也写不进去
+  const subagentModels = (state.data.aggregation.subagentModels ?? []).filter(
+    (model) => model.providerId !== routeId,
+  );
   const begin = () => {
     if (selected === "direct") {
       void state.change({ kind: "mode", mode: "direct" }).catch(() => {});
@@ -134,29 +152,79 @@ export function AppModePanel({
         </Button>
       )}
       {state.data.aggregation.notice && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t(`webMode.notice.${state.data.aggregation.notice}`)}
-          {state.data.aggregation.noticeReasons?.map((reason) => (
-            <span key={reason} className="block">
-              {t(`webMode.noticeReason.${reason}`)}
+        <div role="status" className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            {t(`webMode.notice.${state.data.aggregation.notice}`)}
+            {state.data.aggregation.noticeReasons?.map((reason) => (
+              <span key={reason} className="block">
+                {t(`webMode.noticeReason.${reason}`)}
+              </span>
+            ))}
+          </p>
+          {app === "codex" &&
+            state.data.aggregation.notice === "routeOwnsCatalog" && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={state.pending}
+                onClick={() => {
+                  void state
+                    .change({ kind: "adoptCatalog" })
+                    .then(() => toast.success(t("webMode.adoptCatalogDone")))
+                    .catch(() => {});
+                }}
+              >
+                {t("webMode.adoptCatalog")}
+              </Button>
+            )}
+        </div>
+      )}
+      {app === "codex" && active === "aggregation" && (
+        <CodexStackSettings
+          models={subagentModels}
+          routeOfficial={
+            !!routeId && providers[routeId]?.category === "official"
+          }
+        />
+      )}
+      {app === "codex" && stale && showStale && (
+        <div role="status" className="space-y-2 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">
+            {t(
+              stale.unverified
+                ? "webMode.staleClients.unverifiedTitle"
+                : stale.auth
+                  ? "webMode.staleClients.authTitle"
+                  : "webMode.staleClients.title",
+            )}
+          </p>
+          {stale.daemon && (
+            <span className="block">{t("webMode.staleClients.daemon")}</span>
+          )}
+          {stale.others && (
+            <span className="block">{t("webMode.staleClients.others")}</span>
+          )}
+          {stale.unverified && (
+            <span className="block">
+              {t("webMode.staleClients.unverifiedHint")}
             </span>
-          ))}
-        </p>
-      )}
-      {state.data.aggregation.staleClients && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("webMode.restartClients")}
-        </p>
-      )}
-      {app === "codex" && state.data.aggregation.staleClients?.daemon && (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={state.pending}
-          onClick={() => setRestartConfirm(true)}
-        >
-          {t("webMode.restartDaemon")}
-        </Button>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {stale.daemon && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={state.pending}
+                onClick={() => setRestartConfirm(true)}
+              >
+                {t("webMode.restartDaemon")}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={dismissStale}>
+              {t("common.close")}
+            </Button>
+          </div>
+        </div>
       )}
       <Dialog
         open={restartConfirm}

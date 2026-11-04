@@ -607,6 +607,21 @@ pub struct StackMemberView {
     pub route: bool,
 }
 
+/// 给前端：Codex 聚合面板「子代理模型」下拉的一项（见 `codex_direct::stack_subagent_choices`）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackSubagentModel {
+    /// 发布给客户端的模型 id（`ccs-<key>/<model>`），也是写进 `[agents]` 的值。
+    pub id: String,
+    pub provider_id: String,
+    /// `<模型显示名>（<供应商名>）`，和模型选择器里一样。
+    pub display_name: String,
+    /// 这个模型支持的推理强度，按目录里的顺序。
+    pub efforts: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_effort: Option<String>,
+}
+
 /// 给前端：Stack 模式的状态、名单和提示。
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -615,10 +630,9 @@ pub struct StackView {
     pub active: bool,
     pub members: Vec<StackMemberView>,
     /// Codex Stack 模型客户端看不到或看不全：`routeOwnsCatalog` 路由那家自己管理模型目录
-    /// 文件，Stack 模型不发布；`configOwnsCatalog` 用户在 `config.toml` 里指定了自己的模型
-    /// 目录，生成的目录不生效；官方做路由时官方模型列表暂未取到：`officialModelsBundled`
+    /// 文件，Stack 模型不发布；官方做路由时官方模型列表暂未取到：`officialModelsBundled`
     /// 暂用 Codex 自带的列表（可能缺账号专属的模型），`officialModelsUnavailable` Stack 模型
-    /// 暂不可用。
+    /// 暂不可用；`officialModelsOutdated` 本机 Codex 太旧，拉到的官方列表里没有能选的模型。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<&'static str>,
     /// `notice` 是 `officialModelsBundled` / `officialModelsUnavailable` 时，没取到列表的原因
@@ -630,6 +644,13 @@ pub struct StackView {
     /// Codex 客户端还在用旧的模型列表（启动时读的目录），Stack 模型看不到，要重启才行。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stale_clients: Option<StaleClients>,
+    /// `stale_clients` 对应的目录和登录（见 `codex_client_catalog::revision`）：用户关掉提示后，
+    /// 同一个供应商上目录又改了，这个值变了，前端重新显示。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stale_revision: Option<String>,
+    /// Codex：聚合面板「子代理模型」下拉的选项，发布 Stack 模型的成员按名单顺序。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subagent_models: Vec<StackSubagentModel>,
 }
 
 pub fn member_views(members: &[Member]) -> Vec<StackMemberView> {

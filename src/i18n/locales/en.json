@@ -1677,7 +1677,18 @@
     "contextWindowPlaceholder": "e.g., 128000",
     "contextWindow1M": "1M Context Window",
     "autoCompactLimit": "Auto Compact Limit",
-    "autoCompactLimitHint": "Auto-compacts history when context reaches this token limit"
+    "autoCompactLimitHint": "Auto-compacts history when context reaches this token limit",
+    "subagentModelLabel": "Sub-agent Model",
+    "subagentModelPlaceholder": "Leave empty to follow the main model",
+    "subagentReasoningEffortLabel": "Sub-agent reasoning effort",
+    "subagentReasoningEffortDefault": "Default effort",
+    "subagentModelHint": "The model and reasoning effort Codex sub-agents use by default. Empty follows the main agent; a model alone uses its own default effort. Ignored in Aggregation mode, where the sub-agent model in the app mode panel's Aggregation settings applies instead.",
+    "subagentModelNotInCatalog": "This model is not in the model mapping: Codex can't get its context window, and when routing converts requests to Chat / Anthropic it is replaced by the default model.",
+    "autoReviewModelLabel": "Auto Review model",
+    "autoReviewModelHint": "The model Codex uses to decide whether an action may go ahead when automatic approval (Approve for me) is on. Approval requests go to the same provider as the conversation, so only models in this card's model mapping can be picked. Ignored in Aggregation mode, where the Auto Review model in the app mode panel's Aggregation settings applies instead. Restart Codex after changes.",
+    "autoReviewModelCodexDefault": "Codex default (codex-auto-review)",
+    "autoReviewModelMainDefault": "Main model reviews itself (default)",
+    "autoReviewModelNoList": "This card has no model mapping: Codex reviews approvals with the official codex-auto-review, which only some relays that forward to ChatGPT accounts accept; the rest return 404. Add models to the mapping in the advanced options to pick one."
   },
   "codexOauth": {
     "authStatus": "Auth status",
@@ -3763,7 +3774,6 @@
     "setDefault": "Use as aggregation default",
     "restartDaemon": "Restart Codex daemon",
     "restartDaemonConfirm": "Wait for running tasks to finish, then restart the managed Codex daemon to load the new model list. This can take several minutes. Desktop apps and editor extensions must still be closed and reopened manually.",
-    "restartClients": "The model catalog changed. Fully quit and reopen Codex clients.",
     "help": {
       "direct": "The client connects directly to the selected provider.",
       "routing": "Requests pass through the local routing service, with optional failover.",
@@ -3771,9 +3781,9 @@
     },
     "notice": {
       "routeOwnsCatalog": "The default provider manages its own catalog; other members are not published.",
-      "configOwnsCatalog": "The client uses its own model catalog, so the generated aggregation catalog is not active.",
       "officialModelsBundled": "Using the models bundled with Codex; account-specific models may be missing.",
-      "officialModelsUnavailable": "Official models are unavailable; aggregated models cannot be published yet."
+      "officialModelsUnavailable": "Official models are unavailable; aggregated models cannot be published yet.",
+      "officialModelsOutdated": "Codex on this computer is too old to get the full official model list: update Codex (including the CLI) to the latest version."
     },
     "noticeReason": {
       "noLogin": "Official list: Codex has no usable ChatGPT login. Sign in to Codex with a ChatGPT account",
@@ -3798,7 +3808,39 @@
     "saveRestart": "Save and restart service",
     "rebindHint": "Saving the listen address restarts the service. If binding fails, the previous address is restored.",
     "officialDefaultAdvice": "Consider using an official account as the aggregation default for requests without an aggregated model ID.",
-    "claudeModelsRestart": "Restart Claude Code after changing aggregation models or members to refresh its model catalog."
+    "claudeModelsRestart": "Restart Claude Code after changing aggregation models or members to refresh its model catalog.",
+    "adoptCatalog": "Use CC Switch's model catalog",
+    "adoptCatalogDone": "Now using CC Switch's model catalog. Restart Codex to apply",
+    "staleClients": {
+      "title": "Codex is still using an old model list, so the current models won't show",
+      "authTitle": "Codex may still cache the previous account; restart its background server to load the new login",
+      "unverifiedTitle": "Codex apps that were open before the switch may still use the previous account or model list",
+      "unverifiedHint": "CC Switch can't tell whether the desktop app or editor extensions are running. If they aren't open, just close this notice.",
+      "daemon": "CLI: reopening codex isn't enough; its background daemon needs a restart.",
+      "others": "Desktop app: quit it completely and reopen it (⌘Q on macOS; closing the window isn't enough). Editor extensions: reopen the editor window."
+    },
+    "stackSettings": {
+      "title": "Aggregation settings",
+      "subagentDescription": "Sub-agents follow the main model by default. Pick an aggregated model and the sub-agents the main agent spawns use it by default (unless the main agent names a model when spawning). No Codex restart needed: new conversations pick it up, conversations already open keep the previous setting.",
+      "subagentModel": "Sub-agent model",
+      "followMain": "Follow the main model",
+      "subagentEffort": "Sub-agent reasoning effort",
+      "effortModelDefault": "Model default",
+      "effortModelDefaultNamed": "Model default ({{effort}})",
+      "unavailableOption": "{{model}} (no longer aggregated)",
+      "unavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so sub-agents follow the main model for now. It comes back once you add it again.",
+      "noModels": "No aggregated models are published yet. Add providers to the aggregation first.",
+      "classicOff": "The sub-agent runs on a different provider from the main agent, so Codex's new sub-agent tools encrypt its task where only the main agent's provider can read it, and the sub-agent receives nothing. You must turn on \"Classic sub-agent tools in aggregation\" below.",
+      "classicTools": "Classic sub-agent tools in aggregation",
+      "classicToolsDescription": "Must be on when the main agent and a sub-agent use different providers, or the sub-agent cannot receive its task.",
+      "classicToolsForcedV2": "Codex config.toml turns on [features] multi_agent_v2, which takes precedence over this setting, so it has no effect.",
+      "autoReviewModel": "Auto Review model",
+      "autoReviewDescription": "The model Codex uses to decide whether an action may go ahead when automatic approval (Approve for me) is on. It can be another provider's aggregated model. Restart Codex after changes.",
+      "autoReviewDefaultOfficial": "Official Auto Review (default)",
+      "autoReviewDefaultMain": "Main model reviews itself (default)",
+      "autoReviewUnavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so approvals use the default reviewer for now. It comes back once you add it again.",
+      "saveFailed": "Failed to save: {{error}}"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",

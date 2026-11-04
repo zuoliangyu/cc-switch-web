@@ -58,6 +58,49 @@ pub fn save_settings_internal(
     Ok(true)
 }
 
+/// 聚合设置（经典子 agent 工具、子 agent 模型和推理强度、自动审批模型）只影响 Stack 模式下
+/// 写给 Codex 的内容：保存后立即重写，失败时回滚这几项，免得界面显示已改好、客户端还是旧的。
+/// `existing` 是保存前的设置。
+pub async fn resync_codex_stack_settings(
+    state: &crate::store::AppState,
+    existing: &crate::settings::AppSettings,
+) -> Result<(), String> {
+    let saved = crate::settings::get_settings();
+    let changed = saved.codex_stack_classic_tools != existing.codex_stack_classic_tools
+        || saved.codex_stack_subagent_model != existing.codex_stack_subagent_model
+        || saved.codex_stack_subagent_reasoning_effort
+            != existing.codex_stack_subagent_reasoning_effort
+        || saved.codex_stack_auto_review_model != existing.codex_stack_auto_review_model;
+    if !changed {
+        return Ok(());
+    }
+    if let Err(err) = crate::mode::controller::resync_codex_stack_catalog(state).await {
+        log::warn!("Codex 聚合设置变更后重写客户端配置失败，回滚设置: {err}");
+        let mut rollback = crate::settings::get_settings();
+        rollback.codex_stack_classic_tools = existing.codex_stack_classic_tools;
+        rollback.codex_stack_subagent_model = existing.codex_stack_subagent_model.clone();
+        rollback.codex_stack_subagent_reasoning_effort =
+            existing.codex_stack_subagent_reasoning_effort.clone();
+        rollback.codex_stack_auto_review_model = existing.codex_stack_auto_review_model.clone();
+        if let Err(rollback_err) = crate::settings::update_settings(rollback) {
+            log::error!("回滚 Codex 聚合设置失败: {rollback_err}");
+        }
+        return Err(format!(
+            "聚合设置未生效（Codex 配置重写失败） (The aggregation setting did not take effect: rewriting the Codex config failed): {err}"
+        ));
+    }
+    Ok(())
+}
+
+/// Codex 的 `config.toml` 是不是用 `[features] multi_agent_v2` 强制了新版子 agent 工具
+/// （这时「经典子 agent 工具」开关不生效，界面上提示）。
+pub fn codex_forces_multi_agent_v2_internal() -> Result<bool, String> {
+    let text = crate::codex_config::read_codex_config_text().map_err(|e| e.to_string())?;
+    Ok(crate::codex_config::codex_config_forces_multi_agent_v2(
+        &text,
+    ))
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexUnifyHistoryRestoreResult {

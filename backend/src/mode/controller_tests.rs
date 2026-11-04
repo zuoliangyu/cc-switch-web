@@ -951,3 +951,239 @@ async fn codex_detaching_and_attaching_keep_the_login_next_to_a_third_party_rout
         "a real exit follows the setting"
     );
 }
+
+fn codex_native_row(id: &str, extra: &str, table_extra: &str) -> Provider {
+    Provider::with_id(
+        id.into(),
+        id.into(),
+        json!({"auth":{"OPENAI_API_KEY":"test-key"},"config":format!("model_provider = \"{id}\"\nmodel = \"{id}-model\"\n{extra}[model_providers.{id}]\nbase_url = \"https://{id}.example/v1\"\nwire_api = \"responses\"\n{table_extra}")}),
+        None,
+    )
+}
+
+/// 一家路由 + 一家 Stack 成员的 Codex 聚合，监听端口随机。
+async fn codex_stack_fixture(route: Provider) -> Fixture {
+    let f = Fixture::new();
+    let state = &f.state;
+    state.db.save_provider("codex", &route).unwrap();
+    state
+        .db
+        .save_provider("codex", &codex_native_row("b", "", ""))
+        .unwrap();
+    codex_direct::write_direct(state, None, &route, true, None).unwrap();
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    f
+}
+
+fn codex_doc() -> toml_edit::DocumentMut {
+    codex_direct::read_config_text()
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap()
+}
+
+fn codex_catalog_rows() -> Vec<Value> {
+    serde_json::from_slice::<Value>(
+        &std::fs::read(crate::codex_config::get_codex_model_catalog_path()).unwrap(),
+    )
+    .unwrap()["models"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+fn agents_of(doc: &toml_edit::DocumentMut) -> (Option<String>, Option<String>, Option<i64>) {
+    let text = |key: &str| {
+        doc.get("agents")
+            .and_then(|agents| agents.get(key))
+            .and_then(|item| item.as_str())
+            .map(str::to_string)
+    };
+    (
+        text("default_subagent_model"),
+        text("default_subagent_reasoning_effort"),
+        doc.get("agents")
+            .and_then(|agents| agents.get("max_threads"))
+            .and_then(|item| item.as_integer()),
+    )
+}
+
+/// 子代理模型：路由模式照写路由那家的；聚合模式不写行里的（子代理跟随主模型），改写聚合
+/// 设置里选的、按合并目录校验过的那个，`[agents]` 里用户自己的设置不动。经典子 agent 工具
+/// 默认开，自动审批模型写进合并目录的每一行；设置变了立即重写，退出后恢复路由那家的。
+#[tokio::test]
+#[serial]
+async fn codex_stack_settings_drive_subagents_classic_tools_and_auto_review() {
+    let route = codex_native_row(
+        "a",
+        "[agents]\ndefault_subagent_model = \"a-mini\"\ndefault_subagent_reasoning_effort = \"low\"\n",
+        "",
+    );
+    let f = codex_stack_fixture(route).await;
+    let state = &f.state;
+    // 用户自己写在 live 里的 [agents] 设置。
+    let mut doc = codex_doc();
+    doc["agents"]["max_threads"] = toml_edit::value(4);
+    std::fs::write(
+        crate::codex_config::get_codex_config_path(),
+        doc.to_string(),
+    )
+    .unwrap();
+    let routed = (Some("a-mini".to_string()), Some("low".to_string()), Some(4));
+
+    enter(state, &AppType::Codex, Some("a")).await.unwrap();
+    assert_eq!(agents_of(&codex_doc()), routed);
+    exit(state, &AppType::Codex).await.unwrap();
+
+    enter_mode(state, &AppType::Codex, Some("a"), true)
+        .await
+        .unwrap();
+    set_stack_member(state, &AppType::Codex, "b", true)
+        .await
+        .unwrap();
+    assert_eq!(agents_of(&codex_doc()), (None, None, Some(4)));
+    // 经典子 agent 工具默认开：每一行都写 v1。
+    let rows = codex_catalog_rows();
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row["multi_agent_version"] == "v1"));
+
+    // 子代理下拉列出 Stack 成员发布的模型。
+    let view = stack_view(state, &AppType::Codex).await.unwrap();
+    let choice = view
+        .subagent_models
+        .iter()
+        .find(|model| model.id == "ccs-b/b-model")
+        .expect("member model offered");
+    let effort = choice.efforts.first().cloned();
+
+    let before = get_settings();
+    let mut settings = before.clone();
+    settings.codex_stack_classic_tools = false;
+    settings.codex_stack_subagent_model = Some("ccs-b/b-model".into());
+    settings.codex_stack_subagent_reasoning_effort = effort.clone().or(Some("high".into()));
+    settings.codex_stack_auto_review_model = Some("ccs-b/b-model".into());
+    update_settings(settings).unwrap();
+    crate::commands::resync_codex_stack_settings(state, &before)
+        .await
+        .unwrap();
+    let (model, written_effort, threads) = agents_of(&codex_doc());
+    assert_eq!(model.as_deref(), Some("ccs-b/b-model"));
+    assert_eq!(written_effort, effort, "只写这个模型支持的档位");
+    assert_eq!(threads, Some(4));
+    let rows = codex_catalog_rows();
+    assert!(rows.iter().all(|row| row["multi_agent_version"] != "v1"));
+    assert!(rows
+        .iter()
+        .all(|row| row["auto_review_model_override"] == "ccs-b/b-model"));
+
+    // 不在合并目录里的模型不写：子代理跟随主模型，审批用 Codex 的默认。
+    let before = get_settings();
+    let mut settings = before.clone();
+    settings.codex_stack_subagent_model = Some("ccs-gone/x".into());
+    settings.codex_stack_auto_review_model = Some("ccs-gone/x".into());
+    update_settings(settings).unwrap();
+    crate::commands::resync_codex_stack_settings(state, &before)
+        .await
+        .unwrap();
+    assert_eq!(agents_of(&codex_doc()), (None, None, Some(4)));
+    assert!(codex_catalog_rows()
+        .iter()
+        .all(|row| row.get("auto_review_model_override").is_none()));
+
+    exit(state, &AppType::Codex).await.unwrap();
+    assert_eq!(agents_of(&codex_doc()), routed);
+}
+
+/// 提示上的「改用 CC Switch 的模型目录」：去掉路由那家行里指向别的文件的指针，换上合并目录，
+/// 不再提示；行里其余内容原样。手写进 live 的指针是关键字段，进代理时就清掉。
+#[tokio::test]
+#[serial]
+async fn codex_adopting_the_catalog_drops_the_route_rows_own_pointer() {
+    let route = codex_native_row(
+        "a",
+        "model_catalog_json = \"/opt/team/models.json\"\nmodel_verbosity = \"high\"\n",
+        "",
+    );
+    let f = codex_stack_fixture(route).await;
+    let state = &f.state;
+    enter_mode(state, &AppType::Codex, Some("a"), true)
+        .await
+        .unwrap();
+    set_stack_member(state, &AppType::Codex, "b", true)
+        .await
+        .unwrap();
+    assert_eq!(
+        codex_doc()["model_catalog_json"].as_str(),
+        Some("/opt/team/models.json")
+    );
+    assert_eq!(
+        stack_view(state, &AppType::Codex).await.unwrap().notice,
+        Some("routeOwnsCatalog")
+    );
+
+    assert_eq!(adopt_codex_stack_catalog(state).await.unwrap(), None);
+    let row = provider(state, &AppType::Codex, "a").unwrap();
+    let row_config = row.settings_config["config"].as_str().unwrap();
+    assert!(
+        !row_config.contains("model_catalog_json") && row_config.contains("model_verbosity"),
+        "{row_config}"
+    );
+    assert_eq!(
+        codex_doc()["model_catalog_json"].as_str(),
+        Some(crate::codex_config::CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME)
+    );
+    assert!(codex_catalog_rows()
+        .iter()
+        .any(|row| row["slug"] == "ccs-b/b-model"));
+    assert_eq!(
+        stack_view(state, &AppType::Codex).await.unwrap().notice,
+        None
+    );
+    exit(state, &AppType::Codex).await.unwrap();
+
+    // 手写进 config.toml 的指针挡不住聚合：进代理时按关键字段清掉。
+    let text = codex_direct::read_config_text().unwrap();
+    std::fs::write(
+        crate::codex_config::get_codex_config_path(),
+        format!("model_catalog_json = \"/work/mine.json\"\n{text}"),
+    )
+    .unwrap();
+    enter(state, &AppType::Codex, Some("a")).await.unwrap();
+    assert!(codex_doc().get("model_catalog_json").is_none());
+    exit(state, &AppType::Codex).await.unwrap();
+}
+
+/// 代理路由表由 CC Switch 生成，但压缩偏好（含「OpenAI」名字开关）和 Codex 自己的重试、流空闲
+/// 超时跟着路由那家走（#8339、#8265）；换到没有这些键的一家时一起去掉。
+#[tokio::test]
+#[serial]
+async fn codex_proxy_route_table_keeps_compaction_and_retry_keys() {
+    let route = codex_native_row(
+        "a",
+        "",
+        "name = \"OpenAI\"\nstream_max_retries = 50\nstream_idle_timeout_ms = 600000\n[model_providers.a.capabilities]\nremote_compaction = false\n",
+    );
+    let f = codex_stack_fixture(route).await;
+    let state = &f.state;
+    enter(state, &AppType::Codex, Some("a")).await.unwrap();
+    let doc = codex_doc();
+    let proxy = &doc["model_providers"]["custom"];
+    assert_eq!(proxy["name"].as_str(), Some("OpenAI"));
+    assert_eq!(
+        proxy["capabilities"]["remote_compaction"].as_bool(),
+        Some(false)
+    );
+    assert_eq!(proxy["stream_max_retries"].as_integer(), Some(50));
+    assert_eq!(proxy["stream_idle_timeout_ms"].as_integer(), Some(600000));
+
+    set_route(state, &AppType::Codex, "b").await.unwrap();
+    let doc = codex_doc();
+    let proxy = &doc["model_providers"]["custom"];
+    assert_ne!(proxy["name"].as_str(), Some("OpenAI"));
+    assert!(proxy.get("capabilities").is_none());
+    assert!(proxy.get("stream_max_retries").is_none());
+    assert!(proxy.get("stream_idle_timeout_ms").is_none());
+    exit(state, &AppType::Codex).await.unwrap();
+}

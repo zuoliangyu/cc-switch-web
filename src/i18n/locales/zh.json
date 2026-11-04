@@ -1677,7 +1677,18 @@
     "contextWindowPlaceholder": "例如: 128000",
     "contextWindow1M": "1M 上下文窗口",
     "autoCompactLimit": "压缩阈值",
-    "autoCompactLimitHint": "上下文 token 数达到此阈值时自动压缩历史"
+    "autoCompactLimitHint": "上下文 token 数达到此阈值时自动压缩历史",
+    "subagentModelLabel": "子代理模型",
+    "subagentModelPlaceholder": "留空则跟随主模型",
+    "subagentReasoningEffortLabel": "子代理推理强度",
+    "subagentReasoningEffortDefault": "默认强度",
+    "subagentModelHint": "Codex 派出的子代理默认用的模型和推理强度。留空时沿用主代理的；只填模型时用该模型自己的默认强度。聚合模式下不生效，改用运行模式面板「聚合设置」里的子代理模型。",
+    "subagentModelNotInCatalog": "该模型不在模型映射中：Codex 拿不到它的上下文窗口；经路由转成 Chat / Anthropic 协议时会被换成默认模型。",
+    "autoReviewModelLabel": "自动审批模型",
+    "autoReviewModelHint": "Codex 开了自动审批（Approve for me）时，判断操作能不能放行用的模型。审批请求和主对话发给同一家，所以只能选这张卡模型映射里的。聚合模式下不生效，改用运行模式面板「聚合设置」里的自动审批模型。改完需要重启 Codex。",
+    "autoReviewModelCodexDefault": "Codex 默认（codex-auto-review）",
+    "autoReviewModelMainDefault": "主模型自己审批（默认）",
+    "autoReviewModelNoList": "这张卡没有模型映射：Codex 会用官方的 codex-auto-review 审批，只有部分转发 ChatGPT 账号的中转认它，不认就会报 404。在高级选项的模型映射里加上模型后就能选。"
   },
   "codexOauth": {
     "authStatus": "认证状态",
@@ -3763,7 +3774,6 @@
     "setDefault": "设为聚合默认",
     "restartDaemon": "重启 Codex 守护进程",
     "restartDaemonConfirm": "将等待运行中的任务收尾，再重启 Codex 托管守护进程以读取新模型列表，最长可能需要数分钟。桌面版和编辑器插件仍需手动退出再打开。",
-    "restartClients": "模型目录已更新，请彻底退出并重新打开 Codex 客户端。",
     "help": {
       "direct": "客户端直接连接选中的供应商。",
       "routing": "请求经过本地路由服务，可启用故障转移。",
@@ -3771,9 +3781,9 @@
     },
     "notice": {
       "routeOwnsCatalog": "默认供应商使用自己的模型目录，暂不发布其他成员的模型。",
-      "configOwnsCatalog": "客户端配置指定了自己的模型目录，生成的聚合目录尚未生效。",
       "officialModelsBundled": "暂用 Codex 自带的官方模型列表，可能缺少账号专属模型。",
-      "officialModelsUnavailable": "暂未获取官方模型列表，聚合模型尚不可用。"
+      "officialModelsUnavailable": "暂未获取官方模型列表，聚合模型尚不可用。",
+      "officialModelsOutdated": "本机 Codex 版本过旧，拿不到完整的官方模型列表：请把 Codex（包括命令行）升级到最新版。"
     },
     "noticeReason": {
       "noLogin": "官方列表：Codex 没有可用的 ChatGPT 登录，请在 Codex 里用 ChatGPT 账号登录",
@@ -3798,7 +3808,39 @@
     "saveRestart": "保存并重启服务",
     "rebindHint": "保存监听地址会重启服务；绑定失败时恢复原地址。",
     "officialDefaultAdvice": "建议将官方账号设为聚合默认供应商，以便处理不带聚合模型标识的请求。",
-    "claudeModelsRestart": "聚合模型或成员变化后，请重启 Claude Code 以刷新模型目录。"
+    "claudeModelsRestart": "聚合模型或成员变化后，请重启 Claude Code 以刷新模型目录。",
+    "adoptCatalog": "改用 CC Switch 的模型目录",
+    "adoptCatalogDone": "已改用 CC Switch 的模型目录，重启 Codex 后生效",
+    "staleClients": {
+      "title": "Codex 还在用旧的模型列表，切换后的模型不会出现",
+      "authTitle": "Codex 可能仍缓存着切换前的账号；重启后台服务才能载入新登录",
+      "unverifiedTitle": "切换前就开着的 Codex 可能还在用之前的账号或模型列表",
+      "unverifiedHint": "CC Switch 看不到桌面版和编辑器插件是否在运行；没开着的话直接关掉这条提示即可。",
+      "daemon": "命令行：重开 codex 不够，要重启后台的守护进程。",
+      "others": "桌面版：要彻底退出再重开（macOS 上按 ⌘Q，只关窗口不行）；编辑器插件要重开编辑器窗口。"
+    },
+    "stackSettings": {
+      "title": "聚合设置",
+      "subagentDescription": "子代理默认跟随主模型。选一个聚合里的模型后，主代理派出的子代理默认用它（主代理派单时自己指定了模型的除外）。不用重启 Codex，新开的对话就会用上；已经开着的对话仍按原来的设置。",
+      "subagentModel": "子代理模型",
+      "followMain": "跟随主模型",
+      "subagentEffort": "子代理推理强度",
+      "effortModelDefault": "模型默认",
+      "effortModelDefaultNamed": "模型默认（{{effort}}）",
+      "unavailableOption": "{{model}}（已不在聚合里）",
+      "unavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），子代理暂时跟随主模型；加回来后自动恢复。",
+      "noModels": "聚合名单里还没有发布的模型，先把供应商加入聚合。",
+      "classicOff": "子代理和主代理不在同一家，Codex 新版的子 agent 工具会把任务加密，只有主代理那家解得开，子代理会收不到任务。必须打开下面的「聚合模式下子 agent 用经典工具」。",
+      "classicTools": "聚合模式下子 agent 用经典工具",
+      "classicToolsDescription": "主、子 agent 不在同一家供应商时必须打开，否则子 agent 收不到任务。",
+      "classicToolsForcedV2": "Codex 的 config.toml 里打开了 [features] multi_agent_v2，它比这个开关优先，开关不会生效",
+      "autoReviewModel": "自动审批模型",
+      "autoReviewDescription": "Codex 开了自动审批（Approve for me）时，判断操作能不能放行用的模型，可以选聚合里别家的模型。改完需要重启 Codex。",
+      "autoReviewDefaultOfficial": "官方 Auto Review（默认）",
+      "autoReviewDefaultMain": "主模型自己审批（默认）",
+      "autoReviewUnavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），审批暂时用默认模型；加回来后自动恢复。",
+      "saveFailed": "保存失败：{{error}}"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",

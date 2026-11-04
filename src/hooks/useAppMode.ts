@@ -10,6 +10,8 @@ export const supportsAppMode = (app: AppId) =>
 
 type Action =
   | { kind: "restartDaemon" }
+  | { kind: "adoptCatalog" }
+  | { kind: "acknowledgeStale" }
   | { kind: "mode"; mode: AppMode; route?: string }
   | { kind: "member"; id: string; enabled: boolean }
   | { kind: "route"; id: string };
@@ -26,6 +28,10 @@ export function useAppMode(app: AppId) {
     mutationFn: (action: Action) => {
       if (action.kind === "restartDaemon")
         return proxyApi.restartCodexDaemon().then(() => {});
+      if (action.kind === "adoptCatalog")
+        return proxyApi.adoptCodexStackCatalog().then(() => {});
+      if (action.kind === "acknowledgeStale")
+        return proxyApi.acknowledgeCodexStaleClients();
       if (action.kind === "mode")
         return proxyApi.setAppMode(app, action.mode, action.route);
       if (action.kind === "member")

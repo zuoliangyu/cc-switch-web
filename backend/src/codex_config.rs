@@ -10,11 +10,11 @@ use crate::config::{
 };
 use crate::error::AppError;
 use crate::model_capabilities::{image_input_capability_from_modalities, ImageInputCapability};
+#[cfg(not(test))]
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
-use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
 /// Web 端沿用稳定 provider id，避免切换供应商后 Codex resume 历史漂移。
@@ -47,17 +47,6 @@ pub(crate) struct CodexManagedLiveRefresh {
     pub(crate) last_refresh_ms: Option<i64>,
     pub(crate) chatgpt_account_id: String,
 }
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-// Generating a ProxyChat catalog only needs one stable Codex model template per
-// process. Without this cache every provider switch/takeover can start the
-// Codex CLI again, which is especially expensive for npm-installed `codex.cmd`
-// on Windows. Tests deliberately bypass the global cache because they isolate
-// CODEX_HOME and seed different model templates.
-#[cfg(not(test))]
-static CODEX_MODEL_CATALOG_TEMPLATE_CACHE: OnceCell<Value> = OnceCell::new();
 
 /// Top-level `config.toml` key that controls Codex's built-in web-search tool.
 pub(crate) const CODEX_WEB_SEARCH_FIELD: &str = "web_search";
@@ -189,7 +178,6 @@ pub(crate) fn codex_native_gateway_rejects_web_search(config_text: &str) -> bool
     }
     false
 }
-const CODEX_MODEL_CATALOG_TEMPLATE_SLUG: &str = "gpt-5.5";
 
 /// Which Codex tool surface the generated model catalog should target.
 ///
@@ -1102,6 +1090,24 @@ pub fn read_codex_config_text() -> Result<String, AppError> {
     }
 }
 
+/// `config.toml` 是不是用 `[features] multi_agent_v2` 强制了新版子 agent 工具：写成 `true`，
+/// 或写成带 `enabled = true` 的表（codex-rs `features` 的 `FeatureToml`）。Codex 先看它再看
+/// 模型目录，打开了它，目录里写的 [`CODEX_CLASSIC_SUBAGENTS`] 就不生效。解析不了时按没有。
+pub(crate) fn codex_config_forces_multi_agent_v2(text: &str) -> bool {
+    let Ok(doc) = text.parse::<DocumentMut>() else {
+        return false;
+    };
+    let Some(item) = doc
+        .get("features")
+        .and_then(|features| features.get("multi_agent_v2"))
+    else {
+        return false;
+    };
+    item.as_bool()
+        .or_else(|| item.get("enabled").and_then(toml_edit::Item::as_bool))
+        .unwrap_or(false)
+}
+
 /// 对非空的 TOML 文本进行语法校验
 pub fn validate_config_toml(text: &str) -> Result<(), AppError> {
     if text.trim().is_empty() {
@@ -1819,7 +1825,7 @@ fn codex_catalog_model_entry(
         // `apply_patch` (type=="custom") tool. Strip any key that would make Codex
         // emit a custom/freeform tool, and rely on shell_type="shell_command" for
         // edits. Defensive even though the native template is already clean
-        // (guards against template drift / an accidental gpt-5.5 clone).
+        // (guards against template drift / an accidental classic-template clone).
         //
         // NOTE: `base_instructions` is NOT stripped — Codex's catalog parser
         // treats it as a REQUIRED field and refuses to load the file without
@@ -2013,39 +2019,6 @@ fn codex_catalog_model_specs(settings: &Value) -> Vec<CodexCatalogModelSpec> {
     specs
 }
 
-fn find_codex_model_template(catalog: &Value) -> Option<Value> {
-    catalog
-        .get("models")
-        .and_then(|models| models.as_array())
-        .and_then(|models| {
-            models.iter().find(|model| {
-                model.get("slug").and_then(|slug| slug.as_str())
-                    == Some(CODEX_MODEL_CATALOG_TEMPLATE_SLUG)
-            })
-        })
-        .cloned()
-}
-
-fn load_codex_model_template_from_cache() -> Result<Option<Value>, AppError> {
-    let path = get_codex_config_dir().join("models_cache.json");
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let text = fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
-    let catalog: Value = serde_json::from_str(&text).map_err(|e| AppError::json(&path, e))?;
-    Ok(find_codex_model_template(&catalog))
-}
-
-/// Fixed candidates for locating the `codex` CLI when it is not on the process
-/// PATH (common in GUI apps launched outside a terminal).
-const CODEX_CLI_FIXED_CANDIDATES: &[&str] = &[
-    "codex",                                // PATH (all platforms)
-    "/opt/homebrew/bin/codex",              // macOS Apple Silicon Homebrew
-    "/usr/local/bin/codex",                 // macOS Intel Homebrew / Linux
-    "/home/linuxbrew/.linuxbrew/bin/codex", // Linux Homebrew
-];
-
 /// macOS 桌面版的 bundle 名，新的在前：改名前叫 Codex.app，改名迁移有时会两份都留着
 /// （openai/codex#48052），这时 ChatGPT.app 是新的那份。
 const CODEX_DESKTOP_APP_BUNDLES: &[&str] = &["ChatGPT.app", "Codex.app"];
@@ -2079,139 +2052,7 @@ fn push_existing_codex_cli_candidate(
     }
 }
 
-fn push_codex_cli_candidates_from_version_dirs(
-    candidates: &mut Vec<PathBuf>,
-    seen: &mut HashSet<String>,
-    versions_dir: PathBuf,
-    suffix: &[&str],
-) {
-    let Ok(entries) = fs::read_dir(versions_dir) else {
-        return;
-    };
-
-    let mut discovered = entries
-        .filter_map(Result::ok)
-        .map(|entry| {
-            let mut candidate = entry.path();
-            for component in suffix {
-                candidate.push(component);
-            }
-            candidate
-        })
-        .filter(|candidate| candidate.exists())
-        .collect::<Vec<_>>();
-
-    // Prefer newer-looking version directories before older global installs.
-    discovered.sort_by(|a, b| b.cmp(a));
-    for candidate in discovered {
-        push_codex_cli_candidate(candidates, seen, candidate);
-    }
-}
-
-fn push_home_codex_cli_candidates(
-    candidates: &mut Vec<PathBuf>,
-    seen: &mut HashSet<String>,
-    home: &Path,
-) {
-    for relative in [
-        ".nvm/current/bin/codex",
-        ".volta/bin/codex",
-        ".asdf/shims/codex",
-        ".local/share/mise/shims/codex",
-        ".config/mise/shims/codex",
-        ".local/bin/codex",
-        ".npm-global/bin/codex",
-        ".npm-packages/bin/codex",
-        ".local/share/pnpm/codex",
-        "Library/pnpm/codex",
-    ] {
-        push_existing_codex_cli_candidate(candidates, seen, home.join(relative));
-    }
-
-    push_codex_cli_candidates_from_version_dirs(
-        candidates,
-        seen,
-        home.join(".nvm/versions/node"),
-        &["bin", "codex"],
-    );
-    push_codex_cli_candidates_from_version_dirs(
-        candidates,
-        seen,
-        home.join(".local/share/fnm/node-versions"),
-        &["installation", "bin", "codex"],
-    );
-    push_codex_cli_candidates_from_version_dirs(
-        candidates,
-        seen,
-        home.join("Library/Application Support/fnm/node-versions"),
-        &["installation", "bin", "codex"],
-    );
-}
-
-fn push_env_codex_cli_candidates(candidates: &mut Vec<PathBuf>, seen: &mut HashSet<String>) {
-    for (env_key, suffix) in [
-        ("NPM_CONFIG_PREFIX", &["bin", "codex"][..]),
-        ("VOLTA_HOME", &["bin", "codex"][..]),
-        ("ASDF_DATA_DIR", &["shims", "codex"][..]),
-        ("MISE_DATA_DIR", &["shims", "codex"][..]),
-        ("PNPM_HOME", &["codex"][..]),
-    ] {
-        let Some(prefix) = std::env::var_os(env_key) else {
-            continue;
-        };
-        let mut candidate = PathBuf::from(prefix);
-        for component in suffix {
-            candidate.push(component);
-        }
-        push_existing_codex_cli_candidate(candidates, seen, candidate);
-    }
-
-    if let Some(nvm_dir) = std::env::var_os("NVM_DIR") {
-        push_codex_cli_candidates_from_version_dirs(
-            candidates,
-            seen,
-            PathBuf::from(nvm_dir).join("versions/node"),
-            &["bin", "codex"],
-        );
-    }
-
-    if let Some(fnm_dir) = std::env::var_os("FNM_DIR") {
-        push_codex_cli_candidates_from_version_dirs(
-            candidates,
-            seen,
-            PathBuf::from(fnm_dir).join("node-versions"),
-            &["installation", "bin", "codex"],
-        );
-    }
-
-    #[cfg(windows)]
-    {
-        if let Some(appdata) = std::env::var_os("APPDATA") {
-            let npm_dir = PathBuf::from(appdata).join("npm");
-            for name in ["codex.cmd", "codex.exe", "codex"] {
-                push_existing_codex_cli_candidate(candidates, seen, npm_dir.join(name));
-            }
-        }
-    }
-}
-
-fn codex_cli_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    let mut seen = HashSet::new();
-
-    for candidate in CODEX_CLI_FIXED_CANDIDATES {
-        push_codex_cli_candidate(&mut candidates, &mut seen, PathBuf::from(candidate));
-    }
-
-    let home = get_home_dir();
-    push_env_codex_cli_candidates(&mut candidates, &mut seen);
-    push_home_codex_cli_candidates(&mut candidates, &mut seen, &home);
-    push_desktop_codex_cli_candidates(&mut candidates, &mut seen, &home);
-
-    candidates
-}
-
-/// 桌面版自带的 CLI。排在最后：装了独立 CLI 的人照旧先用独立的那个。
+/// 桌面版自带的 CLI：检测不到独立安装的 `codex` 时的兜底（见 [`load_codex_bundled_models`]）。
 ///
 /// - macOS：`/Applications` 和 `~/Applications` 下的 ChatGPT.app、Codex.app，新 bundle
 ///   排在前面，不管装在哪个目录（别的系统上不存在，自然跳过）；
@@ -2277,75 +2118,23 @@ fn push_codex_cli_candidates_newest_first(
     }
 }
 
-fn codex_bundled_models_command(candidate: &Path) -> Command {
-    let mut command = Command::new(candidate);
-    command
-        .args(["debug", "models", "--bundled"])
-        .stdin(Stdio::null());
-
-    // A release build uses the Windows GUI subsystem, so a console child that
-    // is created without this flag gets its own transient console window. npm
-    // installs Codex as `codex.cmd`, which Windows launches through cmd.exe.
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    command
-}
-
-fn load_codex_model_template_from_bundled() -> Result<Option<Value>, AppError> {
-    for candidate in codex_cli_candidates() {
-        let candidate_label = candidate.to_string_lossy();
-        let output = match codex_bundled_models_command(&candidate).output() {
-            Ok(output) => output,
-            Err(err) => {
-                log::debug!("failed to run `{candidate_label} debug models --bundled`: {err}");
-                continue;
-            }
-        };
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            log::debug!("`{candidate_label} debug models --bundled` failed: {stderr}");
-            continue;
-        }
-
-        let catalog: Value = match serde_json::from_slice(&output.stdout) {
-            Ok(catalog) => catalog,
-            Err(e) => {
-                log::debug!(
-                    "Failed to parse `{candidate_label} debug models --bundled` output: {e}"
-                );
-                continue;
-            }
-        };
-        if let Some(template) = find_codex_model_template(&catalog) {
-            return Ok(Some(template));
-        }
-    }
-
-    Ok(None)
-}
-
-fn load_codex_model_template_static() -> Option<Value> {
+/// 经典工具契约模板：ProxyChat / Copilot 给第三方模型生成目录条目时复制的骨架。取自 Codex
+/// 自带的 gpt-5.5 条目，借的是它那套工具形态（freeform apply_patch、unified_exec、没有
+/// `tool_mode` 和 v2 子代理），转换层就是照它写的；名字、窗口、可见性都会被改写，跟调用哪个
+/// 模型无关。只用仓库里这份，不读 `models_cache.json` 也不跑 `codex`：官方改了那边的条目
+/// （标隐藏、加新工具模式、下线）会悄悄带进第三方模型。Codex 新增解析必需字段时，补进这里和
+/// `CODEX_CATALOG_PARSER_REQUIRED_FIELDS`。也是没有 `codex` 时唯一的官方 gpt-5.5 条目。
+fn load_codex_classic_tool_template() -> Value {
     let text = include_str!("resources/gpt5_5_template.json");
-    match serde_json::from_str(text) {
-        Ok(template) => Some(template),
-        Err(e) => {
-            log::warn!("Failed to parse bundled gpt-5.5 template: {e}");
-            None
-        }
-    }
+    serde_json::from_str(text).expect("bundled classic tool template must be valid JSON")
 }
 
 /// Bundled clean template for native `/responses` providers. Unlike the
-/// gpt-5.5 template it carries NO freeform `apply_patch` / `web_search` tool
+/// classic tool template it carries NO freeform `apply_patch` / `web_search` tool
 /// declarations and no GPT-5 base_instructions, so Codex never emits a
 /// `type=="custom"` tool that native gateways (MiMo/MiniMax/…) reject. Edits
 /// flow through `shell_type="shell_command"` instead. We deliberately do NOT
-/// fall back to `models_cache.json` here (that would reintroduce gpt-5.5's
+/// fall back to the classic tool template here (that would reintroduce its
 /// freeform apply_patch).
 fn load_codex_native_responses_template() -> Value {
     let text = include_str!("resources/codex_native_responses_template.json");
@@ -2381,7 +2170,7 @@ fn load_codex_deepseek_official_catalog_models() -> Vec<Value> {
 
 /// Official vendor catalog entries for the provider in `config_text`, if its
 /// gateway ships one. Only the `NativeResponses` profile qualifies: ProxyChat
-/// runs through cc-switch's converter (gpt-5.5 template contract) and the
+/// runs through cc-switch's converter (classic tool template contract) and the
 /// Anthropic transform drops custom tools, so both must keep their existing
 /// templates. Host-driven like the web_search blacklist, so existing providers
 /// pick it up on their next switch without a re-save.
@@ -2497,24 +2286,21 @@ fn codex_vendor_catalog_model_entry(
 /// When Codex requires a new field, add it here AND to the static templates.
 const CODEX_CATALOG_PARSER_REQUIRED_FIELDS: &[&str] = &[
     "supports_reasoning_summaries",
-    // codex 0.148.0 rejects the catalog without it (#6661); a models_cache.json
-    // written by an older build can lack it.
+    // codex 0.148.0 rejects the catalog without it (#6661); official rows from
+    // `codex debug models --bundled` and vendor files can lack it.
     "supports_parallel_tool_calls",
 ];
 
-/// `models_cache.json` is shared by every Codex install on the machine (npm
-/// CLI, desktop-bundled binary, ...), and each version serializes its own
-/// `ModelInfo` shape — the cache's field set follows whichever process wrote
-/// it last, so it cannot be assumed to satisfy the current external-catalog
-/// schema (observed live: 0.144.5 requires `supports_reasoning_summaries`
-/// while a coexisting build kept rewriting the cache without it). Backfill
-/// ONLY parser-required fields from the bundled static template: optional
-/// capability fields keep their missing-means-default semantics, and existing
-/// values always win.
+/// Rows that come from outside this repo (official rows from whichever `codex`
+/// binary is on the machine, bundled vendor files) follow their writer's
+/// `ModelInfo` shape and cannot be assumed to satisfy the current
+/// external-catalog schema (observed live: 0.144.5 requires
+/// `supports_reasoning_summaries` while a coexisting build omitted it).
+/// Backfill ONLY parser-required fields from the classic tool template:
+/// optional capability fields keep their missing-means-default semantics, and
+/// existing values always win.
 fn fill_template_fields_from_static(template: &mut Value) {
-    let Some(static_template) = load_codex_model_template_static() else {
-        return;
-    };
+    let static_template = load_codex_classic_tool_template();
     let (Some(template_obj), Some(static_obj)) =
         (template.as_object_mut(), static_template.as_object())
     else {
@@ -2527,50 +2313,6 @@ fn fill_template_fields_from_static(template: &mut Value) {
             }
         }
     }
-}
-
-fn load_codex_model_catalog_template_uncached() -> Result<Value, AppError> {
-    // ① models_cache.json (created by Codex when it connects to OpenAI)
-    if let Some(mut template) = load_codex_model_template_from_cache()? {
-        fill_template_fields_from_static(&mut template);
-        return Ok(template);
-    }
-    // ② codex CLI (PATH + platform-specific common paths)
-    if let Some(mut template) = load_codex_model_template_from_bundled()? {
-        fill_template_fields_from_static(&mut template);
-        return Ok(template);
-    }
-    // ③ Static fallback bundled at compile time
-    if let Some(template) = load_codex_model_template_static() {
-        return Ok(template);
-    }
-
-    Err(AppError::Message(format!(
-        "Codex model catalog template `{CODEX_MODEL_CATALOG_TEMPLATE_SLUG}` not found. Please start Codex once so models_cache.json is available, or ensure the `codex` CLI is on PATH."
-    )))
-}
-
-fn get_or_load_codex_model_catalog_template<F>(
-    cache: &OnceCell<Value>,
-    loader: F,
-) -> Result<Value, AppError>
-where
-    F: FnOnce() -> Result<Value, AppError>,
-{
-    cache.get_or_try_init(loader).cloned()
-}
-
-#[cfg(not(test))]
-fn load_codex_model_catalog_template() -> Result<Value, AppError> {
-    get_or_load_codex_model_catalog_template(
-        &CODEX_MODEL_CATALOG_TEMPLATE_CACHE,
-        load_codex_model_catalog_template_uncached,
-    )
-}
-
-#[cfg(test)]
-fn load_codex_model_catalog_template() -> Result<Value, AppError> {
-    load_codex_model_catalog_template_uncached()
 }
 
 #[cfg(test)]
@@ -2601,11 +2343,48 @@ fn codex_model_catalog_from_settings(
         return Ok(None);
     }
 
-    Ok(Some(codex_catalog_from_specs_for_row(
-        &specs,
-        config_text,
-        profile,
-    )?))
+    let mut catalog = codex_catalog_from_specs_for_row(&specs, config_text, profile)?;
+    if let Some(model) = codex_card_auto_review_model(settings) {
+        apply_codex_auto_review_model(&mut catalog, model);
+    }
+    Ok(Some(catalog))
+}
+
+/// 卡上选的自动审批模型（`modelCatalog.autoReviewModel`），空串当作没选。只在直连、路由
+/// 下生效：聚合下用聚合设置里的（`settings::codex_stack_auto_review_model`）。
+fn codex_card_auto_review_model(settings: &Value) -> Option<&str> {
+    settings
+        .get("modelCatalog")
+        .and_then(|catalog| catalog.get("autoReviewModel"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+}
+
+/// Codex 自动审批（Auto Review）用的模型：写进目录每一行的 `auto_review_model_override`。
+/// Codex 按主模型那一行的这个字段选审批模型（codex-rs `ext/guardian-reviewer/src/model.rs`），
+/// 主模型可以是目录里任何一行，所以每行都写。审批请求和主对话走同一家：直连、路由下只能
+/// 选这一家目录里的模型，聚合下可以选别家发布的 `ccs-*` 模型。
+///
+/// 不写时 Codex 用供应商默认的 `codex-auto-review`，目录里没有它（第三方的目录）就由主模型
+/// 自己审批。`model` 不在目录里时不写：Codex 照样会拿这个名字发请求，上游多半不认。
+/// 返回是否写了。
+pub(crate) fn apply_codex_auto_review_model(catalog: &mut Value, model: &str) -> bool {
+    let Some(entries) = catalog.get_mut("models").and_then(Value::as_array_mut) else {
+        return false;
+    };
+    if !entries
+        .iter()
+        .any(|entry| entry.get("slug").and_then(Value::as_str) == Some(model))
+    {
+        return false;
+    }
+    for entry in entries.iter_mut() {
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("auto_review_model_override".to_string(), json!(model));
+        }
+    }
+    true
 }
 
 /// Codex 自带的 OpenAI 官方模型列表（`codex debug models --bundled`），给第三方的 GPT
@@ -2622,9 +2401,7 @@ thread_local! {
 
 /// 编译期内置的 gpt-5.5：本机没有可用的 `codex` 时唯一的官方条目。
 fn codex_static_official_models() -> Vec<Value> {
-    load_codex_model_template_static()
-        .and_then(|template| normalize_codex_native_rows(vec![template]))
-        .unwrap_or_default()
+    normalize_codex_native_rows(vec![load_codex_classic_tool_template()]).unwrap_or_default()
 }
 
 /// 和账号无关的 OpenAI 官方模型列表。不用 `models_cache.json`：它是哪个账号、哪个版本
@@ -2769,15 +2546,15 @@ fn codex_catalog_from_specs_for_row(
     let configured_context_window = windows.window;
     let default_context_window = configured_context_window.unwrap_or(128_000);
 
-    // Native providers use the bundled clean template (no freeform apply_patch,
-    // no cache dependency); ProxyChat and Copilot keep cloning Codex's gpt-5.5
-    // entry so their proxy paths retain custom<->function tool support.
+    // Native providers use the bundled clean template (no freeform apply_patch);
+    // ProxyChat and Copilot clone the bundled classic tool template so their
+    // proxy paths retain custom<->function tool support.
     let template = match profile {
         CodexCatalogToolProfile::NativeResponses | CodexCatalogToolProfile::Anthropic => {
             load_codex_native_responses_template()
         }
         CodexCatalogToolProfile::ProxyChat | CodexCatalogToolProfile::Copilot => {
-            load_codex_model_catalog_template()?
+            load_codex_classic_tool_template()
         }
     };
     // 命中 OpenAI 官方条目的行照搬官方（写了目录之后 Codex 只认文件里的条目，通用模板
@@ -3196,7 +2973,32 @@ fn build_simplified_catalog_from_texts(config_text: &str, catalog_text: &str) ->
         return None;
     }
 
-    Some(json!({ "models": entries }))
+    // 卡上选的自动审批模型写在每一行上（见 `apply_codex_auto_review_model`）：这张卡的行都写着
+    // 同一个、而且是这张卡自己的模型时才还原。聚合设置写的 `ccs-*` 不属于这张卡。
+    let mut overrides = models.iter().filter_map(|entry| {
+        let slug = entry.get("slug").and_then(Value::as_str)?.trim();
+        matches!(
+            crate::mode::stack::decode(&crate::app_config::AppType::Codex, slug),
+            crate::mode::stack::Decoded::Plain
+        )
+        .then(|| {
+            entry
+                .get("auto_review_model_override")
+                .and_then(Value::as_str)
+        })
+    });
+    let auto_review = overrides.next().flatten().filter(|model| {
+        overrides.all(|other| other == Some(*model))
+            && entries
+                .iter()
+                .any(|entry| entry.get("model").and_then(Value::as_str) == Some(*model))
+    });
+
+    let mut simplified = json!({ "models": entries });
+    if let Some(model) = auto_review {
+        simplified["autoReviewModel"] = json!(model);
+    }
+    Some(simplified)
 }
 
 /// Decide the `config.toml` text to write during a takeover-off restore,
@@ -7111,8 +6913,7 @@ base_url = "https://production.api/v1"
 
     #[test]
     fn dynamic_template_backfills_parser_required_fields_from_static() {
-        // Simulate a template cloned from a models_cache.json written by a
-        // Codex build whose ModelInfo lacks parser-side required fields such
+        // Simulate an official row from a Codex build whose ModelInfo lacks parser-side required fields such
         // as `supports_reasoning_summaries` (codex >= 0.144.5 rejects the
         // whole catalog file without it).
         let mut template = json!({
@@ -8090,7 +7891,7 @@ wire_api = "responses"
                 ]
             }
         });
-        let template = load_codex_model_template_static().unwrap();
+        let template = load_codex_classic_tool_template();
         assert_eq!(template["supports_parallel_tool_calls"], json!(true));
         let catalog = codex_model_catalog_from_specs(
             &codex_catalog_model_specs(&settings),
@@ -8500,17 +8301,6 @@ web_search = "disabled"
         );
     }
 
-    #[test]
-    fn codex_cli_candidates_are_non_empty() {
-        let candidates = codex_cli_candidates();
-        assert!(
-            candidates
-                .iter()
-                .any(|candidate| candidate == Path::new("codex")),
-            "codex CLI candidates must include the PATH entry"
-        );
-    }
-
     fn exit_status(code: i32) -> std::process::ExitStatus {
         #[cfg(unix)]
         {
@@ -8555,129 +8345,59 @@ web_search = "disabled"
     }
 
     #[test]
-    fn codex_bundled_models_command_uses_expected_program_and_args() {
-        let command = codex_bundled_models_command(Path::new("codex"));
-        assert_eq!(command.get_program(), "codex");
-        assert_eq!(
-            command
-                .get_args()
-                .map(|arg| arg.to_string_lossy().into_owned())
-                .collect::<Vec<_>>(),
-            ["debug", "models", "--bundled"]
-        );
+    fn classic_tool_template_keeps_the_classic_tool_contract() {
+        let template = load_codex_classic_tool_template();
+        assert_eq!(template["slug"], "gpt-5.5");
+        // 转换层照着这套工具写：freeform apply_patch、unified_exec，带 Skills / 插件使用说明。
+        assert_eq!(template["apply_patch_tool_type"], "freeform");
+        assert_eq!(template["shell_type"], "unified_exec");
+        assert_eq!(template["include_skills_usage_instructions"], true);
+        assert_eq!(template["include_plugin_usage_instructions"], true);
+        // 新官方条目才有的 code mode / v2 子代理 / 实验工具，不能被带给第三方模型。
+        assert!(template.get("tool_mode").is_none());
+        assert!(template.get("multi_agent_version").is_none());
+        assert_eq!(template["experimental_supported_tools"], json!([]));
+        assert_eq!(template["visibility"], "list");
     }
 
     #[test]
-    fn successful_model_catalog_template_load_is_cached() {
-        use std::cell::Cell;
+    #[serial]
+    fn proxy_chat_catalog_ignores_codex_models_cache() {
+        let home = CodexLiveTestHome::new();
+        let codex_dir = home._dir.path().join(".codex");
+        std::fs::create_dir_all(&codex_dir).expect("create codex dir");
+        std::fs::write(
+            codex_dir.join("models_cache.json"),
+            json!({ "models": [{
+                "slug": "gpt-5.5",
+                "visibility": "hide",
+                "shell_type": "shell_command",
+                "tool_mode": "code_mode_only",
+                "base_instructions": "cached"
+            }] })
+            .to_string(),
+        )
+        .expect("write models cache");
 
-        let cache = OnceCell::new();
-        let calls = Cell::new(0);
-        let first = get_or_load_codex_model_catalog_template(&cache, || {
-            calls.set(calls.get() + 1);
-            Ok(json!({ "slug": "first" }))
-        })
-        .expect("first template load");
-        let second = get_or_load_codex_model_catalog_template(&cache, || {
-            calls.set(calls.get() + 1);
-            Ok(json!({ "slug": "second" }))
-        })
-        .expect("cached template load");
-
-        assert_eq!(first, json!({ "slug": "first" }));
-        assert_eq!(second, first);
-        assert_eq!(calls.get(), 1, "successful template should load only once");
-    }
-
-    #[test]
-    fn failed_model_catalog_template_load_can_retry() {
-        use std::cell::Cell;
-
-        let cache = OnceCell::new();
-        let calls = Cell::new(0);
-        let first = get_or_load_codex_model_catalog_template(&cache, || {
-            calls.set(calls.get() + 1);
-            Err(AppError::Message("temporary failure".to_string()))
-        });
-        assert!(first.is_err());
-
-        let second = get_or_load_codex_model_catalog_template(&cache, || {
-            calls.set(calls.get() + 1);
-            Ok(json!({ "slug": "recovered" }))
-        })
-        .expect("retry template load");
-
-        assert_eq!(second, json!({ "slug": "recovered" }));
-        assert_eq!(calls.get(), 2, "failed loads must not poison the cache");
-    }
-
-    #[test]
-    fn codex_cli_candidates_include_user_node_manager_bins() {
-        let temp_home = tempfile::tempdir().expect("create temp home");
-        let home = temp_home.path();
-        let expected = [
-            home.join(".nvm/versions/node/v22.14.0/bin/codex"),
-            home.join(".volta/bin/codex"),
-            home.join(".asdf/shims/codex"),
-            home.join(".local/share/mise/shims/codex"),
-            home.join(".local/share/fnm/node-versions/v22.14.0/installation/bin/codex"),
-        ];
-
-        for candidate in &expected {
-            std::fs::create_dir_all(candidate.parent().expect("candidate parent"))
-                .expect("create candidate parent");
-            std::fs::write(candidate, "").expect("create candidate");
-        }
-
-        let mut candidates = Vec::new();
-        let mut seen = HashSet::new();
-        push_home_codex_cli_candidates(&mut candidates, &mut seen, home);
-
-        for candidate in expected {
-            assert!(
-                candidates.contains(&candidate),
-                "user-level Codex CLI candidate should be discovered: {}",
-                candidate.display()
-            );
-        }
-    }
-
-    #[test]
-    fn codex_cli_candidates_deduplicate_entries() {
-        let temp_home = tempfile::tempdir().expect("create temp home");
-        let home = temp_home.path();
-        let candidate = home.join(".volta/bin/codex");
-        std::fs::create_dir_all(candidate.parent().expect("candidate parent"))
-            .expect("create candidate parent");
-        std::fs::write(&candidate, "").expect("create candidate");
-
-        let mut candidates = Vec::new();
-        let mut seen = HashSet::new();
-        push_existing_codex_cli_candidate(&mut candidates, &mut seen, candidate.clone());
-        push_home_codex_cli_candidates(&mut candidates, &mut seen, home);
-
-        assert_eq!(
-            candidates.iter().filter(|path| **path == candidate).count(),
-            1,
-            "duplicate candidates should be removed"
-        );
-    }
-
-    #[test]
-    fn static_template_is_valid_json_with_slug() {
-        let template =
-            load_codex_model_template_static().expect("static template must parse as valid JSON");
-        assert_eq!(
-            template.get("slug").and_then(|v| v.as_str()),
-            Some("gpt-5.5"),
-            "static template slug must be gpt-5.5"
-        );
+        let settings = json!({ "modelCatalog": { "models": [{ "model": "glm-5.3" }] } });
+        let config_text = "model_provider = \"custom\"\nmodel = \"glm-5.3\"\n\n[model_providers.custom]\nname = \"x\"\nbase_url = \"https://open.bigmodel.cn/api/coding/paas/v4\"\nwire_api = \"chat\"\n";
+        let catalog = codex_model_catalog_from_settings(
+            &settings,
+            config_text,
+            CodexCatalogToolProfile::ProxyChat,
+        )
+        .expect("build catalog")
+        .expect("catalog");
+        let entry = &catalog["models"][0];
+        assert_eq!(entry["slug"], "glm-5.3");
+        assert_eq!(entry["shell_type"], "unified_exec");
+        assert!(entry.get("tool_mode").is_none());
+        assert_ne!(entry["base_instructions"], "cached");
     }
 
     #[test]
     fn static_template_has_required_keys() {
-        let template =
-            load_codex_model_template_static().expect("static template must parse as valid JSON");
+        let template = load_codex_classic_tool_template();
         for key in &[
             "model_messages",
             "base_instructions",
@@ -9272,32 +8992,6 @@ model_catalog_json = "cc-switch-model-catalog.json"
 
         assert_eq!(candidates, vec![newer, older]);
     }
-
-    #[test]
-    #[serial]
-    fn codex_cli_candidates_try_the_desktop_app_cli_after_standalone_installs() {
-        let test_home = CodexLiveTestHome::new();
-        let home = test_home._dir.path();
-        let standalone = home.join(".volta/bin/codex");
-        let desktop = desktop_cli(
-            &home.join("Applications"),
-            "ChatGPT.app",
-            CODEX_DESKTOP_CLI_IN_BUNDLE[0],
-        );
-        create_cli_candidate(&standalone);
-        create_cli_candidate(&desktop);
-
-        let candidates = codex_cli_candidates();
-        let position = |path: &Path| {
-            candidates
-                .iter()
-                .position(|candidate| candidate == path)
-                .unwrap_or_else(|| panic!("missing candidate {}", path.display()))
-        };
-
-        // 装了独立 CLI 的人照旧先用它，桌面版的只做兜底。
-        assert!(position(&standalone) < position(&desktop));
-    }
 }
 
 /// 只规划目录，不写磁盘；由客户端写入事务统一发布。
@@ -9381,10 +9075,15 @@ pub(crate) enum CodexStackRoute<'a> {
     },
 }
 
-/// 合并目录里 Stack 行统一的 `comp_hash`。Codex 在一个会话记下的值变了时会压缩一次；
-/// 模板带来的值会随来源漂移（DeepSeek 官方目录是 "3000"，从 Codex 缓存克隆的 gpt-5.5
-/// 跟着缓存变），固定值才稳定。路由那家的行不改：它的值要和名单为空时的目录一致，否则
-/// 加进第一家、移除最后一家都会让路由上的会话恢复时被压缩一次。
+/// 合并目录里 Stack 行统一的 `comp_hash`。Codex 在一个会话记下的值变了时，会先用**上一个
+/// 模型**压缩一次（codex-rs `maybe_run_previous_model_inline_compact`）；模板带来的值会随
+/// 来源漂移（DeepSeek 官方目录是 "3000"，镜像官方的 GPT 行也是），固定值才稳定。
+///
+/// 第三方路由那家的行也写这个值：否则在它和 Stack 行之间切换都要先用上一家压缩，上一家
+/// 不可用（额度用完）时压缩失败，而自定义供应商不会改用当前模型重试，会话从此每轮都卡在
+/// 上一家（#8485）。代价是加进第一家、移除最后一家时，路由上原本带值的会话会用路由那家
+/// 自己的模型压缩一次。官方路由的原生行不改：失败时 Codex 会改用当前模型重试，官方的
+/// 压缩语义也要保留。
 const CODEX_STACK_COMP_HASH: &str = "cc-switch";
 
 /// 让一行加入合并目录里共用历史的那组：`comp_hash` 按工具协议分组，同协议的行共用一个值。
@@ -9393,7 +9092,9 @@ const CODEX_STACK_COMP_HASH: &str = "cc-switch";
 /// custom 工具 `exec`；其余第三方行是 direct，只有 `exec_command`。两者若共用一个值，切换时
 /// 不压缩，direct 模型会照着历史调用不存在的 `exec`，每轮都报 `unsupported call: exec`
 /// （#8676）。所以协议不同就分开：跨组切换先用上一家压缩，把对方协议的调用收进摘要；
-/// 组内切换照旧不压缩（#8485）。direct 行沿用 [`CODEX_STACK_COMP_HASH`]，老会话记下的值不变。
+/// 组内切换照旧不压缩（#8485）。代价是跨组切换时上一家若不可用，压缩会失败，#8485 在这条
+/// 路径上回来；组内换一家或新开会话都能绕开。direct 行沿用 [`CODEX_STACK_COMP_HASH`]，
+/// 老会话记下的值不变。
 fn join_stack_history(obj: &mut serde_json::Map<String, Value>) {
     let comp_hash = match obj.get("tool_mode").and_then(Value::as_str) {
         Some(mode) => format!("{CODEX_STACK_COMP_HASH}-{mode}"),
@@ -9407,12 +9108,23 @@ fn join_stack_history(obj: &mut serde_json::Map<String, Value>) {
 ///
 /// 窗口类全局键（`model_context_window`、`model_auto_compact_token_limit`）这时不写进
 /// `config.toml`（Codex 会拿它覆盖所有行），改由各家写进自己的行，见 [`sink_row_windows`]。
+///
+/// `classic_subagents`：每一行都改用经典子 agent 工具，见 [`CODEX_CLASSIC_SUBAGENTS`]。
 pub(crate) fn plan_codex_stack_catalog(
     route: CodexStackRoute<'_>,
     stack: &[CodexStackCatalogMember<'_>],
+    classic_subagents: bool,
 ) -> Result<Value, AppError> {
     let mut entries = match route {
-        CodexStackRoute::ThirdParty(row) => codex_stack_third_party_rows(&row)?,
+        CodexStackRoute::ThirdParty(row) => {
+            let mut rows = codex_stack_third_party_rows(&row)?;
+            for entry in &mut rows {
+                if let Some(obj) = entry.as_object_mut() {
+                    join_stack_history(obj);
+                }
+            }
+            rows
+        }
         CodexStackRoute::Official {
             mut native,
             config_text,
@@ -9479,14 +9191,29 @@ pub(crate) fn plan_codex_stack_catalog(
     for (index, entry) in entries.iter_mut().enumerate() {
         if let Some(obj) = entry.as_object_mut() {
             obj.insert("priority".to_string(), json!(index + 1));
+            if classic_subagents {
+                obj.insert(
+                    "multi_agent_version".to_string(),
+                    json!(CODEX_CLASSIC_SUBAGENTS),
+                );
+            }
         }
     }
     Ok(json!({ "models": entries }))
 }
 
-/// 一家第三方供应商在合并目录里的行（`comp_hash` 保持模板的值；Stack 成员的行由调用方经
+/// Codex 按目录行的 `multi_agent_version` 决定子 agent 用哪套工具（codex-rs
+/// `session/turn_context.rs`）。新版（`"v2"`）把派给子 agent 的任务交给主 agent 那家后端加密，
+/// 子 agent 换到别家就解不开；经典（`"v1"`）的任务是明文。聚合模式下主、子 agent 可以是不同
+/// 的供应商，用户打开设置后每一行都写经典（包括官方行：官方签发的密文第三方同样解不开）。
+/// `config.toml` 里 `[features] multi_agent_v2 = true` 比目录优先，这时写了也不生效。
+const CODEX_CLASSIC_SUBAGENTS: &str = "v1";
+
+/// 一家第三方供应商在合并目录里的行（`comp_hash` 保持模板的值，由调用方经
 /// [`join_stack_history`] 统一改写）。
-fn codex_stack_third_party_rows(row: &CodexCatalogRow<'_>) -> Result<Vec<Value>, AppError> {
+pub(crate) fn codex_stack_third_party_rows(
+    row: &CodexCatalogRow<'_>,
+) -> Result<Vec<Value>, AppError> {
     let specs = codex_published_specs(row.settings, row.config_text);
     if specs.is_empty() {
         return Ok(Vec::new());
@@ -9714,6 +9441,214 @@ mod aggregation_catalog_tests {
         // 路由那家自己的 `vendor/model` 名字不受影响。
         assert_eq!(models, vec!["deepseek/deepseek-v4"]);
     }
+
+    fn native_row(slug: &str, extra: Value) -> Value {
+        let mut row = json!({
+            "slug": slug,
+            "priority": 1,
+            "comp_hash": "3000",
+            "supports_reasoning_summaries": true,
+            "supports_parallel_tool_calls": false,
+        });
+        for (key, value) in extra.as_object().unwrap() {
+            row[key] = value.clone();
+        }
+        row
+    }
+
+    #[test]
+    fn multi_agent_v2_override_is_read_in_both_shapes() {
+        assert!(codex_config_forces_multi_agent_v2(
+            "[features]\nmulti_agent_v2 = true\n"
+        ));
+        assert!(codex_config_forces_multi_agent_v2(
+            "[features.multi_agent_v2]\nenabled = true\nmax_threads = 4\n"
+        ));
+        assert!(codex_config_forces_multi_agent_v2(
+            "features = { multi_agent_v2 = { enabled = true } }\n"
+        ));
+        for text in [
+            "",
+            "[features]\nmulti_agent_v2 = false\n",
+            "[features.multi_agent_v2]\nmax_threads = 4\n",
+            "[features]\nmulti_agent = true\n",
+            "not toml = [",
+        ] {
+            assert!(!codex_config_forces_multi_agent_v2(text), "{text}");
+        }
+    }
+
+    /// 打开「经典子 agent」后每一行都写 v1（官方行、Stack 行都写）；关着时官方行保持原值，
+    /// Stack 行沿用模板的值。
+    #[test]
+    fn classic_subagents_stamp_every_stacked_catalog_row() {
+        let plan = |classic: bool| {
+            let native = normalize_codex_native_rows(vec![
+                native_row(
+                    "gpt-6-sol",
+                    json!({ "base_instructions": "x", "multi_agent_version": "v2" }),
+                ),
+                native_row("gpt-5.5", json!({ "base_instructions": "x" })),
+            ])
+            .unwrap();
+            let stacked_settings = json!({});
+            plan_codex_stack_catalog(
+                CodexStackRoute::Official {
+                    native,
+                    config_text: "",
+                },
+                &[CodexStackCatalogMember {
+                    key: "ds",
+                    provider_name: "DS",
+                    row: CodexCatalogRow {
+                        settings: &stacked_settings,
+                        config_text: "model = \"deepseek-v4-pro\"\n",
+                        profile: CodexCatalogToolProfile::NativeResponses,
+                    },
+                }],
+                classic,
+            )
+            .unwrap()
+        };
+
+        let classic = plan(true);
+        let models = classic["models"].as_array().unwrap();
+        assert_eq!(models.len(), 3);
+        for model in models {
+            assert_eq!(model["multi_agent_version"], "v1", "{}", model["slug"]);
+        }
+
+        let native = plan(false);
+        let models = native["models"].as_array().unwrap();
+        assert_eq!(models[0]["slug"], "gpt-6-sol");
+        assert_eq!(models[0]["multi_agent_version"], "v2");
+        assert!(models[1].get("multi_agent_version").is_none());
+    }
+
+    /// #8485：第三方路由那家的行和 Stack 行同一个 `comp_hash`，两者之间切换时 Codex 不会先
+    /// 用上一家压缩（上一家额度用完时压缩失败，会话每轮都卡在上一家）。名单为空时的目录
+    /// 仍是模板的值。
+    #[test]
+    fn third_party_route_rows_share_the_stack_comp_hash() {
+        let route_settings =
+            json!({ "modelCatalog": { "models": [{ "model": "deepseek-v4-pro" }] } });
+        let route_text = "model_provider = \"deepseek\"\nmodel = \"deepseek-v4-pro\"\n\
+                          [model_providers.deepseek]\nbase_url = \"https://api.deepseek.com/v1\"\n";
+        let profile = CodexCatalogToolProfile::NativeResponses;
+        let plain = codex_model_catalog_from_settings(&route_settings, route_text, profile)
+            .unwrap()
+            .unwrap();
+        assert_eq!(plain["models"][0]["comp_hash"], "3000");
+
+        let stacked_settings = json!({});
+        let stacked = plan_codex_stack_catalog(
+            CodexStackRoute::ThirdParty(CodexCatalogRow {
+                settings: &route_settings,
+                config_text: route_text,
+                profile,
+            }),
+            &[CodexStackCatalogMember {
+                key: "ds",
+                provider_name: "DS",
+                row: CodexCatalogRow {
+                    settings: &stacked_settings,
+                    config_text: route_text,
+                    profile,
+                },
+            }],
+            false,
+        )
+        .unwrap();
+        let models = stacked["models"].as_array().unwrap();
+        assert_eq!(models[0]["slug"], "deepseek-v4-pro");
+        assert_eq!(models[1]["slug"], "ccs-ds/deepseek-v4-pro");
+        for model in models {
+            assert_eq!(model["comp_hash"], "cc-switch", "{}", model["slug"]);
+        }
+    }
+
+    fn auto_review_overrides(catalog: &Value) -> Vec<Option<&str>> {
+        catalog["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                row.get("auto_review_model_override")
+                    .and_then(Value::as_str)
+            })
+            .collect()
+    }
+
+    /// 卡上选的自动审批模型写进这张卡目录的每一行（主模型可以是任何一行）；不在模型列表里
+    /// 就不写，用 Codex 的默认。
+    #[test]
+    fn card_auto_review_model_is_written_to_every_catalog_row() {
+        let config = "model = \"deepseek-v4-pro\"\n";
+        let settings = |auto_review: &str| {
+            json!({
+                "modelCatalog": {
+                    "models": [
+                        { "model": "deepseek-v4-pro" },
+                        { "model": "deepseek-v4-flash" }
+                    ],
+                    "autoReviewModel": auto_review
+                }
+            })
+        };
+        let profile = CodexCatalogToolProfile::NativeResponses;
+
+        let catalog =
+            codex_model_catalog_from_settings(&settings(" deepseek-v4-flash "), config, profile)
+                .unwrap()
+                .expect("catalog");
+        assert_eq!(
+            auto_review_overrides(&catalog),
+            vec![Some("deepseek-v4-flash"); 2]
+        );
+
+        for not_written in ["", "codex-auto-review"] {
+            let catalog =
+                codex_model_catalog_from_settings(&settings(not_written), config, profile)
+                    .unwrap()
+                    .expect("catalog");
+            assert_eq!(
+                auto_review_overrides(&catalog),
+                vec![None; 2],
+                "{not_written:?}"
+            );
+        }
+    }
+
+    /// 读回 live 目录时还原卡上选的审批模型；聚合设置写的 `ccs-*`、各行不一致的都不还原。
+    #[test]
+    fn simplified_catalog_restores_the_card_auto_review_model() {
+        let catalog = |overrides: [&str; 2]| {
+            json!({ "models": [
+                { "slug": "deepseek-v4-pro", "auto_review_model_override": overrides[0] },
+                { "slug": "deepseek-v4-flash", "auto_review_model_override": overrides[1] }
+            ]})
+            .to_string()
+        };
+        let restored = |overrides| {
+            build_simplified_catalog_from_texts("", &catalog(overrides))
+                .expect("entries")
+                .get("autoReviewModel")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        };
+        assert_eq!(
+            restored(["deepseek-v4-flash", "deepseek-v4-flash"]).as_deref(),
+            Some("deepseek-v4-flash")
+        );
+        assert_eq!(restored(["ccs-kimi/k3", "ccs-kimi/k3"]), None);
+        assert_eq!(restored(["deepseek-v4-flash", "deepseek-v4-pro"]), None);
+
+        let plain = r#"{ "models": [{ "slug": "deepseek-v4-pro" }] }"#;
+        assert!(build_simplified_catalog_from_texts("", plain)
+            .expect("entries")
+            .get("autoReviewModel")
+            .is_none());
+    }
 }
 
 #[cfg(test)]
@@ -9939,6 +9874,7 @@ mod official_mirror_tests {
                             profile,
                         },
                     }],
+                    false,
                 )
                 .unwrap();
                 let model = &stacked["models"][0];
@@ -10033,6 +9969,7 @@ mod official_mirror_tests {
                         profile: CodexCatalogToolProfile::ProxyChat,
                     },
                 }],
+                false,
             )
             .unwrap();
             let models = catalog["models"].as_array().unwrap();
@@ -10048,9 +9985,9 @@ mod official_mirror_tests {
         });
     }
 
-    /// #8676：共用 `comp_hash` 的行切换时不压缩，所以 Stack 成员的行按工具协议分组。镜像官方
-    /// 条目的第三方 GPT 行保留 code mode，自成一组；direct 行仍是原来的值。除 `comp_hash` 外，
-    /// GPT 行和直连目录里的同一行一致。
+    /// #8676：共用 `comp_hash` 的行切换时不压缩，所以按工具协议分组。镜像官方条目的第三方
+    /// GPT 行（路由那家和 Stack 成员）保留 code mode，自成一组；direct 行仍是原来的值。
+    /// 除 `comp_hash` 外，GPT 行和直连目录里的同一行一致。
     #[test]
     fn stack_rows_share_history_only_within_one_tool_protocol() {
         let gpt_settings = json!({ "modelCatalog": { "models": [{ "model": "gpt-6-sol" }] } });
@@ -10081,6 +10018,7 @@ mod official_mirror_tests {
                         row: row(&ds_settings, ds_text),
                     },
                 ],
+                false,
             )
             .unwrap();
             (direct, stacked)
@@ -10094,10 +10032,15 @@ mod official_mirror_tests {
         );
         let mirrored = &direct["models"][0];
         assert_eq!(mirrored["tool_mode"], "code_mode_only");
-        let gpt = &models[1];
-        assert_eq!(gpt["comp_hash"], "cc-switch-code_mode_only");
-        for key in ["tool_mode", "supports_search_tool", "model_messages"] {
-            assert_eq!(gpt[key], mirrored[key], "{key}");
+        for gpt in &models[..2] {
+            assert_eq!(
+                gpt["comp_hash"], "cc-switch-code_mode_only",
+                "{}",
+                gpt["slug"]
+            );
+            for key in ["tool_mode", "supports_search_tool", "model_messages"] {
+                assert_eq!(gpt[key], mirrored[key], "{} {key}", gpt["slug"]);
+            }
         }
         assert!(models[2].get("tool_mode").is_none());
         assert_eq!(models[2]["comp_hash"], "cc-switch");
@@ -10190,6 +10133,7 @@ mod official_mirror_tests {
                         profile: CodexCatalogToolProfile::ProxyChat,
                     },
                 }],
+                false,
             )
             .unwrap()["models"]
                 .as_array()

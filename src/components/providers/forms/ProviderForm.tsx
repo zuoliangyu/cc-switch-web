@@ -603,6 +603,12 @@ function ProviderFormFull({
     codexBaseUrl,
     codexModelName,
     codexCatalogModels,
+    codexAutoReviewModel,
+    setCodexAutoReviewModel,
+    codexSubagentModel,
+    codexSubagentReasoningEffort,
+    handleCodexSubagentModelChange,
+    handleCodexSubagentReasoningEffortChange,
     codexAuthError,
     setCodexAuth,
     setCodexConfig,
@@ -1413,10 +1419,23 @@ function ProviderFormFull({
         } as {
           auth: unknown;
           config: string;
-          modelCatalog?: { models: CodexCatalogModel[] };
+          modelCatalog?: {
+            models: CodexCatalogModel[];
+            autoReviewModel?: string;
+          };
         };
         if (normalizedCatalogModels.length > 0) {
           configObj.modelCatalog = { models: normalizedCatalogModels };
+          // 自动审批模型只能是映射里的（映射里删掉了就不再存，后端也只认目录里的）
+          const autoReviewModel = codexAutoReviewModel.trim();
+          if (
+            autoReviewModel &&
+            normalizedCatalogModels.some(
+              (model) => model.model === autoReviewModel,
+            )
+          ) {
+            configObj.modelCatalog.autoReviewModel = autoReviewModel;
+          }
         }
         settingsConfig = JSON.stringify(configObj);
       } catch (err) {
@@ -2352,6 +2371,14 @@ function ProviderFormFull({
                 onPromptCacheRoutingChange={setPromptCacheRouting}
                 catalogModels={codexCatalogModels}
                 onCatalogModelsChange={setCodexCatalogModels}
+                autoReviewModel={codexAutoReviewModel}
+                onAutoReviewModelChange={setCodexAutoReviewModel}
+                subagentModel={codexSubagentModel}
+                onSubagentModelChange={handleCodexSubagentModelChange}
+                subagentReasoningEffort={codexSubagentReasoningEffort}
+                onSubagentReasoningEffortChange={
+                  handleCodexSubagentReasoningEffortChange
+                }
                 speedTestEndpoints={speedTestEndpoints}
                 customUserAgent={customUserAgent}
                 onCustomUserAgentChange={setCustomUserAgent}

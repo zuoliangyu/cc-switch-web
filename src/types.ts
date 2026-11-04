@@ -359,6 +359,13 @@ export interface Settings {
   unifyCodexSessionHistory?: boolean;
   // 用户选择把已有官方会话迁入统一历史；迁移失败时用于启动重试
   unifyCodexMigrateExisting?: boolean;
+  // Codex 聚合：合并目录里每个模型都用经典子 agent 工具（默认开）
+  codexStackClassicTools?: boolean;
+  // Codex 聚合：子 agent 默认用的模型（`ccs-<key>/<model>`）和推理强度；不设时跟随主模型
+  codexStackSubagentModel?: string;
+  codexStackSubagentReasoningEffort?: string;
+  // Codex 聚合：自动审批（Auto Review）用的模型（`ccs-<key>/<model>`）；不设时用 Codex 的默认
+  codexStackAutoReviewModel?: string;
   // User has confirmed the local proxy first-run notice
   proxyConfirmed?: boolean;
   // User has confirmed the usage query first-run notice

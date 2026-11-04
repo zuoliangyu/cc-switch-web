@@ -235,7 +235,12 @@ async fn write_proxy_with_edits(
             codex_direct::prepare_official_rows(&state.db, &owner, &target, &mut prepared).await?;
             let planned = codex_direct::plan(&state.db, &owner, &target, &prepared)?;
             after.contract = Some(planned.contract.clone());
-            if edits.is_none() && before.attached && before.contract == after.contract {
+            // 改用 CC Switch 的目录时契约可能没变，也要重写。
+            if edits.is_none()
+                && op_name != op::CATALOG
+                && before.attached
+                && before.contract == after.contract
+            {
                 return operation::commit_target(
                     &state.db,
                     &DeviceStore::for_device(),
@@ -824,58 +829,143 @@ pub async fn set_stack_member(
 }
 
 /// 给 Web 的聚合名单与客户端目录提示；供应商展示按名称 A–Z。
+///
+/// Codex 还带上客户端是否可能缓存旧登录或模型列表（要读进程表，放到阻塞线程池里）。账号与
+/// 目录检测都不分模式：切换账号、直连↔路由切换也会让已启动的客户端拿着旧登录或旧目录，同样
+/// 要重启。路由那家自己管理目录时，重启也看不到 CC Switch 的目录，已经有 `notice` 说明，不再
+/// 查目录。没有目录时（直连、路由那家没配目录）照样查：之前在 CC Switch 的目录时启动的客户端
+/// 还拿着它。
 pub async fn stack_view(state: &AppState, app: &AppType) -> Result<stack::StackView, AppError> {
     let mode = stored_mode(app)?;
     let roster = state::stack(&DeviceStore::for_device(), app.as_str())?;
-    let members = stack::members(&state.db, app, &roster, mode.proxy_route.as_deref())?;
-    let active = mode.is_proxy() && roster.enabled;
+    let route = mode.proxy_route.as_deref().filter(|_| mode.is_proxy());
+    let members = stack::members(&state.db, app, &roster, route)?;
     let mut view = stack::StackView {
-        active,
+        active: mode.is_proxy() && roster.enabled,
         members: stack::member_views(&members),
         ..stack::StackView::default()
     };
-    if active && matches!(app, AppType::Codex) && members.iter().any(stack::is_published) {
-        let route = mode
-            .proxy_route
-            .as_deref()
-            .map(|id| provider(state, app, id))
-            .transpose()?;
-        view.notice = if route.as_ref().is_some_and(codex_direct::route_owns_catalog) {
-            Some("routeOwnsCatalog")
-        } else if !crate::live::project::codex::live_catalog_is_ours(
-            &codex_direct::read_config_text()?,
-        ) {
-            let text = codex_direct::read_config_text()?;
-            let doc = text
-                .parse::<toml_edit::DocumentMut>()
-                .map_err(|e| AppError::Message(e.to_string()))?;
-            if doc.get("model_catalog_json").is_some() {
-                Some("configOwnsCatalog")
-            } else {
-                view.notice_reasons = official_models_reasons(
-                    crate::services::provider::codex_official_models::last_source(),
-                );
-                Some("officialModelsUnavailable")
-            }
-        } else {
-            match crate::services::provider::codex_official_models::last_source() {
-                source @ Some(
-                    crate::services::provider::codex_official_models::NativeSource::Bundled(_),
-                ) => {
-                    view.notice_reasons = official_models_reasons(source);
-                    Some("officialModelsBundled")
-                }
-                _ => None,
-            }
-        };
-        view.stale_clients = codex_direct::off_runtime(|| {
-            crate::services::provider::codex_client_catalog::stale_clients(
-                &DeviceStore::for_device(),
-            )
+    if matches!(app, AppType::Codex) {
+        if let Some((notice, reasons)) = codex_stack_notice(state, &mode, &roster)? {
+            view.notice = Some(notice);
+            view.notice_reasons = reasons;
+        }
+        // 名单里每一家都列上（含路由那家）：切换到聚合的确认框里还能换默认那家，由前端按默认
+        // 那家去掉它的模型（默认那家不发布 `ccs-*` 模型，选了也写不进去）。
+        view.subagent_models = codex_direct::stack_subagent_choices(&members);
+        let check_catalog = view.notice != Some("routeOwnsCatalog");
+        (view.stale_clients, view.stale_revision) = codex_direct::off_runtime(move || {
+            use crate::services::provider::codex_client_catalog;
+            let stale =
+                codex_client_catalog::stale_clients(&DeviceStore::for_device(), check_catalog);
+            let revision = stale.map(|_| codex_client_catalog::revision());
+            (stale, revision)
         })
         .await?;
     }
     Ok(view)
+}
+
+/// Codex 在 Stack 模式下有要发布的 Stack 模型，客户端却看不到或看不全：路由那家自己管理模型
+/// 目录文件（Stack 模型不发布）；或者官方做默认、最近一次写目录时没拿到官方列表，或者拿到的
+/// 列表里没有能选的模型（本机 Codex 太旧）。带上没取到列表的原因码（见
+/// [`stack::StackView::notice_reasons`]）。
+fn codex_stack_notice(
+    state: &AppState,
+    mode: &ModeState,
+    roster: &StackState,
+) -> Result<Option<(&'static str, Vec<&'static str>)>, AppError> {
+    use crate::services::provider::codex_official_models::{self as models, NativeSource};
+    if !mode.is_proxy() || !mode.attached {
+        return Ok(None);
+    }
+    let Some(route) = mode
+        .proxy_route
+        .as_deref()
+        .map(|id| state.db.get_provider_by_id(id, AppType::Codex.as_str()))
+        .transpose()?
+        .flatten()
+    else {
+        return Ok(None);
+    };
+    let published = stack::published_members(&state.db, &AppType::Codex, roster, Some(&route.id))?;
+    if published.is_empty() {
+        return Ok(None);
+    }
+    if codex_direct::route_owns_catalog(&route) {
+        return Ok(Some(("routeOwnsCatalog", Vec::new())));
+    }
+    if !codex_direct::is_official(&route) {
+        return Ok(None);
+    }
+    Ok(match models::last_source() {
+        None | Some(NativeSource::Fetched) => None,
+        source @ Some(NativeSource::Bundled(_)) => {
+            Some(("officialModelsBundled", official_models_reasons(source)))
+        }
+        source @ Some(NativeSource::Unavailable { .. }) => {
+            Some(("officialModelsUnavailable", official_models_reasons(source)))
+        }
+        Some(NativeSource::Outdated) => Some(("officialModelsOutdated", Vec::new())),
+    })
+}
+
+/// Codex Stack 模式下聚合的模型被路由那家自己的模型目录挡住（`routeOwnsCatalog`，用户在提示
+/// 上点了才调）：去掉它行里指向别的文件的 `model_catalog_json`，按当前路由重写，改用 CC Switch
+/// 生成的目录。返回之后还剩的提示。
+///
+/// 先改行再写客户端：写失败时下一次重写按新的行投影，指针照样清掉。
+pub async fn adopt_codex_stack_catalog(state: &AppState) -> Result<Option<&'static str>, AppError> {
+    let app = AppType::Codex;
+    let _service = SERVICE_LOCK.lock().await;
+    let _app = lock_settled(state, &app).await?;
+    let mode = stored_mode(&app)?;
+    if !mode.is_proxy() || !mode.attached {
+        return Ok(None);
+    }
+    let Some(id) = mode.proxy_route.clone() else {
+        return Ok(None);
+    };
+    let mut route = provider(state, &app, &id)?;
+    if let Some(settings) = codex_direct::settings_without_row_catalog(&route) {
+        state
+            .db
+            .update_provider_settings_config(app.as_str(), &route.id, &settings)?;
+        route.settings_config = settings;
+    }
+    let status = state
+        .proxy_service
+        .get_status()
+        .await
+        .map_err(AppError::Message)?;
+    if !status.running {
+        return Err(AppError::Message("路由服务未运行，请先恢复模式".into()));
+    }
+    write_proxy(
+        state,
+        &app,
+        &route,
+        &origin(&status.address, status.port),
+        op::CATALOG,
+    )
+    .await?;
+    let roster = state::stack(&DeviceStore::for_device(), app.as_str())?;
+    Ok(codex_stack_notice(state, &stored_mode(&app)?, &roster)?.map(|(notice, _)| notice))
+}
+
+/// 聚合设置（经典子 agent 工具、子 agent 模型和推理强度、自动审批模型）变了：Codex 在 Stack
+/// 模式下按新的合并目录和 `[agents]` 重写客户端（契约没变就什么都不做）。不在 Stack 模式时
+/// 这些设置不起作用，等进 Stack 时自然按设置写。
+pub async fn resync_codex_stack_catalog(state: &AppState) -> Result<(), AppError> {
+    let app = AppType::Codex;
+    let _service = SERVICE_LOCK.lock().await;
+    let _app = lock_settled(state, &app).await?;
+    if !state::stack(&DeviceStore::for_device(), app.as_str())?.enabled {
+        return Ok(());
+    }
+    reapply_after_save_locked(state, &app, None)
+        .await
+        .map(|_| ())
 }
 
 /// 没取到官方模型列表的原因码（见 [`stack::StackView::notice_reasons`]）：先是官方列表的，
@@ -889,7 +979,7 @@ fn official_models_reasons(
         Some(NativeSource::Unavailable { official, bundled }) => {
             vec![official.code(), bundled.code()]
         }
-        Some(NativeSource::Fetched) | None => Vec::new(),
+        Some(NativeSource::Fetched) | Some(NativeSource::Outdated) | None => Vec::new(),
     }
 }
 

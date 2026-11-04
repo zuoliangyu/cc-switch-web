@@ -13,6 +13,16 @@ export const proxyApi = {
   restartCodexDaemon(): Promise<"restarted" | "notRunning"> {
     return invoke("restart_codex_daemon");
   },
+  /** Codex 聚合的模型被默认那家自己的模型目录挡住时，改用 CC Switch 的；返回之后还剩的提示。 */
+  adoptCodexStackCatalog(): Promise<
+    AppModeView["aggregation"]["notice"] | null
+  > {
+    return invoke("adopt_codex_stack_catalog");
+  },
+  /** 关掉「Codex 可能还在用旧的」提示（看不到进程时）：记下现在的目录和登录。 */
+  acknowledgeCodexStaleClients(): Promise<void> {
+    return invoke("acknowledge_codex_stale_clients");
+  },
   getAppMode(appType: AppId): Promise<AppModeView> {
     return invoke("get_app_mode", { appType });
   },

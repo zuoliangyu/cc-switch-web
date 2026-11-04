@@ -244,6 +244,26 @@ pub struct AppSettings {
     /// 用户选择把已有官方会话迁入统一历史；失败时保留以便启动重试。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unify_codex_migrate_existing: Option<bool>,
+    /// Codex 聚合模式下，合并目录里的每个模型都改用经典子 agent 工具（`multi_agent_version`
+    /// 写 `"v1"`）。新版工具（v2）把派给子 agent 的任务加密，只有主 agent 那家后端解得开，
+    /// 主、子 agent 不在同一家时子 agent 读不到任务。默认开（代价是没有新版工具的
+    /// followup_task 等功能）。上游 v4.0.10–4.0.12 用的是默认关的 `codexStackClassicSubagents`，
+    /// 每次保存都会写下 `false`，分不清是不是用户关的：换了键名，旧键不再读，升级后一律按开。
+    #[serde(default = "default_true")]
+    pub codex_stack_classic_tools: bool,
+    /// Codex 聚合模式下子 agent 默认用的模型（合并目录里的 slug，`ccs-<key>/<model>`）。
+    /// 不设时跟随主模型。只在这个 slug 还在合并目录里时写进 `[agents]`，否则照样跟随主模型
+    /// （成员移除后保留设置，加回来自动恢复）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_stack_subagent_model: Option<String>,
+    /// 上面那个模型的推理强度。不在它支持的档位里时不写，用模型的默认档。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_stack_subagent_reasoning_effort: Option<String>,
+    /// Codex 聚合模式下自动审批（Auto Review）用的模型（合并目录里的 slug）。不设时用 Codex
+    /// 的默认：官方做默认那家时是官方的 `codex-auto-review`，否则由主模型自己审批。只在这个
+    /// slug 还在合并目录里时写进目录行，规则同子 agent 模型。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_stack_auto_review_model: Option<String>,
     /// User has confirmed the local proxy first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_confirmed: Option<bool>,
@@ -378,6 +398,10 @@ impl Default for AppSettings {
             preserve_codex_official_auth_on_switch: false,
             unify_codex_session_history: false,
             unify_codex_migrate_existing: None,
+            codex_stack_classic_tools: true,
+            codex_stack_subagent_model: None,
+            codex_stack_subagent_reasoning_effort: None,
+            codex_stack_auto_review_model: None,
             proxy_confirmed: None,
             usage_confirmed: None,
             session_auto_sync_enabled: true,
@@ -797,6 +821,50 @@ pub fn unify_codex_session_history() -> bool {
         .unify_codex_session_history
 }
 
+pub fn codex_stack_classic_tools() -> bool {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .codex_stack_classic_tools
+}
+
+/// Codex 聚合模式下的子 agent 设置：(模型 slug, 推理强度)，空串当作没设。
+pub fn codex_stack_subagent() -> (Option<String>, Option<String>) {
+    let settings = settings_store().read().unwrap_or_else(|e| {
+        log::warn!("设置锁已毒化，使用恢复值: {e}");
+        e.into_inner()
+    });
+    let non_empty = |value: &Option<String>| {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+    (
+        non_empty(&settings.codex_stack_subagent_model),
+        non_empty(&settings.codex_stack_subagent_reasoning_effort),
+    )
+}
+
+/// Codex 聚合模式下的自动审批模型 slug，空串当作没设。
+pub fn codex_stack_auto_review_model() -> Option<String> {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .codex_stack_auto_review_model
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+}
+
 pub fn preserve_codex_official_auth_on_switch() -> bool {
     get_settings().preserve_codex_official_auth_on_switch
 }
@@ -1121,6 +1189,24 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    #[test]
+    fn codex_stack_classic_tools_default_on_and_ignore_the_old_off_key() {
+        // 上游 v4.0.10–4.0.12 每次保存都写下默认关的旧键：不再读它，升级后按开。
+        let old: AppSettings =
+            serde_json::from_value(serde_json::json!({ "codexStackClassicSubagents": false }))
+                .expect("old settings");
+        assert!(old.codex_stack_classic_tools);
+        assert!(AppSettings::default().codex_stack_classic_tools);
+
+        let off: AppSettings =
+            serde_json::from_value(serde_json::json!({ "codexStackClassicTools": false }))
+                .expect("new settings");
+        assert!(!off.codex_stack_classic_tools);
+        let saved = serde_json::to_value(&off).expect("serialize");
+        assert_eq!(saved["codexStackClassicTools"], false);
+        assert!(saved.get("codexStackClassicSubagents").is_none());
+    }
 
     #[test]
     fn profile_switcher_is_hidden_by_default() {

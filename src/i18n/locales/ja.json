@@ -1677,7 +1677,18 @@
     "contextWindowPlaceholder": "例: 128000",
     "contextWindow1M": "1M コンテキストウィンドウ",
     "autoCompactLimit": "自動圧縮しきい値",
-    "autoCompactLimitHint": "コンテキストトークン数がこのしきい値に達すると履歴を自動圧縮"
+    "autoCompactLimitHint": "コンテキストトークン数がこのしきい値に達すると履歴を自動圧縮",
+    "subagentModelLabel": "サブエージェントモデル",
+    "subagentModelPlaceholder": "空欄ならメインモデルに従う",
+    "subagentReasoningEffortLabel": "サブエージェントの推論強度",
+    "subagentReasoningEffortDefault": "デフォルト強度",
+    "subagentModelHint": "Codex が起動するサブエージェントの既定モデルと推論強度です。空欄ならメインエージェントに従い、モデルだけ指定するとそのモデルの既定強度になります。集約モードでは無効で、動作モードパネルの「集約設定」のサブエージェントモデルが使われます。",
+    "subagentModelNotInCatalog": "このモデルはモデルマッピングにありません。Codex はコンテキストウィンドウを取得できず、ルーティングで Chat / Anthropic 形式に変換する際はデフォルトモデルに置き換えられます。",
+    "autoReviewModelLabel": "自動承認モデル",
+    "autoReviewModelHint": "Codex の自動承認（Approve for me）が有効なとき、操作を許可するかどうかの判断に使うモデルです。承認リクエストは会話と同じプロバイダーに送られるため、このカードのモデルマッピングから選びます。集約モードでは無効で、動作モードパネルの「集約設定」の自動承認モデルが使われます。変更後は Codex を再起動してください。",
+    "autoReviewModelCodexDefault": "Codex の既定（codex-auto-review）",
+    "autoReviewModelMainDefault": "メインモデル自身が承認（既定）",
+    "autoReviewModelNoList": "このカードにはモデルマッピングがありません。Codex は公式の codex-auto-review で承認しますが、これを受け付けるのは ChatGPT アカウントへ転送する一部の中継だけで、それ以外では 404 になります。詳細オプションのモデルマッピングにモデルを追加すると選べます。"
   },
   "codexOauth": {
     "authStatus": "認証状態",
@@ -3763,7 +3774,6 @@
     "setDefault": "集約の既定に設定",
     "restartDaemon": "Codex デーモンを再起動",
     "restartDaemonConfirm": "実行中のタスクの終了を待ち、管理対象の Codex デーモンを再起動して新しいモデル一覧を読み込みます。数分かかる場合があります。デスクトップ版とエディター拡張は手動で終了して開き直してください。",
-    "restartClients": "モデル一覧が更新されました。Codex クライアントを完全に終了して再起動してください。",
     "help": {
       "direct": "クライアントが選択したプロバイダーに直接接続します。",
       "routing": "ローカルサービス経由で接続し、フェイルオーバーを利用できます。",
@@ -3771,9 +3781,9 @@
     },
     "notice": {
       "routeOwnsCatalog": "既定のプロバイダーが独自のモデル一覧を管理しているため、他のメンバーは公開されません。",
-      "configOwnsCatalog": "クライアントに独自のモデル一覧が指定されているため、生成した一覧は無効です。",
       "officialModelsBundled": "Codex 同梱のモデル一覧を使用中です。アカウント専用モデルが含まれない場合があります。",
-      "officialModelsUnavailable": "公式モデル一覧を取得できず、集約モデルはまだ利用できません。"
+      "officialModelsUnavailable": "公式モデル一覧を取得できず、集約モデルはまだ利用できません。",
+      "officialModelsOutdated": "このコンピューターの Codex が古いため、公式モデル一覧を完全に取得できません。Codex（CLI を含む）を最新版に更新してください。"
     },
     "noticeReason": {
       "noLogin": "公式一覧：Codex に使える ChatGPT ログインがありません。Codex で ChatGPT アカウントにログインしてください",
@@ -3798,7 +3808,39 @@
     "saveRestart": "保存してサービスを再起動",
     "rebindHint": "待受アドレスを保存すると再起動します。バインドに失敗すると元のアドレスに戻ります。",
     "officialDefaultAdvice": "集約モデル ID のないリクエストには、公式アカウントを集約の既定に設定することをお勧めします。",
-    "claudeModelsRestart": "集約モデルやメンバーを変更した後は、Claude Code を再起動してモデル一覧を更新してください。"
+    "claudeModelsRestart": "集約モデルやメンバーを変更した後は、Claude Code を再起動してモデル一覧を更新してください。",
+    "adoptCatalog": "CC Switch のモデルカタログを使う",
+    "adoptCatalogDone": "CC Switch のモデルカタログに切り替えました。Codex を再起動すると反映されます",
+    "staleClients": {
+      "title": "Codex が古いモデル一覧を使っているため、切り替え後のモデルが表示されません",
+      "authTitle": "Codex が以前のアカウントをキャッシュしている可能性があります。新しいログインを読み込むにはバックグラウンドサーバーを再起動してください",
+      "unverifiedTitle": "切り替え前から開いている Codex は、以前のアカウントやモデル一覧を使い続けている可能性があります",
+      "unverifiedHint": "CC Switch からはデスクトップ版やエディター拡張が起動中かどうか確認できません。開いていなければ、この通知を閉じてください。",
+      "daemon": "CLI：codex を開き直すだけでは反映されません。バックグラウンドのデーモンを再起動する必要があります。",
+      "others": "デスクトップ版：完全に終了してから開き直してください（macOS では ⌘Q。ウィンドウを閉じるだけでは不十分です）。エディター拡張：エディターのウィンドウを開き直してください。"
+    },
+    "stackSettings": {
+      "title": "集約設定",
+      "subagentDescription": "サブエージェントは既定でメインモデルに従います。集約内のモデルを選ぶと、メインエージェントが起動するサブエージェントは既定でそのモデルを使います（起動時にメインエージェントがモデルを指定した場合を除く）。Codex の再起動は不要で、新しく開いた会話から反映されます。開いたままの会話は以前の設定のままです。",
+      "subagentModel": "サブエージェントのモデル",
+      "followMain": "メインモデルに従う",
+      "subagentEffort": "サブエージェントの推論強度",
+      "effortModelDefault": "モデルの既定",
+      "effortModelDefaultNamed": "モデルの既定（{{effort}}）",
+      "unavailableOption": "{{model}}（集約から外れています）",
+      "unavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、サブエージェントは一時的にメインモデルに従います。再び追加すると自動で戻ります。",
+      "noModels": "集約で公開されているモデルがまだありません。先にプロバイダーを集約に追加してください。",
+      "classicOff": "サブエージェントがメインと別のプロバイダーで動くため、Codex の新しいサブエージェントツールはタスクを暗号化し、メイン側のプロバイダーしか読めず、サブエージェントにタスクが届きません。下の「集約モードでサブエージェントにクラシックツールを使う」を必ずオンにしてください。",
+      "classicTools": "集約モードでサブエージェントにクラシックツールを使う",
+      "classicToolsDescription": "メインとサブのエージェントが別のプロバイダーを使う場合は必ずオンにしてください。オフだとサブエージェントにタスクが届きません。",
+      "classicToolsForcedV2": "Codex の config.toml で [features] multi_agent_v2 がオンになっています。こちらが優先されるため、この設定は効きません。",
+      "autoReviewModel": "自動承認モデル",
+      "autoReviewDescription": "Codex の自動承認（Approve for me）が有効なとき、操作を許可するかどうかの判断に使うモデルです。集約内の他のプロバイダーのモデルも選べます。変更後は Codex を再起動してください。",
+      "autoReviewDefaultOfficial": "公式 Auto Review（既定）",
+      "autoReviewDefaultMain": "メインモデル自身が承認（既定）",
+      "autoReviewUnavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、承認は一時的に既定のモデルを使います。再び追加すると自動で戻ります。",
+      "saveFailed": "保存に失敗しました：{{error}}"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",

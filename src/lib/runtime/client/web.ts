@@ -1476,6 +1476,10 @@ export async function hasWebCodexUnifyHistoryBackup(): Promise<boolean> {
   return requestJson<boolean>("/api/settings/codex-unify-history-backup");
 }
 
+export async function getWebCodexForcesMultiAgentV2(): Promise<boolean> {
+  return requestJson<boolean>("/api/settings/codex-forces-multi-agent-v2");
+}
+
 export async function restoreWebCodexUnifiedHistory(): Promise<
   import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
 > {
@@ -2657,6 +2661,15 @@ export async function restartWebCodexDaemon(): Promise<
   "restarted" | "notRunning"
 > {
   return requestWithBody("/api/proxy/codex/daemon/restart", "POST");
+}
+export async function adoptWebCodexStackCatalog(): Promise<string | null> {
+  return requestWithBody<string | null>("/api/proxy/codex/adopt-catalog", "POST");
+}
+export async function acknowledgeWebCodexStaleClients(): Promise<void> {
+  return requestWithBody<void>(
+    "/api/proxy/codex/stale-clients/acknowledge",
+    "POST",
+  );
 }
 export async function setWebAggregationMember(
   appId: AppId,

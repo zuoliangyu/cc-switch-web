@@ -154,6 +154,16 @@ interface CodexFormFieldsProps {
   onPromptCacheRoutingChange: (value: PromptCacheRoutingMode) => void;
   catalogModels?: CodexCatalogModel[];
   onCatalogModelsChange?: (models: CodexCatalogModel[]) => void;
+  // 自动审批（Auto Review）用的模型：`modelCatalog.autoReviewModel`，只能是映射里的一行。
+  // Codex 专用；聚合模式下不生效（改用聚合设置）。
+  autoReviewModel?: string;
+  onAutoReviewModelChange?: (model: string) => void;
+
+  // 子代理默认值（config.toml 的 `[agents]`）。Codex 专用：Grok Build 没有这两个键。
+  subagentModel?: string;
+  onSubagentModelChange?: (model: string) => void;
+  subagentReasoningEffort?: string;
+  onSubagentReasoningEffortChange?: (effort: string) => void;
 
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
@@ -167,6 +177,24 @@ interface CodexFormFieldsProps {
 }
 
 type CodexCatalogRow = CodexCatalogModel & { rowId: string };
+
+const CODEX_REASONING_LEVELS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+] as const;
+
+// 子代理推理强度下拉的「不写这个键」（Radix Select 不收空值）。
+const EFFORT_INHERIT = "__inherit__";
+// 自动审批模型下拉的「不写覆盖、用 Codex 的默认」。
+const AUTO_REVIEW_DEFAULT = "__codex_default__";
+// Codex 不写覆盖时用的审批模型（codex-rs `DEFAULT_APPROVAL_REVIEW_PREFERRED_MODEL`）。
+const CODEX_AUTO_REVIEW_MODEL = "codex-auto-review";
 
 function createCatalogRow(seed?: Partial<CodexCatalogModel>): CodexCatalogRow {
   return {
@@ -256,6 +284,12 @@ export function CodexFormFields({
   onPromptCacheRoutingChange,
   catalogModels = [],
   onCatalogModelsChange,
+  autoReviewModel = "",
+  onAutoReviewModelChange,
+  subagentModel = "",
+  onSubagentModelChange,
+  subagentReasoningEffort = "",
+  onSubagentReasoningEffortChange,
   speedTestEndpoints,
   customUserAgent,
   onCustomUserAgentChange,
@@ -430,6 +464,78 @@ export function CodexFormFields({
     onCatalogModelsChange,
     trimmedModelName,
   ]);
+
+  // 子代理模型不在模型映射里：Codex 拿不到它的窗口和推理档位；经路由转成 Chat 协议时还会
+  // 被换成默认模型（转换路径只放行映射里的模型）。没有映射、走原生 Responses 的供应商直接
+  // 请求任意模型名，不提示。
+  const trimmedSubagentModel = subagentModel.trim();
+  const isSubagentModelOutsideCatalog =
+    !!trimmedSubagentModel &&
+    (catalogRows.length > 0 || isChatFormat) &&
+    !catalogRows.some((row) => row.model.trim() === trimmedSubagentModel);
+
+  const handleAddSubagentModelToCatalog = useCallback(() => {
+    if (!onCatalogModelsChange || !trimmedSubagentModel) return;
+    const rows = catalogRowsRef.current;
+    const added: CodexCatalogRow[] = [];
+    // 映射原本为空时默认模型也一起加进去，不然加完它就成了映射外的模型。
+    if (
+      rows.length === 0 &&
+      trimmedModelName &&
+      trimmedModelName !== trimmedSubagentModel
+    ) {
+      added.push(
+        createCatalogRow({
+          model: trimmedModelName,
+          displayName: trimmedModelName,
+        }),
+      );
+    }
+    added.push(
+      createCatalogRow({
+        model: trimmedSubagentModel,
+        displayName: trimmedSubagentModel,
+      }),
+    );
+    commitCatalogRows([...rows, ...added]);
+    onCatalogEnabledChange?.(true);
+    for (const row of added) fillCatalogRowMetadata(row.rowId, row.model);
+  }, [
+    catalogRowsRef,
+    commitCatalogRows,
+    fillCatalogRowMetadata,
+    onCatalogEnabledChange,
+    onCatalogModelsChange,
+    trimmedModelName,
+    trimmedSubagentModel,
+  ]);
+
+  // 自动审批模型只能选映射里的：审批请求和主对话发给同一家，后端也只写目录里有的模型。
+  const autoReviewChoices = useMemo(() => {
+    const seen = new Set<string>();
+    const choices: { model: string; label: string }[] = [];
+    if (!catalogEnabled) return choices;
+    for (const row of catalogRows) {
+      const model = row.model.trim();
+      if (!model || seen.has(model)) continue;
+      seen.add(model);
+      choices.push({ model, label: row.displayName?.trim() || model });
+    }
+    return choices;
+  }, [catalogEnabled, catalogRows]);
+  const trimmedAutoReviewModel = autoReviewModel.trim();
+  const autoReviewSelectValue = autoReviewChoices.some(
+    (choice) => choice.model === trimmedAutoReviewModel,
+  )
+    ? trimmedAutoReviewModel
+    : AUTO_REVIEW_DEFAULT;
+  // 不写覆盖时 Codex 先找目录里的 codex-auto-review：没有映射（用 Codex 自带的列表）或映射里
+  // 就有它时用它，否则由主模型自己审批。
+  const autoReviewDefaultIsCodex =
+    autoReviewChoices.length === 0 ||
+    autoReviewChoices.some(
+      (choice) => choice.model === CODEX_AUTO_REVIEW_MODEL,
+    );
 
   const supportsThinking =
     codexChatReasoning.supportsThinking === true ||
@@ -749,6 +855,135 @@ export function CodexFormFields({
               </Button>
             </p>
           )}
+        </div>
+      )}
+
+      {/* 子代理 —— config.toml 的 [agents] default_subagent_model / default_subagent_reasoning_effort。
+          留空删键，子代理跟随主模型；聚合模式下改用聚合设置。 */}
+      {category !== "official" && !isGrokBuild && onSubagentModelChange && (
+        <div className="space-y-2">
+          <label
+            htmlFor="codexSubagentModel"
+            className="block text-sm font-medium text-foreground"
+          >
+            {t("codexConfig.subagentModelLabel")}
+          </label>
+          <div className="flex gap-1">
+            <Input
+              id="codexSubagentModel"
+              value={subagentModel}
+              onChange={(event) => onSubagentModelChange(event.target.value)}
+              placeholder={t("codexConfig.subagentModelPlaceholder")}
+              className="flex-1"
+            />
+            {modelSuggestions.length > 0 && (
+              <ModelDropdown
+                models={modelSuggestions}
+                onSelect={(id) => onSubagentModelChange(id)}
+              />
+            )}
+            {onSubagentReasoningEffortChange && (
+              <Select
+                value={subagentReasoningEffort || EFFORT_INHERIT}
+                onValueChange={(value) =>
+                  onSubagentReasoningEffortChange(
+                    value === EFFORT_INHERIT ? "" : value,
+                  )
+                }
+              >
+                <SelectTrigger
+                  aria-label={t("codexConfig.subagentReasoningEffortLabel")}
+                  className="w-36 shrink-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EFFORT_INHERIT}>
+                    {t("codexConfig.subagentReasoningEffortDefault")}
+                  </SelectItem>
+                  {subagentReasoningEffort &&
+                    !(CODEX_REASONING_LEVELS as readonly string[]).includes(
+                      subagentReasoningEffort,
+                    ) && (
+                      <SelectItem value={subagentReasoningEffort}>
+                        {subagentReasoningEffort}
+                      </SelectItem>
+                    )}
+                  {CODEX_REASONING_LEVELS.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {level}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("codexConfig.subagentModelHint")}
+          </p>
+          {isSubagentModelOutsideCatalog && (
+            <p className="flex flex-wrap items-center gap-x-2 text-xs leading-relaxed text-muted-foreground">
+              {t("codexConfig.subagentModelNotInCatalog")}
+              {onCatalogModelsChange && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={handleAddSubagentModelToCatalog}
+                >
+                  {t("codexConfig.addToModelMapping")}
+                </Button>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 自动审批 —— 写进模型目录每一行的 auto_review_model_override，Codex 按主模型那一行
+          选审批模型。只能选映射里的模型；聚合模式下改用聚合设置。 */}
+      {category !== "official" && !isGrokBuild && onAutoReviewModelChange && (
+        <div className="space-y-2">
+          <label
+            htmlFor="codexAutoReviewModel"
+            className="block text-sm font-medium text-foreground"
+          >
+            {t("codexConfig.autoReviewModelLabel")}
+          </label>
+          <Select
+            value={autoReviewSelectValue}
+            onValueChange={(next) => {
+              // 表单里的 Radix Select 带一个隐藏的原生 select：编辑页加载时列表和已存的值同时
+              // 到达，值先于选项注册，它会回报一次空串。选项都不是空值，空串只能是这个，忽略。
+              if (!next) return;
+              onAutoReviewModelChange(next === AUTO_REVIEW_DEFAULT ? "" : next);
+            }}
+            disabled={autoReviewChoices.length === 0}
+          >
+            <SelectTrigger
+              id="codexAutoReviewModel"
+              aria-label={t("codexConfig.autoReviewModelLabel")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={AUTO_REVIEW_DEFAULT}>
+                {autoReviewDefaultIsCodex
+                  ? t("codexConfig.autoReviewModelCodexDefault")
+                  : t("codexConfig.autoReviewModelMainDefault")}
+              </SelectItem>
+              {autoReviewChoices.map((choice) => (
+                <SelectItem key={choice.model} value={choice.model}>
+                  {choice.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {autoReviewChoices.length === 0
+              ? t("codexConfig.autoReviewModelNoList")
+              : t("codexConfig.autoReviewModelHint")}
+          </p>
         </div>
       )}
 

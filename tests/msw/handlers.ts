@@ -255,6 +255,10 @@ export const handlers = [
 
   http.post(`${RUNTIME_ENDPOINT}/get_settings`, () => success(getSettings())),
 
+  http.post(`${RUNTIME_ENDPOINT}/codex_forces_multi_agent_v2`, () =>
+    success(false),
+  ),
+
   http.post(`${RUNTIME_ENDPOINT}/save_settings`, async ({ request }) => {
     const { settings } = await withJson<{ settings: Settings }>(request);
     setSettings(settings);

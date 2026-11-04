@@ -38,6 +38,13 @@ const success = <T>(payload: T) => HttpResponse.json(payload as any);
 
 export const handlers = [
   http.post(`${RUNTIME_ENDPOINT}/get_last_session_scan`, () => success(null)),
+  http.post(`${RUNTIME_ENDPOINT}/claude_account_submit_paste`, () =>
+    success(null),
+  ),
+  http.post(`${RUNTIME_ENDPOINT}/get_claude_login_switch`, () =>
+    success({ active: true, blocked: null, live: null }),
+  ),
+  http.post(`${RUNTIME_ENDPOINT}/get_claude_default_plan`, () => success(null)),
   http.post(`${RUNTIME_ENDPOINT}/get_app_mode`, async ({ request }) => {
     const { appType } = await withJson<{ appType: AppId }>(request);
     return success({

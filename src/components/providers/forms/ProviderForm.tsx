@@ -89,6 +89,7 @@ import { CodexOAuthSection } from "./CodexOAuthSection";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { McodeProviderForm } from "./McodeProviderForm";
 import { AgyAccountSelect, useAgyAccountSupported } from "./AgyOAuthSection";
+import { ClaudeAccountSelect } from "./ClaudeOfficialSection";
 import { usesGeminiStyleForm } from "@/config/appConfig";
 import { KimiProviderForm } from "./KimiProviderForm";
 import { OmoFormFields } from "./OmoFormFields";
@@ -584,6 +585,10 @@ function ProviderFormFull({
   const [selectedXaiAccountId, setSelectedXaiAccountId] = useState<
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "xai_oauth"));
+  // Claude 官方卡绑定的 Claude 官方账号；null = 跟随 Claude Code 登录（~/.claude）
+  const [selectedClaudeAccountId, setSelectedClaudeAccountId] = useState<
+    string | null
+  >(() => resolveManagedAccountId(initialData?.meta, "claude_official"));
   // Antigravity 官方卡绑定的授权中心账号；null = 跟着 agy 当前的登录
   const [selectedAgyAccountId, setSelectedAgyAccountId] = useState<
     string | null
@@ -1584,7 +1589,15 @@ function ProviderFormFull({
                   authProvider: "agy_oauth",
                   accountId: selectedAgyAccountId,
                 }
-              : undefined,
+              : appId === "claude" &&
+                  category === "official" &&
+                  selectedClaudeAccountId
+                ? {
+                    source: "managed_account",
+                    authProvider: "claude_official",
+                    accountId: selectedClaudeAccountId,
+                  }
+                : undefined,
       // GitHub Copilot 多账号：保存关联的账号 ID
       githubAccountId:
         isCopilotProvider && selectedGitHubAccountId
@@ -2242,6 +2255,13 @@ function ProviderFormFull({
               onLocalProxyHeadersOverrideChange={setLocalProxyHeadersOverride}
               localProxyBodyOverride={localProxyBodyOverride}
               onLocalProxyBodyOverrideChange={setLocalProxyBodyOverride}
+            />
+          )}
+
+          {appId === "claude" && category === "official" && (
+            <ClaudeAccountSelect
+              value={selectedClaudeAccountId}
+              onChange={setSelectedClaudeAccountId}
             />
           )}
 

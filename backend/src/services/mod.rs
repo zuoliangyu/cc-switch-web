@@ -1,4 +1,5 @@
 pub(crate) mod agy_account;
+pub(crate) mod claude_account;
 pub(crate) mod dsh_account;
 pub(crate) mod backup_storage;
 pub(crate) mod balance;

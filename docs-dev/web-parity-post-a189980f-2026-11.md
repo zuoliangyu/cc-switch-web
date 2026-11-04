@@ -757,25 +757,25 @@
 | `882e7a6a` | v4.0.21 | fix(profile): capture "no active prompt" so applying a project disables the current prompt | 1d 资源/设置/工具 | 1d：项目快照记录“没有启用的提示词”，应用项目时停用当前启用项 | 已迁移 |
 | `56fa007f` | v4.0.21 | feat(presets): use DeepSeek Flash instead of Pro everywhere | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `da0c84e4` | v4.0.21 | fix(tray): keep lightweight mode across restarts | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
-| `4dc05a9a` | v4.0.21 | feat(claude): switch between multiple official subscription accounts | 3 官方账号 | Claude 多订阅账号切换（services/claude_account 17 个文件）；凭据快照须写 Web 数据目录；需新建或映射：`agy_config.rs`、`commands/claude_account.rs`等 10 个 | 待迁移 |
-| `58fee0db` | v4.0.21 | fix(claude): close gaps in official account switching | 3 官方账号 | 需新建或映射：`services/claude_account/login.rs`、`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
+| `4dc05a9a` | v4.0.21 | feat(claude): switch between multiple official subscription accounts | 3 官方账号 | 3b：Claude 官方订阅多账号（services/claude_account、claude_official 上游最终版本；授权中心 Claude 账号组、官方卡绑定账号、卡片副标题）；Web 账号管理器为进程单例，登录在服务端跑 claude auth login 且从不在服务端开浏览器，授权页地址交给前端，回调回不到服务端本机时把落地页地址或代码贴回（/api/auth/claude/paste）；Web 无表单跳授权中心入口 | 已迁移 |
+| `58fee0db` | v4.0.21 | fix(claude): close gaps in official account switching | 3 官方账号 | 3b：账号切换的遗漏修补（编辑器保存后同步各账号目录；上游集成用例改写为 claude_runtime_tests） | 已迁移 |
 | `62324686` | v4.0.21 | feat(providers): move Open Terminal out of the more menu | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx` | 待迁移 |
-| `1409bad9` | v4.0.21 | feat(claude): switch Claude Code's sign-in when switching official cards | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/cc_lock.rs`等 16 个 | 待迁移 |
-| `e550adcf` | v4.0.21 | feat(claude): switch the sign-in whenever an official card has an account | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/mod.rs`等 7 个 | 待迁移 |
-| `1ddb14e1` | v4.0.21 | fix(claude): keep account profiles consistent when recovering or parking | 3 官方账号 | 需新建或映射：`services/claude_account/snapshot/recover.rs`、`services/claude_account/snapshot/switch.rs`等 3 个 | 待迁移 |
+| `1409bad9` | v4.0.21 | feat(claude): switch Claude Code's sign-in when switching official cards | 3 官方账号 | 3b：切官方卡时切换 Claude Code 登录（claude_direct/claude_editor/模式退出写 live 前后 with_login_switch；GET /api/auth/claude/login-switch，WSL/覆盖目录时提示不切） | 已迁移 |
+| `e550adcf` | v4.0.21 | feat(claude): switch the sign-in whenever an official card has an account | 3 官方账号 | 3b：官方卡带账号时总是切换登录（claude_direct 上游最终版本） | 已迁移 |
+| `1ddb14e1` | v4.0.21 | fix(claude): keep account profiles consistent when recovering or parking | 3 官方账号 | 3b：恢复或暂存时保持账号资料一致（snapshot 上游最终版本） | 已迁移 |
 | `3837f460` | v4.0.21 | feat(claude): show the bound account in the card subtitle | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
-| `0d6386ed` | v4.0.21 | feat(claude): show each bound account's quota on its card | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/login.rs`等 7 个 | 待迁移 |
+| `0d6386ed` | v4.0.21 | feat(claude): show each bound account's quota on its card | 3 官方账号 | 3b：绑号卡按账号查额度（GET /api/auth/claude/quota，令牌过期时借 Claude Code 的 /usage 缓存）；Web 无托盘额度缓存，不写缓存 | 已迁移 |
 | `b3eb2ad1` | v4.0.21 | feat(claude): show each account's quota in the auth center | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
-| `e29968f5` | v4.0.21 | fix(claude): don't show a stale quota when the account's login has lapsed | 3 官方账号 | 需新建或映射：`services/claude_account/usage.rs` | 待迁移 |
+| `e29968f5` | v4.0.21 | fix(claude): don't show a stale quota when the account's login has lapsed | 3 官方账号 | 3b：登录失效时不显示过期额度 | 已迁移 |
 | `50395742` | v4.0.21 | refactor(claude): match the auth center header changes on main | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
 | `0c07d509` | v4.0.21 | fix(providers): keep the usage column aligned when a card's status changes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx` | 待迁移 |
 | `ee2ef72f` | v4.0.21 | fix(hermes): move set-default into the more menu like other additive apps | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
 | `03337b7e` | v4.0.21 | feat(presets): allow max reasoning effort for MiniMax Flash in OpenClaw | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `88c878ac` | v4.0.21 | feat(claude): show the subscription plan on official cards | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/mod.rs`等 8 个 | 待迁移 |
+| `88c878ac` | v4.0.21 | feat(claude): show the subscription plan on official cards | 3 官方账号 | 3b：官方卡显示订阅套餐（GET /api/auth/claude/default-plan；默认登录在 macOS 先读钥匙串再读 .credentials.json） | 已迁移 |
 | `6837f361` | v4.0.21 | fix(claude-desktop): use the documented OpenCode Go base URL (#8720) | 5a 供应商与全局 UI | Desktop OpenCode Go 预设地址已随 1a 同步；`coding_plan.rs` 与用量检测部分待迁移 | 待迁移 |
 | `9c30cde4` | v4.0.21 | chore(templates): add a required Human Note to issue and PR templates (#8905) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `a56dddb9` | v4.0.21 | feat(presets): add TeamoRouter Claude presets and update promotion text (#8266) | 1a 预设/定价/图标 | 1a：TeamoRouter Claude 预设已同步；推广文案不迁移 | 已迁移 |
-| `f20a2b29` | v4.0.21 | fix(windows): gate Unix-only Claude login opener constant (#8898) | 3 官方账号 | Windows 下 Unix 专用 Claude 登录常量的编译门控，随 Claude 多账号迁移；需新建或映射：`services/claude_account/layout.rs` | 待迁移 |
+| `f20a2b29` | v4.0.21 | fix(windows): gate Unix-only Claude login opener constant (#8898) | 3 官方账号 | 3b：Windows 下仅 Unix 的登录打开器常量加 cfg（login.rs 上游最终版本） | 已迁移 |
 | `74a98fdd` | v4.0.21 | fix(gemini): read export KEY=value lines in ~/.gemini/.env (#8862) | 1d 资源/设置/工具 | 1d：读取 ~/.gemini/.env 时识别 export KEY=value 行 | 已迁移 |
 | `66510775` | v4.0.21 | fix(opencode): hide connectivity check for OMO profiles (#8842) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerCapabilities.test.ts` | 待迁移 |
 | `ec5c5f8a` | v4.0.21 | fix(forms): align Claude Desktop Copilot URL detection and sync zh/en/ja manuals (#8838) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -801,12 +801,12 @@
 | `9f5adaac` | v4.0.21 | ci: auto-close outside PRs that change SCHEMA_VERSION (#8903) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `42ef6347` | v4.0.21 | fix(usage): prevent dashboard jumps when toggling the sidebar (#8548) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `95e29485` | v4.0.21 | feat(presets): add ClinePass presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `5cc6c47f` | v4.0.21 | fix(auth-center): refetch Claude accounts after switching Claude cards | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
+| `5cc6c47f` | v4.0.21 | fix(auth-center): refetch Claude accounts after switching Claude cards | 3 官方账号 | 3b：切换 Claude 卡后重读 Claude 账号列表；托盘切卡事件 Web 无，不适用 | 部分迁移 |
 | `cb50e600` | v4.0.21 | chore(release): v4.0.21 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `c4db63c6` | v4.0.21 | docs(release): add v4.0.21 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `df511e82` | v4.0.22 | docs(contributing): require a self-written Human Note in PRs | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `e55d8a21` | v4.0.22 | fix(tray): handle clicks from third-party Windows tray hosts (#8729) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
-| `0133facc` | v4.0.22 | fix(claude): say Claude accounts aren't supported when the config dir is in WSL | 3 官方账号 | 需新建或映射：`commands/claude_account.rs`、`services/claude_account/snapshot/mod.rs`等 3 个 | 待迁移 |
+| `0133facc` | v4.0.22 | fix(claude): say Claude accounts aren't supported when the config dir is in WSL | 3 官方账号 | 3b：Claude 配置目录在 WSL 时说明账号不可用（tool_runs_in_wsl、登录置灰与提示） | 已迁移 |
 | `d288057f` | v4.0.22 | docs(guides): add a guide to switching Claude subscription accounts | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `dd81bc95` | v4.0.22 | docs(release): link the Claude accounts guide from v4.0.21 notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `3fc8794c` | v4.0.22 | feat(apps): integrate DeepSeek Harness (#8795) | 2e DeepSeek Harness | 2e：DeepSeek Harness 应用（dsh_config、AppType::Dsh 累加式、原生 profile 的 cordis.patch.yml 与数据库一起提交、MCP/Skills 开关、提示词 $DSH_HOME/AGENTS.md、会话浏览（不可删除）、工具安装卸载、表单走 McodeProviderForm）；Web schema v21 enabled_dsh；不做连通检测（上游同样无适配器）；托盘与 docs/ 文档不适用 | 已迁移 |
@@ -822,7 +822,7 @@
 | `a62203bb` | v4.0.22 | fix(ui): prevent duplicate tooltips and constrain help cards (#8593) | 5a 供应商与全局 UI | 需新建或映射：`components/mcp/AppMatrix.tsx` | 待迁移 |
 | `cd9c7210` | v4.0.22 | fix(proxy): reject upstream URLs that loop back to the proxy itself (#8598) | 1b 代理协议 | 1b：拒绝回环到代理自身监听地址的上游 URL | 已迁移 |
 | `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 3a：跳到某个授权分组时只滚动面板正文（新增 AuthCenterPanel 测试） | 已迁移 |
-| `67cce7ad` | v4.0.22 | fix(usage): show bound Claude official account quota in tray and usage settings | 3 官方账号 | 用量设置显示绑定 Claude 账号额度；托盘部分不适用；需新建或映射：`commands/claude_account.rs`、`services/usage_cache.rs` | 待迁移 |
+| `67cce7ad` | v4.0.22 | fix(usage): show bound Claude official account quota in tray and usage settings | 3 官方账号 | 3b：用量脚本弹窗按绑定账号测试；托盘与用量缓存不适用 | 部分迁移 |
 | `e78f641c` | v4.0.22 | fix(apps): report a CLI that is present but yields no version as not runnable | 1d 资源/设置/工具 | 1d：存在但不输出版本的 CLI 报告为不可运行 | 已迁移 |
 | `03b475fb` | v4.0.22 | feat(terminal): add an option to skip permission prompts when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
@@ -838,7 +838,7 @@
 | `7201d81b` | v4.0.22 | feat(sync): let users clear the saved WebDAV config | 1d 资源/设置/工具 | 1d：可清除本机保存的 WebDAV 配置（新增 /api/webdav/settings/clear）；自动上传在同步锁内重新读取设置 | 已迁移 |
 | `326b394b` | v4.0.22 | fix(proxy): map Claude WebSearch blocked_domains to Responses filters | 1b 代理协议 | 1b：Claude WebSearch blocked_domains 映射为 Responses 过滤 | 已迁移 |
 | `064ae422` | v4.0.22 | fix(proxy): split trailing text out of Gemini function-response turns | 1b 代理协议 | 1b：Gemini 函数响应回合拆出尾随文本 | 已迁移 |
-| `6c998b4d` | v4.0.22 | fix(claude-account): write oversized credentials to the keychain via argv | 3 官方账号 | 需新建或映射：`services/claude_account/snapshot/store/keychain.rs` | 待迁移 |
+| `6c998b4d` | v4.0.22 | fix(claude-account): write oversized credentials to the keychain via argv | 3 官方账号 | 3b：超长凭据经 argv 写入钥匙串（keychain.rs 上游最终版本） | 已迁移 |
 | `ebb00da1` | v4.0.22 | feat(terminal): let users append extra arguments when opening a terminal | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `6282108e` | v4.0.22 | fix(proxy): mount thoughtSignature at Part level instead of inside functionCall (#6690) | 1b 代理协议 | 1b：thoughtSignature 挂在 Part 层 | 已迁移 |
 | `df753b5e` | v4.0.22 | fix(proxy): fall back to Gemini's skip signature on the Gemini Native path | 1b 代理协议 | 1b：Gemini Native 路径缺签名时回退 skip 签名 | 已迁移 |
@@ -854,7 +854,7 @@
 | `3e75b96e` | v4.0.22 | docs(sponsors): refresh AIGoCode copy and add theme-aware banner | — | 赞助商推广文案（i18n）；Web 不展示赞助合作信息 | 不适用 |
 | `da263511` | v4.0.22 | fix(apps): rerun the Kimi installer when the installed CLI predates upgrade --yes | 1d 资源/设置/工具 | 1d：已安装 Kimi 早于 upgrade --yes 时重跑官方安装器（生命周期后端已含 Kimi，应用层接入随 2b） | 已迁移 |
 | `12e9fe53` | v4.0.22 | feat(presets): add Astron Coding Plan preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `33aaf8e7` | v4.0.22 | fix(claude-account): pass the global proxy to Claude Code subprocesses | 3 官方账号 | 需新建或映射：`services/claude_account/login.rs`、`services/claude_account/usage.rs` | 待迁移 |
+| `33aaf8e7` | v4.0.22 | fix(claude-account): pass the global proxy to Claude Code subprocesses | 3 官方账号 | 3b：Claude Code 子进程带上全局代理（login.rs/usage.rs 上游最终版本） | 已迁移 |
 | `0b8a53e3` | v4.0.22 | feat(skills): open a discovered skill's docs from the Discover list | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `c1933fd0` | v4.0.22 | fix(providers): warn when an additive app's live config cannot be read | 1d 资源/设置/工具 | 1d：后端在累加式应用写 live 失败时撤回新增行并报错；供应商列表的“live 配置读取失败”提示随 5a 的 ProviderList 处理 | 部分迁移 |
 | `ebdedbee` | v4.0.22 | feat(presets): add ccswitch channel tracking to StreamLake API key links | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -866,8 +866,8 @@
 | `779063c1` | v4.0.23 | fix(usage): record Antigravity latency and first-token time | 2c Antigravity | 2c：记录 Antigravity 延迟与首 token 时间 | 已迁移 |
 | `46ea443d` | v4.0.23 | fix(usage): record MiniMax Code latency and first-token time | 1c 会话/用量导入 | 1c：MiniMax Code 用量记录耗时与首字时间 | 已迁移 |
 | `645f8fa1` | v4.0.23 | feat(presets): add Astron MaaS pay-as-you-go preset for Claude Code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `fcd8f3bd` | v4.0.23 | fix(claude-account): resolve mise shims when locating the claude CLI | 3 官方账号 | 合并到 Web 已改文件 | 待迁移 |
-| `12078d5b` | v4.0.23 | feat(auth): add refresh-all button to the Accounts page header (#9073) | 3 官方账号 | 3a：授权中心页头“全部刷新”（Copilot、ChatGPT、xAI、Kimi、Antigravity 额度与 DSH 余额）；Claude 官方账号随 3b 接入 | 部分迁移 |
+| `fcd8f3bd` | v4.0.23 | fix(claude-account): resolve mise shims when locating the claude CLI | 3 官方账号 | 3b：定位 claude CLI 时解析 mise shim（补上 1d 迁移漏掉的 mise_shim_target 定义，此前只在 Linux/macOS 编译时缺失） | 已迁移 |
+| `12078d5b` | v4.0.23 | feat(auth): add refresh-all button to the Accounts page header (#9073) | 3 官方账号 | 3a/3b：授权中心页头“全部刷新”（含 Claude 官方账号） | 已迁移 |
 | `6d6ee68f` | v4.0.23 | fix(providers): stop IME composition from duplicating letters in provider key inputs (#9069) | 2b Kimi Code | 2b：供应商键输入框的输入法组合不再重复字母（Kimi 与 MiniMax Code 表单） | 已迁移 |
 | `7569b27a` | v4.0.23 | fix(providers): keep fetched model list when the form re-renders (#9068) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `d8339d6a` | v4.0.23 | fix(icon-picker): keep picker clear of macOS traffic lights (#9076) | — | 图标选择器避让 macOS 红绿灯；Web 无原生窗口按钮 | 不适用 |
@@ -899,7 +899,7 @@
 | `1f21c289` | v4.0.24 | fix(dsh): show DeepSeek account in official sign-in subtitle (#9058) | 2e DeepSeek Harness | 2e：官方登录副标题显示 DeepSeek 账号已迁移；预设副行“用 DeepSeek 账号登录”依赖 presetGroups（loginWith），随 5a | 部分迁移 |
 | `7e02e494` | v4.0.24 | fix(codex): restore reasoning effort after re-enabling (#8998) | 1b 代理协议 | 1b：重新启用 Codex Chat 思考等级时恢复默认参数名，后端修复已启用但参数为 none 的旧配置；组件交互测试依赖 Web 不同的测试夹具未迁移 | 已迁移 |
 | `c1fb9eec` | v4.0.24 | fix(tray): store Linux tray icons in app cache directory (#9021) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
-| `734ed4a1` | v4.0.24 | feat(auth): let sign-in copy the login link instead of opening the browser | 3 官方账号 | 登录只复制链接不打开浏览器；Web 远程访问场景尤其适用；需新建或映射：`services/claude_account/layout.rs`、`services/claude_account/login.rs`等 6 个 | 待迁移 |
+| `734ed4a1` | v4.0.24 | feat(auth): let sign-in copy the login link instead of opening the browser | 3 官方账号 | 3b：授权中心“登录时自动打开浏览器”开关与复制登录链接；Claude 不另传 copy_link（Web 服务端从不开浏览器，始终由前端在用户浏览器打开） | 已迁移 |
 | `832fbe65` | v4.0.24 | test(codex-oauth): retry the stale keep-alive request in the replacement test | 3 官方账号 | 3a：替换测试中重试过期的 keep-alive 请求（browser.rs 上游最终版本） | 已迁移 |
 | `14ddd7b5` | v4.0.24 | fix(dsh): keep only text/image in exported model input | 2e DeepSeek Harness | 2e：导出的模型输入只保留 text/image（dsh_config 最终版本） | 已迁移 |
 | `39183b59` | v4.0.24 | fix(proxy): keep max effort for every GPT 5.6+ Sol/Terra/Luna/Astra model | 1b 代理协议 | 1b：GPT 5.6+ Sol/Terra/Luna/Astra 全系保留 max 档 | 已迁移 |
@@ -1039,3 +1039,11 @@
   - 浏览器登录的回调监听在服务端本机的 1455 端口，浏览器与服务端不在同一台机器时完成不了：Web 默认设备码登录（上游默认浏览器），部分禁用设备码的工作区可在账号组标题行改为浏览器登录。
   - 前端：登录方式选择、轮询防重叠、额度列定宽对齐、跳转分组只滚面板正文、页头“全部刷新”（Claude 官方账号随 3b 接入）。
   - 验证：Codex OAuth 后端用例 64 项通过；`tsc --noEmit` 通过；前端全量 Vitest 167 个文件 1805 项通过、2 项跳过。
+- 2026-11-04：完成批次 3b（Claude 官方订阅账号，16 项，另含 12078d5b 的 Claude 部分）。
+  - 后端：`services/claude_account`（账号目录、快照与切换日志、钥匙串/凭据文件、`claude auth login` 登录与 `/usage` 刷新）与 `services/provider/claude_official` 取上游最终版本；`commands/claude_account.rs` 改为 Web 的进程单例管理器，服务启动后补完上次中断的登录切换并同步各账号目录。切官方卡、编辑器保存、退出代理写 live 时先切 Claude Code 登录、写失败换回（`with_login_switch`），并清掉以前开发版写进 settings.json 的账号目录（`JsonPatch::remove_when`）；MCP 增删与编辑器保存后同步各账号目录；绑号卡打开终端时以 `CLAUDE_CONFIG_DIR` 启动（agy 的环境变量启动命令泛化为 `env_launch_command`）。`mode::controller` 增加 `lock_settled`。
+  - 授权中心：`claude_official` 接入通用 `/api/auth/*`（没有默认账号，`set-default` 拒绝）；Web 一律不在服务端开浏览器（等同上游 `copy_link`），授权页地址交给前端，浏览器回不到服务端本机时把落地页地址或代码贴回 `POST /api/auth/claude/paste`，因此浏览器与服务端不在同一台机器时也能完成登录。另有 `GET /api/auth/claude/{quota,default-plan,login-switch}`。增删账号、重新登录后按新账号表重写直连官方卡的 live。
+  - 额度：绑号卡按账号查（令牌过期时在账号目录跑 `claude -p /usage` 借 Claude Code 的缓存）；默认登录的套餐在 macOS 先读钥匙串。Web 没有托盘与额度缓存，相关部分不适用。
+  - 跨平台：用 Docker（rust:1-bookworm）补跑 Linux `cargo check --lib --tests`，发现此前批次在非 Windows 下才编译的代码有缺失：`mise_shim_target`、`npm_scripts_env_prefix` 未迁移，`PathBuf` 只在 Windows 引入，Kimi 会话恢复命令引用了 Web 没有的 `session_manager::terminal`，agy 测试引用了 Web 没有的 `services::{ProviderService, SkillService}` 重导出；均已修正，Linux 检查通过（只剩 Web 不用的 Unix 终端辅助函数 dead_code 警告）。macOS 专属代码仍无法在本机编译验证。
+  - 测试：上游 `tests/provider_service.rs` 的账号目录同步用例改写为 `claude_runtime_tests`；订阅额度补套餐与缓存用例。
+  - 转出/不适用：托盘切卡事件与托盘额度缓存（5cc6c47f、67cce7ad 的托盘部分）。
+  - 验证：`cargo test --lib` 3351 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 173 个文件 1836 项通过、2 项跳过。

@@ -76,7 +76,7 @@ async fn agy_live_provider_skill_session_and_tokens() {
     let skill_dir = agy_config::customizations_dir().join("skills/ccs-smoke");
     fs::create_dir_all(&skill_dir).unwrap();
     fs::write(skill_dir.join("SKILL.md"), "---\nname: ccs-smoke\ndescription: An explicitly requested smoke test.\n---\nWhen invoked, respond with exactly CCS_AGY_SKILL_OK. Do not call tools or access files.\n").unwrap();
-    let imported = crate::services::SkillService::import_from_apps(
+    let imported = crate::services::skill::SkillService::import_from_apps(
         &db,
         vec![crate::services::skill::ImportSkillSelection {
             directory: "ccs-smoke".into(),
@@ -88,9 +88,9 @@ async fn agy_live_provider_skill_session_and_tokens() {
     )
     .unwrap();
     assert_eq!(imported.len(), 1);
-    crate::services::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, false).unwrap();
+    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, false).unwrap();
     assert!(!skill_dir.exists());
-    crate::services::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, true).unwrap();
+    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, true).unwrap();
     assert!(skill_dir.join("SKILL.md").is_file());
     println!("SMOKE skill_import_disable_enable=ok");
 

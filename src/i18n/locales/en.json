@@ -210,6 +210,29 @@
         "oauthHint": "Google official uses OAuth personal authentication, no need to fill in API Key. The browser will automatically open for login on first use.",
         "apiKeyPlaceholder": "Enter Gemini API Key"
       },
+      "claudeAccount": {
+        "label": "Sign-in method",
+        "default": "Follow Claude Code login",
+        "defaultDescription": "The account changes with the current Claude Code login",
+        "missing": "Account not on this computer",
+        "manage": "Add or manage Claude accounts",
+        "helpTerminal": "The Claude config folder is overridden in Settings, so switching to this card doesn't change Claude Code's sign-in. Use Open Terminal on the card to use the selected account.",
+        "helpWsl": "The Claude config folder is in WSL, where Claude accounts aren't supported yet. Switching to this card doesn't change Claude Code's sign-in.",
+        "help": "Switching to this card changes Claude Code's sign-in to the selected account right away, including sessions already running. To use several accounts at once, use Open Terminal on the card.",
+        "claudeAccount": "Claude account",
+        "reauthBadge": "Re-login required",
+        "terminalHint": "Use via Open Terminal",
+        "wslHint": "Not supported in WSL",
+        "plan": {
+          "pro": "Pro",
+          "max": "Max",
+          "max5x": "Max 5x",
+          "max20x": "Max 20x",
+          "team": "Team",
+          "teamPremium": "Team Premium",
+          "enterprise": "Enterprise"
+        }
+      },
       "agy": {
         "account": "Account",
         "accountFollow": "Follow agy's current sign-in",
@@ -4031,7 +4054,10 @@
       "copilotHelp": "Used by GitHub Copilot presets in Claude Code and Claude Desktop. Providers without a chosen account use the Default one.",
       "chatgptHelp": "Used by ChatGPT presets in Claude Code and Claude Desktop, and by Codex's official-login binding. Providers without a chosen account use the Default one.",
       "xaiHelp": "Used by xAI presets in Claude Code, Claude Desktop and Codex. Providers without a chosen account use the Default one.",
-      "agyHelp": "The official sign-in for Antigravity CLI (agy). agy can only be signed in to one account at a time; Switch replaces agy's sign-in with the selected account, and agy sessions started afterwards use it. The account agy was already signed in with is added here automatically, so switching away never loses it."
+      "agyHelp": "The official sign-in for Antigravity CLI (agy). agy can only be signed in to one account at a time; Switch replaces agy's sign-in with the selected account, and agy sessions started afterwards use it. The account agy was already signed in with is added here automatically, so switching away never loses it.",
+      "claudeHelpTerminal": "Official Claude Code subscription accounts (Pro / Max / Team). The Claude config folder is overridden in Settings, so switching cards doesn't change Claude Code's sign-in. Pick an account on an official card and use Open Terminal on the card.",
+      "claudeHelpWsl": "Official Claude Code subscription accounts (Pro / Max / Team). Not supported yet while the Claude config folder is in WSL.",
+      "claudeHelp": "Official Claude Code subscription accounts (Pro / Max / Team). Pick an account on a Claude official card: after switching to the card, Claude Code's sign-in changes to it right away. To use several accounts at once, use Open Terminal on the card. Sign-in tokens stay on this computer and are never uploaded, refreshed or signed out. The first switch saves the account Claude Code is signed in to now; switching ends Remote Control and rebuilds the prompt cache."
     },
     "addAccount": "Add account",
     "accountMenu": "More actions for {{login}}",
@@ -4062,7 +4088,10 @@
       "note": "The authorization page is open in your browser; this updates on its own when you finish. Mind {{service}}'s terms of use.",
       "browserNote": "The {{service}} sign-in page is open in your browser. Sign in and grant access, and this updates automatically.",
       "reopen": "Reopen sign-in page",
-      "linkCopied": "Sign-in link copied."
+      "copyLink": "Copy sign-in link",
+      "linkCopied": "Sign-in link copied.",
+      "linkNote": "Sign-in link copied. Open it in the browser you want to use, sign in and grant access, and this updates automatically.",
+      "linkCodeNote": "Sign-in link copied. Open it in the browser you want to use and enter the code; this updates on its own when you finish. Mind {{service}}'s terms of use."
     },
     "toast": {
       "added": "{{service}} account added.",
@@ -4085,6 +4114,25 @@
       "switched": "Switched. New agy sessions will use this account.",
       "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
       "reauthNote": "Sign-in expired, can't switch to it"
+    },
+    "claude": {
+      "pasteSubmitted": "Submitted. Finishing sign-in…",
+      "pasteToggle": "Didn't come back here after authorizing?",
+      "pasteHint": "Paste the address from the browser's address bar after authorizing, or the code shown on the page.",
+      "pasteLabel": "Authorization code or address",
+      "pasteSubmit": "Submit",
+      "reauthNote": "Sign-in expired. Sign in again.",
+      "addedOn": "Added {{date}}",
+      "loginExpiresOn": "Sign-in expires around {{date}}; sign in again after that",
+      "loginMaybeExpired": "Sign-in may have expired. Sign in again before switching to it.",
+      "statusLoadFailed": "Couldn't read Claude accounts. Try again.",
+      "empty": "No Claude accounts yet. Sign in here to switch between multiple subscription accounts.",
+      "removeNote": "Only removes the sign-in CC Switch saved for this account; it isn't signed out anywhere else, and Claude Code's current sign-in (~/.claude) is untouched. Cards bound to it switch to Claude Code's current sign-in.",
+      "wslUnsupported": "The Claude config folder is in WSL. Adding and switching Claude accounts isn't supported there yet."
+    },
+    "openBrowser": {
+      "title": "Open the browser when signing in",
+      "description": "Turn this off to only copy the sign-in link and open it in a browser of your choice — handy when you keep accounts in separate browser profiles."
     }
   },
   "kimi": {

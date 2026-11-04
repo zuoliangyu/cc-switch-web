@@ -323,3 +323,54 @@ fn editing_taken_over_provider_commits_globals_and_proxy_keys_together() {
         "new-key"
     );
 }
+
+/// 上游 tests/provider_service.rs（58fee0db）：编辑器里改的全局设置也要到 Claude 官方账号的目录。
+/// 账号目录里的 settings.json 是默认 settings.json 的镜像，写入之后要再同步一次，不能等到下次切换。
+#[test]
+#[serial]
+fn claude_editor_global_settings_reach_account_dirs() {
+    let fixture = Fixture::new();
+    let state = &fixture.state;
+    let a = provider(
+        "a",
+        json!({"env":{"ANTHROPIC_BASE_URL":"https://a.example"}}),
+    );
+    ProviderService::add(state, AppType::Claude, a.clone(), true).unwrap();
+
+    // 本机账号表里有一个账号，目录已经建好
+    let app_dir = crate::config::get_app_config_dir();
+    let local_id = "0123456789abcdef0123456789abcdef";
+    let config_dir = app_dir
+        .join("claude-accounts")
+        .join(local_id)
+        .join("config");
+    std::fs::create_dir_all(&config_dir).expect("account dir");
+    std::fs::write(
+        app_dir.join("claude_accounts.json"),
+        serde_json::to_vec(&json!({
+            "version": 1,
+            "accounts": { "acc:org": { "localId": local_id, "addedAt": 1 } }
+        }))
+        .expect("serialize"),
+    )
+    .expect("write account store");
+
+    let row = state.db.get_provider_by_id("a", "claude").unwrap().unwrap();
+    let base = ProviderService::claude_editor_view(state, &row.settings_config)
+        .unwrap()
+        .settings;
+    let mut edited = row.clone();
+    edited.settings_config = base.clone();
+    edited.settings_config["hooks"] =
+        json!({ "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }] });
+    save(state, edited, base, ConflictPolicy::Refuse, false).expect("save");
+
+    let mirrored: Value = serde_json::from_slice(
+        &std::fs::read(config_dir.join("settings.json")).expect("account settings"),
+    )
+    .expect("parse account settings");
+    assert!(
+        mirrored.get("hooks").is_some(),
+        "the account dir sees the hook right after saving: {mirrored}"
+    );
+}

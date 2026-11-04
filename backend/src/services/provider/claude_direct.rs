@@ -53,17 +53,23 @@ fn write(
 ) -> Result<OperationReport, AppError> {
     let prev = previous_projection(db, prev)?;
     let projection = ClaudeProjection::of(&target.settings_config);
-    let patch = direct_patch(prev.as_ref(), &projection);
-    run(
-        db,
-        if pointer.is_some() {
-            op::SWITCH
-        } else {
-            op::APPLY
-        },
-        Some(&patch),
-        recorded_target(pointer.map(str::to_string), &projection),
-    )
+    let mut patch = direct_patch(prev.as_ref(), &projection);
+    // 删掉以前开发版写进去的账号目录（见 claude_official）
+    super::claude_official::strip_from_patch(&mut patch);
+    // 先换登录（卡绑了本机账号、没设配置目录覆盖时）：失败就整个不切，指针和
+    // settings.json 都不动；登录换了、后面写失败时再换回去
+    super::claude_official::with_login_switch(Some(target), || {
+        run(
+            db,
+            if pointer.is_some() {
+                op::SWITCH
+            } else {
+                op::APPLY
+            },
+            Some(&patch),
+            recorded_target(pointer.map(str::to_string), &projection),
+        )
+    })
 }
 
 // Web 仍用旧代理接管控制器。记录最近写入的独有字段，避免代理路由/供应商行已

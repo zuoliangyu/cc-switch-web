@@ -14,7 +14,6 @@ use std::collections::HashMap;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-#[cfg(target_os = "windows")]
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -3287,6 +3286,13 @@ fn anchored_npm_command(bin_path: &str, args: &str) -> Option<String> {
     ))
 }
 
+/// POSIX 官方自升级内部再调 npm 时，用环境变量放行该包的 postinstall 与 optional
+/// dependency（含义同 `npm_install_extra_args`），只作用于紧随其后的那条命令。
+#[cfg(not(target_os = "windows"))]
+fn npm_scripts_env_prefix(pkg: &str) -> String {
+    format!("npm_config_allow_scripts={pkg} npm_config_ignore_scripts=false npm_config_include=optional ")
+}
+
 #[cfg(not(target_os = "windows"))]
 fn anchored_official_update_command(tool: &str, bin_path: &str) -> Option<String> {
     official_update_args(tool).map(|args| format!("{} {args}", quote_path_if_spaced(bin_path)))
@@ -3730,7 +3736,7 @@ impl CommandDeadline {
 }
 
 #[cfg(target_os = "windows")]
-fn terminate_child_tree(child: &mut std::process::Child) -> bool {
+pub(crate) fn terminate_child_tree(child: &mut std::process::Child) -> bool {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
 
@@ -3744,7 +3750,7 @@ fn terminate_child_tree(child: &mut std::process::Child) -> bool {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn terminate_child_tree(child: &mut std::process::Child) -> bool {
+pub(crate) fn terminate_child_tree(child: &mut std::process::Child) -> bool {
     let process_group = -(child.id() as libc::pid_t);
     // SAFETY: runtime commands are placed in a dedicated process group before spawn.
     (unsafe { libc::kill(process_group, libc::SIGKILL) == 0 }) || child.kill().is_ok()
@@ -4730,6 +4736,67 @@ pub(crate) fn run_detected_tool_command_with_timeout(
     }
 }
 
+/// 构造运行本机工具默认入口的命令（定位规则和 PATH 补全同 [`run_detected_tool_command_with_timeout`]），
+/// 不设 stdio、不等待：给要自己管子进程的调用方用（比如长时间运行、要往 stdin 写东西的登录）。
+/// `timeout` 只约束定位工具这一步。工具配置在 WSL 里时报错。
+pub(crate) fn detected_tool_command(
+    tool: &str,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<std::process::Command, String> {
+    if !VALID_TOOLS.contains(&tool) {
+        return Err(format!("Unsupported tool: {tool}"));
+    }
+    let deadline = CommandDeadline::from_timeout(Some(timeout));
+
+    #[cfg(target_os = "windows")]
+    if wsl_distro_for_tool(tool).is_some() {
+        return Err(format!(
+            "{tool} runs in WSL; this action needs it on Windows"
+        ));
+    }
+
+    let tool_path = locate_default_tool(tool, deadline)?;
+    let dir = tool_path
+        .parent()
+        .ok_or_else(|| format!("Invalid {tool} executable path"))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let new_path = format!("{};{}", dir.display(), effective_path_string());
+        Ok(build_windows_tool_command(&tool_path, args, &new_path))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let inherited = std::env::var_os("PATH")
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let current_path = match login_shell_path(deadline) {
+            Some(login_path) => merge_path_segments(&login_path, &inherited),
+            None => inherited,
+        };
+        let mut cmd = std::process::Command::new(&tool_path);
+        cmd.args(args)
+            .env("PATH", format!("{}:{current_path}", dir.display()));
+        isolate_child_process_group(&mut cmd);
+        Ok(cmd)
+    }
+}
+
+/// 这个工具的配置目录是不是指向 WSL（只有 Windows 上会是）。
+pub(crate) fn tool_runs_in_wsl(tool: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        wsl_distro_for_tool(tool).is_some()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = tool;
+        false
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn run_windows_tool_command_capture(
     tool_path: &Path,
@@ -4859,6 +4926,45 @@ fn build_wsl_env_argv(extra_env: &[(&str, String)]) -> Result<Vec<String>, Strin
         env_argv.push(format!("{key}={linux_value}"));
     }
     Ok(env_argv)
+}
+
+/// mise 的 shim 是指向 mise 本体的软链，canonicalize 后和它调度的真身不是同一个文件，
+/// 按真身去重时 shim 与 `installs/node/<版本>/bin/<tool>` 会被算成两处安装。登录 shell
+/// 问不出默认入口时，让 mise 自己说 shim 现在指向哪个文件（按用户的 mise 配置选版本，
+/// 与终端里跑这个 shim 的结果一致），直接用那个真身。不是 mise shim 或解析失败返回 None。
+#[cfg(not(target_os = "windows"))]
+fn mise_shim_target(
+    tool: &str,
+    candidate: &Path,
+    real: &Path,
+    deadline: Option<CommandDeadline>,
+) -> Option<std::path::PathBuf> {
+    use std::ffi::OsStr;
+    use std::process::{Command, Stdio};
+
+    let is_mise_shim = candidate.parent().and_then(Path::file_name) == Some(OsStr::new("shims"))
+        && real.file_name() == Some(OsStr::new("mise"));
+    if !is_mise_shim {
+        return None;
+    }
+
+    let mut cmd = Command::new(real);
+    cmd.args(["which", tool])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    // GUI 进程的工作目录是 `/`；在 home 下解析，与新开终端看到的 mise 配置一致。
+    if let Some(home) = dirs::home_dir() {
+        cmd.current_dir(home);
+    }
+    isolate_child_process_group(&mut cmd);
+    let out = wait_child_output(cmd.spawn().ok()?, deadline).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let raw = decode_command_output(&out.stdout);
+    let target = std::path::PathBuf::from(first_abs_path_line(&raw)?);
+    target.is_file().then_some(target)
 }
 
 fn locate_default_tool(

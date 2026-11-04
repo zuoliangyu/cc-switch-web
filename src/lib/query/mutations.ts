@@ -309,6 +309,12 @@ export const useSwitchProviderMutation = (appId: AppId) => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["providers", appId] });
+      if (appId === "claude") {
+        // 切到绑了账号的官方卡时，后端可能把原来的默认登录收成了新账号：授权中心要重读
+        await queryClient.invalidateQueries({
+          queryKey: ["managed-auth-status", "claude_official"],
+        });
+      }
 
       // OpenCode/OpenClaw: also invalidate live provider IDs cache to update button state
       if (appId === "opencode") {

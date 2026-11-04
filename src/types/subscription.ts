@@ -28,6 +28,12 @@ export interface ResetCredits {
   expiresAt: (string | null)[];
 }
 
+/** Claude 账号的套餐：Claude Code 记在凭据里（`subscriptionType` / `rateLimitTier`） */
+export interface ClaudeAccountPlan {
+  subscriptionType: string | null;
+  rateLimitTier: string | null;
+}
+
 export interface SubscriptionQuota {
   tool: string;
   credentialStatus: CredentialStatus;
@@ -39,4 +45,9 @@ export interface SubscriptionQuota {
   resetCredits?: ResetCredits | null;
   error: string | null;
   queriedAt: number | null;
+}
+
+/** 绑号卡的额度，带上这个号的套餐（读不到时缺省） */
+export interface ClaudeAccountQuota extends SubscriptionQuota {
+  plan?: ClaudeAccountPlan | null;
 }

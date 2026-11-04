@@ -13,6 +13,10 @@ import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
 import KimiAccountQuotaFooter from "@/components/KimiAccountQuotaFooter";
 import AgyAccountQuotaFooter from "@/components/AgyAccountQuotaFooter";
+import ClaudeAccountQuotaFooter from "@/components/ClaudeAccountQuotaFooter";
+import { ClaudeBoundAccountLine } from "@/components/providers/forms/ClaudeOfficialSection";
+import { claudePlanLabel } from "@/lib/claudePlan";
+import { useClaudeDefaultPlan } from "@/lib/query/subscription";
 import { useAgyAccountSupported } from "@/components/providers/forms/AgyOAuthSection";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
@@ -124,6 +128,15 @@ function isOfficialProvider(provider: Provider, appId: AppId): boolean {
   return false;
 }
 
+/** 没绑账号的 Claude 官方卡用 Claude Code 的默认登录：套餐跟在地址后面（「官网 · Max 20x」） */
+function ClaudeDefaultPlanSuffix() {
+  const { t } = useTranslation();
+  const { data: plan } = useClaudeDefaultPlan(true);
+  const label = claudePlanLabel(t, plan?.subscriptionType, plan?.rateLimitTier);
+  if (!label) return null;
+  return <span className="ms-1 shrink-0 text-muted-foreground">· {label}</span>;
+}
+
 /**
  * Antigravity 官方卡的额度：绑了授权中心账号就按那个号查，不用先切号；切号只实现了
  * macOS 钥匙串，服务端不支持时按 agy 当前登录查，忽略卡上的绑定。
@@ -232,9 +245,25 @@ export function ProviderCard({
 
   const isBoundCodexOfficial =
     resolveCodexOfficialIdentity(appId, provider) === "managed_account";
-  const usageEnabled =
-    provider.meta?.usage_script?.enabled ?? isBoundCodexOfficial;
   const isOfficial = isOfficialProvider(provider, appId);
+  // Claude 官方卡绑了 Claude 官方账号：副标题写账号，额度按这个号查
+  const claudeBoundAccountId =
+    appId === "claude" && isOfficial
+      ? resolveManagedAccountId(provider.meta, "claude_official")?.trim() ||
+        null
+      : null;
+  // 绑了账号的官方卡（Codex / Claude）默认查额度，和 Kimi、agy 的账号卡一样
+  const usageEnabled =
+    provider.meta?.usage_script?.enabled ??
+    (isBoundCodexOfficial || Boolean(claudeBoundAccountId));
+  // 没绑账号的 Claude 官方卡用 Claude Code 的默认登录：开了官方订阅额度查询时，地址后面跟默认登录的套餐
+  const showClaudeDefaultPlan =
+    appId === "claude" &&
+    isOfficial &&
+    !claudeBoundAccountId &&
+    usageEnabled &&
+    provider.meta?.usage_script?.templateType ===
+      TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
   const agyModel = useMemo(
     () => (appId === "agy" ? extractAgyModel(provider) : null),
     [appId, provider],
@@ -439,7 +468,13 @@ export function ProviderCard({
               )}
             </div>
 
-            {agyModel ? (
+            {claudeBoundAccountId ? (
+              <ClaudeBoundAccountLine
+                accountId={claudeBoundAccountId}
+                providerName={provider.name}
+                showPlan={usageEnabled}
+              />
+            ) : agyModel ? (
               <span
                 className="inline-flex max-w-[320px] items-center text-sm text-muted-foreground sm:max-w-[420px]"
                 title={agyModel}
@@ -461,6 +496,7 @@ export function ProviderCard({
                   disabled={!isClickableUrl}
                 >
                   <span className="truncate">{displayUrl}</span>
+                  {showClaudeDefaultPlan && <ClaudeDefaultPlanSuffix />}
                 </button>
               )
             )}
@@ -500,6 +536,17 @@ export function ProviderCard({
                   provider={provider}
                   isCurrent={isCurrent}
                 />
+              ) : claudeBoundAccountId ? (
+                usageEnabled ? (
+                  <ClaudeAccountQuotaFooter
+                    accountId={claudeBoundAccountId}
+                    inline={true}
+                    isCurrent={isCurrent}
+                    autoQueryInterval={
+                      provider.meta?.usage_script?.autoQueryInterval ?? 5
+                    }
+                  />
+                ) : null
               ) : appId === "kimi" && isOfficial ? (
                 // 每张 Kimi 官方卡就是授权中心里的一个账号，额度按卡上那个号查
                 <KimiAccountQuotaFooter

@@ -672,7 +672,7 @@ mod integration_tests {
     #[test]
     #[serial]
     fn cards_never_write_the_real_settings_credentials_or_shell_files() {
-        use crate::services::ProviderService;
+        use crate::services::provider::ProviderService;
         let home = HomeGuard::new();
         fs::create_dir_all(agy_dir()).unwrap();
         let original = r#"{"model":"Gemini 3.8 Flash (Medium)","theme":"dark"}"#;
@@ -850,7 +850,7 @@ mod integration_tests {
         let db = Arc::new(Database::memory().unwrap());
         let state = AppState::new(db.clone());
         assert!(
-            !crate::services::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
+            !crate::services::provider::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
         );
         assert!(db.get_all_providers("agy").unwrap().is_empty());
 
@@ -858,7 +858,7 @@ mod integration_tests {
         let blank = provider("blank", json!({"env":{},"config":{}}), false);
         db.save_provider("agy", &blank).unwrap();
         db.set_current_provider("agy", "blank").unwrap();
-        let result = crate::services::ProviderService::sync_current_to_live(&state);
+        let result = crate::services::provider::ProviderService::sync_current_to_live(&state);
         if let Err(error) = &result {
             assert!(!error.to_string().contains("provider/agy"), "{error}");
         }
@@ -877,7 +877,7 @@ mod integration_tests {
         let db = Arc::new(Database::memory().unwrap());
         let state = AppState::new(db.clone());
         assert!(
-            crate::services::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
+            crate::services::provider::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
         );
         // The key never lives in a file, so anything imported is agy's own login.
         let imported = db.get_provider_by_id("default", "agy").unwrap().unwrap();

@@ -2,6 +2,7 @@
 
 mod agy_account;
 mod auth;
+mod claude_account;
 mod codex_oauth;
 mod config;
 mod dsh;
@@ -34,6 +35,7 @@ mod xai_oauth;
 
 pub(crate) use agy_account::*;
 pub(crate) use auth::*;
+pub(crate) use claude_account::*;
 pub(crate) use codex_oauth::*;
 pub(crate) use config::*;
 pub(crate) use dsh::*;
@@ -56,6 +58,7 @@ pub(crate) use settings::*;
 pub(crate) use skill::*;
 pub(crate) use stream_check::*;
 pub(crate) use subscription::*;
+pub(crate) use tool_management::{detected_tool_command, terminate_child_tree, tool_runs_in_wsl};
 pub(crate) use sync_support::*;
 
 pub(crate) use usage::*;

@@ -200,7 +200,8 @@ async fn write_proxy_with_edits(
                 );
             }
             let previous = claude_direct::previous_projection(&state.db, owner.as_ref())?;
-            let patch = direct_patch(previous.as_ref(), &projection);
+            let mut patch = direct_patch(previous.as_ref(), &projection);
+            crate::services::provider::claude_official::strip_from_patch(&mut patch);
             let mut pending = claude_direct::recorded_target(None, &projection);
             pending.state = Some(after);
             pending.stack = Some(stack_state.clone());
@@ -343,10 +344,16 @@ fn write_direct(state: &AppState, app: &AppType, detach: bool) -> Result<(), App
                 .as_ref()
                 .map(|p| ClaudeProjection::of(&p.settings_config))
                 .unwrap_or_default();
-            let patch = direct_patch(previous.as_ref(), &projection);
+            let mut patch = direct_patch(previous.as_ref(), &projection);
+            crate::services::provider::claude_official::strip_from_patch(&mut patch);
             let mut pending = claude_direct::recorded_target(None, &projection);
             pending.state = Some(after);
-            claude_direct::run(&state.db, op_name, Some(&patch), pending)?;
+            // 退出代理（不是退出 CC Switch 时的分离）回到直连的官方卡：和切换一样把它绑的
+            // 账号换进 Claude Code 的登录（代理期间可能改过这张卡绑的号）
+            let login_target = direct.as_ref().filter(|_| op_name == op::EXIT);
+            crate::services::provider::claude_official::with_login_switch(login_target, || {
+                claude_direct::run(&state.db, op_name, Some(&patch), pending)
+            })?;
         }
         AppType::Codex => {
             let owner = codex_owner(&before, owner.as_ref());
@@ -412,6 +419,28 @@ fn write_direct(state: &AppState, app: &AppType, detach: bool) -> Result<(), App
     Ok(())
 }
 /// 预选代理路由；处于直连时不启动服务，也不改客户端配置。
+/// 拿这个应用的切换锁，并先补完上一次没写完的配置文件操作（补不完就什么都不做）。
+pub(crate) async fn lock_settled(
+    state: &AppState,
+    app: &AppType,
+) -> Result<tokio::sync::OwnedMutexGuard<()>, AppError> {
+    let guard = state.proxy_service.lock_switch_for_app(app.as_str()).await;
+    operation::settle(&state.db, app.as_str()).map_err(|error| {
+        AppError::localized(
+            "mode.unsettled",
+            format!(
+                "{} 上一次写配置文件的操作没做完，现在也补不完：{error}。本次什么都没做，请排查后重试",
+                app.as_str()
+            ),
+            format!(
+                "The previous write to {}'s config files is unfinished and cannot be completed now: {error}. Nothing was done; fix the cause and retry",
+                app.as_str()
+            ),
+        )
+    })?;
+    Ok(guard)
+}
+
 pub async fn set_route(state: &AppState, app: &AppType, id: &str) -> Result<(), AppError> {
     let _service = SERVICE_LOCK.lock().await;
     set_route_locked(state, app, id).await

@@ -38,6 +38,9 @@ vi.mock("@/components/providers/KimiAccountLogin", () => ({
   KimiAccountLogin: () => <div />,
 }));
 
+vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
+  ClaudeOfficialSection: () => <div />,
+}));
 vi.mock("@/components/providers/forms/AgyOAuthSection", () => ({
   AgyOAuthSection: () => <div />,
   useAgyAccountSupported: () => false,

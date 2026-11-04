@@ -1282,6 +1282,30 @@ pub(crate) fn open_provider_terminal_internal(
         return Ok(true);
     }
 
+    if app_type == AppType::Claude {
+        use crate::services::provider::claude_official::{terminal_account, AccountTerminal};
+        let config_dir = match terminal_account(provider).map_err(|e| e.to_string())? {
+            Some(AccountTerminal::Dir(config_dir)) => {
+                crate::services::claude_account::sync_shared(&config_dir);
+                Some(Some(config_dir))
+            }
+            Some(AccountTerminal::Default) => {
+                crate::services::provider::claude_official::ensure_default_terminal_is_official(
+                    &state.db,
+                )
+                .map_err(|e| e.to_string())?;
+                Some(None)
+            }
+            None => None,
+        };
+        if let Some(config_dir) = config_dir {
+            let command = claude_account_launch_command(&provider.id, config_dir)?;
+            launch_terminal_command(&command, launch_cwd.as_deref(), None)
+                .map_err(|e| format!("启动终端失败: {e}"))?;
+            return Ok(true);
+        }
+    }
+
     let env_vars = extract_env_vars_from_config(&provider.settings_config, &app_type);
     launch_terminal_with_env(env_vars, &provider_id, launch_cwd.as_deref())
         .map_err(|e| format!("启动终端失败: {e}"))?;
@@ -1360,7 +1384,7 @@ pub(crate) fn open_agy_terminal(
     if let Some(conversation) = conversation {
         args.push(format!("--conversation={conversation}"));
     }
-    let command = agy_launch_command(&provider.id, &args, &launch.env)?;
+    let command = env_launch_command("agy", &provider.id, &args, &launch.env)?;
     launch_terminal_command(&command, cwd, None).map_err(|e| format!("启动终端失败: {e}"))
 }
 
@@ -1378,7 +1402,8 @@ pub(crate) fn open_agy_resume_terminal(
 /// macOS / Linux：环境变量写进只有本人可读的临时文件，命令里先读入再删掉（启动脚本本身是 0755，
 /// 不能直接写 Key）。
 #[cfg(not(target_os = "windows"))]
-fn agy_launch_command(
+fn env_launch_command(
+    program: &str,
     provider_id: &str,
     args: &[String],
     env: &[(&'static str, Option<String>)],
@@ -1394,7 +1419,7 @@ fn agy_launch_command(
             .take(32)
             .collect();
         let env_file = std::env::temp_dir().join(format!(
-            "cc_switch_agy_env_{safe_id}_{}_{}.sh",
+            "cc_switch_{program}_env_{safe_id}_{}_{}.sh",
             std::process::id(),
             chrono::Utc::now().timestamp_millis()
         ));
@@ -1412,13 +1437,13 @@ fn agy_launch_command(
             .create_new(true)
             .mode(0o600)
             .open(&env_file)
-            .map_err(|e| format!("写入 agy 环境文件失败: {e}"))?;
+            .map_err(|e| format!("写入 {program} 环境文件失败: {e}"))?;
         file.write_all(content.as_bytes())
-            .map_err(|e| format!("写入 agy 环境文件失败: {e}"))?;
+            .map_err(|e| format!("写入 {program} 环境文件失败: {e}"))?;
         let path = shell_single_quote(&env_file.to_string_lossy());
         command.push_str(&format!(". {path}; rm -f {path}; "));
     }
-    command.push_str("agy");
+    command.push_str(program);
     for arg in args {
         command.push(' ');
         command.push_str(&shell_single_quote(arg));
@@ -1428,14 +1453,15 @@ fn agy_launch_command(
 
 /// Windows：环境变量用 `set` 写进 %TEMP% 下的启动批处理（运行后自删），只作用于这个终端。
 #[cfg(target_os = "windows")]
-fn agy_launch_command(
+fn env_launch_command(
+    program: &str,
     _provider_id: &str,
     args: &[String],
     env: &[(&'static str, Option<String>)],
 ) -> Result<String, String> {
     let batch_value = |value: &str| -> Result<String, String> {
         if value.contains('"') || value.contains('\r') || value.contains('\n') {
-            return Err("Antigravity 启动参数不能包含引号或换行".to_string());
+            return Err(format!("{program} 启动参数不能包含引号或换行"));
         }
         Ok(value.replace('%', "%%"))
     };
@@ -1446,12 +1472,32 @@ fn agy_launch_command(
             None => lines.push(format!("set \"{key}=\"")),
         }
     }
-    let mut command = String::from("agy");
+    let mut command = String::from(program);
     for arg in args {
         command.push_str(&format!(" \"{}\"", batch_value(arg)?));
     }
     lines.push(command);
     Ok(lines.join("\r\n"))
+}
+
+/// Claude 官方卡绑了账号：`CLAUDE_CONFIG_DIR` 放在启动环境里（不用 `--settings`）。
+/// 变量在进程启动前就设好，Claude Code 一开始预取钥匙串读的就是这个账号的条目
+/// （写在 settings 里的话 macOS 上前 30 秒会用默认登录的令牌）。会把它指向别处的变量一并清掉；
+/// `None` 是账号正在默认槽位里，去掉 `CLAUDE_CONFIG_DIR` 用默认目录。
+fn claude_account_launch_command(
+    provider_id: &str,
+    config_dir: Option<std::path::PathBuf>,
+) -> Result<String, String> {
+    let mut env: Vec<(&'static str, Option<String>)> =
+        crate::services::claude_account::login::CLAUDE_ACCOUNT_UNSET
+            .iter()
+            .map(|name| (*name, None))
+            .collect();
+    env.push((
+        "CLAUDE_CONFIG_DIR",
+        config_dir.map(|dir| dir.to_string_lossy().into_owned()),
+    ));
+    env_launch_command("claude", provider_id, &[], &env)
 }
 
 pub(crate) fn launch_terminal_command_internal(

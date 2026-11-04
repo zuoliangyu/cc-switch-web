@@ -1,10 +1,11 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   CircleAlert,
   Copy,
   ExternalLink,
+  Link2,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -24,6 +25,7 @@ import { ManagedAccountUsage } from "@/components/providers/forms/ManagedAccount
 import type { ManagedAccountUser } from "@/lib/managedAccountUsage";
 import type { ManagedAuthDeviceCodeResponse } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { readAuthOpenBrowser } from "@/lib/authLoginLink";
 import { settingsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ProviderIcon } from "@/components/ProviderIcon";
@@ -59,6 +61,8 @@ export interface GroupLoginFlow {
   error: string | null;
   onCancel: () => void;
   onRetry: () => void;
+  /** 等待块里浏览器说明下面的附加内容（Claude 官方账号：浏览器回不到服务端本机时粘贴代码） */
+  extra?: React.ReactNode;
 }
 
 interface ManagedAccountsGroupProps {
@@ -85,8 +89,13 @@ interface ManagedAccountsGroupProps {
   loginControl?: React.ReactNode;
   /** ⋯ 里有没有「重新登录」（Copilot 没有） */
   canReauth: boolean;
+  /** 只给「需要重新登录」的账号显示（Claude 官方账号：重新登录会替换掉原来的登录，凭据好好的时候不该点到） */
+  reauthOnlyWhenExpired?: boolean;
   onReauth: (accountId: string) => void;
-  onSetDefault: (accountId: string) => void;
+  /** 不传就没有「设为默认」（Claude 官方账号：用哪个号由卡片决定） */
+  onSetDefault?: (accountId: string) => void;
+  /** 不能登录的原因（Claude 官方账号：配置目录在 WSL 里）：「添加账号」「重新登录」置灰，原因显示在标题行下面 */
+  loginDisabledReason?: string;
   settingDefault: boolean;
   onRemove: (accountId: string, login: string) => void;
   removing: boolean;
@@ -122,8 +131,10 @@ export function ManagedAccountsGroup({
   chooser,
   loginControl,
   canReauth,
+  reauthOnlyWhenExpired = false,
   onReauth,
   onSetDefault,
+  loginDisabledReason,
   settingDefault,
   onRemove,
   defaultLabel,
@@ -137,6 +148,8 @@ export function ManagedAccountsGroup({
   // 正在重新登录哪个账号（等待块的标题、成功后的 toast 用）
   const [reauthTarget, setReauthTarget] = useState<string | null>(null);
   const busy = login.starting || login.polling;
+  const blockedId = `auth-blocked-${slug}`;
+  const loginBlocked = Boolean(loginDisabledReason);
 
   const targetAccount = reauthTarget
     ? accounts.find((account) => account.id === reauthTarget)
@@ -163,13 +176,13 @@ export function ManagedAccountsGroup({
   }, [login.pollingState, name, t, targetAccount]);
 
   const add = () => {
-    if (busy) return;
+    if (busy || loginBlocked) return;
     setReauthTarget(null);
     onAdd();
   };
 
   const reauth = (accountId: string) => {
-    if (busy) return;
+    if (busy || loginBlocked) return;
     setReauthTarget(accountId);
     onReauth(accountId);
   };
@@ -199,6 +212,29 @@ export function ManagedAccountsGroup({
   const openPage = () => {
     const uri = login.deviceCode?.verification_uri;
     if (uri) void settingsApi.openExternal(uri);
+  };
+
+  // 这次登录开始时有没有打开浏览器（授权中心的开关），换一次登录链接才重新读：
+  // 中途拨开关不改这次的说明
+  const verificationUri = login.deviceCode?.verification_uri;
+  const linkOnly = useMemo(
+    () => Boolean(verificationUri) && !readAuthOpenBrowser(),
+    [verificationUri],
+  );
+
+  const copyLink = async () => {
+    const uri = login.deviceCode?.verification_uri;
+    if (!uri) return;
+    try {
+      await copyText(uri);
+      toast.success(
+        t("authCenter.pending.linkCopied", {
+          defaultValue: "登录链接已复制。",
+        }),
+      );
+    } catch (e) {
+      console.debug("[AuthCenter] Failed to copy login link:", e);
+    }
   };
 
   const ready = status === "ready";
@@ -238,8 +274,10 @@ export function ManagedAccountsGroup({
             variant="outline"
             size="sm"
             className="gap-1.5 pe-3 ps-2.5"
-            aria-disabled={busy || undefined}
-            aria-describedby={busy ? pendingId : undefined}
+            aria-disabled={busy || loginBlocked || undefined}
+            aria-describedby={
+              busy ? pendingId : loginBlocked ? blockedId : undefined
+            }
             onClick={add}
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -249,6 +287,11 @@ export function ManagedAccountsGroup({
       </div>
 
       {notice && <div className="px-3 pb-3">{notice}</div>}
+      {loginDisabledReason && (
+        <div id={blockedId} className="px-3 pb-3">
+          <Notice tone="warning" title={loginDisabledReason} />
+        </div>
+      )}
 
       {status === "loading" && (
         <div className="flex items-center gap-2 border-t border-border py-3.5 pe-3 ps-4 text-xs text-muted-foreground">
@@ -284,9 +327,12 @@ export function ManagedAccountsGroup({
           <AccountRow
             key={account.id}
             account={account}
-            canReauth={canReauth}
+            canReauth={
+              canReauth && (!reauthOnlyWhenExpired || account.needsReauth)
+            }
             busy={busy}
             pendingId={pendingId}
+            loginBlockedId={loginBlocked ? blockedId : undefined}
             settingDefault={settingDefault}
             removing={removing}
             onReauth={reauth}
@@ -332,25 +378,46 @@ export function ManagedAccountsGroup({
               // 浏览器登录（Antigravity）没有验证码：说明一句，并可重新打开登录页
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="min-w-0 flex-1">
-                  {t("authCenter.pending.browserNote", {
-                    defaultValue:
-                      "已在浏览器打开 {{service}} 的登录页，登录并同意授权后这里会自动更新。",
-                    service: name,
-                  })}
+                  {linkOnly
+                    ? t("authCenter.pending.linkNote", {
+                        defaultValue:
+                          "登录链接已复制。在你要用的浏览器里打开，登录并同意授权后这里会自动更新。",
+                      })
+                    : t("authCenter.pending.browserNote", {
+                        defaultValue:
+                          "已在浏览器打开 {{service}} 的登录页，登录并同意授权后这里会自动更新。",
+                        service: name,
+                      })}
                 </span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="gap-1"
-                  onClick={openPage}
+                  onClick={() => void copyLink()}
                 >
-                  {t("authCenter.pending.reopen", {
-                    defaultValue: "重新打开登录页",
+                  <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {t("authCenter.pending.copyLink", {
+                    defaultValue: "复制登录链接",
                   })}
                 </Button>
+                {!linkOnly && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                    onClick={openPage}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("authCenter.pending.reopen", {
+                      defaultValue: "重新打开登录页",
+                    })}
+                  </Button>
+                )}
               </div>
             )}
+            {login.deviceCode && !login.deviceCode.user_code && login.extra}
             {login.deviceCode?.user_code && (
               <>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -380,29 +447,57 @@ export function ManagedAccountsGroup({
                     </Button>
                   </HoverTip>
                   <HoverTip
-                    content={t("authCenter.pending.open", {
-                      defaultValue: "打开授权页面",
+                    content={t("authCenter.pending.copyLink", {
+                      defaultValue: "复制登录链接",
                     })}
                   >
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      aria-label={t("authCenter.pending.open", {
-                        defaultValue: "打开授权页面",
+                      aria-label={t("authCenter.pending.copyLink", {
+                        defaultValue: "复制登录链接",
                       })}
-                      onClick={openPage}
+                      onClick={() => void copyLink()}
                     >
-                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      <Link2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </Button>
                   </HoverTip>
+                  {!linkOnly && (
+                    <HoverTip
+                      content={t("authCenter.pending.open", {
+                        defaultValue: "打开授权页面",
+                      })}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("authCenter.pending.open", {
+                          defaultValue: "打开授权页面",
+                        })}
+                        onClick={openPage}
+                      >
+                        <ExternalLink
+                          className="h-3.5 w-3.5"
+                          strokeWidth={1.5}
+                        />
+                      </Button>
+                    </HoverTip>
+                  )}
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {t("authCenter.pending.note", {
-                    defaultValue:
-                      "已在浏览器打开授权页面，完成后这里会自动更新。注意 {{service}} 的使用条款。",
-                    service: name,
-                  })}
+                  {linkOnly
+                    ? t("authCenter.pending.linkCodeNote", {
+                        defaultValue:
+                          "登录链接已复制。在你要用的浏览器里打开并输入验证码，完成后这里会自动更新。注意 {{service}} 的使用条款。",
+                        service: name,
+                      })
+                    : t("authCenter.pending.note", {
+                        defaultValue:
+                          "已在浏览器打开授权页面，完成后这里会自动更新。注意 {{service}} 的使用条款。",
+                        service: name,
+                      })}
                 </span>
               </>
             )}
@@ -481,10 +576,12 @@ interface AccountRowProps {
   canReauth: boolean;
   busy: boolean;
   pendingId: string;
+  /** 登录被挡住时（WSL）说明原因的元素 id */
+  loginBlockedId?: string;
   settingDefault: boolean;
   removing: boolean;
   onReauth: (accountId: string) => void;
-  onSetDefault: (accountId: string) => void;
+  onSetDefault?: (accountId: string) => void;
   onRemove: (accountId: string, login: string) => void;
   defaultLabel?: string;
   setDefaultLabel?: string;
@@ -495,6 +592,7 @@ function AccountRow({
   canReauth,
   busy,
   pendingId,
+  loginBlockedId,
   settingDefault,
   removing,
   onReauth,
@@ -505,7 +603,8 @@ function AccountRow({
 }: AccountRowProps) {
   const { t } = useTranslation();
   const subId = useId();
-  const canSetDefault = !account.isDefault && !account.needsReauth;
+  const canSetDefault =
+    onSetDefault !== undefined && !account.isDefault && !account.needsReauth;
   const separator = " · ";
 
   return (
@@ -563,8 +662,8 @@ function AccountRow({
           type="button"
           variant="outline"
           size="sm"
-          aria-disabled={busy || undefined}
-          aria-describedby={busy ? pendingId : subId}
+          aria-disabled={busy || Boolean(loginBlockedId) || undefined}
+          aria-describedby={busy ? pendingId : (loginBlockedId ?? subId)}
           onClick={() => onReauth(account.id)}
         >
           {t("authCenter.reauth", { defaultValue: "重新登录" })}
@@ -594,7 +693,7 @@ function AccountRow({
           {canSetDefault && (
             <DropdownMenuItem
               disabled={settingDefault}
-              onSelect={() => onSetDefault(account.id)}
+              onSelect={() => onSetDefault?.(account.id)}
               className="h-[30px] rounded-md px-2.5 text-sm"
             >
               {setDefaultLabel ??
@@ -603,7 +702,7 @@ function AccountRow({
           )}
           {canReauth && (
             <DropdownMenuItem
-              disabled={busy}
+              disabled={busy || Boolean(loginBlockedId)}
               onSelect={() => onReauth(account.id)}
               className="min-h-[30px] flex-col items-start justify-center gap-0 rounded-md px-2.5 text-sm data-[disabled]:opacity-100"
             >

@@ -2,6 +2,9 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 
+vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
+  ClaudeOfficialSection: () => <div data-testid="claude" />,
+}));
 vi.mock("@/components/providers/forms/CopilotAuthSection", () => ({
   CopilotAuthSection: () => <div data-testid="copilot" />,
 }));

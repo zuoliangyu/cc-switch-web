@@ -212,6 +212,7 @@ import {
   addWebProviderToLiveConfig,
   kimiOAuthWeb,
   agyWeb,
+  claudeAccountWeb,
   dshWeb,
   fetchWebModelsDev,
   saveWebDailyMemoryFile,
@@ -567,6 +568,17 @@ export async function invoke<T>(
       )) as T;
     case "agy_account_quota":
       return agyWeb.quota<T>(args?.accountId as string);
+    case "claude_account_submit_paste":
+      return claudeAccountWeb.submitPaste<T>(
+        args?.flowId as string,
+        args?.pasted as string,
+      );
+    case "get_claude_account_quota":
+      return claudeAccountWeb.quota<T>(args?.accountId as string);
+    case "get_claude_default_plan":
+      return claudeAccountWeb.defaultPlan<T>();
+    case "get_claude_login_switch":
+      return claudeAccountWeb.loginSwitch<T>();
     case "agy_account_is_running":
       return agyWeb.running<T>();
     case "agy_account_supported":

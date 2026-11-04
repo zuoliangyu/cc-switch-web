@@ -235,10 +235,18 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const providerCredentials = getProviderCredentials();
   const isBoundCodexOfficial =
     resolveCodexOfficialIdentity(appId, provider) === "managed_account";
+  // 绑了授权中心账号的 Claude 官方卡：额度按这个号查（同 ProviderCard 的 claudeBoundAccountId）
+  const claudeBoundAccountId =
+    appId === "claude" && provider.category === "official"
+      ? resolveManagedAccountId(provider.meta, "claude_official")?.trim() ||
+        null
+      : null;
+  // 绑了账号的官方卡（Codex / Claude）只用官方订阅额度模板，没保存过开关时默认开
+  const isBoundOfficial = isBoundCodexOfficial || Boolean(claudeBoundAccountId);
 
   const [script, setScript] = useState<UsageScript>(() => {
     const savedScript = provider.meta?.usage_script;
-    if (isBoundCodexOfficial) {
+    if (isBoundOfficial) {
       return {
         enabled: savedScript?.enabled ?? true,
         language: "javascript",
@@ -349,7 +357,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT) {
         return TEMPLATE_TYPES.GITHUB_COPILOT;
       }
-      if (isBoundCodexOfficial) {
+      if (isBoundOfficial) {
         return TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
       }
       // 优先使用保存的 templateType
@@ -441,7 +449,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           provider.meta,
           PROVIDER_TYPES.CODEX_OAUTH,
         );
-        const quota = await subscriptionApi.getCodexOauthQuota(accountId);
+        const quota = claudeBoundAccountId
+          ? await subscriptionApi.getClaudeAccountQuota(claudeBoundAccountId)
+          : await subscriptionApi.getCodexOauthQuota(accountId);
         if (quota.success && quota.tiers.length > 0) {
           const summary = quota.tiers
             .map((tier) => `${tier.name}: ${Math.round(tier.utilization)}%`)
@@ -451,7 +461,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
             closeButton: true,
           });
           queryClient.setQueryData(
-            ["codex_oauth", "quota", accountId ?? "default"],
+            claudeBoundAccountId
+              ? ["claude_official", "quota", claudeBoundAccountId]
+              : ["codex_oauth", "quota", accountId ?? "default"],
             quota,
           );
         } else {
@@ -783,7 +795,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
                   if (isCopilotProvider) {
                     return name === TEMPLATE_TYPES.GITHUB_COPILOT;
                   }
-                  if (isBoundCodexOfficial) {
+                  if (isBoundOfficial) {
                     return name === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION;
                   }
                   return (

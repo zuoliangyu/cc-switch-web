@@ -95,7 +95,7 @@ fn resume_command(home: &Path, id: &str) -> Option<String> {
     #[cfg(not(windows))]
     let command = format!(
         "env KIMI_CODE_HOME={} kimi --session {id}",
-        crate::session_manager::terminal::shell_escape(&home.to_string_lossy())
+        super::utils::shell_escape(&home.to_string_lossy())
     );
     Some(command)
 }

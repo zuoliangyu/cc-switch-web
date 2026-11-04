@@ -1059,6 +1059,18 @@ export const agyWeb = {
     requestWithBody<T>("/api/providers/agy/models", "POST", payload),
 };
 
+/** Claude Code 官方订阅账号（`/api/auth/claude/*`）；加号、列表、删号走通用 `/api/auth/*` */
+export const claudeAccountWeb = {
+  submitPaste: <T>(flowId: string, pasted: string) =>
+    requestWithBody<T>("/api/auth/claude/paste", "POST", { flowId, pasted }),
+  quota: <T>(accountId: string) =>
+    requestJson<T>(
+      `/api/auth/claude/quota?accountId=${encodeURIComponent(accountId)}`,
+    ),
+  defaultPlan: <T>() => requestJson<T>("/api/auth/claude/default-plan"),
+  loginSwitch: <T>() => requestJson<T>("/api/auth/claude/login-switch"),
+};
+
 /** DeepSeek Harness 的 DeepSeek 账号（`/api/dsh/account*`）：浏览器登录，Web 与 Desktop 共用 */
 export const dshWeb = {
   status: <T>() => requestJson<T>("/api/dsh/account"),

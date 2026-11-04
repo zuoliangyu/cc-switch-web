@@ -210,6 +210,29 @@
         "oauthHint": "Google 官方使用 OAuth 个人认证，无需填写 API Key。首次使用时会自动打开浏览器进行登录。",
         "apiKeyPlaceholder": "请输入 Gemini API Key"
       },
+      "claudeAccount": {
+        "label": "登录方式",
+        "default": "跟随 Claude Code 登录",
+        "defaultDescription": "账号会随 Claude Code 当前登录变化",
+        "missing": "不在这台电脑上的账号",
+        "manage": "添加或管理 Claude 账号",
+        "helpTerminal": "设置里覆盖了 Claude 配置目录，切到这张卡不会切换 Claude Code 的登录，请从卡片「打开终端」使用选中的账号。",
+        "helpWsl": "Claude 配置目录在 WSL 里，暂不支持 Claude 账号，切到这张卡不会切换 Claude Code 的登录。",
+        "help": "切到这张卡后，Claude Code 的登录会实时换成选中的账号，正在运行的会话也一样。想同时用几个号，从卡片「打开终端」。",
+        "claudeAccount": "Claude 账号",
+        "reauthBadge": "需要重新登录",
+        "terminalHint": "从卡片打开终端使用",
+        "wslHint": "WSL 暂不支持",
+        "plan": {
+          "pro": "Pro",
+          "max": "Max",
+          "max5x": "Max 5x",
+          "max20x": "Max 20x",
+          "team": "Team",
+          "teamPremium": "Team 高级席位",
+          "enterprise": "Enterprise"
+        }
+      },
       "agy": {
         "account": "账号",
         "accountFollow": "跟随 agy 当前登录",
@@ -4031,7 +4054,10 @@
       "copilotHelp": "用于 Claude Code、Claude Desktop 的 GitHub Copilot 预设。没指定账号的供应商用「默认」账号。",
       "chatgptHelp": "用于 Claude Code、Claude Desktop 的 ChatGPT 预设，以及 Codex 官方登录绑定。没指定账号的供应商用「默认」账号。",
       "xaiHelp": "用于 Claude Code、Claude Desktop、Codex 的 xAI 预设。没指定账号的供应商用「默认」账号。",
-      "agyHelp": "Antigravity CLI（agy）的官方登录。agy 同时只能登录一个号，「切换」会把 agy 的登录换成选中的账号，之后新开的 agy 都用它。agy 里原来登着的号会自动收进这里，切走也不会丢。"
+      "agyHelp": "Antigravity CLI（agy）的官方登录。agy 同时只能登录一个号，「切换」会把 agy 的登录换成选中的账号，之后新开的 agy 都用它。agy 里原来登着的号会自动收进这里，切走也不会丢。",
+      "claudeHelpTerminal": "Claude Code 的官方订阅账号（Pro / Max / Team）。设置里覆盖了 Claude 配置目录，切卡不会切换 Claude Code 的登录；在官方卡上选一个账号，再从卡片「打开终端」使用。",
+      "claudeHelpWsl": "Claude Code 的官方订阅账号（Pro / Max / Team）。Claude 配置目录在 WSL 里时暂不支持，后续会跟进。",
+      "claudeHelp": "Claude Code 的官方订阅账号（Pro / Max / Team）。在 Claude 官方卡上选一个账号，切到这张卡后，Claude Code 的登录会实时换成这个号；想同时用几个号，从卡片「打开终端」。登录令牌只留在本机，不上传、不刷新、不登出。第一次切换会自动收进 Claude Code 现在登录的号；切号后 Remote Control 会断开，提示缓存要重建。"
     },
     "addAccount": "添加账号",
     "accountMenu": "{{login}} 的更多操作",
@@ -4062,7 +4088,10 @@
       "note": "已在浏览器打开授权页面，完成后这里会自动更新。注意 {{service}} 的使用条款。",
       "browserNote": "已在浏览器打开 {{service}} 的登录页，登录并同意授权后这里会自动更新。",
       "reopen": "重新打开登录页",
-      "linkCopied": "登录链接已复制。"
+      "copyLink": "复制登录链接",
+      "linkCopied": "登录链接已复制。",
+      "linkNote": "登录链接已复制。在你要用的浏览器里打开，登录并同意授权后这里会自动更新。",
+      "linkCodeNote": "登录链接已复制。在你要用的浏览器里打开并输入验证码，完成后这里会自动更新。注意 {{service}} 的使用条款。"
     },
     "toast": {
       "added": "已添加 {{service}} 账号。",
@@ -4085,6 +4114,25 @@
       "switched": "已切换，新开的 agy 会使用这个账号。",
       "switchedWhileRunning": "已切换。检测到 agy 正在运行：已打开的 agy 仍用原账号，还可能把原账号写回去，请退出后重新打开。",
       "reauthNote": "登录凭据已失效，切不过去"
+    },
+    "claude": {
+      "pasteSubmitted": "已提交，正在完成登录…",
+      "pasteToggle": "授权后没有回到这里？",
+      "pasteHint": "把授权后浏览器地址栏里的地址，或页面上显示的代码粘贴到这里。",
+      "pasteLabel": "授权代码或地址",
+      "pasteSubmit": "提交",
+      "reauthNote": "登录已失效，请重新登录",
+      "addedOn": "{{date}}添加",
+      "loginExpiresOn": "登录约在{{date}}过期，之后要重新登录",
+      "loginMaybeExpired": "登录可能已过期，切换前请重新登录",
+      "statusLoadFailed": "无法读取 Claude 账号，请重试。",
+      "empty": "还没有添加 Claude 账号。要在多个订阅账号之间切换时在这里登录。",
+      "removeNote": "只删除 CC Switch 为这个账号保存的登录，不会让它在其他地方退出；Claude Code 现在的登录（~/.claude）不受影响。绑定它的卡片会改用 Claude Code 现在的登录。",
+      "wslUnsupported": "Claude 配置目录在 WSL 里，暂不支持添加和切换 Claude 账号。"
+    },
+    "openBrowser": {
+      "title": "登录时自动打开浏览器",
+      "description": "关掉后只复制登录链接，由你自己选浏览器打开，适合用独立的浏览器环境管理多个账号。"
     }
   },
   "kimi": {

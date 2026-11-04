@@ -1160,6 +1160,47 @@ async fn agy_account_quota(
         .map_err(ApiError::internal)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeAccountPasteRequest {
+    flow_id: String,
+    pasted: String,
+}
+
+/// 浏览器回不到服务端本机时，把落地页地址或登录页上的代码交给正在等待的 `claude auth login`。
+async fn claude_account_submit_paste(
+    Json(payload): Json<ClaudeAccountPasteRequest>,
+) -> Result<Json<()>, ApiError> {
+    crate::commands::claude_account_submit_paste_internal(&payload.flow_id, &payload.pasted)
+        .await
+        .map(Json)
+        .map_err(ApiError::bad_request)
+}
+
+async fn claude_account_quota(
+    Query(query): Query<AgyAccountQuery>,
+) -> Result<Json<crate::services::subscription::ClaudeAccountQuota>, ApiError> {
+    crate::commands::get_claude_account_quota_internal(&query.account_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn claude_default_plan(
+) -> Result<Json<Option<crate::services::claude_account::AccountPlan>>, ApiError> {
+    crate::commands::get_claude_default_plan_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+async fn claude_login_switch() -> Result<Json<crate::commands::ClaudeLoginSwitchStatus>, ApiError> {
+    crate::commands::get_claude_login_switch_internal()
+        .await
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
 async fn agy_account_is_running() -> Result<Json<bool>, ApiError> {
     crate::commands::agy_account_is_running_internal()
         .await
@@ -3170,6 +3211,7 @@ async fn auth_poll_for_account(
     Json(payload): Json<AuthPollForAccountRequest>,
 ) -> Result<Json<Option<crate::commands::ManagedAuthAccount>>, ApiError> {
     let account = crate::commands::auth_poll_for_account_internal(
+        state.app_state.as_ref(),
         &payload.auth_provider,
         &payload.device_code,
         &state.app_state.proxy_service,
@@ -3241,6 +3283,7 @@ async fn auth_remove_account(
     Json(payload): Json<AuthAccountRequest>,
 ) -> Result<StatusCode, ApiError> {
     crate::commands::auth_remove_account_internal(
+        state.app_state.as_ref(),
         &payload.auth_provider,
         &payload.account_id,
         &state.copilot_auth_state,
@@ -3273,6 +3316,7 @@ async fn auth_logout(
     Json(payload): Json<AuthStartLoginRequest>,
 ) -> Result<StatusCode, ApiError> {
     crate::commands::auth_logout_internal(
+        state.app_state.as_ref(),
         &payload.auth_provider,
         &state.copilot_auth_state,
         &state.codex_oauth_state,
@@ -4786,6 +4830,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/auth/xai_oauth/models", get(fetch_xai_oauth_models))
         .route("/api/usage/models-dev", get(fetch_models_dev))
         .route("/api/auth/agy/quota", get(agy_account_quota))
+        .route("/api/auth/claude/paste", post(claude_account_submit_paste))
+        .route("/api/auth/claude/quota", get(claude_account_quota))
+        .route("/api/auth/claude/default-plan", get(claude_default_plan))
+        .route("/api/auth/claude/login-switch", get(claude_login_switch))
         .route("/api/auth/agy/running", get(agy_account_is_running))
         .route("/api/auth/agy/supported", get(agy_account_supported))
         .route("/api/providers/agy/models", post(get_agy_models))
@@ -5275,6 +5323,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
     println!("cc-switch web service listening on http://{bind_addr}");
 
     crate::mode::controller::startup(&app_state).await;
+    crate::commands::claude_account_startup(app_state.db.clone());
     crate::services::provider::codex_official_models::start_background_checks(
         app_state.as_ref().clone(),
     );

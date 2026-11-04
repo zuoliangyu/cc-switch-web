@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSection";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
@@ -9,6 +9,9 @@ import {
   AgyOAuthSection,
   useAgyAccountSupported,
 } from "@/components/providers/forms/AgyOAuthSection";
+import { ClaudeOfficialSection } from "@/components/providers/forms/ClaudeOfficialSection";
+import { Switch } from "@/components/ui/switch";
+import { useAuthOpenBrowser, writeAuthOpenBrowser } from "@/lib/authLoginLink";
 import type { ManagedAuthProvider } from "@/lib/api";
 
 interface AuthCenterPanelProps {
@@ -37,7 +40,42 @@ function findScrollContainer(element: HTMLElement): HTMLElement | null {
 }
 
 /**
- * 授权中心（v7 Auth 画板）：GitHub Copilot、ChatGPT、xAI 三组账号，一组一张卡片。
+ * 「登录时自动打开浏览器」：所有服务的登录共用。关掉后只复制登录链接，用户自己选浏览器打开
+ * （用独立浏览器环境管多个账号时，不让登录混进默认浏览器）。
+ */
+function OpenBrowserToggle() {
+  const { t } = useTranslation();
+  const openBrowser = useAuthOpenBrowser();
+  const titleId = useId();
+  const descriptionId = useId();
+  return (
+    <div className="flex shrink-0 items-center gap-4 rounded-xl border border-border bg-card py-3 pe-4 ps-4">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p id={titleId} className="m-0 text-sm font-medium text-foreground">
+          {t("authCenter.openBrowser.title", {
+            defaultValue: "登录时自动打开浏览器",
+          })}
+        </p>
+        <p id={descriptionId} className="m-0 text-xs text-muted-foreground">
+          {t("authCenter.openBrowser.description", {
+            defaultValue:
+              "关掉后只复制登录链接，由你自己选浏览器打开，适合用独立的浏览器环境管理多个账号。",
+          })}
+        </p>
+      </div>
+      <Switch
+        checked={openBrowser}
+        onCheckedChange={writeAuthOpenBrowser}
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+      />
+    </div>
+  );
+}
+
+/**
+ * 授权中心：Claude 官方账号、GitHub Copilot、ChatGPT、xAI、Kimi Code、DeepSeek Harness，一组一张卡片；
+ * 服务端支持时另有 Antigravity 一组（切 agy 的官方登录，目前只实现了 macOS 钥匙串）。
  * 侧栏的「授权中心」页和供应商表单里「管理账号」打开的全屏页共用。
  */
 export function AuthCenterPanel({
@@ -50,6 +88,7 @@ export function AuthCenterPanel({
   const codexOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const xaiOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const agyOauthSectionRef = useRef<HTMLDivElement | null>(null);
+  const claudeOfficialSectionRef = useRef<HTMLDivElement | null>(null);
   const showAgy = useAgyAccountSupported();
 
   useEffect(() => {
@@ -58,13 +97,15 @@ export function AuthCenterPanel({
     if (!root) return;
 
     const sectionRef =
-      authScrollTarget === "github_copilot"
-        ? copilotSectionRef
-        : authScrollTarget === "codex_oauth"
-          ? codexOauthSectionRef
-          : authScrollTarget === "agy_oauth"
-            ? agyOauthSectionRef
-            : xaiOauthSectionRef;
+      authScrollTarget === "claude_official"
+        ? claudeOfficialSectionRef
+        : authScrollTarget === "github_copilot"
+          ? copilotSectionRef
+          : authScrollTarget === "codex_oauth"
+            ? codexOauthSectionRef
+            : authScrollTarget === "agy_oauth"
+              ? agyOauthSectionRef
+              : xaiOauthSectionRef;
 
     const target = sectionRef.current;
     const container = findScrollContainer(root);
@@ -144,6 +185,11 @@ export function AuthCenterPanel({
           {t("settings.authCenter.description")}
         </p>
       )}
+      <OpenBrowserToggle />
+      {/* Claude 官方账号在服务端跑 `claude auth login`：浏览器回不到服务端本机时，登录块里可粘贴代码 */}
+      <div ref={claudeOfficialSectionRef}>
+        <ClaudeOfficialSection helpSide="bottom" />
+      </div>
       <div ref={copilotSectionRef}>
         <CopilotAuthSection />
       </div>

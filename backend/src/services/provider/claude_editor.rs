@@ -477,13 +477,16 @@ pub(crate) fn write_live(
     let target = key_fields
         .as_ref()
         .map(|write| ClaudeProjection::of(&write.target.settings_config));
+    // 改了当前卡绑的账号（或新增的第一张就是绑号卡）：和切换一样先换登录，写失败时换回去
+    let login_target = key_fields.as_ref().map(|write| write.target);
     let key_patch = key_fields
+        .as_ref()
         .map(|write| {
             let prev = claude_direct::previous_projection(db, write.prev)?;
-            Ok::<_, AppError>(direct_patch(
-                prev.as_ref(),
-                target.as_ref().expect("target"),
-            ))
+            let mut patch = direct_patch(prev.as_ref(), target.as_ref().expect("target"));
+            // 和切换一样：删掉以前开发版写进去的账号目录
+            super::claude_official::strip_from_patch(&mut patch);
+            Ok::<_, AppError>(patch)
         })
         .transpose()?;
     let patch = EditorPatch {
@@ -493,21 +496,28 @@ pub(crate) fn write_live(
     };
 
     // 关键字段的补丁是按调用方读到的行算的：先补完上一次的操作。
-    AppWrite::begin(db, AppType::Claude.as_str())?.run(
-        if pointer.is_some() {
-            op::SWITCH
-        } else {
-            op::APPLY
-        },
-        &[FileChange {
-            file: claude_direct::settings_file(),
-            patch: &patch,
-        }],
-        target
-            .as_ref()
-            .map(|target| claude_direct::recorded_target(pointer.clone(), target))
-            .unwrap_or_else(|| PendingTarget::pointer(pointer)),
-    )?;
+    super::claude_official::with_login_switch(login_target, || {
+        AppWrite::begin(db, AppType::Claude.as_str()).and_then(|write| {
+            write.run(
+                if pointer.is_some() {
+                    op::SWITCH
+                } else {
+                    op::APPLY
+                },
+                &[FileChange {
+                    file: claude_direct::settings_file(),
+                    patch: &patch,
+                }],
+                target
+                    .as_ref()
+                    .map(|target| claude_direct::recorded_target(pointer.clone(), target))
+                    .unwrap_or_else(|| PendingTarget::pointer(pointer)),
+            )
+        })
+    })?;
+    // 账号目录里的设置是默认 settings.json 的镜像：写完再同步，编辑器里改的 hooks、
+    // permissions 才到得了正在用的账号（切换路径上的同步在写入之前，读到的是旧内容）
+    crate::services::claude_account::sync_all_shared(&crate::config::get_app_config_dir());
     Ok(())
 }
 

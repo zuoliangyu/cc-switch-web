@@ -4736,6 +4736,35 @@ pub(crate) fn run_detected_tool_command_with_timeout(
     }
 }
 
+/// 按已知路径运行一个程序并收集输出（固定参数、空 stdin、超时后连子进程一起结束），
+/// 不做工具定位：给「不在 PATH 上、但知道装在哪」的兜底用，比如 Codex 桌面版自带的 CLI。
+pub(crate) fn run_program_with_timeout(
+    program: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+    working_dir: &Path,
+) -> Result<std::process::Output, String> {
+    use std::process::{Command, Stdio};
+
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(target_os = "windows"))]
+    isolate_child_process_group(&mut cmd);
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to run {}: {e}", program.display()))?;
+    wait_child_output(child, CommandDeadline::from_timeout(Some(timeout)))
+}
+
 /// 构造运行本机工具默认入口的命令（定位规则和 PATH 补全同 [`run_detected_tool_command_with_timeout`]），
 /// 不设 stdio、不等待：给要自己管子进程的调用方用（比如长时间运行、要往 stdin 写东西的登录）。
 /// `timeout` 只约束定位工具这一步。工具配置在 WSL 里时报错。

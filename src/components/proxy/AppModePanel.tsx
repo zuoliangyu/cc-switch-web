@@ -136,6 +136,11 @@ export function AppModePanel({
       {state.data.aggregation.notice && (
         <p role="status" className="text-sm text-muted-foreground">
           {t(`webMode.notice.${state.data.aggregation.notice}`)}
+          {state.data.aggregation.noticeReasons?.map((reason) => (
+            <span key={reason} className="block">
+              {t(`webMode.noticeReason.${reason}`)}
+            </span>
+          ))}
         </p>
       )}
       {state.data.aggregation.staleClients && (

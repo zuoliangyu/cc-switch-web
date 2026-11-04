@@ -34,6 +34,7 @@ use serde_json::Value;
 
 use crate::codex_config::{
     extract_codex_auth_user_identity, load_codex_bundled_models, normalize_codex_native_rows,
+    CodexBundledModelsError,
 };
 use crate::live::engine::DeviceStore;
 use crate::services::subscription::{
@@ -62,17 +63,22 @@ impl OfficialLogin {
     /// 从登录 JSON 取：要有有效的 access token、工作区 ID 和稳定的用户身份。取不到稳定
     /// 用户身份（没有 id_token，或里面没有 `sub`）时不拉取，和 Codex「身份不可用就不复用
     /// 缓存」同一取向。
-    pub fn of(auth: &Value) -> Option<Self> {
+    pub fn of(auth: &Value) -> Result<Self, OfficialSkip> {
         let (access_token, account_id, status, _) = parse_codex_credentials_json(&auth.to_string());
-        if !matches!(status, CredentialStatus::Valid) {
-            return None;
+        match status {
+            CredentialStatus::Valid => {}
+            CredentialStatus::Expired => return Err(OfficialSkip::LoginStale),
+            _ => return Err(OfficialSkip::NoLogin),
         }
-        let access_token = access_token.filter(|token| !token.trim().is_empty())?;
+        let access_token = access_token
+            .filter(|token| !token.trim().is_empty())
+            .ok_or(OfficialSkip::NoLogin)?;
         let account_id = account_id
             .map(|id| id.trim().to_string())
-            .filter(|id| !id.is_empty())?;
-        let user = extract_codex_auth_user_identity(auth)?;
-        Some(Self {
+            .filter(|id| !id.is_empty())
+            .ok_or(OfficialSkip::LoginIncomplete)?;
+        let user = extract_codex_auth_user_identity(auth).ok_or(OfficialSkip::LoginIncomplete)?;
+        Ok(Self {
             identity: format!("{account_id}|{user}"),
             access_token,
             account_id,
@@ -98,7 +104,7 @@ pub(crate) type FetchFn = dyn Fn(&OfficialLogin, &str, Option<&str>) -> Fetch + 
 pub(crate) struct Env {
     pub codex_version: Box<dyn Fn() -> Option<String> + Send + Sync>,
     pub fetch: Box<FetchFn>,
-    pub bundled: Box<dyn Fn() -> Option<Vec<Value>> + Send + Sync>,
+    pub bundled: Box<dyn Fn() -> Result<Vec<Value>, BundledSkip> + Send + Sync>,
     pub keychain: Box<dyn Fn() -> CodexKeychainLogin + Send + Sync>,
     /// Unix 秒。
     pub now: Box<dyn Fn() -> u64 + Send + Sync>,
@@ -111,7 +117,15 @@ impl Env {
                 crate::commands::local_tool_version("codex").filter(|v| usable_version(v))
             }),
             fetch: Box::new(fetch_models),
-            bundled: Box::new(load_codex_bundled_models),
+            bundled: Box::new(|| {
+                load_codex_bundled_models().map_err(|error| {
+                    log::warn!("读取 Codex 自带的模型列表失败: {error}");
+                    match error {
+                        CodexBundledModelsError::NoCli => BundledSkip::NoCli,
+                        CodexBundledModelsError::Failed(_) => BundledSkip::CliFailed,
+                    }
+                })
+            }),
             keychain: Box::new(crate::services::subscription::read_codex_keychain_login),
             now: Box::new(|| {
                 SystemTime::now()
@@ -148,6 +162,9 @@ pub(crate) fn reset_test_env() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     CLIENT_BEHIND.store(false, Ordering::SeqCst);
+    *last_source_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 }
 
 /// 服务端按版本过滤列表：报低了少模型（`0.60.0` 返回 0 条），报高了会列出本机驱动不了的
@@ -194,7 +211,12 @@ fn fetch_models(login: &OfficialLogin, version: &str, etag: Option<&str>) -> Fet
             }
             let response = match request.send().await {
                 Ok(response) => response,
-                Err(error) => return Fetch::Failed(format!("网络错误: {error}")),
+                Err(error) => {
+                    return Fetch::Failed(format!(
+                        "网络错误: {}",
+                        crate::proxy::error::describe_reqwest_error(error)
+                    ))
+                }
             };
             // 被重定向到别处（登录页之类）不算数。
             if response.url().host_str() != Some("chatgpt.com") {
@@ -215,7 +237,14 @@ fn fetch_models(login: &OfficialLogin, version: &str, etag: Option<&str>) -> Fet
             let bytes = match response.bytes().await {
                 Ok(bytes) if bytes.len() <= MAX_BODY_BYTES => bytes,
                 Ok(_) => return Fetch::Failed("响应过大".to_string()),
-                Err(error) => return Fetch::Failed(format!("读取响应失败: {error}")),
+                // reqwest 把读响应体时的任何错误（超时、连接被断开）都报成「error decoding
+                // response body」，真正的原因在原因链里。
+                Err(error) => {
+                    return Fetch::Failed(format!(
+                        "读取响应失败: {}",
+                        crate::proxy::error::describe_reqwest_error(error)
+                    ))
+                }
             };
             match serde_json::from_slice::<Value>(&bytes)
                 .ok()
@@ -315,12 +344,92 @@ impl NativeRows {
     }
 }
 
-/// 最近一次切换用的是哪种来源（界面提示用）。
+/// 没用上官方列表的原因（界面提示和日志用）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OfficialSkip {
+    /// 操作之后 Codex 没有能用的 ChatGPT 登录（没登录、用 API Key 登录、钥匙串读不出、
+    /// 登录只存在内存里）。
+    NoLogin,
+    /// 登录超过 8 天没刷新，access token 多半已过期，等 Codex 自己刷新。
+    LoginStale,
+    /// 登录里缺工作区 ID 或用户身份（`sub`）。
+    LoginIncomplete,
+    /// 拿不到本机 Codex 的版本（PATH 上没有 `codex`，也还没有线程记录）。
+    NoVersion,
+    /// 联网拉取失败（网络、HTTP 错误、被重定向）。
+    FetchFailed,
+    /// 拉到了，但列表不合格（缺必填字段或指令字段）。
+    InvalidList,
+}
+
+impl OfficialSkip {
+    /// 给前端的原因码（`provider.officialModelsReason.<码>`）。
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::NoLogin => "noLogin",
+            Self::LoginStale => "loginStale",
+            Self::LoginIncomplete => "loginIncomplete",
+            Self::NoVersion => "noVersion",
+            Self::FetchFailed => "fetchFailed",
+            Self::InvalidList => "invalidList",
+        }
+    }
+}
+
+impl std::fmt::Display for OfficialSkip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoLogin => "没有能用的 ChatGPT 登录",
+            Self::LoginStale => "登录超过 8 天没有刷新",
+            Self::LoginIncomplete => "登录里缺工作区 ID 或用户身份",
+            Self::NoVersion => "拿不到本机 Codex 的版本",
+            Self::FetchFailed => "拉取失败",
+            Self::InvalidList => "列表不合格",
+        })
+    }
+}
+
+/// 没用上 Codex 自带列表的原因。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BundledSkip {
+    /// 本机找不到 Codex 命令行。
+    NoCli,
+    /// 找到了命令行，但没跑出列表。
+    CliFailed,
+    /// 跑出来了，但不合格或者没有一条能选的模型。
+    NothingUsable,
+}
+
+impl BundledSkip {
+    /// 给前端的原因码（`provider.officialModelsReason.<码>`）。
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::NoCli => "noCli",
+            Self::CliFailed => "cliFailed",
+            Self::NothingUsable => "nothingUsable",
+        }
+    }
+}
+
+impl std::fmt::Display for BundledSkip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoCli => "找不到 Codex 命令行",
+            Self::CliFailed => "Codex 命令行没有输出列表",
+            Self::NothingUsable => "列表里没有能用的模型",
+        })
+    }
+}
+
+/// 最近一次切换用的是哪种来源（界面提示用）。没用上的来源带着原因。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeSource {
     Fetched,
-    Bundled,
-    Unavailable,
+    Bundled(OfficialSkip),
+    Unavailable {
+        official: OfficialSkip,
+        bundled: BundledSkip,
+    },
 }
 
 fn last_source_slot() -> &'static Mutex<Option<NativeSource>> {
@@ -334,17 +443,40 @@ pub(crate) fn last_source() -> Option<NativeSource> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// 最近一次写目录时官方列表没用上（登录过期、拿不到版本、拉取失败……）。
+fn fell_back_from_official() -> bool {
+    matches!(
+        last_source(),
+        Some(NativeSource::Bundled(_) | NativeSource::Unavailable { .. })
+    )
+}
+
 /// 切换时（拿着切换锁、在写锁之前）按目标登录取官方行。能用而新的条目直接用；能用而
 /// 过期的先照用、后台刷新；没有能用的就联网拉一次（10 秒），拉不到退回自带列表。
-pub(crate) fn rows_for_switch(login: Option<&OfficialLogin>) -> NativeRows {
+/// `login` 取不到时带着原因，和自带列表的失败原因一起记进 [`last_source`]。
+pub(crate) fn rows_for_switch(login: &Result<OfficialLogin, OfficialSkip>) -> NativeRows {
     let env = env();
-    let rows = login
-        .and_then(|login| official_rows(&env, login))
-        .unwrap_or_else(|| bundled_rows(&env));
-    let source = match &rows {
-        NativeRows::Fetched { .. } => NativeSource::Fetched,
-        NativeRows::Bundled { .. } => NativeSource::Bundled,
-        NativeRows::Unavailable => NativeSource::Unavailable,
+    let official = match login {
+        Ok(login) => official_rows(&env, login),
+        Err(skip) => Err(*skip),
+    };
+    let (rows, source) = match official {
+        Ok(rows) => (rows, NativeSource::Fetched),
+        Err(official) => match bundled_rows(&env) {
+            Ok(rows) => {
+                log::warn!("没用上 Codex 官方模型列表（{official}），改用自带列表");
+                (rows, NativeSource::Bundled(official))
+            }
+            Err(bundled) => {
+                log::warn!(
+                    "Codex 模型列表都没取到，聚合的模型暂不可用：官方列表{official}，自带列表{bundled}"
+                );
+                (
+                    NativeRows::Unavailable,
+                    NativeSource::Unavailable { official, bundled },
+                )
+            }
+        },
     };
     *last_source_slot()
         .lock()
@@ -352,8 +484,8 @@ pub(crate) fn rows_for_switch(login: Option<&OfficialLogin>) -> NativeRows {
     rows
 }
 
-fn official_rows(env: &Env, login: &OfficialLogin) -> Option<NativeRows> {
-    let version = (env.codex_version)()?;
+fn official_rows(env: &Env, login: &OfficialLogin) -> Result<NativeRows, OfficialSkip> {
+    let version = (env.codex_version)().ok_or(OfficialSkip::NoVersion)?;
     let now = (env.now)();
     if let Some(entry) = usable_entry(&login.identity, &version) {
         let fresh = is_fresh(&entry, now);
@@ -363,7 +495,7 @@ fn official_rows(env: &Env, login: &OfficialLogin) -> Option<NativeRows> {
                 // 这次的目标登录：切换还没落定，事后重新预测会得到切换前的登录。
                 spawn_refresh(login.clone(), version);
             }
-            return Some(NativeRows::Fetched {
+            return Ok(NativeRows::Fetched {
                 identity: login.identity.clone(),
                 rows,
             });
@@ -372,9 +504,9 @@ fn official_rows(env: &Env, login: &OfficialLogin) -> Option<NativeRows> {
     }
     match (env.fetch)(login, &version, None) {
         Fetch::Models { models, etag } => {
-            let rows = normalize_codex_native_rows(models.clone()).or_else(|| {
+            let rows = normalize_codex_native_rows(models.clone()).ok_or_else(|| {
                 log::warn!("Codex 官方模型列表不合格（缺必填字段或指令字段），改用自带列表");
-                None
+                OfficialSkip::InvalidList
             })?;
             store_entry(
                 &login.identity,
@@ -385,29 +517,33 @@ fn official_rows(env: &Env, login: &OfficialLogin) -> Option<NativeRows> {
                     models,
                 },
             );
-            Some(NativeRows::Fetched {
+            Ok(NativeRows::Fetched {
                 identity: login.identity.clone(),
                 rows,
             })
         }
-        Fetch::NotModified => None,
+        // 没带 etag，不该收到 304。
+        Fetch::NotModified => Err(OfficialSkip::FetchFailed),
         Fetch::Failed(error) => {
             log::warn!("拉取 Codex 官方模型列表失败，改用自带列表: {error}");
-            None
+            Err(OfficialSkip::FetchFailed)
         }
     }
 }
 
-fn bundled_rows(env: &Env) -> NativeRows {
-    match (env.bundled)().and_then(normalize_codex_native_rows) {
-        Some(rows) => NativeRows::Bundled { rows },
-        None => NativeRows::Unavailable,
-    }
+fn bundled_rows(env: &Env) -> Result<NativeRows, BundledSkip> {
+    let rows = (env.bundled)()?;
+    normalize_codex_native_rows(rows)
+        .map(|rows| NativeRows::Bundled { rows })
+        .ok_or(BundledSkip::NothingUsable)
 }
 
 /// 刷新一个身份的条目：一定联网，带 `If-None-Match`。304 只更新 `fetched_at`；失败保留
 /// 旧条目和旧的 `fetched_at`，等下一个检查点再试。返回列表有没有变；变了同时记下客户端
 /// 落后于缓存（见 [`take_client_behind`]）。
+///
+/// 上次写目录时官方列表没用上，这次又取到了，列表没变也记下落后：比如当时 Codex 的登录
+/// 过期，之后它自己刷新了登录，缓存里的旧列表照样是 304，不这样客户端会一直停在自带列表上。
 pub(crate) fn refresh(login: &OfficialLogin, version: &str) -> Result<bool, String> {
     let env = env();
     let now = (env.now)();
@@ -423,6 +559,9 @@ pub(crate) fn refresh(login: &OfficialLogin, version: &str) -> Result<bool, Stri
                         ..entry
                     },
                 );
+                if fell_back_from_official() {
+                    mark_client_behind();
+                }
             }
             Ok(false)
         }
@@ -440,7 +579,7 @@ pub(crate) fn refresh(login: &OfficialLogin, version: &str) -> Result<bool, Stri
                     models,
                 },
             );
-            if changed {
+            if changed || fell_back_from_official() {
                 mark_client_behind();
             }
             Ok(changed)
@@ -456,6 +595,25 @@ pub(crate) fn needs_refresh(login: &OfficialLogin) -> Option<String> {
     match usable_entry(&login.identity, &version) {
         Some(entry) if is_fresh(&entry, (env.now)()) => None,
         _ => Some(version),
+    }
+}
+
+/// 后台检查不用刷新时（条目还新，或拿不到版本）调：上次写目录时官方列表没用上，而这个
+/// 登录现在有能用的条目，就记下客户端落后，让检查按它重写。不联网。不补的话要等条目过了
+/// 新鲜期、刷新拿到 304 才重写（见 [`refresh`]），最多晚 6 小时：比如写目录那一刻钥匙串没读
+/// 出来，过一会儿又读得出了。
+pub(crate) fn catch_up_after_fallback(login: &OfficialLogin) {
+    if !fell_back_from_official() {
+        return;
+    }
+    let Some(version) = (env().codex_version)() else {
+        return;
+    };
+    let usable = usable_entry(&login.identity, &version)
+        .and_then(|entry| normalize_codex_native_rows(entry.models))
+        .is_some();
+    if usable {
+        mark_client_behind();
     }
 }
 
@@ -570,7 +728,7 @@ pub(crate) mod testing {
                     }
                     response
                 }),
-                bundled: Box::new(move || bundled.clone()),
+                bundled: Box::new(move || bundled.clone().ok_or(BundledSkip::NoCli)),
                 keychain: Box::new(move || {
                     keychain_reads.fetch_add(1, Ordering::SeqCst);
                     keychain.lock().unwrap().clone()
@@ -732,13 +890,31 @@ mod tests {
         // 没有 id_token：身份不稳定，不拉取。
         let mut no_id = login("ws-1", "alice");
         no_id["tokens"].as_object_mut().unwrap().remove("id_token");
-        assert!(OfficialLogin::of(&no_id).is_none());
+        assert_eq!(
+            OfficialLogin::of(&no_id).err(),
+            Some(OfficialSkip::LoginIncomplete)
+        );
+        let mut no_workspace = login("ws-1", "alice");
+        no_workspace["tokens"]
+            .as_object_mut()
+            .unwrap()
+            .remove("account_id");
+        assert_eq!(
+            OfficialLogin::of(&no_workspace).err(),
+            Some(OfficialSkip::LoginIncomplete)
+        );
         // 很久没刷新的 token 不用，等 Codex 自己刷新。
         let mut stale = login("ws-1", "alice");
         stale["last_refresh"] = json!("2026-01-01T00:00:00Z");
-        assert!(OfficialLogin::of(&stale).is_none());
+        assert_eq!(
+            OfficialLogin::of(&stale).err(),
+            Some(OfficialSkip::LoginStale)
+        );
         // API Key 登录没有官方列表。
-        assert!(OfficialLogin::of(&json!({ "OPENAI_API_KEY": "sk" })).is_none());
+        assert_eq!(
+            OfficialLogin::of(&json!({ "OPENAI_API_KEY": "sk" })).err(),
+            Some(OfficialSkip::NoLogin)
+        );
     }
 
     #[test]
@@ -748,7 +924,7 @@ mod tests {
         let setup = install(Some("0.158.0"), vec![fetched(&["gpt-6-sol"])], None);
         let login = OfficialLogin::of(&login("ws", "alice")).unwrap();
 
-        let rows = rows_for_switch(Some(&login));
+        let rows = rows_for_switch(&Ok(login.clone()));
         assert_eq!(slugs(&rows), vec!["gpt-6-sol"]);
         assert_eq!(rows.identity(), Some("ws|sub:alice"));
         assert_eq!(
@@ -759,7 +935,10 @@ mod tests {
 
         // 一小时后：新的，不联网。
         *setup.now.lock().unwrap() = T0 + HOUR;
-        assert_eq!(slugs(&rows_for_switch(Some(&login))), vec!["gpt-6-sol"]);
+        assert_eq!(
+            slugs(&rows_for_switch(&Ok(login.clone()))),
+            vec!["gpt-6-sol"]
+        );
         assert_eq!(setup.calls.lock().unwrap().len(), 1);
         assert!(needs_refresh(&login).is_none());
     }
@@ -772,7 +951,7 @@ mod tests {
         seed_cache("ws|sub:bob", T0, "0.158.0", models(&["bobs"]));
         install(Some("0.158.0"), vec![fetched(&["alices"])], None);
         let alice = OfficialLogin::of(&login("ws", "alice")).unwrap();
-        assert_eq!(slugs(&rows_for_switch(Some(&alice))), vec!["alices"]);
+        assert_eq!(slugs(&rows_for_switch(&Ok(alice.clone()))), vec!["alices"]);
         // 各存各的，互不覆盖。
         assert_eq!(cache_fetched_at("ws|sub:bob"), Some(T0));
     }
@@ -797,7 +976,7 @@ mod tests {
         let login = OfficialLogin::of(&login("ws", "alice")).unwrap();
 
         // 这次先用旧条目完成切换，不等网络。
-        assert_eq!(slugs(&rows_for_switch(Some(&login))), vec!["cached"]);
+        assert_eq!(slugs(&rows_for_switch(&Ok(login.clone()))), vec!["cached"]);
         rx.recv_timeout(Duration::from_secs(5))
             .expect("background refresh");
         // 刷新带的是这次的目标登录和旧条目的 etag。
@@ -817,7 +996,7 @@ mod tests {
         }
         assert_eq!(cache_fetched_at("ws|sub:alice"), Some(T0));
         assert_eq!(
-            slugs(&rows_for_switch(Some(&login))),
+            slugs(&rows_for_switch(&Ok(login.clone()))),
             vec!["cached", "new-model"]
         );
         // 后台检查还没开始（CC Switch 正在启动）时刷新完了：不重写，标记留给第一次检查。
@@ -877,6 +1056,66 @@ mod tests {
         assert!(setup.responses.lock().unwrap().is_empty());
     }
 
+    /// 上次写目录时没用上官方列表，而登录恢复后缓存里的条目还新：后台检查不联网，直接按它
+    /// 重写；用上之后不再重写。
+    #[test]
+    #[serial]
+    fn a_fresh_entry_after_falling_back_rewrites_the_client_without_fetching() {
+        let _scope = Scope::new();
+        seed_cache("ws|sub:alice", T0 - HOUR, "0.158.0", models(&["cached"]));
+        let setup = install(Some("0.158.0"), Vec::new(), Some(models(&["bundled"])));
+        let bob = OfficialLogin::of(&login("ws", "bob")).unwrap();
+        let alice = OfficialLogin::of(&login("ws", "alice")).unwrap();
+
+        // 还没写过目录、上次用的就是官方列表：都不补。
+        catch_up_after_fallback(&alice);
+        assert!(!take_client_behind());
+        rows_for_switch(&Ok(alice.clone()));
+        assert_eq!(last_source(), Some(NativeSource::Fetched));
+        catch_up_after_fallback(&alice);
+        assert!(!take_client_behind());
+
+        rows_for_switch(&Err(OfficialSkip::NoLogin));
+        assert_eq!(needs_refresh(&alice), None, "the entry is still fresh");
+        catch_up_after_fallback(&alice);
+        assert!(take_client_behind());
+        assert!(setup.calls.lock().unwrap().is_empty());
+
+        // 别人的登录在缓存里没有条目：不补。
+        rows_for_switch(&Err(OfficialSkip::NoLogin));
+        catch_up_after_fallback(&bob);
+        assert!(!take_client_behind());
+    }
+
+    /// 上次写目录时登录过期、退回了自带列表；Codex 之后自己刷新了登录，后台刷新拿到的还是
+    /// 缓存里那份（304），客户端也要重写，不能一直停在自带列表上。
+    #[test]
+    #[serial]
+    fn a_refresh_after_falling_back_rewrites_the_client_even_if_nothing_changed() {
+        let _scope = Scope::new();
+        seed_cache(
+            "ws|sub:alice",
+            T0 - 7 * HOUR,
+            "0.158.0",
+            models(&["cached"]),
+        );
+        install(
+            Some("0.158.0"),
+            vec![Fetch::NotModified, fetched(&["cached"])],
+            Some(models(&["bundled"])),
+        );
+        let login = OfficialLogin::of(&login("ws", "alice")).unwrap();
+
+        rows_for_switch(&Err(OfficialSkip::LoginStale));
+        assert_eq!(refresh(&login, "0.158.0"), Ok(false));
+        assert!(take_client_behind(), "304 after a fallback");
+
+        // 重写之后用上了官方列表：再刷新到同样的列表就不必重写。
+        assert_eq!(slugs(&rows_for_switch(&Ok(login.clone()))), vec!["cached"]);
+        assert_eq!(refresh(&login, "0.158.0"), Ok(false));
+        assert!(!take_client_behind());
+    }
+
     #[test]
     #[serial]
     fn without_a_usable_official_list_the_bundled_list_is_used() {
@@ -886,25 +1125,43 @@ mod tests {
 
         // 拿不到版本：不请求。
         let setup = install(None, vec![fetched(&["x"])], bundled.clone());
-        assert_eq!(slugs(&rows_for_switch(Some(&login))), vec!["bundled"]);
+        assert_eq!(slugs(&rows_for_switch(&Ok(login.clone()))), vec!["bundled"]);
         assert!(setup.calls.lock().unwrap().is_empty());
-        assert_eq!(last_source(), Some(NativeSource::Bundled));
+        assert_eq!(
+            last_source(),
+            Some(NativeSource::Bundled(OfficialSkip::NoVersion))
+        );
 
-        // 没有能用的登录、请求失败、列表不合格：都退回自带列表。
+        // 没有能用的登录、请求失败、列表不合格：都退回自带列表，记下原因。
         install(Some("0.158.0"), Vec::new(), bundled.clone());
-        assert_eq!(slugs(&rows_for_switch(None)), vec!["bundled"]);
+        assert_eq!(
+            slugs(&rows_for_switch(&Err(OfficialSkip::LoginStale))),
+            vec!["bundled"]
+        );
+        assert_eq!(
+            last_source(),
+            Some(NativeSource::Bundled(OfficialSkip::LoginStale))
+        );
         install(
             Some("0.158.0"),
             vec![Fetch::Failed("401".to_string())],
             bundled.clone(),
         );
-        assert_eq!(slugs(&rows_for_switch(Some(&login))), vec!["bundled"]);
+        assert_eq!(slugs(&rows_for_switch(&Ok(login.clone()))), vec!["bundled"]);
+        assert_eq!(
+            last_source(),
+            Some(NativeSource::Bundled(OfficialSkip::FetchFailed))
+        );
         let invalid = Fetch::Models {
             models: vec![json!({ "slug": "no-instructions" })],
             etag: None,
         };
         install(Some("0.158.0"), vec![invalid], bundled);
-        assert_eq!(slugs(&rows_for_switch(Some(&login))), vec!["bundled"]);
+        assert_eq!(slugs(&rows_for_switch(&Ok(login.clone()))), vec!["bundled"]);
+        assert_eq!(
+            last_source(),
+            Some(NativeSource::Bundled(OfficialSkip::InvalidList))
+        );
         assert!(
             cache_fetched_at("ws|sub:alice").is_none(),
             "an invalid list is not cached"
@@ -912,8 +1169,14 @@ mod tests {
 
         // 两个来源都没有：不可用。
         install(Some("0.158.0"), Vec::new(), None);
-        assert_eq!(rows_for_switch(Some(&login)), NativeRows::Unavailable);
-        assert_eq!(last_source(), Some(NativeSource::Unavailable));
+        assert_eq!(rows_for_switch(&Ok(login.clone())), NativeRows::Unavailable);
+        assert_eq!(
+            last_source(),
+            Some(NativeSource::Unavailable {
+                official: OfficialSkip::FetchFailed,
+                bundled: BundledSkip::NoCli,
+            })
+        );
     }
 
     #[test]
@@ -930,6 +1193,6 @@ mod tests {
         .unwrap();
         install(Some("0.158.0"), Vec::new(), None);
         let login = OfficialLogin::of(&login("ws", "alice")).unwrap();
-        assert_eq!(rows_for_switch(Some(&login)), NativeRows::Unavailable);
+        assert_eq!(rows_for_switch(&Ok(login.clone())), NativeRows::Unavailable);
     }
 }

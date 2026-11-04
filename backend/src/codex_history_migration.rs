@@ -946,6 +946,9 @@ fn state_db_paths(codex_dir: &Path, config_text: &str) -> Vec<PathBuf> {
             paths.push(path);
         }
     }
+    // Windows 经 9P 访问 WSL 里的库拿不到字节范围锁，每次打开都会等满忙等超时再失败：
+    // 跳过这类库（迁移按零行计、照常写完成标记），见 codex_state_db_is_lockable。
+    paths.retain(|path| crate::codex_state_db::codex_state_db_is_lockable(path));
     paths
 }
 

@@ -397,3 +397,75 @@ fn editing_auth_store_uses_the_new_store_mode_for_login_stamp() {
     );
     assert!(crate::codex_config::get_codex_auth_path().exists());
 }
+
+/// Codex 官方卡的编辑器：auth.json 框显示盘上真实的登录（Codex 轮换过 token，行里旧版
+/// 回填的快照早就对不上了）；不改直接保存，行里原来的 auth 不变、盘上的登录也不动（上游 2c2d6c43）。
+#[test]
+#[serial]
+fn codex_editor_official_auth_shows_disk_login_and_keeps_row_auth() {
+    let f = Fixture::new();
+    let login = |access: &str| {
+        json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "access_token": access,
+                "refresh_token": format!("{access}-refresh"),
+                "account_id": "acct-official"
+            }
+        })
+    };
+    seed("");
+    let auth_path = crate::codex_config::get_codex_auth_path();
+    std::fs::write(&auth_path, login("fresh").to_string()).unwrap();
+
+    for (id, stored_auth) in [("codex-official", login("stale")), ("follow", json!({}))] {
+        let mut official = Provider::with_id(
+            id.into(),
+            id.into(),
+            json!({ "auth": stored_auth.clone(), "config": "" }),
+            None,
+        );
+        official.category = Some("official".into());
+        f.state.db.save_provider("codex", &official).unwrap();
+
+        let view = ProviderService::codex_editor_view(
+            &f.state,
+            &official.settings_config,
+            Some("official"),
+        )
+        .unwrap();
+        assert_eq!(
+            view.settings.pointer("/auth/tokens/access_token"),
+            Some(&json!("fresh")),
+            "{id}: the auth.json box shows the login on disk, not the row snapshot"
+        );
+
+        let mut edited = official.clone();
+        edited.settings_config = view.settings.clone();
+        ProviderService::save_codex(
+            &f.state,
+            edited,
+            Some(EditorSave {
+                base: view.settings.clone(),
+                on_conflict: ConflictPolicy::Refuse,
+            }),
+            false,
+        )
+        .unwrap();
+
+        let saved = f.state.db.get_provider_by_id(id, "codex").unwrap().unwrap();
+        assert_eq!(
+            saved.settings_config.get("auth"),
+            Some(&stored_auth),
+            "{id}: an untouched auth box must not capture the disk login into the row"
+        );
+        let on_disk: Value =
+            serde_json::from_str(&std::fs::read_to_string(&auth_path).unwrap()).unwrap();
+        assert_eq!(
+            on_disk,
+            login("fresh"),
+            "{id}: saving leaves auth.json alone"
+        );
+    }
+}

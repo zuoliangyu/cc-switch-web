@@ -131,6 +131,16 @@ export interface AppProxyConfig {
   circuitMinRequests: number;
 }
 
+export type AppModeNoticeReason =
+  | "noLogin"
+  | "loginStale"
+  | "loginIncomplete"
+  | "noVersion"
+  | "fetchFailed"
+  | "invalidList"
+  | "noCli"
+  | "cliFailed"
+  | "nothingUsable";
 export type AppMode = "direct" | "routing" | "aggregation";
 export interface AppModeView {
   startupError?: string | null;
@@ -147,6 +157,8 @@ export interface AppModeView {
       | "configOwnsCatalog"
       | "officialModelsBundled"
       | "officialModelsUnavailable";
+    /** 官方模型列表没取到的原因：先是官方列表的，不可用时再跟 Codex 自带列表的。 */
+    noticeReasons?: AppModeNoticeReason[];
     staleClients?: { daemon: boolean; others: boolean };
   };
 }

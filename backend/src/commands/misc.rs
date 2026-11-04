@@ -2928,7 +2928,9 @@ mod tests {
     }
 }
 
-pub(crate) use super::tool_management::run_detected_tool_command_with_timeout;
+pub(crate) use super::tool_management::{
+    run_detected_tool_command_with_timeout, run_program_with_timeout,
+};
 
 pub(crate) fn local_tool_version(tool: &str) -> Option<String> {
     let output = run_detected_tool_command_with_timeout(

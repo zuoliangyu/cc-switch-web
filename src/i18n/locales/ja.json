@@ -3775,6 +3775,17 @@
       "officialModelsBundled": "Codex 同梱のモデル一覧を使用中です。アカウント専用モデルが含まれない場合があります。",
       "officialModelsUnavailable": "公式モデル一覧を取得できず、集約モデルはまだ利用できません。"
     },
+    "noticeReason": {
+      "noLogin": "公式一覧：Codex に使える ChatGPT ログインがありません。Codex で ChatGPT アカウントにログインしてください",
+      "loginStale": "公式一覧：Codex のログインが 8 日以上更新されていません。Codex を一度使うと自動で更新されます",
+      "loginIncomplete": "公式一覧：Codex のログイン情報が不完全です（ワークスペースまたはユーザー ID がありません）。Codex でもう一度ログインしてください",
+      "noVersion": "公式一覧：このコンピューターの Codex のバージョンを読み取れません。Codex で会話を始めると自動で再試行します",
+      "fetchFailed": "公式一覧：取得に失敗しました。15 分ごとに自動で再試行します（詳細はログを参照）",
+      "invalidList": "公式一覧：返されたデータが不完全です（詳細はログを参照）",
+      "noCli": "Codex 内蔵の一覧：このコンピューターに Codex CLI が見つかりません",
+      "cliFailed": "Codex 内蔵の一覧：Codex CLI がモデル一覧を出力しませんでした（詳細はログを参照）",
+      "nothingUsable": "Codex 内蔵の一覧：使えるモデルがありません。Codex を最新版に更新してください"
+    },
     "models": {
       "title": "集約モデル",
       "custom": "このプロバイダーが公開するモデルを指定",

@@ -721,11 +721,15 @@ pub async fn check_codex_official_models(state: &AppState) {
             stack: &members,
         };
         let prepared = codex_direct::prepare(&snapshot, &owner, &target)?;
-        if let Some(login) =
+        if let Ok(login) =
             codex_direct::predicted_official_login(&snapshot.db, &owner, &target, &prepared)?
         {
-            if let Some(version) = models::needs_refresh(&login) {
-                models::refresh(&login, &version).map_err(AppError::Message)?;
+            match models::needs_refresh(&login) {
+                Some(version) => {
+                    models::refresh(&login, &version).map_err(AppError::Message)?;
+                }
+                // 条目还新：上次写目录时回落了的话按它重写，不必等过了新鲜期。
+                None => models::catch_up_after_fallback(&login),
             }
         }
         Ok(())
@@ -848,11 +852,17 @@ pub async fn stack_view(state: &AppState, app: &AppType) -> Result<stack::StackV
             if doc.get("model_catalog_json").is_some() {
                 Some("configOwnsCatalog")
             } else {
+                view.notice_reasons = official_models_reasons(
+                    crate::services::provider::codex_official_models::last_source(),
+                );
                 Some("officialModelsUnavailable")
             }
         } else {
             match crate::services::provider::codex_official_models::last_source() {
-                Some(crate::services::provider::codex_official_models::NativeSource::Bundled) => {
+                source @ Some(
+                    crate::services::provider::codex_official_models::NativeSource::Bundled(_),
+                ) => {
+                    view.notice_reasons = official_models_reasons(source);
                     Some("officialModelsBundled")
                 }
                 _ => None,
@@ -866,6 +876,21 @@ pub async fn stack_view(state: &AppState, app: &AppType) -> Result<stack::StackV
         .await?;
     }
     Ok(view)
+}
+
+/// 没取到官方模型列表的原因码（见 [`stack::StackView::notice_reasons`]）：先是官方列表的，
+/// 两个来源都没取到时再跟自带列表的。
+fn official_models_reasons(
+    source: Option<crate::services::provider::codex_official_models::NativeSource>,
+) -> Vec<&'static str> {
+    use crate::services::provider::codex_official_models::NativeSource;
+    match source {
+        Some(NativeSource::Bundled(official)) => vec![official.code()],
+        Some(NativeSource::Unavailable { official, bundled }) => {
+            vec![official.code(), bundled.code()]
+        }
+        Some(NativeSource::Fetched) | None => Vec::new(),
+    }
 }
 
 /// Claude Code 的模型发现开关：打开后启动时向 `ANTHROPIC_BASE_URL/v1/models` 取模型列表，
@@ -1293,6 +1318,32 @@ pub async fn switch_desktop(state: &AppState, id: &str) -> Result<(), AppError> 
     let row = provider(state, &AppType::ClaudeDesktop, id)?;
     let was_mapping = desktop_uses_mapping(state)?;
     apply_desktop_locked(state, &row, was_mapping).await
+}
+
+#[cfg(test)]
+mod official_models_reason_tests {
+    use super::official_models_reasons;
+    use crate::services::provider::codex_official_models::{
+        BundledSkip, NativeSource, OfficialSkip,
+    };
+
+    /// 提示里列出没取到官方列表的原因：回落到自带列表时只有官方的，都没取到时再跟自带的。
+    #[test]
+    fn notice_reasons_follow_the_last_source() {
+        assert!(official_models_reasons(None).is_empty());
+        assert!(official_models_reasons(Some(NativeSource::Fetched)).is_empty());
+        assert_eq!(
+            official_models_reasons(Some(NativeSource::Bundled(OfficialSkip::LoginStale))),
+            vec!["loginStale"]
+        );
+        assert_eq!(
+            official_models_reasons(Some(NativeSource::Unavailable {
+                official: OfficialSkip::NoLogin,
+                bundled: BundledSkip::NoCli,
+            })),
+            vec!["noLogin", "noCli"]
+        );
+    }
 }
 
 #[cfg(test)]

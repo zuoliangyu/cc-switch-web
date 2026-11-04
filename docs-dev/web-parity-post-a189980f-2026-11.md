@@ -189,7 +189,7 @@
 | `f6387b86` | v4.0.1 | style(quota): put the reset-credits chevron in the countdown slot | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `259d807f` | v4.0.1 | feat(settings): add a help tip explaining the Claude Code onboarding skip | 5a 供应商与全局 UI | 需新建或映射：`components/settings/sections/AppConfigSection.tsx` | 待迁移 |
 | `43077f55` | v4.0.1 | fix(usage): stop parented Codex sync from deadlocking on a poisoned cache | 1c 会话/用量导入 | 1c：带父线程的 Codex 同步遇到中毒缓存不再死锁 | 已迁移 |
-| `d115fddb` | v4.0.1 | fix(codex): skip Codex state DBs on WSL paths Windows cannot lock | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `d115fddb` | v4.0.1 | fix(codex): skip Codex state DBs on WSL paths Windows cannot lock | 4 模式/路由 | 4a：Codex 状态库在 WSL 路径（\wsl$、\wsl.localhost）上时跳过（codex_state_db_is_lockable，只告警一次）：历史迁移、还原、会话标题加载都不再卡在拿不到锁上；claude_mcp 改用 config::is_wsl_path | 已迁移 |
 | `e4960bba` | v4.0.1 | test(wsl): run the WSL2 nightly as a lib suite that can pass on 9P | — | WSL2 夜间 CI 的 9P 共享兼容调整；Web 不运行该任务 | 不适用 |
 | `f9e2ebbb` | v4.0.1 | ci(release): fail fast on notarization rejections and missing updater signatures | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `f344af02` | v4.0.1 | ci: install the Rust toolchain pinned in rust-toolchain.toml | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
@@ -268,7 +268,7 @@
 | `5ae6ad38` | v4.0.5 | ci(wsl): retry flaky lib tests in the WSL2 nightly | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `36c8b87e` | v4.0.5 | fix(linux): restore Wayland title-bar controls on first show and tray re-show (#7947) | — | Wayland 标题栏控件；Web 无桌面窗口 | 不适用 |
 | `3c9e430f` | v4.0.5 | fix(installer): drop ProductIcon reference from MSI shortcuts (#5952) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `e40ebb6e` | v4.0.5 | fix(codex): list explicitly configured models from hidden templates (#7925) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `e40ebb6e` | v4.0.5 | fix(codex): list explicitly configured models from hidden templates (#7925) | 4 模式/路由 | 4a：显式配置的模型生成目录行时 visibility 固定为 list，不继承缓存模板的 hide（原生官方行仍保留自己的 visibility） | 已迁移 |
 | `b1752e1c` | v4.0.5 | ci(release): require deb and rpm signatures in latest.json check (#7943) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `3af55c39` | v4.0.5 | fix(codex): give the MoArk preset a model catalog and native Responses format (#7940) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `02759c67` | v4.0.5 | fix(proxy): mark converted function tools as non-strict for Responses (#7717) | 1b 代理协议 | 1b：转换后的 function 工具标记为非 strict | 已迁移 |
@@ -312,10 +312,10 @@
 | `00db3eef` | v4.0.7 | fix(openclaw): preserve custom headers when toggling User-Agent (#7847) | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `5667b287` | v4.0.7 | fix(usage): treat explicit-zero OpenAI cache fields as unreported (#8045) | 1c 会话/用量导入 | 1c：OpenAI 缓存字段显式 0 视为未上报，继续读低顺位字段（解析、转换、流式） | 已迁移 |
 | `eda410e5` | v4.0.7 | feat(settings): scroll to and highlight app configuration entries (#7934) | 5a 供应商与全局 UI | 需新建或映射：`components/settings/SettingsLayout.tsx`、`components/settings/sections/AppConfigSection.tsx` | 待迁移 |
-| `84457b51` | v4.0.7 | fix(codex): keep a top-level base_url when saving a provider | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `84457b51` | v4.0.7 | fix(codex): keep a top-level base_url when saving a provider | 4 模式/路由 | 4a：顶层 base_url（没有 model_provider）的 Codex 行在投影时归一成 [model_providers.custom]，编辑器显示地址、保存不丢；前端 setCodexBaseUrl 在没有选路时写进选中的 custom 表，核对不过退回顶层写法 | 已迁移 |
 | `69dbb307` | v4.0.7 | fix(i18n): scope unified Codex session history copy to the CLI | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e06ba573` | v4.0.7 | fix(windows): keep non-ASCII paths out of generated batch files | 1d 资源/设置/工具 | 1d：工具安装/升级批处理先 chcp 65001；Claude 与会话启动器的非 ASCII 目录经环境变量传入、配置文件以 %%~dp0 引用（Web 的会话启动器同样适配） | 已迁移 |
-| `e5b1e096` | v4.0.7 | fix(codex): tell ChatGPT workspaces of the same user apart when switching official cards | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `e5b1e096` | v4.0.7 | fix(codex): tell ChatGPT workspaces of the same user apart when switching official cards | 4 模式/路由 | 4a：Codex 登录按「用户 + ChatGPT workspace」认人，同一人的 Plus / Team 是两个登录；登录暂存加版本号，旧暂存读入时按新身份重算并从官方卡行补回被合并掉的 workspace（登出不复活） | 已迁移 |
 | `0fc67c3b` | v4.0.7 | fix(codex): warn about stale Codex clients on Windows without a process table | 4 模式/路由 | 需新建或映射：`components/providers/CodexStaleClientsNotice.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
 | `b7d548b6` | v4.0.7 | feat(quota): let quota windows show what is used instead of what is left | 5b 用量/额度 UI | 需新建或映射：`components/quota/useQuotaDisplay.ts`、`components/settings/sections/GeneralSection.tsx` | 待迁移 |
 | `e049660a` | v4.0.7 | fix(codex): explain that old third-party sessions cannot continue on the official route | 1b 代理协议 | 1b：官方路由旧第三方会话提示新建会话；对应断言 Web 无此测试 | 已迁移 |
@@ -327,8 +327,8 @@
 | `315aeda7` | v4.0.8 | fix(model-fetch): honor provider header overrides when fetching models (#7760) | 5a 供应商与全局 UI | 需新建或映射：`lib/api/model-fetch.test.ts` | 待迁移 |
 | `4215f7ee` | v4.0.8 | feat(settings): add an Open log button to the diagnostic log section | 1d 资源/设置/工具 | Web 服务的诊断日志写到进程标准错误（env_logger），没有 cc-switch.log 文件可定位，因此不提供日志路径复制 | 不适用 |
 | `3784fd9e` | v4.0.8 | fix(ui): soften dark-mode text colors to reduce glare | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `979ce6a6` | v4.0.8 | fix(codex): find the CLI bundled with the Codex desktop app | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `2e20cdcb` | v4.0.8 | fix(codex): explain why the official model list is unavailable | 4 模式/路由 | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `979ce6a6` | v4.0.8 | fix(codex): find the CLI bundled with the Codex desktop app | 4 模式/路由 | 4a：取 Codex 自带模型列表时，检测不到 codex 就按桌面版自带的 CLI 兜底（macOS ChatGPT.app / Codex.app；Windows %LOCALAPPDATA%\OpenAI\Codex\bin\<版本>\codex.exe 按修改时间从新到旧），以固定参数、空 stdin、超时运行；模板候选也加入桌面版 | 已迁移 |
+| `2e20cdcb` | v4.0.8 | fix(codex): explain why the official model list is unavailable | 4 模式/路由 | 4a：官方模型列表没取到时带上原因（OfficialSkip / BundledSkip），Stack 视图给出 noticeReasons，Web 模式面板逐条列出；回落后官方列表恢复时自动重写客户端。依赖 dc93c496 Outdated / 隐藏行判断的分支随 4b；上游控制器层用例改写为 Web 的判定与原因码映射用例 | 部分迁移 |
 | `ed15cd01` | v4.0.8 | chore(release): v4.0.8 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `df40d53c` | v4.0.8 | docs(release): add v4.0.8 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `f88068b9` | v4.0.9 | fix(proxy): let clients reach local routing through a separate connection address (#7878) | 4 模式/路由 | 本地路由独立的客户端连接地址；与 Docker/局域网部署相关，需与 Web 监听配置统一；需新建或映射：`components/settings/sections/RoutingSection.tsx` | 待迁移 |
@@ -570,7 +570,7 @@
 | `75e93281` | v4.0.16 | fix(proxy): allow unforced Claude WebSearch through Codex OAuth (#7936) | 1b 代理协议 | 1b：未强制的 Claude WebSearch 可经 Codex OAuth | 已迁移 |
 | `adc223af` | v4.0.16 | fix(claude): use catalog ids for 5.5 upstreams in routing takeover (#8450) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
 | `8d8dc456` | v4.0.16 | fix(proxy): keep Chat tool outputs contiguous across hoisted developer notices (#8445) | 1b 代理协议 | 1b：开发者提示上移后 Chat 工具输出保持连续；历史仓库补回部分 Web 无对应模块（无 CodexChatHistoryStore） | 已迁移 |
-| `a94f997f` | v4.0.16 | fix(codex): honor configured GPT context windows (#8385) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `a94f997f` | v4.0.16 | fix(codex): honor configured GPT context windows (#8385) | 4 模式/路由 | 4a：第三方供应商上镜像官方 GPT 的目录行接受显式窗口（contextWindow / model_context_window），max_context_window 与压缩点同步；vendor 官方目录行同样处理；Gemini 输入超限归一为 context_length_exceeded、SSE 非字符串错误码转字符串。handlers 层把输入超限 400 改写为 response.failed 流未迁移：Web 的 Codex 代理原样透传上游错误，没有上游的 Chat 错误规整层 | 部分迁移 |
 | `734c4831` | v4.0.16 | feat(minimax): add MiniMax-M3.1-Flash to the official MiniMax presets (#8518) | 1a 预设/定价/图标 | 1a：七类预设默认 M3.1-Flash 与定价已同步；Hermes 标题模型钉选（`hermes_config.rs`）转入 1d | 部分迁移 |
 | `0bbbb534` | v4.0.16 | fix(hermes): prefill MiniMax provider keys that don't collide with Hermes built-ins (#8538) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `bbcf0aea` | v4.0.16 | fix(usage): show account balance when a Zhipu account has no coding plan | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -590,9 +590,9 @@
 | `3168b00f` | v4.0.16 | Revert "fix(sidebar): show only the numbers in the usage Today badge" | — | 侧栏今日用量徽标改动已被上游撤销，净效果为空 | 不适用 |
 | `bb05f9d6` | v4.0.16 | fix(pricing): correct Kimi K3 and Step 5 Preview prices and seed new Qwen models | 1a 预设/定价/图标 | 1a：修正 Kimi K3、Step 5 Preview 价格并新增 Qwen；仅修复仍为旧内置值的行，Web 定价断言随之更新 | 已迁移 |
 | `1e36b107` | v4.0.16 | fix(usage): recover the model name for MiniMax Code usage rows that lack one | 1c 会话/用量导入 | 1c：MiniMax Code 用量行缺模型名时从会话恢复 | 已迁移 |
-| `2c2d6c43` | v4.0.16 | fix(codex): show the on-disk login in the official card's auth.json editor | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `2c2d6c43` | v4.0.16 | fix(codex): show the on-disk login in the official card's auth.json editor | 4 模式/路由 | 4a：没绑托管账号的 Codex 官方卡，编辑器 auth.json 框显示切换后盘上的登录（只读预测 predicted_auth_file）；不改直接保存则保留行里原来的 auth；上游集成测试改写为 codex_runtime_tests | 已迁移 |
 | `8e51101e` | v4.0.16 | fix(claude-desktop): publish catalog ids for 5.5 targets in route mode | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `6c36d68a` | v4.0.16 | fix(codex): keep the ChatGPT login when CC Switch detaches from routing | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `6c36d68a` | v4.0.16 | fix(codex): keep the ChatGPT login when CC Switch detaches from routing | 4 模式/路由 | 4a：退出时的分离（op::DETACH）不按「保留官方登录」开关删 auth.json；进入或接上代理且第三方路由旁没有登录时，把最近暂存的登录还回去，只还一次（登出不复活） | 已迁移 |
 | `8b09732a` | v4.0.16 | fix(usage): don't auto-enable Volcengine plan quota without AccessKey | 1d 资源/设置/工具 | Web 套餐列表无 Volcengine/ZenMux，codingPlanEnabledByDefault 无需排除对象 | 不适用 |
 | `5fa00079` | v4.0.16 | fix(icons): soften the macOS app icon tile to light grey | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `f3d9e8c6` | v4.0.16 | fix(settings): render the About card logo from the vector mark | 5a 供应商与全局 UI | 关于页 logo 改矢量；上游删除 app-icon.png，Web 仍引用 | 待迁移 |
@@ -618,7 +618,7 @@
 | `2dfc848f` | v4.0.17 | fix(proxy): stop child processes from inheriting the listener socket on Windows | 1b 代理协议 | 1b：mio 升级到 1.2.1，Windows 监听 socket 不被子进程继承；新增 Windows 回归 | 已迁移 |
 | `5cbe6700` | v4.0.17 | fix(webdav): upload the sync manifest as application/octet-stream | 1d 资源/设置/工具 | 1d：WebDAV 同步清单以 application/octet-stream 上传 | 已迁移 |
 | `1f1becfb` | v4.0.17 | fix(toml): only normalize smart quotes used as string delimiters | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
-| `95693d6c` | v4.0.17 | fix(codex): don't give an expired stashed login back to the proxy | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `95693d6c` | v4.0.17 | fix(codex): don't give an expired stashed login back to the proxy | 4 模式/路由 | 4a：进入/接上代理时不还 access_token 已过期的暂存登录，它留在暂存里，切回官方卡时照常还 | 已迁移 |
 | `52e87344` | v4.0.17 | fix(mcp): project url-only servers without a type to Hermes and OpenCode | 1d 资源/设置/工具 | 1d：无 type 但有 url 的 MCP 服务器按 http 投影到 OpenCode（与 Codex 共用 spec_transport_type）；Web 不写 Hermes MCP | 已迁移 |
 | `cf312f6a` | v4.0.17 | fix(mcp): take the app's switch lock before toggling a server | 1d 资源/设置/工具 | 1d：切换 MCP 应用启用前先拿该应用的切换锁，避免并发写丢条目 | 已迁移 |
 | `73adfaf0` | v4.0.17 | fix(tray): release the tray panel WebView in lightweight mode | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
@@ -657,7 +657,7 @@
 | `8d4ec90f` | v4.0.18 | chore(presets): remove ZetaAPI sponsor and presets | 1a 预设/定价/图标 | 1a：九类预设移除 ZetaAPI，删除三语推广文案；Web 原本未登记其图标 | 已迁移 |
 | `0a41250d` | v4.0.18 | feat(presets): add DIT.ai sponsor presets across nine apps | — | DIT.ai 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `132ab9ce` | v4.0.18 | feat(presets): add hao.ai sponsor presets across eight apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `e1821b5e` | v4.0.18 | fix(codex): hide reset countdown for unused quota windows (#8631) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `e1821b5e` | v4.0.18 | fix(codex): hide reset countdown for unused quota windows (#8631) | 4 模式/路由 | 4a：Codex 额度窗口已用为 0 时不显示重置倒计时 | 已迁移 |
 | `ea8bc2c3` | v4.0.18 | fix(sessions): group a Claude session by its last /cd location (#8643) | 1c 会话/用量导入 | 1c：Claude 会话按最后一次 /cd 位置分组 | 已迁移 |
 | `6226f5c4` | v4.0.18 | fix(terminal): stop waiting for the launched console to close on Windows | 1d 资源/设置/工具 | 1d：Windows 启动终端后不再等待控制台关闭 | 已迁移 |
 | `47ffdff8` | v4.0.18 | fix(apps): give runtime CLI commands the login-shell PATH on Unix | 1d 资源/设置/工具 | 1d：Unix 上运行时 CLI 命令补上登录 shell 的 PATH（tool_management 的 login_shell_path 供 misc.rs 复用） | 已迁移 |
@@ -668,7 +668,7 @@
 | `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 2b：Kimi 官方设备登录与切换；Web 以 /api/auth/kimi/* 路由代替 Tauri 命令，管理器为进程级单例 | 已迁移 |
 | `07265bc9` | v4.0.19 | feat(kimi): support multiple official accounts in Auth Center (#8726) | 2b Kimi Code | 2b：授权中心多个 Kimi 官方账号；Web 授权中心加入 Kimi 组 | 已迁移 |
 | `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 需新建或映射：`components/usage/ChecklistMenu.tsx`、`components/usage/RequestLogColumnsMenu.tsx`等 10 个 | 待迁移 |
-| `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 4a：合并目录里 Stack 成员行的 comp_hash 按工具协议分组（code_mode_only 镜像行为 cc-switch-code_mode_only，direct 行仍为 cc-switch）；路由行统一 comp_hash 属 8a0eddb0，随 4b | 部分迁移 |
 | `ce098caf` | v4.0.19 | fix(about): detach the shell version probe from the controlling terminal | 1d 资源/设置/工具 | 1d：shell 版本探测脱离控制终端（tool_management.rs） | 已迁移 |
 | `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
 | `e88ff540` | v4.0.19 | test(usage): scope Codex parent-cache count assertions to each test's dir | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
@@ -833,7 +833,7 @@
 | `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
 | `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `115677a1` | v4.0.22 | fix(agy): let a transcript win over another root's index-only entry | 2c Antigravity | 2c：会话 transcript 优先于其他根目录仅有索引的条目 | 已迁移 |
-| `11485ee7` | v4.0.22 | fix(codex): log the underlying cause when the official model list fetch fails | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `11485ee7` | v4.0.22 | fix(codex): log the underlying cause when the official model list fetch fails | 4 模式/路由 | 4a：拉取 Codex 官方模型列表失败时日志带上底层原因 | 已迁移 |
 | `ed494fbc` | v4.0.22 | fix(opencode): read the V2 settings.baseURL in the connectivity check | 1d 资源/设置/工具 | 1d：OpenCode 连通性检查识别 V2 原生格式（settings.baseURL/apiKey、package、顶层 headers），Web 版按包名归一到对应 AI SDK 协议 | 已迁移 |
 | `7201d81b` | v4.0.22 | feat(sync): let users clear the saved WebDAV config | 1d 资源/设置/工具 | 1d：可清除本机保存的 WebDAV 配置（新增 /api/webdav/settings/clear）；自动上传在同步锁内重新读取设置 | 已迁移 |
 | `326b394b` | v4.0.22 | fix(proxy): map Claude WebSearch blocked_domains to Responses filters | 1b 代理协议 | 1b：Claude WebSearch blocked_domains 映射为 Responses 过滤 | 已迁移 |
@@ -873,7 +873,7 @@
 | `d8339d6a` | v4.0.23 | fix(icon-picker): keep picker clear of macOS traffic lights (#9076) | — | 图标选择器避让 macOS 红绿灯；Web 无原生窗口按钮 | 不适用 |
 | `ba3d80d8` | v4.0.23 | fix(tray): show the bound Claude account instead of the website for official cards (#9071) | — | 托盘官方卡片显示绑定账号；Web 无托盘（共享账号读取随批次 3 核对） | 不适用 |
 | `258c367f` | v4.0.23 | fix(grokbuild): stream large session logs and support byte offset cursor (#9026) | 1c 会话/用量导入 | 1c：Grok Build 会话日志逐行流式读取并按字节游标续读；导入器整体同步到上游最终版本（去掉 input_token_semantics），补 grok-4.6/4.7 Build 定价 | 已迁移 |
-| `300453be` | v4.0.23 | fix(codex): handle text-only DeepSeek V4 Flash 0731 on OpenRouter (#6194) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `300453be` | v4.0.23 | fix(codex): handle text-only DeepSeek V4 Flash 0731 on OpenRouter (#6194) | 4 模式/路由 | 4a：deepseek-v4-flash-0731 列为文本模型，发送前去图；OpenRouter 404「No endpoints found that support image input」算作不支持图片、触发去图重试；forwarder 层用例依赖 Web 没有的夹具，改在 media_sanitizer 里覆盖 | 部分迁移 |
 | `3817c2b2` | v4.0.23 | fix(provider-form): prevent config editors from overwriting each other (#6777) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e49d12a5` | v4.0.23 | fix(settings): avoid launching OpenCode Desktop during env check (#7027) | 1d 资源/设置/工具 | 1d：环境检查不再拉起 OpenCode Desktop（桌面版无 CLI sidecar 时跳过） | 已迁移 |
 | `c7188667` | v4.0.23 | fix(usage): recover bounded Codex forks after parent idle gaps (#9093) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
@@ -1053,3 +1053,10 @@
   - 前端：Codex 预设新增 GitHub Copilot；表单选择账号、不显示 key 与地址、协议选择（含自动）、拉取模型填目录；三种语言文案。
   - 不适用：Claude 路径的 Copilot 优化器与企业版动态端点（基线前 Web 已移除，含 9403960f 只在优化器里做的 thinking 剥离）；新增卡片的草稿投影 meta。
   - 验证：`cargo test --lib` 3453 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 176 个文件 1859 项通过、2 项跳过。
+- 2026-11-04：批次 4 规划。上游 54 项以 3-way 方式试应用，只有 4 项能直接合入：Web 的 `mode/controller.rs` 是独立的精简实现，上游的 SwitchModePanel / ModeDialog / CodexStaleClientsNotice 等模式界面在 Web 里对应 `ProviderList` 内的模式面板（`AppModePanel` / `useAppMode`）。因此按行为手工迁移，并按共享文件顺序拆为 4a（Codex 登录、官方卡与配置）、4b（Codex 聚合 / Stack）、4c（Claude 与 Claude Desktop 路由）、4d（通用模式与代理：切换日志、独立连接地址、回直连确认、路由切换提示、拖拽排序、额度保护）。
+- 2026-11-04：完成批次 4a（Codex 登录、官方卡与配置，14 项：10 项已迁移、4 项部分迁移）。
+  - 登录：按「用户 + ChatGPT workspace」区分登录（暂存加版本号并迁移旧暂存）；分离时不删官方登录，进入代理时还回最近暂存且未过期的登录；官方卡编辑器显示切换后盘上的 auth.json。
+  - 配置与目录：顶层 `base_url` 归一为 `[model_providers.custom]`；显式配置的模型在目录里可见；第三方镜像 GPT 行接受显式上下文窗口；Stack 成员行 comp_hash 按工具协议分组；模型列表取不到 codex 时兜底桌面版自带 CLI；官方模型列表取不到时给出原因（`noticeReasons`，模式面板逐条显示），恢复后自动重写客户端。
+  - 其他：Codex 状态库在 WSL 路径上跳过；额度未使用时不显示重置倒计时；OpenRouter 上 DeepSeek V4 Flash 0731 的文本模型去图。
+  - 未迁移：a94f997f 在 handlers 层把输入超限改写为 `response.failed` 流（Web 的 Codex 代理原样透传上游错误，没有错误规整层）；依赖 dc93c496 的 Outdated 判断与路由行 comp_hash（8a0eddb0）随 4b。
+  - 验证：`cargo test --lib` 3485 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 176 个文件 1865 项通过、2 项跳过。

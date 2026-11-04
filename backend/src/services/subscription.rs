@@ -331,7 +331,9 @@ fn read_claude_credentials() -> (Option<String>, CredentialStatus, Option<String
     parse_claude_credentials_json(&content)
 }
 
-fn parse_claude_credentials_json(content: &str) -> (Option<String>, CredentialStatus, Option<String>) {
+fn parse_claude_credentials_json(
+    content: &str,
+) -> (Option<String>, CredentialStatus, Option<String>) {
     let parsed: serde_json::Value = match serde_json::from_str(&content) {
         Ok(value) => value,
         Err(error) => {
@@ -836,7 +838,9 @@ pub async fn query_codex_quota(
         query_codex_usage(access_token, account_id, tool, expired_hint),
         query_codex_reset_credits(access_token, account_id),
     );
-    if quota.success { quota.reset_credits = reset_credits; }
+    if quota.success {
+        quota.reset_credits = reset_credits;
+    }
     quota
 }
 
@@ -913,7 +917,14 @@ async fn query_codex_usage(
                         .map(codex_window_name)
                         .unwrap_or_else(|| "unknown".to_string()),
                     utilization: used_percent,
-                    resets_at: window.reset_at.and_then(unix_ts_to_iso),
+                    // 已用额度为 0 时，上游可能返回当前时间加窗口时长；
+                    // 隐藏该占位时间，避免产生虚假的倒计时。
+                    // 使用原始用量，保留非零用量取整后仍剩余 100% 的倒计时。
+                    resets_at: if used_percent == 0.0 {
+                        None
+                    } else {
+                        window.reset_at.and_then(unix_ts_to_iso)
+                    },
                 });
             }
         }
@@ -1436,11 +1447,8 @@ mod tests {
     #[test]
     fn expired_token_uses_a_fresh_cache_but_not_a_stale_one() {
         let now = 1_700_000_000_000_i64;
-        let fresh = account_quota_with_cache(
-            expired_claude_quota(),
-            Some(cached_usage(now - 1_000)),
-            now,
-        );
+        let fresh =
+            account_quota_with_cache(expired_claude_quota(), Some(cached_usage(now - 1_000)), now);
         assert!(fresh.success);
         assert_eq!(fresh.queried_at, Some(now - 1_000));
         assert_eq!(fresh.tiers.len(), 1);
@@ -1691,8 +1699,6 @@ mod tests {
         .unwrap();
         assert!(quota.reset_credits.is_none());
     }
-
-
 }
 
 /// Codex 在 Keychain 里存登录用的账户名：`cli|` 加规范化后的 Codex 配置目录路径的

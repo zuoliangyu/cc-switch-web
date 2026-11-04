@@ -85,6 +85,40 @@ describe("模式与聚合操作", () => {
     );
     client.clear();
   });
+  it("说明 Codex 模型列表为什么没取到", async () => {
+    server.use(
+      http.post("http://runtime.local/get_app_mode", () =>
+        HttpResponse.json({
+          mode: "aggregation",
+          attached: true,
+          directProviderId: "a",
+          routeProviderId: "a",
+          eligibleProviderIds: ["a"],
+          aggregation: {
+            active: true,
+            members: [{ providerId: "a", modelIds: [], route: true }],
+            notice: "officialModelsUnavailable",
+            noticeReasons: ["loginStale", "noCli"],
+          },
+        }),
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ModePanel app="codex" />
+      </QueryClientProvider>,
+    );
+    const notice = await screen.findByText(
+      "webMode.notice.officialModelsUnavailable",
+      { exact: false },
+    );
+    expect(notice).toHaveTextContent("webMode.noticeReason.loginStale");
+    expect(notice).toHaveTextContent("webMode.noticeReason.noCli");
+  });
+
   it("页签只查看，确认后才进入聚合，候选按名称排序且排除不可路由供应商", async () => {
     let mode = "direct";
     const calls: unknown[] = [];

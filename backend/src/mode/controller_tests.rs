@@ -806,7 +806,7 @@ async fn official_codex_routing_keeps_history_bucket_and_detects_only_our_proxy(
     models::set_test_env(models::Env {
         codex_version: Box::new(|| None),
         fetch: Box::new(|_, _, _| panic!("no external model requests in this test")),
-        bundled: Box::new(|| None),
+        bundled: Box::new(|| Err(models::BundledSkip::NoCli)),
         keychain: Box::new(|| crate::services::subscription::CodexKeychainLogin::Missing),
         now: Box::new(|| 0),
     });
@@ -869,4 +869,85 @@ async fn official_codex_routing_keeps_history_bucket_and_detects_only_our_proxy(
             );
         }
     }
+}
+
+fn codex_login_on_disk() -> Option<Value> {
+    std::fs::read(crate::codex_config::get_codex_auth_path())
+        .ok()
+        .map(|bytes| serde_json::from_slice(&bytes).unwrap())
+}
+
+fn chatgpt_login(account: &str) -> Value {
+    json!({
+        "auth_mode": "chatgpt",
+        "OPENAI_API_KEY": null,
+        "tokens": {
+            "id_token": crate::codex_config::test_codex_id_token(&format!("user-{account}")),
+            "access_token": format!("access-{account}"),
+            "refresh_token": format!("refresh-{account}"),
+            "account_id": account,
+        }
+    })
+}
+
+/// 直连指针在第三方卡上：退出 CC Switch 的分离不暂存登录，重启接上后登录还在；真正退出
+/// 路由仍按保留登录开关走。Codex 桌面版续会话要 ChatGPT 登录（上游 6c36d68a，#8431）。
+#[tokio::test]
+#[serial]
+async fn codex_detaching_and_attaching_keep_the_login_next_to_a_third_party_route() {
+    let f = Fixture::new();
+    let state = &f.state;
+    let mut settings = get_settings();
+    settings.preserve_codex_official_auth_on_switch = false;
+    update_settings(settings).unwrap();
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+
+    let row = Provider::with_id(
+        "a".into(),
+        "a".into(),
+        json!({"auth":{"OPENAI_API_KEY":"test-key"},"config":"model_provider = \"a\"\nmodel = \"a-model\"\n[model_providers.a]\nbase_url = \"https://a.example/v1\"\nwire_api = \"responses\"\n"}),
+        None,
+    );
+    state.db.save_provider("codex", &row).unwrap();
+    // 直连到第三方前 auth.json 里的登录被暂存走（保留开关关着）。
+    let path = crate::codex_config::get_codex_auth_path();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, chatgpt_login("acct").to_string()).unwrap();
+    codex_direct::write_direct(state, None, &row, true, None).unwrap();
+    assert_eq!(
+        codex_login_on_disk(),
+        None,
+        "stashed next to a third-party card"
+    );
+
+    // 进入代理：把最近暂存的登录还回去。
+    enter(state, &AppType::Codex, Some("a")).await.unwrap();
+    assert_eq!(codex_login_on_disk(), Some(chatgpt_login("acct")));
+
+    detach_all(state).await.unwrap();
+    assert!(!stored_mode(&AppType::Codex).unwrap().attached);
+    assert_eq!(
+        codex_login_on_disk(),
+        Some(chatgpt_login("acct")),
+        "detaching keeps the login"
+    );
+    assert!(startup(state).await.is_empty());
+    assert!(stored_mode(&AppType::Codex).unwrap().attached);
+    assert_eq!(codex_login_on_disk(), Some(chatgpt_login("acct")));
+
+    // 只还一次：在 Codex 里登出后重新接上，不会又被登上。
+    std::fs::remove_file(&path).unwrap();
+    detach_all(state).await.unwrap();
+    assert!(startup(state).await.is_empty());
+    assert_eq!(codex_login_on_disk(), None, "logging out sticks");
+
+    std::fs::write(&path, chatgpt_login("acct").to_string()).unwrap();
+    exit(state, &AppType::Codex).await.unwrap();
+    assert_eq!(
+        codex_login_on_disk(),
+        None,
+        "a real exit follows the setting"
+    );
 }

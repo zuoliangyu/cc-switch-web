@@ -264,6 +264,13 @@ export function useManagedAuth(
       setError(e instanceof Error ? e.message : String(e));
       await refetchStatus();
     },
+    onSettled: async () => {
+      if (authProvider === "codex_oauth") {
+        await queryClient.invalidateQueries({
+          queryKey: ["providers", "codex"],
+        });
+      }
+    },
   });
 
   const removeAccountMutation = useMutation({
@@ -276,9 +283,18 @@ export function useManagedAuth(
       await refetchStatus();
       await queryClient.invalidateQueries({ queryKey });
     },
-    onError: (e) => {
+    onError: async (e) => {
       console.error("[ManagedAuth] Failed to remove account:", e);
       setError(e instanceof Error ? e.message : String(e));
+      // Account removal can succeed before provider unbinding fails.
+      if (authProvider === "codex_oauth") await refetchStatus();
+    },
+    onSettled: async () => {
+      if (authProvider === "codex_oauth") {
+        await queryClient.invalidateQueries({
+          queryKey: ["providers", "codex"],
+        });
+      }
     },
   });
 

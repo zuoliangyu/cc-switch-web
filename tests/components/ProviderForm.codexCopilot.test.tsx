@@ -112,6 +112,34 @@ describe("Codex GitHub Copilot provider form", () => {
     expect(submitted.meta?.isFullUrl).toBeUndefined();
   });
 
+  it("drops a legacy representative apiFormat and keeps unknown protocols", async () => {
+    const preset = codexProviderPresets.find(
+      (item) => item.providerType === "github_copilot",
+    )!;
+    const onSubmit = renderForm({
+      name: "GitHub Copilot",
+      category: "third_party",
+      settingsConfig: { auth: {}, config: preset.config },
+      meta: {
+        providerType: "github_copilot",
+        apiFormat: "openai_chat",
+        codexCopilotApiFormat: "future_protocol",
+        authBinding: {
+          source: "managed_account",
+          authProvider: "github_copilot",
+          accountId: "saved-account",
+        },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "save-provider" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted.meta?.apiFormat).toBeUndefined();
+    // 新版本写下的协议原样保留，这一版按自动处理
+    expect(submitted.meta?.codexCopilotApiFormat).toBe("future_protocol");
+  });
+
   it("keeps an explicit Copilot protocol when editing a saved card", async () => {
     const preset = codexProviderPresets.find(
       (item) => item.providerType === "github_copilot",
@@ -140,7 +168,8 @@ describe("Codex GitHub Copilot provider form", () => {
     expect(submitted.meta).toMatchObject({
       providerType: "github_copilot",
       codexCopilotApiFormat: "openai_responses",
-      apiFormat: "openai_responses",
     });
+    // 托管 Copilot 不再存 apiFormat 代表值（上游 b4a07943）
+    expect(submitted.meta?.apiFormat).toBeUndefined();
   });
 });

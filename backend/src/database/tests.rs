@@ -1734,3 +1734,52 @@ fn sort_index_updates_touch_only_existing_rows_and_the_index() {
     assert_eq!(a.sort_index, Some(1));
     assert_eq!(a.name, "renamed");
 }
+
+// 上游 4aeaccf1：删托管账号时解绑绑着它的 Codex 卡，别的账号保持原样
+#[test]
+fn unbind_codex_managed_accounts_detaches_only_the_removed_accounts() {
+    let db = Database::memory().expect("create memory db");
+    let bound = |account: &str| {
+        json!({
+            "authBinding": {
+                "source": "managed_account",
+                "authProvider": "codex_oauth",
+                "accountId": account
+            },
+        })
+    };
+    for (id, account, category) in [
+        ("gone", "acct-gone", Some("official")),
+        ("legacy", " acct-gone ", None),
+        ("other", "acct-other", Some("official")),
+    ] {
+        let mut provider = Provider::with_id(
+            id.to_string(),
+            id.to_string(),
+            json!({ "auth": { "tokens": { "access_token": "t" } }, "config": "" }),
+            None,
+        );
+        provider.category = category.map(str::to_string);
+        provider.meta = Some(serde_json::from_value(bound(account)).unwrap());
+        db.save_provider("codex", &provider).unwrap();
+    }
+
+    let affected = db
+        .unbind_codex_managed_accounts(&["acct-gone".to_string()])
+        .unwrap();
+    assert_eq!(affected, vec!["gone".to_string(), "legacy".to_string()]);
+
+    let providers = db.get_all_providers("codex").unwrap();
+    for id in ["gone", "legacy"] {
+        let row = &providers[id];
+        let meta = serde_json::to_value(row.meta.as_ref().unwrap()).unwrap();
+        assert!(meta.get("authBinding").is_none(), "{id}");
+        assert_eq!(row.settings_config["auth"], json!({}), "{id}");
+    }
+    // 旧卡没有分类：按官方卡的形状补上 official，之后跟随原生登录
+    assert_eq!(providers["legacy"].category.as_deref(), Some("official"));
+    let other = serde_json::to_value(providers["other"].meta.as_ref().unwrap()).unwrap();
+    assert_eq!(other["authBinding"]["accountId"], "acct-other");
+
+    assert!(db.unbind_codex_managed_accounts(&[]).unwrap().is_empty());
+}

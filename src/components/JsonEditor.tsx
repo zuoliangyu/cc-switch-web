@@ -3,13 +3,16 @@ import { EditorView, basicSetup } from "codemirror";
 import { json } from "@codemirror/lang-json";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { EditorState } from "@codemirror/state";
+import { Annotation, EditorState } from "@codemirror/state";
 import { placeholder } from "@codemirror/view";
 import { linter, Diagnostic } from "@codemirror/lint";
 import { useTranslation } from "react-i18next";
 import { Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatJSON } from "@/utils/formatters";
+
+/** 标记把 value 属性推进编辑器的事务，避免回吐为 onChange（上游 3817c2b2）。 */
+const ExternalSync = Annotation.define<boolean>();
 
 interface JsonEditorProps {
   id?: string;
@@ -39,6 +42,12 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
   const { t } = useTranslation();
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // 编辑器只在外观相关依赖变化时重建，监听器经 ref 调用最新的 onChange，
+  // 否则会一直用创建时的旧闭包（上游 3817c2b2）
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   // JSON linter 函数
   const jsonLinter = useMemo(
@@ -149,8 +158,13 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
       ),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          const newValue = update.state.doc.toString();
-          onChange(newValue);
+          // CodeMirror 会把外部同步 dispatch 也标记为 docChanged。只有当
+          // 本次 ViewUpdate 中的事务全部来自外部同步时才跳过；使用 every
+          // 保证与用户输入合并的更新不会被误吞。
+          if (update.transactions.every((tr) => tr.annotation(ExternalSync))) {
+            return;
+          }
+          onChangeRef.current(update.state.doc.toString());
         }
       }),
     ];
@@ -224,6 +238,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
           to: viewRef.current.state.doc.length,
           insert: value,
         },
+        annotations: ExternalSync.of(true),
       });
       viewRef.current.dispatch(transaction);
     }

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { parse as parseToml } from "smol-toml";
 import {
+  extractCodexAgentsMaxThreads,
   extractCodexAgentsString,
   extractCodexBaseUrl,
   extractCodexExperimentalBearerToken,
   extractCodexModelName,
+  extractCodexMultiAgentV2Total,
   hasExplicitNonOpenAiCodexModelProvider,
+  setCodexAgentsMaxThreads,
   setCodexAgentsString,
   setCodexBaseUrl,
   setCodexModelName,
@@ -197,6 +200,115 @@ describe("Codex TOML utils", () => {
     expect(extractCodexBaseUrl(output)).toBe("https://relay.example/v1");
   });
 
+  it("finds the active provider table when its header quotes the key", () => {
+    for (const header of [
+      '[model_providers."custom"]',
+      "[model_providers.'custom']",
+      "[ model_providers . custom ]",
+      '["model_providers".custom]',
+    ]) {
+      const input = [
+        'model_provider = "custom"',
+        "",
+        header,
+        'name = "custom"',
+        'wire_api = "responses"',
+        "",
+        "[features]",
+        "",
+      ].join("\n");
+
+      const output = setCodexBaseUrl(input, "https://relay.example/v1");
+
+      const parsed = parseToml(output) as Record<string, any>;
+      expect(parsed.model_providers.custom, header).toEqual({
+        name: "custom",
+        wire_api: "responses",
+        base_url: "https://relay.example/v1",
+      });
+      expect(output.split(/^\s*\[/m), header).toHaveLength(3);
+      expect(extractCodexBaseUrl(output), header).toBe(
+        "https://relay.example/v1",
+      );
+      expect(
+        extractCodexBaseUrl(setCodexBaseUrl(output, "")),
+        header,
+      ).toBeUndefined();
+    }
+  });
+
+  it("writes base_url into a quoted provider table whose id needs quoting", () => {
+    const input = [
+      'model_provider = "my.relay"',
+      "",
+      '[model_providers."my.relay"]',
+      'name = "my.relay"',
+      "",
+    ].join("\n");
+
+    const output = setCodexBaseUrl(input, "https://relay.example/v1");
+
+    const parsed = parseToml(output) as Record<string, any>;
+    expect(Object.keys(parsed.model_providers)).toEqual(["my.relay"]);
+    expect(parsed.model_providers["my.relay"].base_url).toBe(
+      "https://relay.example/v1",
+    );
+  });
+
+  // Web 的表单不往 TOML 里写 bearer token（Key 存在 auth 里），只核对读取
+  it("reads the bearer token from a provider table whose header quotes the key", () => {
+    const input = [
+      'model_provider = "custom"',
+      "",
+      '[model_providers."custom"]',
+      'name = "custom"',
+      'experimental_bearer_token = "old"',
+      "",
+    ].join("\n");
+
+    expect(extractCodexExperimentalBearerToken(input)).toBe("old");
+  });
+
+  it("skips provider tables quoted inside a multi-line string", () => {
+    for (const delimiter of ['"""', "'''"]) {
+      const instructions = [
+        "Example:",
+        '[model_providers."custom"]',
+        'base_url = "https://example.invalid/v1"',
+        'experimental_bearer_token = "example-token"',
+        "",
+      ].join("\n");
+      const input = [
+        'model_provider = "custom"',
+        `developer_instructions = ${delimiter}`,
+        `${instructions}${delimiter}`,
+        "",
+        "[model_providers.custom]",
+        'name = "custom"',
+        'base_url = "https://old.invalid/v1"',
+        'experimental_bearer_token = "old-token"',
+        "",
+      ].join("\n");
+
+      expect(extractCodexBaseUrl(input), delimiter).toBe(
+        "https://old.invalid/v1",
+      );
+      expect(extractCodexExperimentalBearerToken(input), delimiter).toBe(
+        "old-token",
+      );
+
+      const output = setCodexBaseUrl(input, "https://new.invalid/v1");
+
+      const parsed = parseToml(output) as Record<string, any>;
+      expect(parsed.developer_instructions, delimiter).toBe(instructions);
+      expect(parsed.model_providers.custom, delimiter).toEqual({
+        name: "custom",
+        base_url: "https://new.invalid/v1",
+        experimental_bearer_token: "old-token",
+      });
+    }
+  });
+
   it("never redefines a custom table the line scan cannot see", () => {
     for (const input of [
       'model = "m"\n\n[model_providers.custom] # mine\nname = "custom"\nwire_api = "responses"\n',
@@ -384,5 +496,185 @@ describe("Codex [agents] subagent defaults", () => {
     const updated = setCodexAgentsString(input, "default_subagent_model", "m");
     expect(() => parseToml(updated)).not.toThrow();
     expect((parseToml(updated) as any).agents).toEqual({ max_threads: 4 });
+  });
+});
+
+// 上游 ddcb1117：数组表头 [[...]] 也算表头
+describe("setCodexBaseUrl with array-of-tables headers", () => {
+  it("writes base_url inside [model_providers.custom] when [[skills.config]] follows", () => {
+    // Regression: [[skills.config]] is an array-of-tables header ([[...]])
+    // that the section regex did not recognize, so the section range extended
+    // past it and base_url was appended after the skills content — landing
+    // inside skills.config[0] instead of model_providers.custom.
+    const input = `model_provider = "custom"
+model = "gpt-5.5"
+
+[model_providers.custom]
+name = "custom"
+wire_api = "responses"
+requires_openai_auth = true
+
+[[skills.config]]
+path = "/path/to/some-skill/SKILL.md"
+enabled = false
+`;
+
+    const result = setCodexBaseUrl(input, "https://relay.example.com/v1");
+
+    // base_url must be inside [model_providers.custom], i.e. before the
+    // [[skills.config]] header.
+    const baseUrlLine = 'base_url = "https://relay.example.com/v1"';
+    const baseUrlIndex = result.indexOf(baseUrlLine);
+    const skillsHeaderIndex = result.indexOf("[[skills.config]]");
+    expect(baseUrlIndex).toBeGreaterThan(-1);
+    expect(skillsHeaderIndex).toBeGreaterThan(-1);
+    expect(baseUrlIndex).toBeLessThan(skillsHeaderIndex);
+
+    // Round-trip: extractCodexBaseUrl must find it in the custom table.
+    expect(extractCodexBaseUrl(result)).toBe("https://relay.example.com/v1");
+  });
+
+  it("writes base_url inside [model_providers.custom] when [[skills.config]] precedes it", () => {
+    const input = `model_provider = "custom"
+model = "gpt-5.5"
+
+[[skills.config]]
+path = "/path/to/some-skill/SKILL.md"
+enabled = false
+
+[model_providers.custom]
+name = "custom"
+wire_api = "responses"
+requires_openai_auth = true
+`;
+
+    const result = setCodexBaseUrl(input, "https://relay.example.com/v1");
+
+    // base_url must be after [model_providers.custom] and NOT inside the
+    // skills.config array that precedes it.
+    const baseUrlLine = 'base_url = "https://relay.example.com/v1"';
+    const baseUrlIndex = result.indexOf(baseUrlLine);
+    const customHeaderIndex = result.indexOf("[model_providers.custom]");
+    expect(baseUrlIndex).toBeGreaterThan(customHeaderIndex);
+
+    // The skills.config block must not contain base_url.
+    const skillsBlock = result.slice(
+      result.indexOf("[[skills.config]]"),
+      result.indexOf("[model_providers.custom]"),
+    );
+    expect(skillsBlock).not.toContain("base_url");
+
+    expect(extractCodexBaseUrl(result)).toBe("https://relay.example.com/v1");
+  });
+
+  it("recovers base_url from a corrupted [[skills.config]] entry", () => {
+    // v4.0.21 wrote base_url inside [[skills.config]] instead of
+    // [model_providers.custom]. When the user edits the URL again,
+    // the fix must move it to the custom table and remove the stale
+    // entry from skills.config[0].
+    const input = `model_provider = "custom"
+
+[model_providers.custom]
+name = "custom"
+wire_api = "responses"
+requires_openai_auth = true
+
+[[skills.config]]
+path = "/synthetic/example/SKILL.md"
+enabled = false
+base_url = "https://old.example/v1"
+`;
+
+    const result = setCodexBaseUrl(input, "https://new.example/v1");
+
+    // The new base_url must be in [model_providers.custom].
+    expect(extractCodexBaseUrl(result)).toBe("https://new.example/v1");
+
+    // The old URL must be gone entirely.
+    expect(result).not.toContain("https://old.example/v1");
+
+    // The skills.config block must not contain base_url.
+    const skillsBlock = result.slice(result.indexOf("[[skills.config]]"));
+    expect(skillsBlock).not.toContain("base_url");
+
+    // Skill path and enabled flag must be preserved.
+    expect(skillsBlock).toContain('path = "/synthetic/example/SKILL.md"');
+    expect(skillsBlock).toContain("enabled = false");
+  });
+});
+
+// 上游 a9e607c3：子代理并发上限
+describe("Codex [agents] sub-agent concurrency limit", () => {
+  const base = [
+    'model = "gpt-a"',
+    "",
+    "[mcp_servers.fs]",
+    'command = "fs"',
+  ].join("\n");
+
+  it("writes max_threads into a new [agents] table and removes it when cleared", () => {
+    const updated = setCodexAgentsMaxThreads(base, 8);
+    expect((parseToml(updated) as any).agents).toEqual({ max_threads: 8 });
+    expect(extractCodexAgentsMaxThreads(updated)).toBe(8);
+
+    const cleared = setCodexAgentsMaxThreads(updated, undefined);
+    expect(cleared.trim()).toBe(base);
+    expect(extractCodexAgentsMaxThreads(cleared)).toBeUndefined();
+  });
+
+  it("keeps the canonical name in place and the other [agents] keys", () => {
+    const input = [
+      "[agents]",
+      "max_concurrent_threads_per_session = 2 # mine",
+      'default_subagent_model = "m"',
+    ].join("\n");
+    expect(extractCodexAgentsMaxThreads(input)).toBe(2);
+
+    const updated = setCodexAgentsMaxThreads(input, 12);
+    expect(updated).toContain("max_concurrent_threads_per_session = 12");
+    expect(updated).not.toContain("max_threads");
+    expect((parseToml(updated) as any).agents.default_subagent_model).toBe("m");
+
+    const cleared = setCodexAgentsMaxThreads(updated, undefined);
+    expect((parseToml(cleared) as any).agents).toEqual({
+      default_subagent_model: "m",
+    });
+  });
+
+  it("drops the duplicate spelling so Codex does not reject the config", () => {
+    const input =
+      "[agents]\nmax_threads = 2\nmax_concurrent_threads_per_session = 3\n";
+    const updated = setCodexAgentsMaxThreads(input, 5);
+    expect((parseToml(updated) as any).agents).toEqual({
+      max_concurrent_threads_per_session: 5,
+    });
+  });
+
+  it("does not mistake the multi_agent_v2 key for the [agents] one", () => {
+    const input = [
+      "[features.multi_agent_v2]",
+      "enabled = true",
+      "max_concurrent_threads_per_session = 6",
+    ].join("\n");
+    expect(extractCodexAgentsMaxThreads(input)).toBeUndefined();
+    expect(extractCodexMultiAgentV2Total(input)).toBe(6);
+
+    const parsed = parseToml(setCodexAgentsMaxThreads(input, 4)) as any;
+    expect(parsed.agents).toEqual({ max_threads: 4 });
+    expect(
+      parsed.features.multi_agent_v2.max_concurrent_threads_per_session,
+    ).toBe(6);
+  });
+
+  it("reads half-edited TOML line by line and ignores 0", () => {
+    expect(
+      extractCodexAgentsMaxThreads("[agents]\nmax_threads = 7\nbroken = ["),
+    ).toBe(7);
+    expect(
+      extractCodexAgentsMaxThreads("[agents]\nmax_threads = 0\n"),
+    ).toBeUndefined();
+    expect(extractCodexAgentsMaxThreads("agents = { max_threads = 3 }\n")).toBe(
+      3,
+    );
   });
 });

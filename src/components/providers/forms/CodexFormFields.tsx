@@ -1,8 +1,48 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { FormLabel } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { fieldClass, Input } from "@/components/ui/input";
+import { HoverTip } from "@/components/ui/hover-tip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -18,9 +58,11 @@ import {
 } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
   Download,
+  GripVertical,
   Loader2,
   Plus,
   Trash2,
@@ -50,6 +92,7 @@ import {
 import {
   fetchModelsForConfig,
   fetchXaiOauthModels,
+  modelFetchRequestHeaders,
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
@@ -164,6 +207,10 @@ interface CodexFormFieldsProps {
   onSubagentModelChange?: (model: string) => void;
   subagentReasoningEffort?: string;
   onSubagentReasoningEffortChange?: (effort: string) => void;
+  // 子代理并发上限（config.toml 的 `[agents] max_threads`）：Codex 的全局设置，保存时写进 live
+  agentMaxThreads?: string;
+  multiAgentV2Total?: number;
+  onAgentMaxThreadsChange?: (value: string) => void;
 
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
@@ -216,6 +263,72 @@ function createCatalogRow(seed?: Partial<CodexCatalogModel>): CodexCatalogRow {
   };
 }
 
+// 拖动行首手柄换行序（上游 05034a4e）。Web 的默认模型是单独字段，第一行不代表它，
+// 只换顺序：Codex 的 /model 菜单按这个顺序列出。
+export function reorderCatalogRows<T extends { rowId: string }>(
+  rows: T[],
+  activeId: string,
+  overId: string,
+): T[] | null {
+  const from = rows.findIndex((row) => row.rowId === activeId);
+  const to = rows.findIndex((row) => row.rowId === overId);
+  if (from === -1 || to === -1 || from === to) return null;
+  return arrayMove(rows, from, to);
+}
+
+// 模型列表只能上下拖。
+const verticalOnly: Modifier[] = [({ transform }) => ({ ...transform, x: 0 })];
+
+function SortableCatalogRow({
+  id,
+  canDrag,
+  children,
+}: {
+  id: string;
+  canDrag: boolean;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled: !canDrag });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        position: "relative",
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      className={cn(
+        "flex items-start gap-1",
+        isDragging && "rounded-md bg-background shadow-md",
+      )}
+    >
+      {/* 只有一行时没东西可换，手柄隐藏但留着位置，各列照旧和表头对齐 */}
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        disabled={!canDrag}
+        className="flex h-9 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing disabled:invisible"
+        aria-label={t("provider.dragHandle", { defaultValue: "拖拽排序" })}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 function catalogRowsMatchModels(
   rows: CodexCatalogModel[],
   models: CodexCatalogModel[],
@@ -237,6 +350,214 @@ function catalogRowsMatchModels(
       (row.defaultReasoningLevel ?? "") === (model.defaultReasoningLevel ?? "")
     );
   });
+}
+
+// Trigger label for the picked levels, kept narrow for the catalog cell. Each
+// run of three or more adjacent canonical levels collapses to "first → last"
+// ("none, low → max" when minimal is skipped); a range never spans a gap, so
+// it can't imply an unpicked level. Non-canonical order stays a plain list.
+export function formatReasoningLevelsLabel(levels: string[]): string {
+  const canonical = CODEX_REASONING_LEVELS as readonly string[];
+  const positions = levels.map((level) => canonical.indexOf(level));
+  const ordered = positions.every(
+    (position, index) =>
+      position >= 0 && (index === 0 || position > positions[index - 1]),
+  );
+  if (!ordered) return levels.join(", ");
+
+  const parts: string[] = [];
+  let runStart = 0;
+  for (let index = 1; index <= levels.length; index++) {
+    if (
+      index < levels.length &&
+      positions[index] === positions[index - 1] + 1
+    ) {
+      continue;
+    }
+    const run = levels.slice(runStart, index);
+    if (run.length >= 3) {
+      parts.push(`${run[0]} → ${run[run.length - 1]}`);
+    } else {
+      parts.push(...run);
+    }
+    runStart = index;
+  }
+  return parts.join(", ");
+}
+
+// Sentinel for the default-level Select: Radix Select forbids empty item
+// values, so "back to Auto" needs a non-empty value mapped to undefined.
+const AUTO_DEFAULT_REASONING_LEVEL = "__auto__";
+
+function ReasoningLevelsEditor({
+  levels,
+  defaultLevel,
+  onLevelsChange,
+  onDefaultLevelChange,
+}: {
+  levels?: string[];
+  defaultLevel?: string;
+  onLevelsChange: (levels: string[] | undefined) => void;
+  onDefaultLevelChange: (level: string | undefined) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const selected = (levels ?? []).filter((level) =>
+    (CODEX_REASONING_LEVELS as readonly string[]).includes(level),
+  );
+
+  const toggleLevel = (level: string) => {
+    const picked = selected.includes(level)
+      ? selected.filter((item) => item !== level)
+      : [...selected, level];
+    // Store in canonical ascending-depth order (not click order): the Codex
+    // picker and the generated catalog both follow array order.
+    const next = (CODEX_REASONING_LEVELS as readonly string[]).filter((item) =>
+      picked.includes(item),
+    );
+    onLevelsChange(next.length > 0 ? next : undefined);
+    if (defaultLevel && !next.includes(defaultLevel)) {
+      onDefaultLevelChange(undefined);
+    }
+  };
+
+  const triggerLabel =
+    selected.length > 0
+      ? formatReasoningLevelsLabel(selected)
+      : t("codexConfig.reasoningLevelsNotSet", {
+          defaultValue: "Not set",
+        });
+
+  // The label may be a range or truncated, so hovering spells out every
+  // picked level plus the default one.
+  const triggerTip =
+    selected.length > 0 ? (
+      <>
+        <div>{selected.join(", ")}</div>
+        {defaultLevel && (
+          <div>
+            {t("codexConfig.defaultReasoningLevelTip", {
+              level: defaultLevel,
+              defaultValue: "Default level: {{level}}",
+            })}
+          </div>
+        )}
+      </>
+    ) : undefined;
+
+  return (
+    <Popover modal open={open} onOpenChange={setOpen}>
+      <HoverTip content={triggerTip}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            // 和同一行的 Input、Select 同一套外观，行高才对得齐。
+            className={cn(
+              fieldClass,
+              "flex h-9 w-full items-center justify-between gap-1 whitespace-nowrap text-start",
+            )}
+          >
+            <span
+              className={cn(
+                "truncate",
+                selected.length === 0 && "text-muted-foreground",
+              )}
+            >
+              {triggerLabel}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+          </button>
+        </PopoverTrigger>
+      </HoverTip>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        avoidCollisions
+        collisionPadding={8}
+        // Flipping alone can't help when neither side of the trigger has
+        // room for the whole panel (short window, row mid-form): cap it to
+        // the space Radix measured and let the level list scroll instead of
+        // cutting off the bottom, including the default-level picker.
+        className="z-[1000] flex max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] flex-col p-0 border-border"
+      >
+        <Command className="min-h-0 flex-1">
+          <CommandInput
+            placeholder={t("codexConfig.reasoningLevelsSearch", {
+              defaultValue: "Search reasoning levels...",
+            })}
+          />
+          <CommandList>
+            <CommandEmpty>
+              {t("codexConfig.reasoningLevelsEmpty", {
+                defaultValue: "No levels",
+              })}
+            </CommandEmpty>
+            <CommandGroup>
+              {CODEX_REASONING_LEVELS.map((level) => (
+                <CommandItem
+                  key={level}
+                  value={level}
+                  onSelect={() => toggleLevel(level)}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      selected.includes(level) ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span className="flex-1">{level}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+        {selected.length > 0 && (
+          <div className="shrink-0 border-t border-border p-2">
+            <span className="text-xs text-muted-foreground">
+              {t("codexConfig.defaultReasoningLevelLabel", {
+                defaultValue: "Default level",
+              })}
+            </span>
+            <Select
+              value={defaultLevel ?? AUTO_DEFAULT_REASONING_LEVEL}
+              onValueChange={(value) =>
+                onDefaultLevelChange(
+                  value === AUTO_DEFAULT_REASONING_LEVEL ? undefined : value,
+                )
+              }
+            >
+              <SelectTrigger className="mt-1 h-8 w-full">
+                <SelectValue
+                  placeholder={t(
+                    "codexConfig.defaultReasoningLevelPlaceholder",
+                    { defaultValue: "Auto" },
+                  )}
+                />
+              </SelectTrigger>
+              {/* Must render above the enclosing z-[1000] popover: the
+                  default SelectContent z-[100] would hide the menu behind
+                  the panel when it flips upward. */}
+              <SelectContent className="z-[1100]">
+                <SelectItem value={AUTO_DEFAULT_REASONING_LEVEL}>
+                  {t("codexConfig.defaultReasoningLevelPlaceholder", {
+                    defaultValue: "Auto",
+                  })}
+                </SelectItem>
+                {selected.map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {level}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function CodexFormFields({
@@ -290,6 +611,9 @@ export function CodexFormFields({
   onSubagentModelChange,
   subagentReasoningEffort = "",
   onSubagentReasoningEffortChange,
+  agentMaxThreads = "",
+  multiAgentV2Total,
+  onAgentMaxThreadsChange,
   speedTestEndpoints,
   customUserAgent,
   onCustomUserAgentChange,
@@ -306,6 +630,21 @@ export function CodexFormFields({
     catalogModels.map((model) => createCatalogRow(model)),
   );
   const lastSentModelsRef = useRef<CodexCatalogModel[]>(catalogModels);
+  const catalogSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const handleCatalogDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    setCatalogRows(
+      (current) =>
+        reorderCatalogRows(current, String(active.id), String(over.id)) ??
+        current,
+    );
+  }, []);
   // Copilot 自动模式按 Chat 的能力选项展示（Responses 原生模型也兼容这些选项）
   const effectiveApiFormat = isCopilotPreset
     ? copilotApiFormat === "auto"
@@ -355,6 +694,8 @@ export function CodexFormFields({
     copilotApiFormat,
     isCopilotAuthenticated,
     selectedGitHubAccountId,
+    // Header 覆盖也是请求身份：/models 可能按请求头身份返回，换了就清掉旧列表
+    localProxyHeadersOverride,
     isXaiOauthPreset,
     isXaiOauthAuthenticated,
     selectedXaiAccountId,
@@ -700,6 +1041,9 @@ export function CodexFormFields({
       isFullUrl,
       undefined,
       customUserAgent,
+      {
+        requestHeaders: modelFetchRequestHeaders(localProxyHeadersOverride),
+      },
     )
       .then((models) => {
         if (seq !== fetchModelsSeqRef.current) return;
@@ -731,6 +1075,7 @@ export function CodexFormFields({
     isFullUrl,
     isXaiOauthAuthenticated,
     isXaiOauthPreset,
+    localProxyHeadersOverride,
     modelName,
     onCatalogModelsChange,
     onModelNameChange,
@@ -935,6 +1280,36 @@ export function CodexFormFields({
                   {t("codexConfig.addToModelMapping")}
                 </Button>
               )}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 子代理并发上限 —— config.toml 的 [agents] max_threads，Codex 的全局设置（官方供应商也显示），
+          保存时写进 live。留空删键，回到 Codex 默认值（上游 a9e607c3）。 */}
+      {!isGrokBuild && onAgentMaxThreadsChange && (
+        <div className="space-y-2">
+          <label
+            htmlFor="codexAgentMaxThreads"
+            className="block text-sm font-medium text-foreground"
+          >
+            {t("codexConfig.agentMaxThreadsLabel")}
+          </label>
+          <Input
+            id="codexAgentMaxThreads"
+            value={agentMaxThreads}
+            inputMode="numeric"
+            onChange={(event) => onAgentMaxThreadsChange(event.target.value)}
+            placeholder={t("codexConfig.agentMaxThreadsPlaceholder")}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("codexConfig.agentMaxThreadsHint")}
+          </p>
+          {multiAgentV2Total !== undefined && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t("codexConfig.agentMaxThreadsV2Override", {
+                total: multiAgentV2Total,
+              })}
             </p>
           )}
         </div>
@@ -1190,88 +1565,135 @@ export function CodexFormFields({
                   </Button>
                 </div>
 
-                {catalogRows.map((row, index) => (
-                  <div
-                    key={row.rowId}
-                    className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_140px_36px]"
+                <DndContext
+                  sensors={catalogSensors}
+                  collisionDetection={closestCenter}
+                  modifiers={verticalOnly}
+                  onDragEnd={handleCatalogDragEnd}
+                >
+                  <SortableContext
+                    items={catalogRows.map((row) => row.rowId)}
+                    strategy={verticalListSortingStrategy}
                   >
-                    <Input
-                      value={row.displayName ?? ""}
-                      onChange={(event) =>
-                        setCatalogRows((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? { ...item, displayName: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder={t(
-                        "codexConfig.catalogDisplayNamePlaceholder",
-                      )}
-                      aria-label={t("codexConfig.catalogColumnDisplay")}
-                    />
-                    <div className="flex gap-1">
-                      <Input
-                        value={row.model}
-                        onChange={(event) =>
-                          setCatalogRows((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? { ...item, model: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                        placeholder={t("codexConfig.catalogModelPlaceholder")}
-                        aria-label={t("codexConfig.catalogColumnModel")}
-                      />
-                      {fetchedModels.length > 0 && (
-                        <ModelDropdown
-                          models={fetchedModels}
-                          onSelect={(id) =>
-                            selectFetchedCatalogModel(row.rowId, id)
-                          }
-                        />
-                      )}
-                    </div>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={row.contextWindow ?? ""}
-                      onChange={(event) =>
-                        setCatalogRows((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? {
-                                  ...item,
-                                  contextWindow: event.target.value.replace(
-                                    /[^\d]/g,
-                                    "",
+                    {catalogRows.map((row, index) => (
+                      <SortableCatalogRow
+                        key={row.rowId}
+                        id={row.rowId}
+                        canDrag={catalogRows.length > 1}
+                      >
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_minmax(0,140px)_36px]">
+                          <Input
+                            value={row.displayName ?? ""}
+                            onChange={(event) =>
+                              setCatalogRows((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        displayName: event.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            placeholder={t(
+                              "codexConfig.catalogDisplayNamePlaceholder",
+                            )}
+                            aria-label={t("codexConfig.catalogColumnDisplay")}
+                          />
+                          <div className="flex gap-1">
+                            <Input
+                              value={row.model}
+                              onChange={(event) =>
+                                setCatalogRows((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...item, model: event.target.value }
+                                      : item,
                                   ),
+                                )
+                              }
+                              placeholder={t(
+                                "codexConfig.catalogModelPlaceholder",
+                              )}
+                              aria-label={t("codexConfig.catalogColumnModel")}
+                            />
+                            {fetchedModels.length > 0 && (
+                              <ModelDropdown
+                                models={fetchedModels}
+                                onSelect={(id) =>
+                                  selectFetchedCatalogModel(row.rowId, id)
                                 }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder={t("codexConfig.contextWindowPlaceholder")}
-                      aria-label={t("codexConfig.catalogColumnContext")}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        setCatalogRows((current) =>
-                          current.filter((_, itemIndex) => itemIndex !== index),
-                        )
-                      }
-                      title={t("common.delete")}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                              />
+                            )}
+                          </div>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={row.contextWindow ?? ""}
+                            onChange={(event) =>
+                              setCatalogRows((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        contextWindow:
+                                          event.target.value.replace(
+                                            /[^\d]/g,
+                                            "",
+                                          ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            placeholder={t(
+                              "codexConfig.contextWindowPlaceholder",
+                            )}
+                            aria-label={t("codexConfig.catalogColumnContext")}
+                          />
+                          <ReasoningLevelsEditor
+                            levels={row.reasoningLevels}
+                            defaultLevel={row.defaultReasoningLevel}
+                            onLevelsChange={(levels) =>
+                              setCatalogRows((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, reasoningLevels: levels }
+                                    : item,
+                                ),
+                              )
+                            }
+                            onDefaultLevelChange={(level) =>
+                              setCatalogRows((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, defaultReasoningLevel: level }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setCatalogRows((current) =>
+                                current.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              )
+                            }
+                            title={t("common.delete")}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </SortableCatalogRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </div>
             )}
 

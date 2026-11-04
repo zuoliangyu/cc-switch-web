@@ -149,3 +149,36 @@ describe("CodexFormFields 子代理与自动审批", () => {
     ).toBeInTheDocument();
   });
 });
+
+// 上游 a9e607c3：子代理并发上限（Codex 的全局设置，官方卡也显示）
+const maxThreadsInput = () =>
+  document.getElementById("codexAgentMaxThreads") as HTMLInputElement | null;
+
+describe("CodexFormFields sub-agent concurrency limit", () => {
+  it("shows the value and writes the typed text through the handler", () => {
+    const onAgentMaxThreadsChange = vi.fn();
+    renderForm({ agentMaxThreads: "8", onAgentMaxThreadsChange });
+    expect(maxThreadsInput()!.value).toBe("8");
+
+    fireEvent.change(maxThreadsInput()!, { target: { value: "12" } });
+    expect(onAgentMaxThreadsChange).toHaveBeenCalledWith("12");
+  });
+
+  it("is shown for the official card too: it is a Codex-wide setting", () => {
+    renderForm({ category: "official", onAgentMaxThreadsChange: vi.fn() });
+    expect(maxThreadsInput()).not.toBeNull();
+    expect(subagentInput()).toBeNull();
+  });
+
+  it("is hidden when the caller gives no handler", () => {
+    renderForm();
+    expect(maxThreadsInput()).toBeNull();
+  });
+
+  it("points out a multi_agent_v2 total that takes precedence", () => {
+    renderForm({ multiAgentV2Total: 5, onAgentMaxThreadsChange: vi.fn() });
+    expect(
+      screen.getByText("codexConfig.agentMaxThreadsV2Override"),
+    ).toBeTruthy();
+  });
+});

@@ -5,7 +5,10 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { overlayGeminiProviderFields } from "@/utils/geminiEditorOverlay";
-import { overlayClaudeProviderFields } from "@/utils/claudeEditorOverlay";
+import {
+  overlayClaudeProviderFields,
+  withClaudeGatewayDefaults,
+} from "@/utils/claudeEditorOverlay";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -67,6 +70,7 @@ import {
   applyTemplateValues,
   extractCodexModelName,
   extractCodexWireApi,
+  getApiKeyFromConfig,
   hasApiKeyField,
   setCodexModelName as setCodexModelNameInConfig,
   setCodexWireApi,
@@ -447,7 +451,13 @@ function ProviderFormFull({
                   : JSON.stringify(
                       overlayClaudeProviderFields(
                         providerLiveBase ?? {},
-                        JSON.parse(CLAUDE_DEFAULT_CONFIG),
+                        withClaudeGatewayDefaults(
+                          JSON.parse(CLAUDE_DEFAULT_CONFIG) as Record<
+                            string,
+                            unknown
+                          >,
+                          "custom",
+                        ),
                       ),
                       null,
                       2,
@@ -467,8 +477,18 @@ function ProviderFormFull({
 
   const handleSettingsConfigChange = useCallback(
     (config: string) => {
+      if (form.getValues("settingsConfig") === config) {
+        return;
+      }
       form.setValue("settingsConfig", config);
     },
+    [form],
+  );
+
+  // 事件处理要现读 settingsConfig，不能按渲染期的快照重建 JSON：JSON 编辑器经
+  // form.setValue 写入，渲染期取的快照可能早于这些改动（上游 3817c2b2）。
+  const getSettingsConfig = useCallback(
+    () => form.getValues("settingsConfig"),
     [form],
   );
 
@@ -495,6 +515,7 @@ function ProviderFormFull({
   } = useApiKeyState({
     initialConfig: form.getValues("settingsConfig"),
     onConfigChange: handleSettingsConfigChange,
+    getConfig: getSettingsConfig,
     selectedPresetId,
     category,
     appType: appId,
@@ -508,6 +529,7 @@ function ProviderFormFull({
     codexConfig: "",
     onSettingsConfigChange: handleSettingsConfigChange,
     onCodexConfigChange: () => {},
+    getSettingsConfig,
   });
 
   const {
@@ -525,7 +547,27 @@ function ProviderFormFull({
   } = useModelState({
     settingsConfig: form.getValues("settingsConfig"),
     onConfigChange: handleSettingsConfigChange,
+    getSettingsConfig,
   });
+
+  // 提交时的校验和身份判断要按 JSON 编辑器里的当前内容，不能用上一次渲染时 hook
+  // 里的旧状态。
+  const readSubmitTimeCredentials = useCallback(() => {
+    const raw = getSettingsConfig() || "{}";
+    let parsedBaseUrl: string | null = null;
+    try {
+      const parsed = JSON.parse(raw) as { env?: Record<string, unknown> };
+      const candidate = parsed.env?.ANTHROPIC_BASE_URL;
+      parsedBaseUrl = typeof candidate === "string" ? candidate.trim() : "";
+    } catch {
+      // JSON 校验会提示格式错误；改好之前辅助检查沿用 hook 状态
+      parsedBaseUrl = null;
+    }
+    return {
+      baseUrl: parsedBaseUrl ?? baseUrl,
+      apiKey: parsedBaseUrl === null ? apiKey : getApiKeyFromConfig(raw, appId),
+    };
+  }, [apiKey, appId, baseUrl, getSettingsConfig]);
 
   const [localApiFormat, setLocalApiFormat] = useState<ClaudeApiFormat>(() => {
     if (appId !== "claude") return "anthropic";
@@ -550,7 +592,6 @@ function ProviderFormFull({
           delete config.env[prev];
           config.env[field] = value;
           const updated = JSON.stringify(config, null, 2);
-          form.setValue("settingsConfig", updated);
           handleSettingsConfigChange(updated);
         }
       } catch {
@@ -607,8 +648,11 @@ function ProviderFormFull({
     setCodexAutoReviewModel,
     codexSubagentModel,
     codexSubagentReasoningEffort,
+    codexAgentMaxThreads,
+    codexMultiAgentV2Total,
     handleCodexSubagentModelChange,
     handleCodexSubagentReasoningEffortChange,
+    handleCodexAgentMaxThreadsChange,
     codexAuthError,
     setCodexAuth,
     setCodexConfig,
@@ -624,6 +668,9 @@ function ProviderFormFull({
   // 其次从 TOML config 里的 wire_api 推断，回退到 openai_responses。
   const [localCodexApiFormat, setLocalCodexApiFormat] =
     useState<CodexApiFormat>(() => {
+      // 托管 Copilot 的协议在 codexCopilotApiFormat 里，旧卡残留的 apiFormat 不再作数
+      if (initialData?.meta?.providerType === "github_copilot")
+        return "openai_responses";
       if (initialData?.meta?.apiFormat === "openai_chat") return "openai_chat";
       if (initialData?.meta?.apiFormat === "openai_responses")
         return "openai_responses";
@@ -638,10 +685,15 @@ function ProviderFormFull({
       );
     });
   // Codex → GitHub Copilot 的协议选择：缺省为自动（按模型能力选 Responses / Chat）
-  const [codexCopilotApiFormat, setCodexCopilotApiFormat] =
-    useState<CodexCopilotApiFormat>(
-      () => initialData?.meta?.codexCopilotApiFormat ?? "auto",
-    );
+  // 原样保留新版本写下的值，用户改了协议才换掉。
+  const [codexCopilotApiFormat, setCodexCopilotApiFormat] = useState<string>(
+    () => initialData?.meta?.codexCopilotApiFormat ?? "auto",
+  );
+  const effectiveCodexCopilotApiFormat: CodexCopilotApiFormat =
+    codexCopilotApiFormat === "openai_chat" ||
+    codexCopilotApiFormat === "openai_responses"
+      ? codexCopilotApiFormat
+      : "auto";
   const [codexCatalogEnabled, setCodexCatalogEnabled] = useState(
     () => codexCatalogCountFromSettings(initialData?.settingsConfig) > 0,
   );
@@ -676,12 +728,18 @@ function ProviderFormFull({
     [setCodexConfig, debouncedValidate],
   );
 
+  // Copilot 的协议另存（codexCopilotApiFormat），不再借 apiFormat 存一个代表值；
+  // Codex 对代理始终说 Responses。
   const handleCodexCopilotApiFormatChange = useCallback(
     (format: CodexCopilotApiFormat) => {
       setCodexCopilotApiFormat(format);
-      handleCodexApiFormatChange(format === "auto" ? "openai_chat" : format);
+      setCodexConfig((prev) => {
+        const updated = setCodexWireApi(prev, "responses");
+        debouncedValidate(updated);
+        return updated;
+      });
     },
-    [handleCodexApiFormatChange],
+    [setCodexConfig, debouncedValidate],
   );
 
   useEffect(() => {
@@ -784,6 +842,7 @@ function ProviderFormFull({
     selectedPresetId: appId === "claude" ? selectedPresetId : null,
     presetEntries: appId === "claude" ? presetEntries : [],
     settingsConfig: form.getValues("settingsConfig"),
+    getSettingsConfig,
     onConfigChange: handleSettingsConfigChange,
   });
 
@@ -868,10 +927,10 @@ function ProviderFormFull({
           config.env = {};
         }
         config.env[key] = value;
-        form.setValue("settingsConfig", JSON.stringify(config, null, 2));
+        handleSettingsConfigChange(JSON.stringify(config, null, 2));
       } catch {}
     },
-    [form],
+    [form, handleSettingsConfigChange],
   );
 
   const handleGeminiApiKeyChange = useCallback(
@@ -946,8 +1005,8 @@ function ProviderFormFull({
     initialData,
     appId,
     providerId,
-    onSettingsConfigChange: (config) => form.setValue("settingsConfig", config),
-    getSettingsConfig: () => form.getValues("settingsConfig"),
+    onSettingsConfigChange: handleSettingsConfigChange,
+    getSettingsConfig,
   });
   const isNativeOpencode =
     appId === "opencode" &&
@@ -998,8 +1057,8 @@ function ProviderFormFull({
     initialData,
     appId,
     providerId,
-    onSettingsConfigChange: (config) => form.setValue("settingsConfig", config),
-    getSettingsConfig: () => form.getValues("settingsConfig"),
+    onSettingsConfigChange: handleSettingsConfigChange,
+    getSettingsConfig,
   });
   const {
     data: openclawLiveProviderIds = [],
@@ -1010,8 +1069,8 @@ function ProviderFormFull({
     initialData,
     appId,
     providerId,
-    onSettingsConfigChange: (config) => form.setValue("settingsConfig", config),
-    getSettingsConfig: () => form.getValues("settingsConfig"),
+    onSettingsConfigChange: handleSettingsConfigChange,
+    getSettingsConfig,
   });
   const {
     data: hermesLiveProviderIds = [],
@@ -1255,10 +1314,16 @@ function ProviderFormFull({
     // GitHub Copilot 使用 OAuth 认证，不需要 API Key
     // Codex 只按供应商类型认托管 Copilot：自建中转（地址里带 githubcopilot.com）保留自己的
     // Key 和端点
+    const { baseUrl: submitBaseUrl, apiKey: submitApiKey } =
+      readSubmitTimeCredentials();
     const isCopilotProvider =
       presetProviderType === "github_copilot" ||
       initialData?.meta?.providerType === "github_copilot" ||
-      (appId !== "codex" && baseUrl.includes("githubcopilot.com"));
+      (appId !== "codex" && submitBaseUrl.includes("githubcopilot.com"));
+    // 自动协议可能按请求选 Chat，Chat 专属选项照样保留
+    const isCodexChatFormat = isCopilotProvider
+      ? effectiveCodexCopilotApiFormat !== "openai_responses"
+      : localCodexApiFormat === "openai_chat";
     const isCodexOauthProvider =
       presetProviderType === "codex_oauth" ||
       initialData?.meta?.providerType === "codex_oauth";
@@ -1328,7 +1393,11 @@ function ProviderFormFull({
 
     if (category !== "official" && category !== "cloud_provider") {
       if (appId === "claude") {
-        if (!isCodexOauthProvider && !isXaiOauthProvider && !baseUrl.trim()) {
+        if (
+          !isCodexOauthProvider &&
+          !isXaiOauthProvider &&
+          !submitBaseUrl.trim()
+        ) {
           toast.error(
             t("providerForm.endpointRequired", {
               defaultValue: "非官方供应商请填写 API 端点",
@@ -1340,7 +1409,7 @@ function ProviderFormFull({
           !isCopilotProvider &&
           !isCodexOauthProvider &&
           !isXaiOauthProvider &&
-          !apiKey.trim()
+          !submitApiKey.trim()
         ) {
           toast.error(
             t("providerForm.apiKeyRequired", {
@@ -1640,15 +1709,13 @@ function ProviderFormFull({
           ? selectedGitHubAccountId
           : undefined,
       codexChatReasoning:
-        appId === "codex" &&
-        category !== "official" &&
-        localCodexApiFormat === "openai_chat"
+        appId === "codex" && category !== "official" && isCodexChatFormat
           ? normalizeCodexChatReasoningForSave(codexChatReasoning)
           : undefined,
       promptCacheRouting:
         appId === "codex" &&
         category !== "official" &&
-        localCodexApiFormat === "openai_chat" &&
+        isCodexChatFormat &&
         promptCacheRouting !== "auto"
           ? promptCacheRouting
           : undefined,
@@ -1674,14 +1741,11 @@ function ProviderFormFull({
           ? isXaiOauthProvider
             ? "openai_responses"
             : localApiFormat
-          : appId === "codex" && category !== "official"
-            ? isCopilotProvider
-              ? codexCopilotApiFormat === "auto"
-                ? "openai_chat"
-                : codexCopilotApiFormat
-              : isXaiOauthProvider
-                ? "openai_responses"
-                : localCodexApiFormat
+          : // 托管 Copilot 不存 apiFormat（旧卡上的代表值随保存去掉）
+            appId === "codex" && category !== "official" && !isCopilotProvider
+            ? isXaiOauthProvider
+              ? "openai_responses"
+              : localCodexApiFormat
             : undefined,
       codexCopilotApiFormat:
         appId === "codex" &&
@@ -1722,6 +1786,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: baseUrl,
   });
 
   const {
@@ -1735,6 +1800,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: codexBaseUrl,
   });
 
   const {
@@ -1748,6 +1814,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: geminiBaseUrl,
   });
 
   const {
@@ -1761,6 +1828,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: opencodeForm.opencodeBaseUrl,
   });
 
   // 使用 API Key 链接 hook (OpenClaw)
@@ -1775,6 +1843,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: openclawForm.openclawBaseUrl,
   });
 
   const {
@@ -1788,6 +1857,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: hermesForm.hermesBaseUrl,
   });
 
   // 使用端点测速候选 hook
@@ -1976,7 +2046,13 @@ function ProviderFormFull({
     const preset = entry.preset as ProviderPreset;
     const config = overlayClaudeProviderFields(
       providerLiveBase ?? {},
-      applyTemplateValues(preset.settingsConfig, preset.templateValues),
+      withClaudeGatewayDefaults(
+        applyTemplateValues(
+          preset.settingsConfig,
+          preset.templateValues,
+        ) as Record<string, unknown>,
+        preset.category,
+      ),
     );
 
     if (preset.apiFormat) {
@@ -2360,7 +2436,7 @@ function ProviderFormFull({
                 onCatalogEnabledChange={setCodexCatalogEnabled}
                 apiFormat={localCodexApiFormat}
                 onApiFormatChange={handleCodexApiFormatChange}
-                copilotApiFormat={codexCopilotApiFormat}
+                copilotApiFormat={effectiveCodexCopilotApiFormat}
                 onCopilotApiFormatChange={handleCodexCopilotApiFormatChange}
                 shouldShowModelField={category !== "official"}
                 modelName={codexModelName}
@@ -2379,6 +2455,9 @@ function ProviderFormFull({
                 onSubagentReasoningEffortChange={
                   handleCodexSubagentReasoningEffortChange
                 }
+                agentMaxThreads={codexAgentMaxThreads}
+                multiAgentV2Total={codexMultiAgentV2Total}
+                onAgentMaxThreadsChange={handleCodexAgentMaxThreadsChange}
                 speedTestEndpoints={speedTestEndpoints}
                 customUserAgent={customUserAgent}
                 onCustomUserAgentChange={setCustomUserAgent}
@@ -2593,7 +2672,7 @@ function ProviderFormFull({
                 )}
                 <JsonEditor
                   value={form.getValues("settingsConfig")}
-                  onChange={(config) => form.setValue("settingsConfig", config)}
+                  onChange={handleSettingsConfigChange}
                   placeholder={
                     isNativeOpencode
                       ? "{}"
@@ -2621,7 +2700,7 @@ function ProviderFormFull({
                 </Label>
                 <JsonEditor
                   value={form.getValues("settingsConfig")}
-                  onChange={(config) => form.setValue("settingsConfig", config)}
+                  onChange={handleSettingsConfigChange}
                   placeholder={
                     appId === "hermes"
                       ? `{
@@ -2656,7 +2735,7 @@ function ProviderFormFull({
               <CommonConfigEditor
                 keyFieldMode={appId === "claude"}
                 value={form.getValues("settingsConfig")}
-                onChange={(value) => form.setValue("settingsConfig", value)}
+                onChange={handleSettingsConfigChange}
                 useCommonConfig={useCommonConfig}
                 onCommonConfigToggle={handleCommonConfigToggle}
                 commonConfigSnippet={commonConfigSnippet}

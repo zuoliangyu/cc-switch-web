@@ -184,8 +184,8 @@
 | `55ef871f` | v4.0.1 | perf(shell): animate the sidebar edge on the compositor instead of width (#7860) | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx`、`hooks/useSidebarCollapsed.ts` | 待迁移 |
 | `30318ac7` | v4.0.1 | fix(proxy): report zero-usage response.incomplete as api_error, not max_tokens (#7868) | 1b 代理协议 | 1b：零用量 response.incomplete 报 api_error 而非 max_tokens | 已迁移 |
 | `a33c156e` | v4.0.1 | fix(shell): match the sidebar's bottom divider to the one above it (#7874) | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
-| `636e1616` | v4.0.1 | feat(opencode): mark reasoning models so OpenCode offers thinking variants | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `df08bb15` | v4.0.1 | fix(grokbuild): use preset apiKeyUrl for the get-API-key link | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `636e1616` | v4.0.1 | feat(opencode): mark reasoning models so OpenCode offers thinking variants | 5a 供应商与全局 UI | 5a1：OpenCode 预设的 reasoning 标记与取模型补 reasoning:true 已随 1a 迁入（预设为上游最终版本）；本批补上游预设用例 | 已迁移 |
+| `df08bb15` | v4.0.1 | fix(grokbuild): use preset apiKeyUrl for the get-API-key link | 5a 供应商与全局 UI | 5a1：Grok Build 表单的「获取 API Key」链接优先用预设的 apiKeyUrl | 已迁移 |
 | `f6387b86` | v4.0.1 | style(quota): put the reset-credits chevron in the countdown slot | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `259d807f` | v4.0.1 | feat(settings): add a help tip explaining the Claude Code onboarding skip | 5a 供应商与全局 UI | 需新建或映射：`components/settings/sections/AppConfigSection.tsx` | 待迁移 |
 | `43077f55` | v4.0.1 | fix(usage): stop parented Codex sync from deadlocking on a poisoned cache | 1c 会话/用量导入 | 1c：带父线程的 Codex 同步遇到中毒缓存不再死锁 | 已迁移 |
@@ -210,9 +210,9 @@
 | `165622b8` | v4.0.2 | feat: show a short summary of what changed after updating | — | 更新后 whats-new 摘要弹窗依赖桌面更新流程；Web 以 CHANGELOG/Release 说明版本 | 不适用 |
 | `f5db60db` | v4.0.2 | feat(ui): fill the icon box with tile-style provider icons | 5a 供应商与全局 UI | 需新建或映射：`components/ProviderIconBox.tsx` | 待迁移 |
 | `20222460` | v4.0.2 | docs(whats-new): add the 4.0.2 summary | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `db8069ef` | v4.0.2 | fix(codex): keep the reasoning levels column from stretching the model catalog | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `db8069ef` | v4.0.2 | fix(codex): keep the reasoning levels column from stretching the model catalog | 5a 供应商与全局 UI | 5a1：Codex 模型目录行按上游最终形态补上思考档位列（多选档位 + 默认档位，相邻三档以上折成 first → last），列宽不被长标签撑开 | 已迁移 |
 | `91765357` | v4.0.2 | feat(ui): pick fetched models into the Codex model mapping table | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
-| `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 5a1：按打开表单的模式标签（直连 / 路由 / 聚合）选表单布局；Web 没有模式标签页与聚合表单布局，表单只有一种布局 | 不适用 |
 | `9ec89fe8` | v4.0.2 | feat(claude): list aggregated models through modelPicker instead of gateway discovery | 4 模式/路由 | 4c：聚合模式下 Claude Code 的 /model 改用顶层 modelPicker（replaceBuiltInOptions，每个聚合模型一行），不再写 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY（旧契约写过的按独有字段删）；路由契约逐字节不变；floor 与前端键字段镜像加 modelPicker | 已迁移 |
 | `600fdb0c` | v4.0.2 | fix(ui): drop the restart hints for Claude Code aggregation changes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx`、`components/providers/mode/ModeDialog.tsx`等 4 个 | 待迁移 |
 | `08f789a8` | v4.0.2 | chore(release): v4.0.2 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -241,10 +241,10 @@
 | `d68f008f` | v4.0.3 | docs(contributing): accept large established aggregators as presets | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `58a9e8e2` | v4.0.3 | fix(presets): drop the expired OpenCode Go referral code | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3144c820` | v4.0.3 | feat(backup): show all backup locations and their sizes | 1d 资源/设置/工具 | 1d：设置页列出全部备份位置与大小并可删除（新增 /api/backups/locations）；路径按 Web 数据目录映射；“在文件管理器中显示”按用户决定改为复制路径 | 已迁移 |
-| `146f3196` | v4.0.3 | feat(claude): add auto mode server-check toggle and default it off for gateways | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `cac218f3` | v4.0.3 | refactor(claude): drop the Teammates quick toggle | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `997a34fe` | v4.0.3 | refactor(claude): drop the max effort quick toggle | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `65e79de8` | v4.0.3 | feat(claude): explain each quick toggle with a help tip | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `146f3196` | v4.0.3 | feat(claude): add auto mode server-check toggle and default it off for gateways | 5a 供应商与全局 UI | 5a1：Claude 快捷开关新增「关闭 auto mode 服务端检查」（CLAUDE_CODE_AUTO_MODE_SERVER=0）；新增 Claude 供应商除官方与云服务商外默认写上，预设自己写了的以预设为准 | 已迁移 |
+| `cac218f3` | v4.0.3 | refactor(claude): drop the Teammates quick toggle | 5a 供应商与全局 UI | 5a1：去掉 Teammates 快捷开关 | 已迁移 |
+| `997a34fe` | v4.0.3 | refactor(claude): drop the max effort quick toggle | 5a 供应商与全局 UI | 5a1：去掉思考强度快捷开关（Web 原为 effortHigh，同理去掉） | 已迁移 |
+| `65e79de8` | v4.0.3 | feat(claude): explain each quick toggle with a help tip | 5a 供应商与全局 UI | 5a1：快捷开关按列表渲染，每个带帮助提示，帮助按钮不切换勾选；保留 Web 的通用配置片段与 Windows 变量提示 | 已迁移 |
 | `f3e3a955` | v4.0.3 | docs(manual): add the auto mode server-check toggle to the Claude quick toggles table | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `014a33a4` | v4.0.3 | chore(release): v4.0.3 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `8596a233` | v4.0.3 | docs(release): add v4.0.3 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -270,7 +270,7 @@
 | `3c9e430f` | v4.0.5 | fix(installer): drop ProductIcon reference from MSI shortcuts (#5952) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `e40ebb6e` | v4.0.5 | fix(codex): list explicitly configured models from hidden templates (#7925) | 4 模式/路由 | 4a：显式配置的模型生成目录行时 visibility 固定为 list，不继承缓存模板的 hide（原生官方行仍保留自己的 visibility） | 已迁移 |
 | `b1752e1c` | v4.0.5 | ci(release): require deb and rpm signatures in latest.json check (#7943) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
-| `3af55c39` | v4.0.5 | fix(codex): give the MoArk preset a model catalog and native Responses format (#7940) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `3af55c39` | v4.0.5 | fix(codex): give the MoArk preset a model catalog and native Responses format (#7940) | 5a 供应商与全局 UI | 5a1：模力方舟预设的模型目录与 apiFormat 已随 1a 迁入；本批补 codex_config 断言与上游 moarkProviderPresets 用例 | 已迁移 |
 | `02759c67` | v4.0.5 | fix(proxy): mark converted function tools as non-strict for Responses (#7717) | 1b 代理协议 | 1b：转换后的 function 工具标记为非 strict | 已迁移 |
 | `5d24fdf9` | v4.0.5 | feat(usage): show all history in the all-time heatmap | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `cf02f670` | v4.0.5 | chore(release): v4.0.5 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -281,12 +281,12 @@
 | `ffffd43c` | v4.0.6 | fix(codex): keep tools in third-party compaction summary turns (#7991) | 1b 代理协议 | 1b：原生 Responses 压缩摘要回合保留工具定义并强制 tool_choice=none；Web 压缩 HTTP 回归随之更新 | 已迁移 |
 | `42d47956` | v4.0.6 | ci(release): fail fast when linux deb or rpm package is missing (#7985) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `f025ee05` | v4.0.6 | docs(faq): update window controls setting path for v4 in zh/en/ja manuals (#7983) | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `b4a07943` | v4.0.6 | fix(codex): stop storing representative apiFormat for Copilot (#7972) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `b4a07943` | v4.0.6 | fix(codex): stop storing representative apiFormat for Copilot (#7972) | 5a 供应商与全局 UI | 5a1：托管 Copilot 不再存 apiFormat 代表值（旧卡保存时去掉），协议只存 codexCopilotApiFormat；Chat 专属选项按实际可能走 Chat 判断 | 已迁移 |
 | `0be33a84` | v4.0.6 | fix(quota): bring back colored quota numbers and warn below 20% | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `18bdea7c` | v4.0.6 | chore(icons): update DMXAPI logo | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `6760cfbb` | v4.0.6 | feat(codex): add an opt-in classic sub-agent tools toggle for aggregation | 4 模式/路由 | 4b：聚合合并目录每行写 multi_agent_version = "v1" 的设备级开关（按 6aeaeb17 最终形态 codexStackClassicTools，默认开）；[features] multi_agent_v2 强制新版时提示不生效（GET /api/settings/codex-forces-multi-agent-v2）；开关变了立即重写、失败回滚设置 | 已迁移 |
 | `c37a2625` | v4.0.6 | fix(proxy): explain unreadable sub-agent tasks instead of emptying them | 1b 代理协议 | 1b：子 agent 加密任务不被整流清空；解不开时返回中性 400 并说明；原样转发流在首个非生命周期事件前暂存（Web 无首包超时配置，固定上限 10s），新增 ProxyResponse::Streamed | 已迁移 |
-| `4aeaccf1` | v4.0.6 | fix(codex): unbind providers when a managed account is removed | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `4aeaccf1` | v4.0.6 | fix(codex): unbind providers when a managed account is removed | 5a 供应商与全局 UI | 5a1：删除 ChatGPT 托管账号 / 全部登出时，在 Codex 切换锁内单事务解绑绑着这些账号的 Codex 卡（去掉 authBinding、auth 置空、旧卡补 category=official）；前端删号/登出后刷新 Codex 供应商列表；上游集成用例改为 DAO 用例 | 已迁移 |
 | `449c7e78` | v4.0.6 | docs: add aggregation mode guide and update user manuals | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `1beb8fa8` | v4.0.6 | feat(ui): make the CC Switch update dot green and open About from it | 5a 供应商与全局 UI | 更新点改绿色并跳转关于页；适配 Web UpdateBadge；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
 | `ae934663` | v4.0.6 | fix(codex): build third-party catalog entries from the bundled classic tool template | 4 模式/路由 | 4b：ProxyChat / Copilot 的第三方目录条目一律用内置经典工具模板（unified_exec），不再读 models_cache.json、不再跑 codex 取模板，去掉模板缓存 | 已迁移 |
@@ -323,8 +323,8 @@
 | `790ed800` | v4.0.7 | docs(release): add v4.0.7 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `0b8662a4` | v4.0.8 | fix(i18n): align quota help and backup hint wording with UI labels | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `1f786dad` | v4.0.8 | docs(release): expand the Codex session compression section in v4.0.7 notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `74b1a98c` | v4.0.8 | fix(models): send the configured request headers when fetching OpenCode model lists (#7759) | 5a 供应商与全局 UI | OpenCode 表单拉取模型时携带请求头，属表单改动，转入 5a | 待迁移 |
-| `315aeda7` | v4.0.8 | fix(model-fetch): honor provider header overrides when fetching models (#7760) | 5a 供应商与全局 UI | 需新建或映射：`lib/api/model-fetch.test.ts` | 待迁移 |
+| `74b1a98c` | v4.0.8 | fix(models): send the configured request headers when fetching OpenCode model lists (#7759) | 5a 供应商与全局 UI | 5a1：OpenCode 取模型列表带上配置的请求头 | 已迁移 |
+| `315aeda7` | v4.0.8 | fix(model-fetch): honor provider header overrides when fetching models (#7760) | 5a 供应商与全局 UI | 5a1：Claude / Codex 表单取模型带上本地代理 Header 覆盖（非法或为空时不带）；Header 覆盖改了即清空已取列表、丢弃在途响应 | 已迁移 |
 | `4215f7ee` | v4.0.8 | feat(settings): add an Open log button to the diagnostic log section | 1d 资源/设置/工具 | Web 服务的诊断日志写到进程标准错误（env_logger），没有 cc-switch.log 文件可定位，因此不提供日志路径复制 | 不适用 |
 | `3784fd9e` | v4.0.8 | fix(ui): soften dark-mode text colors to reduce glare | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `979ce6a6` | v4.0.8 | fix(codex): find the CLI bundled with the Codex desktop app | 4 模式/路由 | 4a：取 Codex 自带模型列表时，检测不到 codex 就按桌面版自带的 CLI 兜底（macOS ChatGPT.app / Codex.app；Windows %LOCALAPPDATA%\OpenAI\Codex\bin\<版本>\codex.exe 按修改时间从新到旧），以固定参数、空 stdin、超时运行；模板候选也加入桌面版 | 已迁移 |
@@ -354,11 +354,11 @@
 | `29998ed9` | v4.0.9 | fix(i18n): apply the saved language on cold start | 1d 资源/设置/工具 | 1d：拿到后端设置后用保存的语言校正首屏语言（Web 在 App 读取设置时同步，覆盖访问密钥门之后的首次加载） | 已迁移 |
 | `6e7811e5` | v4.0.9 | fix(proxy): send Bearer to OpenAI-format Claude upstreams and merge stack switches | 1b 代理协议 | 1b：OpenAI 格式 Claude 上游一律 Bearer、聚合成员兼容开关按性质合并、表单仅 Anthropic/Copilot 显示认证字段；Codex 主推理强度选择器依赖 Web 尚无的子代理表单字段，转入 5a | 部分迁移 |
 | `f59bba54` | v4.0.9 | refactor(forms): move Claude form explanations into help tips | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `56731456` | v4.0.9 | refactor(forms): shorten the legacy provider fields notice | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `56731456` | v4.0.9 | refactor(forms): shorten the legacy provider fields notice | 5a 供应商与全局 UI | 5a1：缩短「旧字段不随切换生效」文案；Web 的旧字段面板本来就是一句话、不带计数 | 不适用 |
 | `1e045d2e` | v4.0.9 | refactor(forms): move the full URL toggle into advanced options | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/shared/FullUrlToggle.tsx` | 待迁移 |
 | `28ee933c` | v4.0.9 | refactor(claude-desktop): explain the model mode in plain words | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `ac2eebc0` | v4.0.9 | revert(forms): drop the Codex main reasoning effort picker | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `1afa90af` | v4.0.9 | fix(forms): align the thinking level picker with the model list row | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `ac2eebc0` | v4.0.9 | revert(forms): drop the Codex main reasoning effort picker | 5a 供应商与全局 UI | 5a1：撤掉 Codex 主推理强度选择器；该选择器（6e7811e5）在 Web 从未迁入，一增一删相抵 | 不适用 |
+| `1afa90af` | v4.0.9 | fix(forms): align the thinking level picker with the model list row | 5a 供应商与全局 UI | 5a1：档位触发器与同行输入框同一套外观和行高 | 已迁移 |
 | `f7244745` | v4.0.9 | feat(forms): pick fetched models in a dialog that can also remove them | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
 | `8347e1ab` | v4.0.9 | refactor(forms): drop the fetch-count toast when the model picker opens | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `644b7d5c` | v4.0.9 | feat(forms): show model parameters in the picker and fill picks quietly | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
@@ -467,7 +467,7 @@
 | `06805090` | v4.0.12 | fix(apps): stop the Apps page layout from shifting when buttons appear | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `edf32204` | v4.0.12 | chore(release): v4.0.12 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `51ac86f1` | v4.0.12 | docs(release): add v4.0.12 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `c1051f8e` | v4.0.13 | fix(codex): match quoted provider table headers when writing base_url (#8276) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `c1051f8e` | v4.0.13 | fix(codex): match quoted provider table headers when writing base_url (#8276) | 5a 供应商与全局 UI | 5a1：带引号 / 带空格的 provider 表头按规范表名比较；多行字符串里像表头或赋值的行不算；上游改 bearer token 的用例改为只核对读取（Web 表单不往 TOML 写 bearer token） | 已迁移 |
 | `f318e65e` | v4.0.13 | fix(proxy): stop Chat stream converters at the DONE boundary (#8281) | 1b 代理协议 | 1b：Chat 流转换在 [DONE] 边界停止 | 已迁移 |
 | `81bc1bce` | v4.0.13 | fix(usage): derive opencode session request latency from message times (#8309) | 1c 会话/用量导入 | 1c：OpenCode 会话请求耗时按消息时间推算 | 已迁移 |
 | `76f99d41` | v4.0.13 | fix(cli): avoid quadratic search path deduplication (#8322) | 1d 资源/设置/工具 | 1d：工具搜索路径改用 IndexSet 去重（随 tool_management 同步到上游最终版本） | 已迁移 |
@@ -541,7 +541,7 @@
 | `8a06838d` | v4.0.15 | fix(settings): never overwrite settings.json with defaults after a failed load | 1d 资源/设置/工具 | 1d：设置文件读取失败时不再用默认值覆盖：重试读取、去 BOM、逐字段保留有效项、先备份原文件，备份失败拒绝保存；保存改为原子写 | 已迁移 |
 | `dd24b1ed` | v4.0.15 | fix(icons): give the macOS app icon a white rounded-square background | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `a94b592a` | v4.0.15 | fix(usage): hide empty DeepSeek wallets when another currency has funds | 1c 会话/用量导入 | 1c：DeepSeek 有币种有余额时隐藏空钱包 | 已迁移 |
-| `b570f137` | v4.0.15 | fix(forms): keep the Codex thinking level picker inside short windows | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `b570f137` | v4.0.15 | fix(forms): keep the Codex thinking level picker inside short windows | 5a 供应商与全局 UI | 5a1：档位弹层按可用高度封顶、列表内滚动 | 已迁移 |
 | `5d04c12d` | v4.0.15 | fix(claude-desktop): fetch models for managed OAuth providers | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `c696c68f` | v4.0.15 | fix(sync): stop cutting off slow WebDAV/S3 transfers at a fixed 300s | 1d 资源/设置/工具 | 1d：WebDAV 大文件传输超时按体积放宽并增加空闲超时；Web 无 S3 传输与 sync_protocol，辅助函数放在 webdav_sync.rs | 已迁移 |
 | `97daccb6` | v4.0.15 | fix(settings): keep settings when an old save left a trailing tail | 1d 资源/设置/工具 | 1d：旧版保存残留尾巴时只取开头完整对象（随 8a06838d 的最终实现一并移植） | 已迁移 |
@@ -575,8 +575,8 @@
 | `0bbbb534` | v4.0.16 | fix(hermes): prefill MiniMax provider keys that don't collide with Hermes built-ins (#8538) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `bbcf0aea` | v4.0.16 | fix(usage): show account balance when a Zhipu account has no coding plan | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `e02f3a33` | v4.0.16 | chore(presets): drop invite codes from Zhipu API key links | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `68b52851` | v4.0.16 | style(providers): restore the light-blue "Get API Key" link | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `b92de269` | v4.0.16 | fix(providers): show the "Get API Key" link when editing a provider | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `68b52851` | v4.0.16 | style(providers): restore the light-blue "Get API Key" link | 5a 供应商与全局 UI | 5a1：上游把「获取 API Key」链接改成带下划线正文后又改回浅蓝；Web 的链接一直是主色、无下划线 | 不适用 |
+| `b92de269` | v4.0.16 | fix(providers): show the "Get API Key" link when editing a provider | 5a 供应商与全局 UI | 5a1：编辑已有供应商时按当前请求地址反查预设，显示其「获取 API Key」链接（链接不一致时退回官网） | 已迁移 |
 | `752998a6` | v4.0.16 | feat(tray): add a setting to switch between the tray panel and the native menu | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `940f9f93` | v4.0.16 | fix(tray): follow the usage display currency and chart style in the panel | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `e003829b` | v4.0.16 | feat(tray): default the tray style to the native menu | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
@@ -611,13 +611,13 @@
 | `74cf8e6f` | v4.0.17 | fix(tray): refresh DPI coordinates after cross-monitor show (#8595) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `4ea66d88` | v4.0.17 | fix(windows): remove stale portable marker during MSI installation (#8529) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `8cfe5644` | v4.0.17 | fix(usage): count Codex compaction usage from token_usage_record (#8479) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
-| `9be88e3e` | v4.0.17 | fix(provider-form): stop macOS from capitalizing typed API keys | 5a 供应商与全局 UI | 关闭 API Key 输入自动大写；Safari/移动浏览器同样适用 | 待迁移 |
+| `9be88e3e` | v4.0.17 | fix(provider-form): stop macOS from capitalizing typed API keys | 5a 供应商与全局 UI | 5a1：API Key 输入框关闭自动纠错、自动大写与拼写检查 | 已迁移 |
 | `099c9761` | v4.0.17 | fix(tray): align quota bars and show time until reset | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `7e97b44f` | v4.0.17 | feat(tray): mark the balance amount in panel quota lines | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `c42e3067` | v4.0.17 | feat(tray): show remaining balances in green in the tray panel | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `2dfc848f` | v4.0.17 | fix(proxy): stop child processes from inheriting the listener socket on Windows | 1b 代理协议 | 1b：mio 升级到 1.2.1，Windows 监听 socket 不被子进程继承；新增 Windows 回归 | 已迁移 |
 | `5cbe6700` | v4.0.17 | fix(webdav): upload the sync manifest as application/octet-stream | 1d 资源/设置/工具 | 1d：WebDAV 同步清单以 application/octet-stream 上传 | 已迁移 |
-| `1f1becfb` | v4.0.17 | fix(toml): only normalize smart quotes used as string delimiters | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
+| `1f1becfb` | v4.0.17 | fix(toml): only normalize smart quotes used as string delimiters | 5a 供应商与全局 UI | 5a1：只把作为字符串定界符的弯引号 / 全角引号规整成 ASCII | 已迁移 |
 | `95693d6c` | v4.0.17 | fix(codex): don't give an expired stashed login back to the proxy | 4 模式/路由 | 4a：进入/接上代理时不还 access_token 已过期的暂存登录，它留在暂存里，切回官方卡时照常还 | 已迁移 |
 | `52e87344` | v4.0.17 | fix(mcp): project url-only servers without a type to Hermes and OpenCode | 1d 资源/设置/工具 | 1d：无 type 但有 url 的 MCP 服务器按 http 投影到 OpenCode（与 Codex 共用 spec_transport_type）；Web 不写 Hermes MCP | 已迁移 |
 | `cf312f6a` | v4.0.17 | fix(mcp): take the app's switch lock before toggling a server | 1d 资源/设置/工具 | 1d：切换 MCP 应用启用前先拿该应用的切换锁，避免并发写丢条目 | 已迁移 |
@@ -670,7 +670,7 @@
 | `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 需新建或映射：`components/usage/ChecklistMenu.tsx`、`components/usage/RequestLogColumnsMenu.tsx`等 10 个 | 待迁移 |
 | `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 4a：合并目录里 Stack 成员行的 comp_hash 按工具协议分组（code_mode_only 镜像行为 cc-switch-code_mode_only，direct 行仍为 cc-switch）；路由行统一 comp_hash 属 8a0eddb0，随 4b | 部分迁移 |
 | `ce098caf` | v4.0.19 | fix(about): detach the shell version probe from the controlling terminal | 1d 资源/设置/工具 | 1d：shell 版本探测脱离控制终端（tool_management.rs） | 已迁移 |
-| `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
+| `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 5a1：填取到模型元数据时不把图片输入关掉（modelMetadataFill 此前批次已是上游最终版本） | 已迁移 |
 | `e88ff540` | v4.0.19 | test(usage): scope Codex parent-cache count assertions to each test's dir | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `cdd2190d` | v4.0.19 | feat(kimi): identify, remove and show quota for official accounts | 2b Kimi Code | 2b：识别、移除、显示官方账号额度；账号组支持逐行删除文案与不可删原因 | 已迁移 |
 | `e12415b5` | v4.0.19 | refactor(providers): move OpenCode/OpenClaw set-default into the more menu | 5a 供应商与全局 UI | 需新建或映射：`components/providers/ProviderCardActions.tsx`、`components/providers/presentation.ts` | 待迁移 |
@@ -729,7 +729,7 @@
 | `e8ae28b6` | v4.0.20 | fix(linux): restore window dragging and resize feedback (#8092) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
 | `7f9cd9e9` | v4.0.20 | fix(proxy): use the attached marker for orphan tool result media (#8157) | 1b 代理协议 | 1b：孤立工具结果中的媒体使用附件标记 | 已迁移 |
 | `9decd60e` | v4.0.20 | feat(i18n): complete Turkish catalog (#8616) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
-| `bd50984e` | v4.0.20 | fix(forms): reflect automatic Copilot protocol routing (#8196) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `bd50984e` | v4.0.20 | fix(forms): reflect automatic Copilot protocol routing (#8196) | 5a 供应商与全局 UI | 5a1：Claude Code / Claude Desktop 的 Copilot 卡上游格式显示「由路由按模型自动选择」并禁用手选 | 已迁移 |
 | `c72c82cf` | v4.0.20 | feat(auth): support browser login for managed ChatGPT accounts (#8288) | 3 官方账号 | 3a：托管 ChatGPT 账号的浏览器登录（授权码 + PKCE，codex_oauth_auth/browser.rs 上游最终版本；/api/auth/start-login 接受 loginMethod）；回调监听服务端本机 1455 端口，只有浏览器与服务端同机时才能完成，Web 因此默认设备码登录（上游默认浏览器），标题行仍可切换 | 已迁移 |
 | `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 2c：从原生 generations 恢复子代理用量模型（native_models.rs） | 已迁移 |
 | `5bc562ce` | v4.0.20 | feat(apps): group the apps page into installed and not installed sections | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -781,7 +781,7 @@
 | `ec5c5f8a` | v4.0.21 | fix(forms): align Claude Desktop Copilot URL detection and sync zh/en/ja manuals (#8838) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `d2008fdb` | v4.0.21 | fix(i18n): complete Turkish catalog follow-ups (#8836) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `238d8a71` | v4.0.21 | test(proxy): add end-to-end regression tests for inline <think> block conversion (#8835) | 1b 代理协议 | 1b：内联 <think> 转换端到端回归（适配 Web 代理构造参数） | 已迁移 |
-| `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeOfficialSection.tsx` | 待迁移 |
+| `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 5a1：Claude 官方卡账号选择器已随 3b 取上游最终版本；「添加或管理 Claude 账号」从表单跳授权中心的入口 Web 基线前就没有（Codex / Copilot 选择器同样没有），账号在设置 → 授权中心添加 | 部分迁移 |
 | `ea1645f9` | v4.0.21 | fix(auth): align quota bars across accounts in the auth center | 3 官方账号 | 3a：授权中心各账号的额度列定宽对齐（.auth-quota-col 与分组卡片 container query） | 已迁移 |
 | `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx`、`components/providers/ProviderCardActions.tsx` | 待迁移 |
 | `5f0fc253` | v4.0.21 | fix(apps): count Hermes's leftover hermes.cmd beside hermes.exe as one install | 1d 资源/设置/工具 | 1d：Hermes 的 hermes.exe 旁残留 hermes.cmd 按一处安装计（tool_management.rs） | 已迁移 |
@@ -789,7 +789,7 @@
 | `618af9d9` | v4.0.21 | fix(apps): allow OpenCode's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 OpenCode postinstall（后端安装命令与前端一键命令） | 已迁移 |
 | `ff31d840` | v4.0.21 | fix(apps): allow Grok Build's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 Grok Build postinstall | 已迁移 |
 | `d564adc3` | v4.0.21 | feat(presets): add Kimi K3.1 Pro and HighSpeed to the official Kimi presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `05034a4e` | v4.0.21 | feat(codex): drag to reorder rows in the provider model list | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `05034a4e` | v4.0.21 | feat(codex): drag to reorder rows in the provider model list | 5a 供应商与全局 UI | 5a1：Codex 模型目录行首拖动手柄换行序（只有一行时隐藏，可键盘操作）；「第一行即默认模型」随 9f7ac1fa 在 5a1b 处理 | 部分迁移 |
 | `71524045` | v4.0.21 | fix(stack): keep the aggregation member order in step with drag sorting | 4 模式/路由 | 4d：排序只改 sort_index（update_provider_sort_indexes，一个事务、不存在的行跳过），不会复活并发删掉的行或盖掉刚存的字段。聚合名单随拖动重排不适用：Web 聚合成员按名称 A–Z 排，与 sort_index 无关 | 部分迁移 |
 | `96f01af0` | v4.0.21 | fix(proxy): retry Codex requests rejected for a foreign Azure resource | 1b 代理协议 | 1b：Codex 请求因外部 Azure 资源 item id 被拒时整流重试 | 已迁移 |
 | `c2110ebb` | v4.0.21 | fix(mcp): warn when an SSE server is written to apps without SSE support | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -828,7 +828,7 @@
 | `6776bc06` | v4.0.22 | feat(terminal): open a Codex terminal from a provider card | 5a 供应商与全局 UI | 终端选项依赖上游 OpenTerminalDialog（Web 尚无），随 5a 的供应商卡片与终端对话框处理 | 待迁移 |
 | `7f82b85b` | v4.0.22 | fix(sidebar): inset today's usage text to align with mode badge text | 5a 供应商与全局 UI | 侧栏动画/分隔线/今日文本对齐；适配 Web 侧栏 WebSidebar；需新建或映射：`components/shell/Sidebar.tsx` | 待迁移 |
 | `9403960f` | v4.0.22 | fix(copilot): pass Claude models through to native /v1/messages so prompt caching works (#8908) | 3 官方账号 | 3c：Anthropic 模型声明 /v1/messages 时原生透传、响应转换按每次请求解析的格式、Copilot 纳入 thinking 签名 / budget 整流；Claude 路径未接优化器，“只在 OpenAI 桥接上剥离 thinking”不适用 | 部分迁移 |
-| `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 需新建或映射：`utils/providerConfigUtils.test.ts` | 待迁移 |
+| `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 5a1：数组表头 [[...]] 也算表头，base_url 不会写进 [[skills.config]]，已误写的移回 custom 表 | 已迁移 |
 | `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 2e：Web 与 Desktop 共用管理、DeepSeek 账号登录（/api/dsh/account*，回调落在服务端本机，仅浏览器与服务端同机时可完成）、用量导入（session_log_sync.parser_state、zstd 会话按解压后偏移读取）；Web 请求日志无 pricing_model/input_token_semantics 列：前缀模型仍按裸名计价，但导入时无定价、之后补价的前缀模型无法回填（对应上游用例未迁移）；用量页 providerLabel 与筛选随 5b | 部分迁移 |
 | `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
 | `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -874,7 +874,7 @@
 | `ba3d80d8` | v4.0.23 | fix(tray): show the bound Claude account instead of the website for official cards (#9071) | — | 托盘官方卡片显示绑定账号；Web 无托盘（共享账号读取随批次 3 核对） | 不适用 |
 | `258c367f` | v4.0.23 | fix(grokbuild): stream large session logs and support byte offset cursor (#9026) | 1c 会话/用量导入 | 1c：Grok Build 会话日志逐行流式读取并按字节游标续读；导入器整体同步到上游最终版本（去掉 input_token_semantics），补 grok-4.6/4.7 Build 定价 | 已迁移 |
 | `300453be` | v4.0.23 | fix(codex): handle text-only DeepSeek V4 Flash 0731 on OpenRouter (#6194) | 4 模式/路由 | 4a：deepseek-v4-flash-0731 列为文本模型，发送前去图；OpenRouter 404「No endpoints found that support image input」算作不支持图片、触发去图重试；forwarder 层用例依赖 Web 没有的夹具，改在 media_sanitizer 里覆盖 | 部分迁移 |
-| `3817c2b2` | v4.0.23 | fix(provider-form): prevent config editors from overwriting each other (#6777) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `3817c2b2` | v4.0.23 | fix(provider-form): prevent config editors from overwriting each other (#6777) | 5a 供应商与全局 UI | 5a1：JSON 编辑器外部同步不回吐成 onChange、监听器经 ref 调最新 onChange；表单各 hook 改 Key / 地址 / 模型 / 模板变量时现读当前配置，不按渲染期快照覆盖编辑器里的改动；提交校验按编辑器当前内容 | 已迁移 |
 | `e49d12a5` | v4.0.23 | fix(settings): avoid launching OpenCode Desktop during env check (#7027) | 1d 资源/设置/工具 | 1d：环境检查不再拉起 OpenCode Desktop（桌面版无 CLI sidecar 时跳过） | 已迁移 |
 | `c7188667` | v4.0.23 | fix(usage): recover bounded Codex forks after parent idle gaps (#9093) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `91a76cfd` | v4.0.23 | fix(startup): keep database lock waits off the UI thread (#9098) | 1d 资源/设置/工具 | 解决 Tauri 命令在 UI 线程上等数据库锁；Web 没有 UI 线程，HTTP 处理不会冻结界面。MiniMax Code/Kimi/DSH 列表刷新与供应商改动串行化随 2b/2e 的对应应用一并评估 | 不适用 |
@@ -909,7 +909,7 @@
 | `c0189078` | v4.0.24 | docs(release): update v4.0.24 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `9119deca` | v4.0.25 | chore(ci): remove Dependabot version update config | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `686ba51e` | v4.0.25 | fix(claude): keep the route-mode placeholder out of ANTHROPIC_API_KEY (#8111) | 4 模式/路由 | 4c：路由模式本地跳只写 ANTHROPIC_AUTH_TOKEN 占位符，行里只有 ANTHROPIC_API_KEY 时本地也不出现该键 | 已迁移 |
-| `a9e607c3` | v4.0.25 | feat(codex): add sub-agent concurrency limit field to the provider form (#9056) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `a9e607c3` | v4.0.25 | feat(codex): add sub-agent concurrency limit field to the provider form (#9056) | 5a 供应商与全局 UI | 5a1：Codex 表单新增子代理并发上限（[agents] max_threads，旧名改新名、留空删键、官方卡也显示），multi_agent_v2 写了总数时提示以它为准 | 已迁移 |
 | `9bd8fe51` | v4.0.25 | fix(terminal): prefer PowerShell 7 (pwsh) when PowerShell is the preferred Windows terminal (#8992) | 1d 资源/设置/工具 | 1d：首选终端为 PowerShell 时，PATH 上有 pwsh.exe 就用 PowerShell 7 | 已迁移 |
 | `b8112ca5` | v4.0.25 | feat(mcp): check MCP server connectivity on demand (#8348) | 1d 资源/设置/工具 | 1d：MCP 按需连通性检查（stdio/Streamable HTTP/旧版 SSE 握手，最多 3 并发、每项 30 秒，进程树回收）；Web 无 IPC 通道，改为 /api/mcp/connectivity 启动 + 轮询取结果 + 取消；页面按钮与行内测试、状态点 | 已迁移 |
 | `5c14e917` | v4.0.25 | fix: fetch models.dev through the backend proxy-aware client, fixing sync failures in proxy-only environments (#8739) | 2b Kimi Code | 2b：models.dev 经后端代理感知客户端拉取（Web 路由 /api/usage/models-dev，浏览器不再直连 models.dev） | 已迁移 |
@@ -1082,3 +1082,10 @@
   - 补充二：旧客户端检测的进程表读数缓存 5 秒（模式面板每 3 秒轮询不再每次跑 `ps`），重启守护进程后清缓存。
   - 不适用：前端确认框日志（Web 无前端日志通道）、聚合名单随拖动重排（Web 聚合成员按名称排序）、docs/ 用户手册。
   - 验证：`cargo test --lib` 3563 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 181 个文件 1908 项通过、2 项跳过。
+- 2026-11-04：批次 5a 规划。137 项按界面区域拆为 5a1（Codex / Claude 表单与模型选择器，39）、5a2（其他应用表单与预设，19）、5a3（供应商列表、卡片、终端与图标，40）、5a4（外壳、设置、应用页、Skills、MCP，39），顺序执行。
+- 2026-11-04：完成批次 5a1（29 项：23 项已迁移、2 项部分迁移、4 项不适用（含 fe831f0a）；其余 10 项转入 5a1b）。
+  - Claude 表单：快捷开关逐项带帮助提示，去掉 Teammates 与思考强度开关，新增「关闭 auto mode 服务端检查」并为新增的第三方卡默认写上；Copilot 卡上游格式显示为按模型自动选择。
+  - Codex 表单：模型目录行加思考档位列与拖动换序；子代理并发上限；托管 Copilot 不再存 `apiFormat` 代表值；删除 ChatGPT 托管账号时解绑绑着它的 Codex 卡。
+  - 通用：取模型带上配置的请求头 / Header 覆盖；JSON 编辑器与表单字段互不覆盖；TOML 表头识别带引号与数组表头；只规整作定界符的弯引号；编辑时也显示「获取 API Key」链接；API Key 输入框关闭自动大写。
+  - 转入 5a1b：取模型对话框（91765357、f7244745、8347e1ab、644b7d5c）、表单布局向上游收敛（0dae89e2、9f7ac1fa、36e2ce2c、f59bba54、1e045d2e）、协议提示跟随实际模式（e615a6f4）。这些是上游后来的表单设计，不是 Web 的取舍，按上游收敛。
+  - 验证：`cargo test --lib` 3564 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 190 个文件 1998 项通过、2 项跳过。

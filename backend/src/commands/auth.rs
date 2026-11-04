@@ -542,11 +542,26 @@ pub(crate) async fn auth_remove_account_internal(
                 .map_err(|e| e.to_string())
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = codex_state.write().await;
-            auth_manager
+            // 删号和托管供应商的新增 / 更新 / 切换用同一把锁：已经预检过凭据包的切换不会在
+            // 删号后又把 auth.json 写回来。
+            let _switch_guard = app_state
+                .proxy_service
+                .lock_switch_for_app(crate::app_config::AppType::Codex.as_str())
+                .await;
+            codex_state
+                .write()
+                .await
                 .remove_account(account_id)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string())?;
+            // 绑着这个号的 Codex 卡解绑，改跟随原生登录
+            app_state
+                .db
+                .unbind_codex_managed_accounts(&[account_id.to_string()])
+                .map_err(|error| {
+                    format!("账号已删除，但 Codex 供应商解绑失败；请编辑供应商重新选择账号或切换供应商: {error}")
+                })?;
+            Ok(())
         }
         AUTH_PROVIDER_XAI_OAUTH => {
             let auth_manager = xai_state.write().await;
@@ -633,8 +648,26 @@ pub(crate) async fn auth_logout_internal(
             auth_manager.clear_auth().await.map_err(|e| e.to_string())
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
+            let _switch_guard = app_state
+                .proxy_service
+                .lock_switch_for_app(crate::app_config::AppType::Codex.as_str())
+                .await;
             let auth_manager = codex_state.write().await;
-            auth_manager.clear_auth().await.map_err(|e| e.to_string())
+            // 只解绑本机的账号：供应商行跨设备同步，绑着别的设备账号的行保持原样
+            let removed: Vec<String> = auth_manager
+                .list_accounts()
+                .await
+                .into_iter()
+                .map(|account| account.id)
+                .collect();
+            auth_manager.clear_auth().await.map_err(|e| e.to_string())?;
+            app_state
+                .db
+                .unbind_codex_managed_accounts(&removed)
+                .map_err(|error| {
+                    format!("托管账号已登出，但 Codex 供应商解绑失败；请编辑供应商重新选择账号或切换供应商: {error}")
+                })?;
+            Ok(())
         }
         AUTH_PROVIDER_XAI_OAUTH => {
             let auth_manager = xai_state.write().await;

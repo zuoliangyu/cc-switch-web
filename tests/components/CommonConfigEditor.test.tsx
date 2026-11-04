@@ -118,3 +118,65 @@ describe("CommonConfigEditor disable artifact toggle", () => {
     expect(JSON.parse(onChange.mock.calls[1][0])).toEqual({});
   });
 });
+
+describe("CommonConfigEditor auto mode server toggle", () => {
+  const autoModeServerCheckbox = () =>
+    screen.getByRole("checkbox", {
+      name: "claudeConfig.disableAutoModeServer",
+    });
+
+  it("reads CLAUDE_CODE_AUTO_MODE_SERVER=0 as checked", () => {
+    renderEditor(
+      JSON.stringify({ env: { CLAUDE_CODE_AUTO_MODE_SERVER: "0" } }),
+    );
+
+    expect(autoModeServerCheckbox()).toBeChecked();
+  });
+
+  it("writes and removes the env key", () => {
+    const onChange = renderEditor(
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://gw.example" } }),
+    );
+
+    fireEvent.click(autoModeServerCheckbox());
+
+    expect(JSON.parse(onChange.mock.calls[0][0])).toEqual({
+      env: {
+        ANTHROPIC_BASE_URL: "https://gw.example",
+        CLAUDE_CODE_AUTO_MODE_SERVER: "0",
+      },
+    });
+  });
+
+  it("drops an emptied env when unchecked", () => {
+    const onChange = renderEditor(
+      JSON.stringify({ env: { CLAUDE_CODE_AUTO_MODE_SERVER: "0" } }),
+    );
+
+    fireEvent.click(autoModeServerCheckbox());
+
+    expect(JSON.parse(onChange.mock.calls[0][0])).toEqual({});
+  });
+});
+
+describe("CommonConfigEditor quick toggle help", () => {
+  it("gives every toggle a help button that does not toggle it", () => {
+    const onChange = renderEditor("{}");
+
+    for (const key of [
+      "hideAttribution",
+      "enableToolSearch",
+      "disableAutoUpgrade",
+      "disableArtifact",
+      "disableAutoModeServer",
+    ]) {
+      const help = screen.getByRole("button", { name: `claudeConfig.${key}` });
+      expect(help).toHaveAccessibleDescription(`claudeConfig.${key}Help`);
+      fireEvent.click(help);
+      expect(
+        screen.getByRole("checkbox", { name: `claudeConfig.${key}` }),
+      ).not.toBeChecked();
+    }
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

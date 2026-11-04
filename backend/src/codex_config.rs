@@ -7153,6 +7153,13 @@ base_url = "https://production.api/v1"
                         "model": "unordered-model",
                         "reasoningLevels": ["xhigh", "low", "bogus", "low"],
                         "defaultReasoningLevel": "bogus"
+                    },
+                    {
+                        "model": "single-none-model",
+                        "reasoningLevels": ["none"]
+                    },
+                    {
+                        "model": "absent-levels-model"
                     }
                 ]
             }
@@ -7227,6 +7234,32 @@ base_url = "https://production.api/v1"
                 .get("default_reasoning_level")
                 .and_then(|v| v.as_str()),
             Some("xhigh")
+        );
+
+        // A single declared level collapses the picker: Codex applies the only
+        // level directly instead of offering a choice. The template default
+        // ("high") is no longer in the list, so the default falls back to the
+        // highest supported level, i.e. "none". This is how a model that
+        // ignores reasoning effort must be declared — leaving
+        // `reasoningLevels` out inherits the template's none/high pair and
+        // re-exposes the very picker we want to avoid.
+        assert_eq!(efforts(5), vec!["none"]);
+        assert_eq!(
+            models[5]
+                .get("default_reasoning_level")
+                .and_then(|v| v.as_str()),
+            Some("none")
+        );
+
+        // Guards the inheritance the comment above depends on: with no
+        // declaration at all the entry keeps the native template's none/high
+        // pair and its "high" default.
+        assert_eq!(efforts(6), vec!["none", "high"]);
+        assert_eq!(
+            models[6]
+                .get("default_reasoning_level")
+                .and_then(|v| v.as_str()),
+            Some("high")
         );
     }
 

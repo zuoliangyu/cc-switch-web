@@ -12,6 +12,7 @@ const modelFetchApiMock = vi.hoisted(() => ({
 
 vi.mock("@/lib/api/model-fetch", () => ({
   fetchModelsForConfig: modelFetchApiMock.fetchModelsForConfig,
+  modelFetchRequestHeaders: () => undefined,
   showFetchModelsError: modelFetchApiMock.showFetchModelsError,
 }));
 
@@ -236,5 +237,33 @@ describe("ClaudeFormFields reasoning effort", () => {
   it("Copilot 卡不显示思考档位", () => {
     renderForm({ apiFormat: "openai_chat", isCopilotPreset: true });
     expect(screen.queryByRole("combobox", { name: "思考档位" })).toBeNull();
+  });
+});
+
+// 上游 bd50984e：Copilot 的上游格式由路由按模型自动选，手选格式禁用并说明
+describe("ClaudeFormFields Copilot protocol", () => {
+  beforeEach(() => {
+    modelFetchApiMock.fetchModelsForConfig.mockResolvedValue([]);
+  });
+
+  it("shows the automatic protocol and disables the manual format", () => {
+    renderForm({
+      apiFormat: "openai_responses",
+      isCopilotPreset: true,
+      usesOAuth: true,
+    });
+
+    expect(screen.getByText("copilot.automaticFormatHint")).toBeVisible();
+    // 非 Anthropic 格式时高级选项默认展开
+    if (!document.getElementById("apiFormat")) {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: /providerForm.advancedOptionsToggle/,
+        }),
+      );
+    }
+    const control = document.getElementById("apiFormat");
+    expect(control).toBeDisabled();
+    expect(control).toHaveTextContent("copilot.automaticFormat");
   });
 });

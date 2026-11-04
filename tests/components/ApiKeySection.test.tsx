@@ -74,3 +74,20 @@ it("合作元数据不产生推广内容，仍提供 API Key 获取链接", () =
     "https://example.com/keys",
   );
 });
+
+// 上游 9be88e3e：明文手打 Key 时不让 macOS 自动改大写、自动纠错
+it("turns off autocorrect and auto-capitalization on the key input", () => {
+  render(
+    <ApiKeySection
+      value="sk-test"
+      onChange={vi.fn()}
+      shouldShowLink={false}
+      websiteUrl=""
+    />,
+  );
+  const input = screen.getByLabelText("API Key");
+
+  expect(input).toHaveAttribute("autocorrect", "off");
+  expect(input).toHaveAttribute("autocapitalize", "off");
+  expect(input).toHaveAttribute("spellcheck", "false");
+});

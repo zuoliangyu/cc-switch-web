@@ -50,6 +50,10 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({
           // 由保存流程处理空 Key 确认，避免浏览器原生校验提前阻止提交。
           aria-required={required || undefined}
           autoComplete="off"
+          // 切成明文后手打 Key，macOS 会把首字母改成大写（上游 9be88e3e）
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           className={inputClass}
         />
         {!disabled && value && (

@@ -223,7 +223,9 @@ export interface ProviderMeta {
     | "openai_responses"
     | "gemini_native";
   // Missing means automatic capability routing, including legacy Copilot cards.
-  codexCopilotApiFormat?: CodexCopilotApiFormat;
+  // 托管 Codex Copilot 用它代替 apiFormat；缺省或不认识的值按自动处理。
+  // 存原始字符串，新版本写下的选项经编辑保存也不丢。
+  codexCopilotApiFormat?: string;
   // 通用认证绑定
   authBinding?: AuthBinding;
   // Claude 认证字段名

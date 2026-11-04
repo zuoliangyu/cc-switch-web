@@ -44,6 +44,7 @@ import {
   fetchModelsForConfig,
   fetchCodexOauthModels,
   fetchXaiOauthModels,
+  modelFetchRequestHeaders,
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
@@ -305,6 +306,11 @@ export function ClaudeFormFields({
             isFullUrl,
             modelsUrl,
             customUserAgent,
+            {
+              requestHeaders: modelFetchRequestHeaders(
+                localProxyHeadersOverride,
+              ),
+            },
           )
     )
       .then((models) => {
@@ -334,6 +340,7 @@ export function ClaudeFormFields({
     isFullUrl,
     isCodexOauthPreset,
     isXaiOauthPreset,
+    localProxyHeadersOverride,
     selectedCodexAccountId,
     selectedXaiAccountId,
     t,
@@ -525,6 +532,11 @@ export function ClaudeFormFields({
           onAccountSelect={onGitHubAccountSelect}
         />
       )}
+      {isCopilotPreset && (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t("copilot.automaticFormatHint")}
+        </p>
+      )}
 
       {isCodexOauthPreset && (
         <CodexOAuthSection
@@ -669,9 +681,18 @@ export function ClaudeFormFields({
                 <FormLabel htmlFor="apiFormat">
                   {t("providerForm.apiFormat", { defaultValue: "上游格式" })}
                 </FormLabel>
-                <Select value={apiFormat} onValueChange={onApiFormatChange}>
+                <Select
+                  value={apiFormat}
+                  onValueChange={onApiFormatChange}
+                  disabled={isCopilotPreset}
+                >
                   <SelectTrigger id="apiFormat" className="w-full">
-                    <SelectValue />
+                    <SelectValue>
+                      {/* Copilot 按模型能力自动选协议（上游 bd50984e） */}
+                      {isCopilotPreset
+                        ? t("copilot.automaticFormat")
+                        : undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="anthropic">

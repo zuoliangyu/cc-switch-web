@@ -1,5 +1,5 @@
 import { renderWithQueryClient as render } from "../utils/testQueryClient";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CodexFormFields } from "@/components/providers/forms/CodexFormFields";
@@ -26,6 +26,9 @@ vi.mock("@/components/ui/form", () => ({
 vi.mock("@/lib/api/model-fetch", () => ({
   fetchModelsForConfig: fetchModelsForConfigMock,
   fetchXaiOauthModels: fetchXaiOauthModelsMock,
+  // 取模型带上 Header 覆盖（上游 315aeda7）：测试里按 JSON 原样解析
+  modelFetchRequestHeaders: (json: string) =>
+    json.trim() ? (JSON.parse(json) as Record<string, string>) : undefined,
   showFetchModelsError: vi.fn(),
 }));
 
@@ -285,5 +288,108 @@ describe("CodexFormFields", () => {
         }),
       ]),
     );
+  });
+});
+
+// 上游 315aeda7：Header 覆盖也是取模型的请求身份，换了要清掉旧列表、丢弃在途响应
+describe("CodexFormFields model fetch identity", () => {
+  function HeadersHarness() {
+    const [headers, setHeaders] = useState('{"X-Tenant": "tenant-1"}');
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setHeaders('{"X-Tenant": "tenant-2"}')}
+        >
+          change-headers
+        </button>
+        <CodexFormFields
+          codexApiKey="sk-test"
+          onApiKeyChange={vi.fn()}
+          category="third_party"
+          shouldShowApiKeyLink={false}
+          websiteUrl=""
+          shouldShowSpeedTest={false}
+          codexBaseUrl="https://api.example.com/v1"
+          onBaseUrlChange={vi.fn()}
+          isFullUrl={false}
+          onFullUrlChange={vi.fn()}
+          isEndpointModalOpen={false}
+          onEndpointModalToggle={vi.fn()}
+          autoSelect={false}
+          onAutoSelectChange={vi.fn()}
+          catalogEnabled={false}
+          onCatalogEnabledChange={vi.fn()}
+          apiFormat="openai_responses"
+          onApiFormatChange={vi.fn()}
+          promptCacheRouting="auto"
+          onPromptCacheRoutingChange={vi.fn()}
+          modelName=""
+          onModelNameChange={vi.fn()}
+          speedTestEndpoints={[]}
+          customUserAgent=""
+          onCustomUserAgentChange={vi.fn()}
+          localProxyHeadersOverride={headers}
+          onLocalProxyHeadersOverrideChange={setHeaders}
+          localProxyBodyOverride=""
+          onLocalProxyBodyOverrideChange={vi.fn()}
+        />
+      </>
+    );
+  }
+
+  const fetchedIds = () =>
+    (
+      JSON.parse(
+        screen.getByTestId("model-field").getAttribute("data-models") ?? "[]",
+      ) as { id: string }[]
+    ).map((model) => model.id);
+
+  it("sends the header override and clears the list once it changes", async () => {
+    fetchModelsForConfigMock.mockReset();
+    fetchModelsForConfigMock.mockResolvedValueOnce([
+      { id: "model-a", ownedBy: "vendor" },
+    ]);
+    render(<HeadersHarness />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    );
+    await waitFor(() => expect(fetchedIds()).toEqual(["model-a"]));
+    expect(fetchModelsForConfigMock).toHaveBeenCalledWith(
+      "https://api.example.com/v1",
+      "sk-test",
+      false,
+      undefined,
+      "",
+      { requestHeaders: { "X-Tenant": "tenant-1" } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "change-headers" }));
+    await waitFor(() => expect(fetchedIds()).toEqual([]));
+  });
+
+  it("drops a response that lands after the header override changed", async () => {
+    fetchModelsForConfigMock.mockReset();
+    let resolveFetch!: (models: { id: string; ownedBy: string }[]) => void;
+    fetchModelsForConfigMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    render(<HeadersHarness />);
+
+    const fetchButton = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    fireEvent.click(fetchButton);
+    await waitFor(() => expect(fetchModelsForConfigMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "change-headers" }));
+    resolveFetch([{ id: "stale-model", ownedBy: "vendor" }]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchedIds()).toEqual([]);
   });
 });

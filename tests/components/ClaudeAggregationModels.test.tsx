@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
+import { renderWithQueryClient as render } from "../utils/testQueryClient";
 import { useState } from "react";
 import { describe, it, expect } from "vitest";
 import {
@@ -8,10 +9,11 @@ import {
 import type { ClaudeStackModel } from "@/types";
 
 describe("Claude 聚合模型", () => {
-  it("批选远端模型保留默认项和自定义名称，不重复加入已有模型", () => {
+  it("在选择弹窗里加入远端模型、取消勾选移除，保留默认项和自定义名称", async () => {
     function Form() {
       const [value, setValue] = useState<ClaudeStackModel[] | undefined>([
         { model: "a", displayName: "Custom" },
+        { model: "c[1M]" },
       ]);
       return (
         <>
@@ -28,9 +30,21 @@ describe("Claude 聚合模型", () => {
       );
     }
     render(<Form />);
-    expect(screen.getByRole("checkbox", { name: "a" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "b" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add selected (1)" }));
+    // 拉过模型后按钮直接打开选择弹窗（上游 f7244745）
+    fireEvent.click(
+      screen.getByRole("button", { name: "providerForm.modelPicker.title" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("checkbox", { name: "a" })).toBeChecked();
+    // 配置里有、供应商没返回的模型按去掉 [1M] 后的 ID 列出
+    expect(within(dialog).getByRole("checkbox", { name: "c" })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "b" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "c" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: "providerForm.modelPicker.apply",
+      }),
+    );
     expect(screen.getByTestId("value")).toHaveTextContent(
       '[{"model":"a","displayName":"Custom"},{"model":"b"}]',
     );

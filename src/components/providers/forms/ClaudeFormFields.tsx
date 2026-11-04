@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { FormLabel } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { HelpTip } from "@/components/ui/help-tip";
 import {
   Select,
   SelectContent,
@@ -28,7 +29,10 @@ import {
 import EndpointSpeedTest from "./EndpointSpeedTest";
 import {
   ApiKeySection,
+  DirectModeFormatWarning,
   EndpointField,
+  FullUrlToggle,
+  type DirectModeFormatNotice,
   ModelDropdown,
   ModelInputWithFetch,
 } from "./shared";
@@ -157,6 +161,8 @@ interface ClaudeFormFieldsProps {
   // Full URL mode
   isFullUrl: boolean;
   onFullUrlChange: (value: boolean) => void;
+  /** 应用实际在直连时传：选了要靠路由转换的格式就在格式下面提示后果（上游 e615a6f4）。 */
+  directModeFormatNotice?: DirectModeFormatNotice;
 
   customUserAgent: string;
   onCustomUserAgentChange: (value: string) => void;
@@ -222,6 +228,7 @@ export function ClaudeFormFields({
   onApiKeyFieldChange,
   isFullUrl,
   onFullUrlChange,
+  directModeFormatNotice,
   customUserAgent,
   onCustomUserAgentChange,
   localProxyHeadersOverride,
@@ -242,7 +249,8 @@ export function ClaudeFormFields({
     reasoningEffort !== "auto" ||
     apiKeyField !== "ANTHROPIC_AUTH_TOKEN" ||
     customUserAgent ||
-    hasRequestOverrides
+    hasRequestOverrides ||
+    isFullUrl
   );
   const [advancedExpanded, setAdvancedExpanded] = useState(
     isXaiOauthPreset ? false : hasAnyAdvancedValue,
@@ -257,6 +265,22 @@ export function ClaudeFormFields({
     }
   }, [hasAnyAdvancedValue, isXaiOauthPreset]);
 
+  const apiFormatLabel = t("providerForm.apiFormat", {
+    defaultValue: "上游格式",
+  });
+  const authFieldLabel = t("providerForm.authField", {
+    defaultValue: "认证字段",
+  });
+  const fallbackModelLabel = t("providerForm.fallbackModelLabel", {
+    defaultValue: "默认兜底模型",
+  });
+  // 只有第三方端点才认不出原始 Claude 模型名：直连看后台任务用的 Haiku 档，路由看兜底模型本身。
+  const usesThirdPartyEndpoint =
+    category !== "official" && category !== "cloud_provider";
+  const fallbackModelMissing =
+    usesThirdPartyEndpoint &&
+    !(directModeFormatNotice ? defaultHaikuModel : claudeModel).trim();
+
   // Copilot 可用模型列表
   const [copilotModels, setCopilotModels] = useState<CopilotModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -264,6 +288,8 @@ export function ClaudeFormFields({
   const [isFetchingModels, setIsFetchingModels] = useState(false);
 
   const modelFetchGeneration = useRef(0);
+  // 这次拉取是不是聚合模型列表发起的：那边拉到就打开选择弹窗，弹窗里已经显示了数量。
+  const opensPickerRef = useRef(false);
   useEffect(() => {
     modelFetchGeneration.current++;
     setFetchedModels([]);
@@ -318,7 +344,7 @@ export function ClaudeFormFields({
         setFetchedModels(models);
         if (models.length === 0) {
           toast.info(t("providerForm.fetchModelsEmpty"));
-        } else {
+        } else if (!opensPickerRef.current) {
           toast.success(
             t("providerForm.fetchModelsSuccess", { count: models.length }),
           );
@@ -610,7 +636,7 @@ export function ClaudeFormFields({
           value={baseUrl}
           onChange={onBaseUrlChange}
           placeholder={t("providerForm.apiEndpointPlaceholder")}
-          hint={
+          help={
             apiFormat === "openai_responses"
               ? t("providerForm.apiHintResponses")
               : apiFormat === "openai_chat"
@@ -619,15 +645,7 @@ export function ClaudeFormFields({
                   ? t("providerForm.apiHintGeminiNative")
                   : t("providerForm.apiHint")
           }
-          fullUrlHint={
-            apiFormat === "gemini_native"
-              ? t("providerForm.fullUrlHintGeminiNative")
-              : undefined
-          }
           onManageClick={() => onEndpointModalToggle(true)}
-          showFullUrlToggle={!isXaiOauthPreset}
-          isFullUrl={isFullUrl}
-          onFullUrlChange={onFullUrlChange}
         />
       )}
 
@@ -669,18 +687,16 @@ export function ClaudeFormFields({
               {t("providerForm.advancedOptionsToggle")}
             </Button>
           </CollapsibleTrigger>
-          {!advancedExpanded && (
-            <p className="text-xs text-muted-foreground mt-1 ml-1">
-              {t("providerForm.advancedOptionsHint")}
-            </p>
-          )}
           <CollapsibleContent className="space-y-4 pt-2">
             {/* 上游格式选择（仅非云服务商显示） */}
             {category !== "cloud_provider" && !isXaiOauthPreset && (
               <div className="space-y-2">
-                <FormLabel htmlFor="apiFormat">
-                  {t("providerForm.apiFormat", { defaultValue: "上游格式" })}
-                </FormLabel>
+                <div className="flex items-center gap-0.5">
+                  <FormLabel htmlFor="apiFormat">{apiFormatLabel}</FormLabel>
+                  <HelpTip title={apiFormatLabel}>
+                    {t("providerForm.apiFormatHelp")}
+                  </HelpTip>
+                </div>
                 <Select
                   value={apiFormat}
                   onValueChange={onApiFormatChange}
@@ -717,22 +733,35 @@ export function ClaudeFormFields({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {t("providerForm.apiFormatHint", {
-                    defaultValue:
-                      "供应商原生为 Anthropic Messages API 就选 Anthropic Messages（直连，不转换格式）；使用 Chat Completions 协议就选 Chat；使用 Responses API 就选 Responses；使用 Gemini generateContent 协议就选 Gemini Native。Chat、Responses 与 Gemini Native 均需开启路由接管才能转换为 Anthropic Messages。",
-                  })}
-                </p>
+                {directModeFormatNotice &&
+                  !isCopilotPreset &&
+                  apiFormat !== "anthropic" && (
+                    <DirectModeFormatWarning notice={directModeFormatNotice} />
+                  )}
               </div>
             )}
+
+            {/* 完整 URL 跟着地址框：托管账号卡的地址由后端固定，没有这个开关（上游 1e045d2e）。 */}
+            {shouldShowSpeedTest &&
+              !isCodexOauthPreset &&
+              !isXaiOauthPreset && (
+                <FullUrlToggle
+                  checked={isFullUrl}
+                  onCheckedChange={onFullUrlChange}
+                  geminiNative={apiFormat === "gemini_native"}
+                />
+              )}
 
             {/* 认证字段只决定 Anthropic 格式上游的认证头（OpenAI 格式一律 Bearer）；Copilot
                 靠它决定占位符写在哪个变量。 */}
             {(apiFormat === "anthropic" || isCopilotPreset) && (
               <div className="space-y-2">
-                <FormLabel>
-                  {t("providerForm.authField", { defaultValue: "认证字段" })}
-                </FormLabel>
+                <div className="flex items-center gap-0.5">
+                  <FormLabel>{authFieldLabel}</FormLabel>
+                  <HelpTip title={authFieldLabel}>
+                    {t("providerForm.authFieldHint")}
+                  </HelpTip>
+                </div>
                 <Select
                   value={apiKeyField}
                   onValueChange={(v) =>
@@ -755,18 +784,18 @@ export function ClaudeFormFields({
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t("providerForm.authFieldHint", {
-                    defaultValue: "选择写入配置的认证环境变量名",
-                  })}
-                </p>
               </div>
             )}
 
             {/* 模型映射 */}
             <div className="space-y-1 border-t border-border-default pt-2">
               <div className="flex items-center justify-between">
-                <FormLabel>{t("providerForm.modelMappingLabel")}</FormLabel>
+                <div className="flex items-center gap-0.5">
+                  <FormLabel>{t("providerForm.modelMappingLabel")}</FormLabel>
+                  <HelpTip title={t("providerForm.modelMappingLabel")}>
+                    {t("providerForm.modelMappingHint")}
+                  </HelpTip>
+                </div>
                 <div className="flex gap-2">
                   {/* 一键设置按钮 */}
                   <Button
@@ -819,7 +848,10 @@ export function ClaudeFormFields({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleFetchModels}
+                      onClick={() => {
+                        opensPickerRef.current = false;
+                        handleFetchModels();
+                      }}
                       disabled={isFetchingModels}
                       className="h-7 gap-1"
                     >
@@ -833,9 +865,6 @@ export function ClaudeFormFields({
                   )}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {t("providerForm.modelMappingHint")}
-              </p>
             </div>
 
             <div className="space-y-3">
@@ -926,11 +955,17 @@ export function ClaudeFormFields({
             </div>
 
             <div className="space-y-2 border-t border-border-default pt-4">
-              <FormLabel htmlFor="claudeModel">
-                {t("providerForm.fallbackModelLabel", {
-                  defaultValue: "默认兜底模型",
-                })}
-              </FormLabel>
+              <div className="flex items-center gap-0.5">
+                <FormLabel htmlFor="claudeModel">
+                  {fallbackModelLabel}
+                </FormLabel>
+                {/* 直连时它是 Claude Code 的主模型；经过路由时才是各档留空、没匹配到档位的回落。 */}
+                <HelpTip title={fallbackModelLabel}>
+                  {directModeFormatNotice
+                    ? t("providerForm.fallbackModelHelpDirect")
+                    : t("providerForm.fallbackModelHelp")}
+                </HelpTip>
+              </div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_minmax(0,104px)]">
                 {renderModelInput(
                   "claudeModel",
@@ -960,28 +995,38 @@ export function ClaudeFormFields({
                   })}
                 </label>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {t("providerForm.fallbackModelHint", {
-                  defaultValue:
-                    "用于未明确落到 Sonnet、Opus、Fable、Haiku 角色的请求。使用第三方/中转端点时建议填写：否则这些请求（含 Haiku 后台子任务）会以原始 Claude 模型名透传给上游，可能因上游无此模型而报错。官方端点可留空。",
-                })}
-              </p>
+              {fallbackModelMissing && (
+                <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+                  {directModeFormatNotice
+                    ? t("providerForm.fallbackModelHaikuMissing")
+                    : t("providerForm.fallbackModelMissing")}
+                </p>
+              )}
             </div>
 
-            <CustomUserAgentField
-              id="claude-custom-user-agent"
-              value={customUserAgent}
-              onChange={onCustomUserAgentChange}
-            />
-
-            <div className="border-t border-border-default pt-3">
-              <LocalProxyRequestOverridesField
-                headersJson={localProxyHeadersOverride}
-                bodyJson={localProxyBodyOverride}
-                onHeadersJsonChange={onLocalProxyHeadersOverrideChange}
-                onBodyJsonChange={onLocalProxyBodyOverrideChange}
-              />
-            </div>
+            {/* Copilot 的请求由转发层按 Copilot 客户端的样子发，UA 和请求覆盖都会被跳过 */}
+            {!isCopilotPreset && (
+              <div className="space-y-4 border-t border-border-default pt-4">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t("codexConfig.routeOnlySettingsHint")}
+                </p>
+                <CustomUserAgentField
+                  id="claude-custom-user-agent"
+                  value={customUserAgent}
+                  onChange={onCustomUserAgentChange}
+                  help={t("providerForm.customUserAgentHelp")}
+                />
+                <div className="border-t border-border-default pt-3">
+                  <LocalProxyRequestOverridesField
+                    headersJson={localProxyHeadersOverride}
+                    bodyJson={localProxyBodyOverride}
+                    onHeadersJsonChange={onLocalProxyHeadersOverrideChange}
+                    onBodyJsonChange={onLocalProxyBodyOverrideChange}
+                    help={t("providerForm.localProxyRequestOverridesHelp")}
+                  />
+                </div>
+              </div>
+            )}
           </CollapsibleContent>
         </Collapsible>
       )}
@@ -994,7 +1039,14 @@ export function ClaudeFormFields({
               ? copilotModels.map((model) => ({ id: model.id, ownedBy: null }))
               : fetchedModels
           }
-          onFetchModels={isCopilotPreset ? undefined : handleFetchModels}
+          onFetchModels={
+            isCopilotPreset
+              ? undefined
+              : () => {
+                  opensPickerRef.current = true;
+                  handleFetchModels();
+                }
+          }
           isFetching={isFetchingModels || modelsLoading}
         />
       )}

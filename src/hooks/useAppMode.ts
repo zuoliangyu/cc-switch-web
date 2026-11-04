@@ -17,6 +17,19 @@ type Action =
   | { kind: "member"; id: string; enabled: boolean }
   | { kind: "route"; id: string };
 
+/**
+ * 只读的模式视图（和 useAppMode 同一个查询，不另外轮询）：表单按应用实际的模式给提示。
+ * 不支持模式的应用返回 undefined。
+ */
+export function useAppModeView(app: AppId) {
+  return useQuery({
+    queryKey: ["appMode", app],
+    queryFn: () => proxyApi.getAppMode(app),
+    enabled: supportsAppMode(app),
+    retry: false,
+  }).data;
+}
+
 export function useAppMode(app: AppId) {
   const client = useQueryClient();
   const query = useQuery({

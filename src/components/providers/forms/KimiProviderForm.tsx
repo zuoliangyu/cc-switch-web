@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Download, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Form, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -58,19 +58,16 @@ import {
   ModelDropdown,
   NativeConfigEditor,
 } from "./shared";
-import { FetchedModelPicker } from "./FetchedModelPicker";
+import {
+  FetchedModelPicker,
+  type FetchedModelSelection,
+} from "./FetchedModelPicker";
 import { fillKimiModel, metadataFilledAnything } from "./modelMetadataFill";
 import { RequestHeadersEditor } from "./RequestHeadersEditor";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import type { ProviderFormProps } from "./ProviderForm";
 import { usePresetStep } from "./presetStep";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
-
-/** 从获取到的模型列表里勾选的结果（Web 的选择框只加不减，`remove` 恒为空） */
-interface FetchedModelSelection {
-  add: string[];
-  remove: string[];
-}
 
 // 新加的行先用这个窗口占位（max_context_size 必填），选中模型后换成查到的值。
 const PLACEHOLDER_CONTEXT_SIZE = 262144;
@@ -633,21 +630,16 @@ export function KimiProviderForm({
                 </HelpTip>
               </div>
               <div className="flex gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFetchModels}
-                  disabled={isFetchingModels}
-                  className="h-7 gap-1"
-                >
-                  {isFetchingModels ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
+                <FetchedModelPicker
+                  models={fetchedModels}
+                  configuredModelIds={Object.values(config.models).map(
+                    (model) => model.model,
                   )}
-                  {t("providerForm.fetchModels")}
-                </Button>
+                  onApply={handleApplyFetchedModels}
+                  onFetch={handleFetchModels}
+                  isFetching={isFetchingModels}
+                  metadataSource={{ baseUrl, presets: kimiPresetModelSources }}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -678,15 +670,6 @@ export function KimiProviderForm({
                 </Button>
               </div>
             </div>
-            {fetchedModels.length > 0 && (
-              <FetchedModelPicker
-                models={fetchedModels}
-                configuredModelIds={Object.values(config.models).map(
-                  (model) => model.model,
-                )}
-                onAdd={(add) => handleApplyFetchedModels({ add, remove: [] })}
-              />
-            )}
             {Object.keys(config.models).length === 0 ? (
               <p className="py-2 text-sm text-muted-foreground">
                 {t("opencode.noModels")}

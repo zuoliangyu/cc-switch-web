@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { FormLabel } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpTip } from "@/components/ui/help-tip";
 import {
   parseBodyOverrideJson,
   parseHeaderOverrideJson,
@@ -11,6 +12,8 @@ interface LocalProxyRequestOverridesFieldProps {
   bodyJson: string;
   onHeadersJsonChange: (value: string) => void;
   onBodyJsonChange: (value: string) => void;
+  /** 字段名后「?」里的说明；「只在路由、聚合模式下生效」由调用方在分组开头说一次。 */
+  help: string;
 }
 
 export function LocalProxyRequestOverridesField({
@@ -18,18 +21,18 @@ export function LocalProxyRequestOverridesField({
   bodyJson,
   onHeadersJsonChange,
   onBodyJsonChange,
+  help,
 }: LocalProxyRequestOverridesFieldProps) {
   const { t } = useTranslation();
+  const label = t("providerForm.localProxyRequestOverrides");
   const headerError = parseHeaderOverrideJson(headersJson).error;
   const bodyError = parseBodyOverrideJson(bodyJson).error;
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <FormLabel>{t("providerForm.localProxyRequestOverrides")}</FormLabel>
-        <p className="text-xs text-muted-foreground">
-          {t("providerForm.localProxyRequestOverridesHint")}
-        </p>
+      <div className="flex items-center gap-0.5">
+        <FormLabel>{label}</FormLabel>
+        <HelpTip title={label}>{help}</HelpTip>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2">

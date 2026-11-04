@@ -134,6 +134,8 @@ import { HERMES_DEFAULT_CONFIG } from "./hooks/useHermesFormState";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { useHermesLiveProviderIds } from "@/hooks/useHermes";
+import { useAppModeView } from "@/hooks/useAppMode";
+import type { DirectModeFormatNotice } from "./shared";
 import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
 import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
 import { PiProviderForm } from "./PiProviderForm";
@@ -168,13 +170,6 @@ const codexApiFormatFromWireApi = (
     default:
       return undefined;
   }
-};
-
-const codexCatalogCountFromSettings = (settingsConfig: unknown): number => {
-  if (!settingsConfig || typeof settingsConfig !== "object") return 0;
-  const models = (settingsConfig as { modelCatalog?: { models?: unknown } })
-    .modelCatalog?.models;
-  return Array.isArray(models) ? models.length : 0;
 };
 
 export const normalizeCodexCatalogModelsForSave = (
@@ -345,6 +340,15 @@ function ProviderFormFull({
     () => initialData?.meta?.endpointAutoSelect ?? true,
   );
   const supportsFullUrl = appId === "claude" || appId === "codex";
+  // 应用实际在直连时，非原生上游格式发不出请求：正在直连用的这张卡一保存就坏，别的卡切不过去。
+  // 按实际模式判断（上游 e615a6f4）。
+  const appModeView = useAppModeView(appId);
+  const directModeFormatNotice: DirectModeFormatNotice | undefined =
+    appModeView?.mode === "direct"
+      ? providerId && providerId === appModeView.directProviderId
+        ? "inUse"
+        : "switch"
+      : undefined;
   const [localIsFullUrl, setLocalIsFullUrl] = useState<boolean>(() => {
     if (!supportsFullUrl) return false;
     return initialData?.meta?.isFullUrl ?? false;
@@ -694,9 +698,6 @@ function ProviderFormFull({
     codexCopilotApiFormat === "openai_responses"
       ? codexCopilotApiFormat
       : "auto";
-  const [codexCatalogEnabled, setCodexCatalogEnabled] = useState(
-    () => codexCatalogCountFromSettings(initialData?.settingsConfig) > 0,
-  );
 
   const { configError: codexConfigError, debouncedValidate } =
     useCodexTomlValidation();
@@ -749,7 +750,6 @@ function ProviderFormFull({
         template.auth,
         overlayCodexProviderConfig(providerLiveBase?.config, template.config),
       );
-      setCodexCatalogEnabled(false);
     }
   }, [
     appId,
@@ -1470,7 +1470,7 @@ function ProviderFormFull({
             ? setCodexWireApi(codexConfig ?? "", "responses")
             : (codexConfig ?? "");
         const normalizedCatalogModels =
-          category !== "official" && codexCatalogEnabled
+          category !== "official"
             ? normalizeCodexCatalogModelsForSave(codexCatalogModels)
             : [];
         if (
@@ -1888,7 +1888,6 @@ function ProviderFormFull({
           codexApiFormatFromWireApi(extractCodexWireApi(template.config)) ??
             "openai_responses",
         );
-        setCodexCatalogEnabled(false);
       }
       if (usesGeminiStyleForm(appId)) {
         const base = overlayGeminiProviderFields(providerLiveBase ?? {}, {});
@@ -1937,7 +1936,6 @@ function ProviderFormFull({
           codexApiFormatFromWireApi(extractCodexWireApi(config)) ??
           "openai_responses",
       );
-      setCodexCatalogEnabled((preset.modelCatalog?.length ?? 0) > 0);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
@@ -2292,6 +2290,7 @@ function ProviderFormFull({
 
           {appId === "claude" && (
             <ClaudeFormFields
+              directModeFormatNotice={directModeFormatNotice}
               aggregationModels={aggregationModels}
               onAggregationModelsChange={setAggregationModels}
               providerId={providerId}
@@ -2432,8 +2431,7 @@ function ProviderFormFull({
                 }
                 autoSelect={endpointAutoSelect}
                 onAutoSelectChange={setEndpointAutoSelect}
-                catalogEnabled={codexCatalogEnabled}
-                onCatalogEnabledChange={setCodexCatalogEnabled}
+                directModeFormatNotice={directModeFormatNotice}
                 apiFormat={localCodexApiFormat}
                 onApiFormatChange={handleCodexApiFormatChange}
                 copilotApiFormat={effectiveCodexCopilotApiFormat}

@@ -211,7 +211,7 @@
 | `f5db60db` | v4.0.2 | feat(ui): fill the icon box with tile-style provider icons | 5a 供应商与全局 UI | 需新建或映射：`components/ProviderIconBox.tsx` | 待迁移 |
 | `20222460` | v4.0.2 | docs(whats-new): add the 4.0.2 summary | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `db8069ef` | v4.0.2 | fix(codex): keep the reasoning levels column from stretching the model catalog | 5a 供应商与全局 UI | 5a1：Codex 模型目录行按上游最终形态补上思考档位列（多选档位 + 默认档位，相邻三档以上折成 first → last），列宽不被长标签撑开 | 已迁移 |
-| `91765357` | v4.0.2 | feat(ui): pick fetched models into the Codex model mapping table | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
+| `91765357` | v4.0.2 | feat(ui): pick fetched models into the Codex model mapping table | 5a 供应商与全局 UI | 5a1b：Codex 模型列表标题上的「获取模型列表」打开同一个选择弹窗，选中的模型按 ID 建行并补窗口与思考档位；行内下拉仍可换单行模型；Codex 模型列表、Claude 聚合模型、OpenCode 列表的添加按钮改为「手动添加」 | 已迁移 |
 | `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 5a1：按打开表单的模式标签（直连 / 路由 / 聚合）选表单布局；Web 没有模式标签页与聚合表单布局，表单只有一种布局 | 不适用 |
 | `9ec89fe8` | v4.0.2 | feat(claude): list aggregated models through modelPicker instead of gateway discovery | 4 模式/路由 | 4c：聚合模式下 Claude Code 的 /model 改用顶层 modelPicker（replaceBuiltInOptions，每个聚合模型一行），不再写 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY（旧契约写过的按独有字段删）；路由契约逐字节不变；floor 与前端键字段镜像加 modelPicker | 已迁移 |
 | `600fdb0c` | v4.0.2 | fix(ui): drop the restart hints for Claude Code aggregation changes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx`、`components/providers/mode/ModeDialog.tsx`等 4 个 | 待迁移 |
@@ -345,23 +345,23 @@
 | `886915a7` | v4.0.9 | feat(presets): add BotCF presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c4770472` | v4.0.9 | feat(presets): add YYLX presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `4f08989a` | v4.0.9 | refactor(stack): explain the default model with a help tip instead of stars | 4 模式/路由 | 4b：上游 Stack 布局模型列表的星标改帮助提示；Web 的供应商表单没有 Stack 布局与星标，聚合模型编辑器（ClaudeAggregationModels）本来就是文字说明加「移到首位设为默认」 | 不适用 |
-| `0dae89e2` | v4.0.9 | refactor(codex): move the model list out of the advanced options | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `9f7ac1fa` | v4.0.9 | refactor(codex): make the first row of the model list the default model | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `36e2ce2c` | v4.0.9 | refactor(codex): move field explanations into help tips | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `0dae89e2` | v4.0.9 | refactor(codex): move the model list out of the advanced options | 5a 供应商与全局 UI | 5a1b：Codex 模型列表移出高级选项，排在连接信息之后、默认模型之前，标题改为「模型列表」；去掉 Web 为 #6 加的「自定义模型目录」开关（be2ba289），列表常驻、留空即不生成目录，目录仍不决定是否需要路由，Chat 思考与缓存参数照旧独立；路由指南同步 | 已迁移 |
+| `9f7ac1fa` | v4.0.9 | refactor(codex): make the first row of the model list the default model | 5a 供应商与全局 UI | 5a1b：有模型列表时第一行就是默认模型、不再显示默认模型框；列表为空时显示，加第一行时用当前默认模型打底；改名 / 删除第一行时 model 当场跟着变；旧卡默认模型不在第一行时显示时挪到最前、不算修改 | 已迁移 |
+| `36e2ce2c` | v4.0.9 | refactor(codex): move field explanations into help tips | 5a 供应商与全局 UI | 5a1b：Codex 表单字段说明收进「?」，后果提示留在页面上；UA 与请求覆盖合成一组，开头说一次「只在路由、聚合模式下生效」。上游 Stack 布局与 Anthropic 格式专有字段 Web 的 Codex 表单没有，不适用 | 部分迁移 |
 | `84ca4f00` | v4.0.9 | refactor(stack): move aggregation layout explanations into help tips | 4 模式/路由 | 4b：上游聚合表单布局说明改为帮助提示；Web 的供应商表单没有聚合布局 | 不适用 |
 | `5b78fc62` | v4.0.9 | docs(flatpak): explain skipping updater artifacts without a signing key | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `e615a6f4` | v4.0.9 | refactor(forms): make provider form hints follow the app's actual mode | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx`、`components/providers/forms/shared/DirectModeFormatWarning.tsx` | 待迁移 |
+| `e615a6f4` | v4.0.9 | refactor(forms): make provider form hints follow the app's actual mode | 5a 供应商与全局 UI | 5a1b：表单按应用实际模式提示（新增不轮询的 useAppModeView）：直连时选了要转换的格式就在格式下提示后果（正在直连用的卡：保存后请求会失败；其他卡：要先切到路由或聚合）；Codex 的 Copilot 卡单独说明恒需路由。上游聚合布局 / ModeTabs 相关部分 Web 没有，不适用 | 部分迁移 |
 | `29998ed9` | v4.0.9 | fix(i18n): apply the saved language on cold start | 1d 资源/设置/工具 | 1d：拿到后端设置后用保存的语言校正首屏语言（Web 在 App 读取设置时同步，覆盖访问密钥门之后的首次加载） | 已迁移 |
 | `6e7811e5` | v4.0.9 | fix(proxy): send Bearer to OpenAI-format Claude upstreams and merge stack switches | 1b 代理协议 | 1b：OpenAI 格式 Claude 上游一律 Bearer、聚合成员兼容开关按性质合并、表单仅 Anthropic/Copilot 显示认证字段；Codex 主推理强度选择器依赖 Web 尚无的子代理表单字段，转入 5a | 部分迁移 |
-| `f59bba54` | v4.0.9 | refactor(forms): move Claude form explanations into help tips | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
+| `f59bba54` | v4.0.9 | refactor(forms): move Claude form explanations into help tips | 5a 供应商与全局 UI | 5a1b：Claude 表单的地址、上游格式、认证字段、模型映射、默认兜底模型说明收进「?」；后果只在适用时显示（第三方端点直连时 Haiku 档没填、路由时兜底模型没填）；UA 与请求覆盖共用一组说明，Copilot 卡不显示 | 已迁移 |
 | `56731456` | v4.0.9 | refactor(forms): shorten the legacy provider fields notice | 5a 供应商与全局 UI | 5a1：缩短「旧字段不随切换生效」文案；Web 的旧字段面板本来就是一句话、不带计数 | 不适用 |
-| `1e045d2e` | v4.0.9 | refactor(forms): move the full URL toggle into advanced options | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/shared/FullUrlToggle.tsx` | 待迁移 |
+| `1e045d2e` | v4.0.9 | refactor(forms): move the full URL toggle into advanced options | 5a 供应商与全局 UI | 5a1b：完整 URL 开关从地址栏旁移到 Claude / Codex 的高级选项（共用 FullUrlToggle），开着时高级区自动展开；托管账号卡没有这个开关 | 已迁移 |
 | `28ee933c` | v4.0.9 | refactor(claude-desktop): explain the model mode in plain words | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `ac2eebc0` | v4.0.9 | revert(forms): drop the Codex main reasoning effort picker | 5a 供应商与全局 UI | 5a1：撤掉 Codex 主推理强度选择器；该选择器（6e7811e5）在 Web 从未迁入，一增一删相抵 | 不适用 |
 | `1afa90af` | v4.0.9 | fix(forms): align the thinking level picker with the model list row | 5a 供应商与全局 UI | 5a1：档位触发器与同行输入框同一套外观和行高 | 已迁移 |
-| `f7244745` | v4.0.9 | feat(forms): pick fetched models in a dialog that can also remove them | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
-| `8347e1ab` | v4.0.9 | refactor(forms): drop the fetch-count toast when the model picker opens | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
-| `644b7d5c` | v4.0.9 | feat(forms): show model parameters in the picker and fill picks quietly | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
+| `f7244745` | v4.0.9 | feat(forms): pick fetched models in a dialog that can also remove them | 5a 供应商与全局 UI | 5a1b：取模型改为弹窗选择：拉取成功自动打开，拉过后按钮变「选择模型」、弹窗内可刷新；勾选即加入、取消勾选即移除，点「应用」才生效；配置里有、供应商没返回的模型单独列在最前。Codex、Claude 聚合模型（ClaudeAggregationModels，对应上游 ClaudeStackModelsField）、OpenCode / MiniMax Code、Kimi 全部改用；Web 没有 V7Dialog，用现有 Dialog 实现同样外壳 | 已迁移 |
+| `8347e1ab` | v4.0.9 | refactor(forms): drop the fetch-count toast when the model picker opens | 5a 供应商与全局 UI | 5a1b：会打开选择弹窗的拉取不再提示「已获取 N 个模型」，Claude 模型映射与 Codex 无列表时的拉取照旧提示 | 已迁移 |
+| `644b7d5c` | v4.0.9 | feat(forms): show model parameters in the picker and fill picks quietly | 5a 供应商与全局 UI | 5a1b：弹窗每行按同地址预设 + models.dev 显示窗口 · 推理 · 图片；从弹窗加入的模型补参数时不再弹补全提示 | 已迁移 |
 | `2b0ec81b` | v4.0.9 | fix(codex): rewrite call_id-less tool outputs for xAI native Responses | 1b 代理协议 | 1b：xAI 原生 Responses 改写缺 call_id 的工具输出 | 已迁移 |
 | `b17250a3` | v4.0.9 | feat(presets): add TokenFlux presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `5e57b1ec` | v4.0.9 | chore(release): v4.0.9 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -789,7 +789,7 @@
 | `618af9d9` | v4.0.21 | fix(apps): allow OpenCode's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 OpenCode postinstall（后端安装命令与前端一键命令） | 已迁移 |
 | `ff31d840` | v4.0.21 | fix(apps): allow Grok Build's postinstall under npm 12 | 1d 资源/设置/工具 | 1d：npm 12 下允许 Grok Build postinstall | 已迁移 |
 | `d564adc3` | v4.0.21 | feat(presets): add Kimi K3.1 Pro and HighSpeed to the official Kimi presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `05034a4e` | v4.0.21 | feat(codex): drag to reorder rows in the provider model list | 5a 供应商与全局 UI | 5a1：Codex 模型目录行首拖动手柄换行序（只有一行时隐藏，可键盘操作）；「第一行即默认模型」随 9f7ac1fa 在 5a1b 处理 | 部分迁移 |
+| `05034a4e` | v4.0.21 | feat(codex): drag to reorder rows in the provider model list | 5a 供应商与全局 UI | 5a1/5a1b：Codex 模型列表行首拖动手柄换行序（只有一行时隐藏，可键盘操作）；第一行即默认模型，拖到最前的那一行当场成为新的 model | 已迁移 |
 | `71524045` | v4.0.21 | fix(stack): keep the aggregation member order in step with drag sorting | 4 模式/路由 | 4d：排序只改 sort_index（update_provider_sort_indexes，一个事务、不存在的行跳过），不会复活并发删掉的行或盖掉刚存的字段。聚合名单随拖动重排不适用：Web 聚合成员按名称 A–Z 排，与 sort_index 无关 | 部分迁移 |
 | `96f01af0` | v4.0.21 | fix(proxy): retry Codex requests rejected for a foreign Azure resource | 1b 代理协议 | 1b：Codex 请求因外部 Azure 资源 item id 被拒时整流重试 | 已迁移 |
 | `c2110ebb` | v4.0.21 | fix(mcp): warn when an SSE server is written to apps without SSE support | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -1089,3 +1089,8 @@
   - 通用：取模型带上配置的请求头 / Header 覆盖；JSON 编辑器与表单字段互不覆盖；TOML 表头识别带引号与数组表头；只规整作定界符的弯引号；编辑时也显示「获取 API Key」链接；API Key 输入框关闭自动大写。
   - 转入 5a1b：取模型对话框（91765357、f7244745、8347e1ab、644b7d5c）、表单布局向上游收敛（0dae89e2、9f7ac1fa、36e2ce2c、f59bba54、1e045d2e）、协议提示跟随实际模式（e615a6f4）。这些是上游后来的表单设计，不是 Web 的取舍，按上游收敛。
   - 验证：`cargo test --lib` 3564 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 190 个文件 1998 项通过、2 项跳过。
+- 2026-11-04：完成批次 5a1b（10 项：8 项已迁移、2 项部分迁移；05034a4e 改为已迁移）。这些是上游后来的表单设计，按上游收敛。
+  - 取模型改为选择弹窗（勾选加入、取消移除，显示窗口 / 推理 / 图片），Codex、Claude 聚合模型、OpenCode / MiniMax Code、Kimi 统一使用。
+  - Codex 表单：「模型列表」常驻于连接信息之后，第一行即默认模型，列表为空时才显示默认模型框；去掉 Web 为 #6 加的「自定义模型目录」开关——列表留空即不生成目录，目录仍不决定是否需要路由，#6 的回归用例保留；`docs/claude-codex-routing-guide-zh.md` 同步。
+  - 说明文字收进帮助提示；完整 URL 开关移入高级选项；直连模式下选了要转换的格式时按卡片是否在用给出后果提示。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 191 个文件 2016 项通过、2 项跳过。

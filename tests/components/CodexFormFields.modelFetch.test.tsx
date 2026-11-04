@@ -122,8 +122,12 @@ function Harness(props: Props) {
   );
 }
 
+// 有模型列表时拉取按钮在列表标题上，拉到模型后变成「选择模型」并打开选择弹窗（上游 f7244745）
 const fetchButton = () =>
-  screen.getAllByRole("button", { name: "providerForm.fetchModels" })[0];
+  screen.getAllByRole("button", {
+    name: /^providerForm\.(fetchModels|modelPicker\.title)$/,
+    hidden: true,
+  })[0];
 
 describe("Codex model-fetch lifecycle", () => {
   beforeEach(() => {

@@ -327,7 +327,7 @@ describe("KimiProviderForm", () => {
     );
     await user.click(await screen.findByRole("checkbox", { name: "k3.1-pro" }));
     await user.click(
-      screen.getByRole("button", { name: /addSelectedModels|Add selected/ }),
+      screen.getByRole("button", { name: "providerForm.modelPicker.apply" }),
     );
     expect(requested).toEqual({ accountId: "managed:kimi-code" });
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -544,7 +544,7 @@ describe("KimiProviderForm", () => {
     await user.click(await screen.findByRole("checkbox", { name: "model-x" }));
     await user.click(await screen.findByRole("checkbox", { name: "model-y" }));
     await user.click(
-      screen.getByRole("button", { name: /addSelectedModels|Add selected/ }),
+      screen.getByRole("button", { name: "providerForm.modelPicker.apply" }),
     );
 
     expect(fetchRequest).toMatchObject({

@@ -1,6 +1,6 @@
 import { renderWithQueryClient as render } from "../utils/testQueryClient";
 import { useState, type ReactNode } from "react";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CodexFormFields } from "@/components/providers/forms/CodexFormFields";
 import { http, HttpResponse } from "msw";
@@ -44,12 +44,6 @@ vi.mock("@/components/providers/forms/shared", async (importOriginal) => ({
   >()),
   ApiKeySection: () => <div data-testid="api-key-field" />,
   EndpointField: () => <div data-testid="endpoint-field" />,
-  ModelInputWithFetch: ({ fetchedModels }: { fetchedModels: unknown[] }) => (
-    <div
-      data-testid="model-field"
-      data-models={JSON.stringify(fetchedModels)}
-    />
-  ),
 }));
 
 function renderXaiOauthFields() {
@@ -72,8 +66,6 @@ function renderXaiOauthFields() {
       onEndpointModalToggle={vi.fn()}
       autoSelect={false}
       onAutoSelectChange={vi.fn()}
-      catalogEnabled={false}
-      onCatalogEnabledChange={vi.fn()}
       apiFormat="openai_responses"
       onApiFormatChange={vi.fn()}
       promptCacheRouting="auto"
@@ -102,7 +94,8 @@ describe("CodexFormFields", () => {
     expect(screen.queryByTestId("api-key-field")).toBeNull();
     expect(screen.queryByTestId("endpoint-field")).toBeNull();
     expect(document.getElementById("codexApiFormat")).toBeNull();
-    expect(screen.getByTestId("model-field")).toBeInTheDocument();
+    // 没有模型列表：默认模型框带自己的获取按钮
+    expect(document.getElementById("codexModelName")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
@@ -131,8 +124,6 @@ describe("CodexFormFields", () => {
         onEndpointModalToggle={vi.fn()}
         autoSelect={false}
         onAutoSelectChange={vi.fn()}
-        catalogEnabled
-        onCatalogEnabledChange={vi.fn()}
         apiFormat="openai_responses"
         onApiFormatChange={vi.fn()}
         promptCacheRouting="auto"
@@ -177,7 +168,7 @@ describe("CodexFormFields", () => {
     );
   });
 
-  it("默认模型合并目录与远端建议，并可加入模型映射", async () => {
+  it("默认模型不在列表里时提示并加到第一行；选拉到的模型补参数并带着默认模型", async () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
     server.use(
       http.post("http://runtime.local/fetch_models_dev", () =>
@@ -203,6 +194,7 @@ describe("CodexFormFields", () => {
       { id: "remote-model", ownedBy: "remote" },
     ]);
     const onCatalogModelsChange = vi.fn();
+    const onModelNameChange = vi.fn();
     render(
       <CodexFormFields
         codexApiKey="sk-test"
@@ -219,14 +211,12 @@ describe("CodexFormFields", () => {
         onEndpointModalToggle={vi.fn()}
         autoSelect={false}
         onAutoSelectChange={vi.fn()}
-        catalogEnabled
-        onCatalogEnabledChange={vi.fn()}
         apiFormat="openai_responses"
         onApiFormatChange={vi.fn()}
         promptCacheRouting="auto"
         onPromptCacheRoutingChange={vi.fn()}
         modelName="outside-model"
-        onModelNameChange={vi.fn()}
+        onModelNameChange={onModelNameChange}
         catalogModels={[{ model: "mapped-model" }]}
         onCatalogModelsChange={onCatalogModelsChange}
         speedTestEndpoints={[]}
@@ -239,32 +229,31 @@ describe("CodexFormFields", () => {
       />,
     );
 
+    // 有模型列表：没有单独的默认模型框，拉取在列表标题上，拉到后打开选择弹窗
+    expect(document.getElementById("codexModelName")).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
     );
-
-    await waitFor(() =>
-      expect(screen.getByTestId("model-field")).toHaveAttribute(
-        "data-models",
-        expect.stringContaining('"id":"remote-model"'),
-      ),
-    );
-    expect(screen.getByTestId("model-field")).toHaveAttribute(
-      "data-models",
-      expect.stringContaining('"id":"mapped-model"'),
-    );
-
+    const picker = await screen.findByRole("dialog");
     fireEvent.click(
-      screen.getByRole("button", { name: "codexConfig.addToModelMapping" }),
+      within(picker).getByRole("button", { name: "common.cancel" }),
+    );
+    expect(onCatalogModelsChange).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByText("codexConfig.defaultModelNotInList"),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "codexConfig.addToModelList" }),
     );
     await waitFor(() =>
       expect(onCatalogModelsChange).toHaveBeenLastCalledWith([
-        expect.objectContaining({ model: "mapped-model" }),
         expect.objectContaining({
           model: "outside-model",
           displayName: "outside-model",
           contextWindow: "9000",
         }),
+        expect.objectContaining({ model: "mapped-model" }),
       ]),
     );
     fireEvent.click(
@@ -275,19 +264,17 @@ describe("CodexFormFields", () => {
     fireEvent.click(
       await screen.findByRole("option", { name: "remote-model" }),
     );
+    // 第一行就是默认模型：换成拉到的模型时默认模型跟着变
     await waitFor(() =>
       expect(onCatalogModelsChange).toHaveBeenLastCalledWith([
         expect.objectContaining({
           model: "remote-model",
-          contextWindow: "64000",
-          inputModalities: ["text", "image"],
-        }),
-        expect.objectContaining({
-          model: "outside-model",
           contextWindow: "9000",
         }),
+        expect.objectContaining({ model: "mapped-model" }),
       ]),
     );
+    expect(onModelNameChange).toHaveBeenCalledWith("remote-model");
   });
 });
 
@@ -318,8 +305,6 @@ describe("CodexFormFields model fetch identity", () => {
           onEndpointModalToggle={vi.fn()}
           autoSelect={false}
           onAutoSelectChange={vi.fn()}
-          catalogEnabled={false}
-          onCatalogEnabledChange={vi.fn()}
           apiFormat="openai_responses"
           onApiFormatChange={vi.fn()}
           promptCacheRouting="auto"
@@ -338,12 +323,20 @@ describe("CodexFormFields model fetch identity", () => {
     );
   }
 
-  const fetchedIds = () =>
-    (
-      JSON.parse(
-        screen.getByTestId("model-field").getAttribute("data-models") ?? "[]",
-      ) as { id: string }[]
-    ).map((model) => model.id);
+  // 没有模型列表时，拉到的模型出现在默认模型框旁的下拉里
+  const fetchedIds = async () => {
+    const trigger = screen.queryByRole("button", {
+      name: "providerForm.searchModelAriaLabel",
+    });
+    if (!trigger) return [];
+    fireEvent.click(trigger);
+    const options = await screen.findAllByRole("option");
+    const ids = options.map((option) => option.textContent ?? "");
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
+    return ids;
+  };
 
   it("sends the header override and clears the list once it changes", async () => {
     fetchModelsForConfigMock.mockReset();
@@ -355,7 +348,14 @@ describe("CodexFormFields model fetch identity", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
     );
-    await waitFor(() => expect(fetchedIds()).toEqual(["model-a"]));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "providerForm.searchModelAriaLabel",
+        }),
+      ).toBeInTheDocument(),
+    );
+    expect((await fetchedIds()).join(" ")).toContain("model-a");
     expect(fetchModelsForConfigMock).toHaveBeenCalledWith(
       "https://api.example.com/v1",
       "sk-test",
@@ -366,7 +366,13 @@ describe("CodexFormFields model fetch identity", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "change-headers" }));
-    await waitFor(() => expect(fetchedIds()).toEqual([]));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", {
+          name: "providerForm.searchModelAriaLabel",
+        }),
+      ).toBeNull(),
+    );
   });
 
   it("drops a response that lands after the header override changed", async () => {
@@ -390,6 +396,6 @@ describe("CodexFormFields model fetch identity", () => {
     resolveFetch([{ id: "stale-model", ownedBy: "vendor" }]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(fetchedIds()).toEqual([]);
+    expect(await fetchedIds()).toEqual([]);
   });
 });

@@ -77,10 +77,7 @@ describe("Codex editor global baseline", () => {
     expect(
       screen.queryByRole("switch", { name: "codexConfig.localRoutingToggle" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("switch", { name: "codexConfig.catalogToggle" }),
-    );
-    expect(screen.getByText("codexConfig.catalogOnHint")).toBeInTheDocument();
+    // 模型列表常驻在高级选项外面，留空即不生成目录（上游 0dae89e2）
     fireEvent.click(
       screen.getByRole("button", { name: "codexConfig.addCatalogModel" }),
     );
@@ -122,7 +119,7 @@ describe("Codex editor global baseline", () => {
     ).toBe(false);
   });
 
-  it("关闭目录仍保留 Chat 的思考与缓存参数", async () => {
+  it("删光模型列表仍保留 Chat 的思考与缓存参数", async () => {
     setSettings({ commonConfigConfirmed: true });
     const onSubmit = vi.fn<ProviderFormProps["onSubmit"]>();
     const reasoning = { supportsThinking: true, supportsEffort: true };
@@ -151,9 +148,7 @@ describe("Codex editor global baseline", () => {
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(
-      screen.getByRole("switch", { name: "codexConfig.catalogToggle" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
     expect(
       screen.queryByLabelText("codexConfig.catalogColumnModel"),
     ).not.toBeInTheDocument();

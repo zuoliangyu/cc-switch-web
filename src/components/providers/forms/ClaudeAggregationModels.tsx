@@ -115,41 +115,40 @@ export function ClaudeAggregationModels({
         </div>
       ))}
       {value && (
-        <div className="space-y-3">
-          {onFetchModels && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isFetching}
-              onClick={onFetchModels}
-            >
-              {t("providerForm.fetchModels")}
-            </Button>
-          )}
-          {fetchedModels.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {(onFetchModels || fetchedModels.length > 0) && (
             <FetchedModelPicker
               models={fetchedModels}
               configuredModelIds={normalizeAggregationModels(value).map(
                 (row) => row.model,
               )}
-              onAdd={(ids) =>
+              onApply={({ add, remove }) => {
+                const removed = new Set(remove);
+                const kept = value.filter(
+                  (row) =>
+                    !removed.has(
+                      stripClaudeOneMMarker(row.model.trim()).trim(),
+                    ),
+                );
                 onChange(
                   normalizeAggregationModels([
-                    ...value,
-                    ...ids.map((model) => ({ model })),
+                    ...kept,
+                    ...add.map((model) => ({ model })),
                   ]),
-                )
-              }
+                );
+              }}
+              onFetch={onFetchModels ?? (() => {})}
+              isFetching={isFetching}
             />
           )}
           <Button
             type="button"
             variant="outline"
             size="sm"
+            className="h-7 gap-1"
             onClick={() => onChange([...value, { model: "" }])}
           >
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             {t("webMode.models.add")}
           </Button>
         </div>

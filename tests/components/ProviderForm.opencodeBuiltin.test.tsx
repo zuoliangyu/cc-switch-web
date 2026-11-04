@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -220,9 +226,14 @@ describe("OpenCode built-in provider editing", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "providerForm.fetchModels" }),
       );
+      // 拉到模型后打开选择弹窗（上游 f7244745），取消后再保存
+      const picker = await screen.findByRole("dialog");
       expect(
-        await screen.findByRole("checkbox", { name: "glm-5.2" }),
+        within(picker).getByRole("checkbox", { name: "glm-5.2" }),
       ).toBeInTheDocument();
+      fireEvent.click(
+        within(picker).getByRole("button", { name: "common.cancel" }),
+      );
       expect(requests).toEqual([
         expect.objectContaining({ baseUrl: baseURL, apiKey: "test-key" }),
       ]);

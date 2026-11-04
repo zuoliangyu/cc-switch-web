@@ -2,7 +2,13 @@ import { compareProviderNames } from "@/utils/providerSort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ImeSafeInput } from "@/components/ui/ime-safe-input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import JsonEditor from "@/components/JsonEditor";
+import { useProvidersQuery } from "@/lib/query/queries";
+import { REQUIRED_LABEL } from "./BasicFormFields";
 import { PiModelsEditor } from "./PiModelsEditor";
 import { RequestHeadersEditor } from "./RequestHeadersEditor";
 import { normalizeRequestHeaders } from "./helpers/requestHeaders";
@@ -211,6 +219,15 @@ export function PiProviderForm({
   const [selectedPreset, setSelectedPreset] = useState<PiFamilyPreset | null>(
     null,
   );
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const { data: existingProviders } = useProvidersQuery(isOmp ? "omp" : "pi");
+  // 预设自带标识；同一家加第二次时会撞上已有的卡，在字段下直接提示（上游 1e2559ef）。
+  const isDuplicateProviderKey =
+    !initialData &&
+    Object.prototype.hasOwnProperty.call(
+      existingProviders?.providers ?? {},
+      providerKey.trim(),
+    );
 
   const parsedConfig = useMemo(() => {
     try {
@@ -336,6 +353,11 @@ export function PiProviderForm({
       toast.error(t("pi.provider.invalidKey"));
       return;
     }
+    if (isDuplicateProviderKey) {
+      toast.error(t("pi.form.providerKeyDuplicate"));
+      document.getElementById("pi-provider-key")?.focus();
+      return;
+    }
     if (!name.trim()) {
       toast.error(t("providerForm.fillSupplierName"));
       return;
@@ -431,16 +453,33 @@ export function PiProviderForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="pi-provider-key">{t("pi.provider.key")}</Label>
+          <Label htmlFor="pi-provider-key" className={REQUIRED_LABEL}>
+            {t("pi.provider.key")}
+          </Label>
           <ImeSafeInput
             id="pi-provider-key"
             value={providerKey}
             onValueChange={setProviderKey}
             disabled={Boolean(initialData)}
+            aria-invalid={isDuplicateProviderKey || undefined}
+            aria-describedby={
+              isDuplicateProviderKey ? "pi-provider-key-duplicate" : undefined
+            }
           />
+          {isDuplicateProviderKey && (
+            <p
+              id="pi-provider-key-duplicate"
+              role="alert"
+              className="text-xs text-destructive"
+            >
+              {t("pi.form.providerKeyDuplicate")}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="pi-provider-name">{t("provider.name")}</Label>
+          <Label htmlFor="pi-provider-name" className={REQUIRED_LABEL}>
+            {t("provider.name")}
+          </Label>
           <ImeSafeInput
             id="pi-provider-name"
             value={name}
@@ -516,52 +555,6 @@ export function PiProviderForm({
         />
       </div>
 
-      <RequestHeadersEditor
-        headers={headers}
-        onHeadersChange={(value) => {
-          setHeaders(value);
-          setStructuredConfig({ headers: normalizeRequestHeaders(value) });
-        }}
-      />
-
-      {isOmp && (
-        <div className="space-y-2">
-          <Label htmlFor="omp-discovery-type">
-            {t("omp.form.discoveryType")}
-          </Label>
-          <Select
-            value={ompDiscoveryType || OMP_DISCOVERY_OFF}
-            onValueChange={handleOmpDiscoveryChange}
-            disabled={!parsedConfig}
-          >
-            <SelectTrigger id="omp-discovery-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={OMP_DISCOVERY_OFF}>
-                {t("omp.form.discoveryOff")}
-              </SelectItem>
-              {OMP_DISCOVERY_TYPES.map(({ value, labelKey }) => (
-                <SelectItem key={value} value={value}>
-                  {t(`omp.form.discoveryTypes.${labelKey}`)}
-                </SelectItem>
-              ))}
-              {ompDiscoveryType &&
-                !OMP_DISCOVERY_TYPES.some(
-                  ({ value }) => value === ompDiscoveryType,
-                ) && (
-                  <SelectItem value={ompDiscoveryType}>
-                    {ompDiscoveryType}
-                  </SelectItem>
-                )}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t("omp.form.discoveryHint")}
-          </p>
-        </div>
-      )}
-
       <div className="space-y-2">
         <Label>{t("pi.provider.models")}</Label>
         <p className="text-xs text-muted-foreground">
@@ -595,6 +588,75 @@ export function PiProviderForm({
           }}
         />
       </div>
+
+      <Collapsible
+        open={advancedOpen}
+        onOpenChange={setAdvancedOpen}
+        className="rounded-lg border border-border-default p-4"
+      >
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant={null}
+            size="sm"
+            className="h-8 w-full justify-start gap-1.5 px-0 text-sm font-medium text-foreground hover:opacity-70"
+          >
+            {advancedOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+            {t("providerForm.advancedOptionsToggle")}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4 pt-2">
+          <RequestHeadersEditor
+            headers={headers}
+            onHeadersChange={(value) => {
+              setHeaders(value);
+              setStructuredConfig({ headers: normalizeRequestHeaders(value) });
+            }}
+          />
+
+          {isOmp && (
+            <div className="space-y-2">
+              <Label htmlFor="omp-discovery-type">
+                {t("omp.form.discoveryType")}
+              </Label>
+              <Select
+                value={ompDiscoveryType || OMP_DISCOVERY_OFF}
+                onValueChange={handleOmpDiscoveryChange}
+                disabled={!parsedConfig}
+              >
+                <SelectTrigger id="omp-discovery-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={OMP_DISCOVERY_OFF}>
+                    {t("omp.form.discoveryOff")}
+                  </SelectItem>
+                  {OMP_DISCOVERY_TYPES.map(({ value, labelKey }) => (
+                    <SelectItem key={value} value={value}>
+                      {t(`omp.form.discoveryTypes.${labelKey}`)}
+                    </SelectItem>
+                  ))}
+                  {ompDiscoveryType &&
+                    !OMP_DISCOVERY_TYPES.some(
+                      ({ value }) => value === ompDiscoveryType,
+                    ) && (
+                      <SelectItem value={ompDiscoveryType}>
+                        {ompDiscoveryType}
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("omp.form.discoveryHint")}
+              </p>
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
 
       {isOmp ? (
         <NativeConfigEditor

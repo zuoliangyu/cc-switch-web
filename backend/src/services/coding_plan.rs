@@ -13,9 +13,9 @@ enum CodingPlanProvider {
     ZhipuEn,
     MiniMaxCn,
     MiniMaxEn,
-    /// OpenCode Go（$10/月订阅，美元额度三时间窗口）。base_url 分两档：
-    /// `https://opencode.ai/zen/go`（claude/claude-desktop 直连 /messages）
-    /// 与 `https://opencode.ai/zen/go/v1`（codex/opencode/pi 走 Chat）。
+    /// OpenCode Go（$10/月订阅，美元额度三时间窗口）。base_url 分两个入口：
+    /// `https://opencode.ai/inference/go/anthropic`（Anthropic 端，现行文档地址）
+    /// 与 `https://opencode.ai/zen/go`（旧入口），OpenAI Chat 端在各自后面加 `/v1`。
     OpencodeGo,
     CommandCode,
 }
@@ -37,7 +37,7 @@ fn detect_provider(base_url: &str) -> Option<CodingPlanProvider> {
         Some(CodingPlanProvider::MiniMaxCn)
     } else if crate::codex_config::codex_url_host_matches_any(base_url, &["api.minimax.io"]) {
         Some(CodingPlanProvider::MiniMaxEn)
-    } else if url.contains("opencode.ai/zen/go") {
+    } else if url.contains("opencode.ai/zen/go") || url.contains("opencode.ai/inference/go") {
         // 同时覆盖 /zen/go 与 /zen/go/v1 两档 base；Zen 按量版（/zen/v1）
         // 没有任何用量/余额 API（实测 404），刻意不命中。
         Some(CodingPlanProvider::OpencodeGo)
@@ -909,7 +909,18 @@ mod tests {
     }
 
     #[test]
-    fn opencode_go_detects_both_base_variants_but_not_zen() {
+    fn opencode_go_detects_current_and_legacy_bases_but_not_zen() {
+        // Claude Desktop 预设 base 是 /inference/go/anthropic，Codex/OpenCode/Pi
+        // 是 /inference/go/v1；旧入口 /zen/go[/v1] 仍可用，也要命中（上游 6837f361）。
+        assert!(matches!(
+            detect_provider("https://opencode.ai/inference/go/anthropic"),
+            Some(CodingPlanProvider::OpencodeGo)
+        ));
+        assert!(matches!(
+            detect_provider("https://opencode.ai/inference/go/v1"),
+            Some(CodingPlanProvider::OpencodeGo)
+        ));
+        assert!(detect_provider("https://opencode.ai/inference/v1").is_none());
         // claude/claude-desktop 预设 base 是 /zen/go，codex/opencode/pi 是
         // /zen/go/v1，两档都要命中；Zen 按量版（/zen/v1）无用量 API，不得命中。
         assert!(matches!(

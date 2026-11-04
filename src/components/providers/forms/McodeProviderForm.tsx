@@ -31,8 +31,7 @@ import {
 } from "./helpers/yamlNode";
 import { NativeConfigEditor } from "./shared/NativeConfigEditor";
 import {
-  isKnownOpencodeOptionKey,
-  OPENCODE_EXTRA_OPTION_DRAFT_PREFIX,
+  mergeOpencodeExtraOptionRows,
   toOpencodeExtraOptions,
 } from "./helpers/opencodeFormUtils";
 import type { ProviderFormProps } from "./ProviderForm";
@@ -336,6 +335,7 @@ export function McodeProviderForm({
             }
           />
           <OpenCodeFormFields
+            modelDialect={appId === "dsh" ? "dsh" : "opencode"}
             apiFormats={API_FORMATS}
             presetModelSources={mcodePresetModelSources}
             npm={config.api ?? "anthropic-messages"}
@@ -356,23 +356,10 @@ export function McodeProviderForm({
             extraOptions={extraOptions}
             onExtraOptionsChange={(draft) => {
               setExtraOptions(draft);
-              const options = Object.fromEntries(
-                Object.entries(config.options ?? {}).filter(([key]) =>
-                  isKnownOpencodeOptionKey(key),
-                ),
-              );
-              for (const [key, value] of Object.entries(draft)) {
-                if (
-                  !key.trim() ||
-                  key.startsWith(OPENCODE_EXTRA_OPTION_DRAFT_PREFIX)
-                )
-                  continue;
-                try {
-                  options[key.trim()] = JSON.parse(value);
-                } catch {
-                  options[key.trim()] = value;
-                }
-              }
+              const options: OpenCodeProviderOptions = {
+                ...(config.options ?? {}),
+              };
+              mergeOpencodeExtraOptionRows(options, draft);
               update({ ...config, options });
             }}
           />

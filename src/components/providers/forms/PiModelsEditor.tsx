@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import JsonEditor from "@/components/JsonEditor";
 import { ModelDropdown } from "./shared/ModelDropdown";
+import { REQUIRED_LABEL } from "./BasicFormFields";
+import {
+  FetchedModelPicker,
+  type FetchedModelSelection,
+} from "./FetchedModelPicker";
 import {
   fetchModelsForConfig,
   showFetchModelsError,
@@ -118,6 +123,8 @@ export function PiModelsEditor({
   const scope = JSON.stringify([protocol, apiKey, headers]);
   const scopeRef = useLatestRef(scope);
   const revision = useRef(0);
+  // 最近一次补全写下的内容：同一批加入的几行各自补参数，别的行的补全不算外部改动
+  const lastFill = useRef<string | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -157,6 +164,12 @@ export function PiModelsEditor({
       id,
       ...(!current.name || current.name === current.id ? { name: id } : {}),
     });
+    fillRow(index, id);
+  };
+  /** 按模型 ID 补窗口、推理、图片与思考映射；`silent` 时不弹补全提示（弹窗里已显示过）。 */
+  const fillRow = (index: number, id: string, silent?: boolean) => {
+    const current = latest.current?.[index];
+    if (!current) return;
     const selectedRevision = revision.current;
     const selectedScope = scopeRef.current;
     let expectedValue = valueRef.current;
@@ -174,16 +187,41 @@ export function PiModelsEditor({
           rows[index]?.id !== id
         )
           return false;
-        if (valueRef.current !== expectedValue) return false;
+        if (
+          valueRef.current !== expectedValue &&
+          valueRef.current !== lastFill.current
+        )
+          return false;
         const next = fillPiModel(rows[index], metadata, protocolRef.current);
         if (JSON.stringify(next) === JSON.stringify(rows[index])) return false;
         const nextRows = rows.map((row, i) => (i === index ? next : row));
         expectedValue = JSON.stringify(nextRows, null, 2);
         commit(nextRows);
+        lastFill.current = valueRef.current;
         return true;
       },
-      { baseUrl: text(current.baseUrl) || protocol.baseUrl },
+      { baseUrl: text(current.baseUrl) || protocol.baseUrl, silent },
     );
+  };
+  const applyFetched = ({ add, remove }: FetchedModelSelection) => {
+    const removed = new Set(remove);
+    const kept = (latest.current ?? []).filter(
+      (model) => !removed.has(text(model.id)),
+    );
+    const configured = new Set(kept.map((model) => text(model.id)));
+    const added = add.filter((id) => !configured.has(id));
+    revision.current++;
+    commit([
+      ...kept,
+      ...added.map((id) => ({
+        id,
+        name: id,
+        reasoning: false,
+        input: ["text"],
+      })),
+    ]);
+    // 每行各自补参数：迟到的补全按行号与 ID 核对，期间又改过就不覆盖
+    added.forEach((id, offset) => fillRow(kept.length + offset, id, true));
   };
   const fetch = async () => {
     const requestScope = scope;
@@ -207,7 +245,15 @@ export function PiModelsEditor({
         { apiFormat: protocol.api, requestHeaders },
       );
       if (alive.current && scopeRef.current === requestScope) {
-        setCatalog({ scope: requestScope, models: result });
+        const seen = new Set<string>();
+        setCatalog({
+          scope: requestScope,
+          models: result.filter((model) => {
+            if (seen.has(model.id)) return false;
+            seen.add(model.id);
+            return true;
+          }),
+        });
         if (result.length === 0) toast.info(t("providerForm.fetchModelsEmpty"));
       }
     } catch (error) {
@@ -237,14 +283,23 @@ export function PiModelsEditor({
         >
           {t("pi.modelsEditor.add")}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={locked || fetching}
-          onClick={() => void fetch()}
-        >
-          {fetching ? t("common.loading") : t("providerForm.fetchModels")}
-        </Button>
+        {locked || !models ? (
+          <Button type="button" variant="outline" size="sm" disabled>
+            {t("providerForm.fetchModels")}
+          </Button>
+        ) : (
+          <FetchedModelPicker
+            models={fetched}
+            configuredModelIds={models.map((model) => text(model.id))}
+            onApply={applyFetched}
+            onFetch={() => void fetch()}
+            isFetching={fetching}
+            metadataSource={{
+              baseUrl: protocol.baseUrl,
+              presets: piPresetModelSources,
+            }}
+          />
+        )}
       </div>
       {!models && (
         <p role="alert" className="text-sm text-destructive">
@@ -264,7 +319,7 @@ export function PiModelsEditor({
           </legend>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
-              ID
+              <span className={REQUIRED_LABEL}>ID</span>
               <div className="flex gap-1">
                 <Input
                   aria-label={`ID ${index + 1}`}
@@ -280,7 +335,9 @@ export function PiModelsEditor({
               </div>
             </label>
             <label className="space-y-1 text-sm">
-              {t("pi.modelsEditor.name")}
+              <span className={REQUIRED_LABEL}>
+                {t("pi.modelsEditor.name")}
+              </span>
               <Input
                 value={text(model.name)}
                 onChange={(event) => edit(index, { name: event.target.value })}
@@ -288,7 +345,9 @@ export function PiModelsEditor({
             </label>
             {(["contextWindow", "maxTokens"] as const).map((field) => (
               <label key={field} className="space-y-1 text-sm">
-                {t(`pi.modelsEditor.${field}`)}
+                <span className={REQUIRED_LABEL}>
+                  {t(`pi.modelsEditor.${field}`)}
+                </span>
                 <Input
                   type="number"
                   min={1}

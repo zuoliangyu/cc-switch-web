@@ -1840,16 +1840,13 @@
   },
   "opencode": {
     "headersHint": "随供应商请求发送的可选 HTTP 请求头，如 HTTP-Referer 或 X-Title。",
-    "modelLimits": "Token 限制",
     "headers": "请求头",
     "toggleModelDetails": "展开或收起模型详情",
     "removeHeader": "删除请求头",
     "headerName": "请求头",
     "headerNamePlaceholder": "X-Title",
     "headerValue": "值",
-    "limitContext": "上下文",
     "noHeaders": "暂无自定义请求头",
-    "limitOutput": "输出",
     "headerValuePlaceholder": "CC Switch",
     "addHeader": "添加请求头",
     "npmPackage": "接口格式",
@@ -2271,7 +2268,7 @@
       "title": "MCP 标题（唯一）",
       "titlePlaceholder": "my-mcp-server",
       "name": "显示名称",
-      "namePlaceholder": "例如 @modelcontextprotocol/server-time",
+      "namePlaceholder": "例如 mcp-server-time",
       "enabledApps": "启用到应用",
       "noAppsWarning": "至少选择一个应用",
       "description": "描述",
@@ -2364,7 +2361,7 @@
         "description": "通用 HTTP 请求工具，支持 GET/POST 等 HTTP 方法，适合快速请求接口/抓取网页数据"
       },
       "time": {
-        "name": "@modelcontextprotocol/server-time",
+        "name": "mcp-server-time",
         "description": "时间查询工具，提供当前时间、时区转换、日期计算等功能"
       },
       "memory": {
@@ -3152,6 +3149,8 @@
       "providerKeyRequired": "供应商标识不能为空",
       "providerKeyInvalid": "供应商标识只能包含小写字母、数字和连字符",
       "providerKeyDuplicate": "该供应商标识已存在",
+      "providerKeyBuiltin": "「{{key}}」是 Hermes 内置供应商的标识。Hermes 会改用内置供应商（要它自己的环境变量 Key），这张卡的地址和 Key 不会生效。请换一个标识，例如 cc-switch-{{key}}。",
+      "providerKeyBuiltinLocked": "「{{key}}」是 Hermes 内置供应商的标识。Hermes 会改用内置供应商，这张卡的地址和 Key 不会生效。标识已锁定无法修改，请用其他标识（例如 cc-switch-{{key}}）重新添加这个供应商，再删除这张卡。",
       "apiMode": "API 模式",
       "apiModeHint": "供应商 API 协议。请根据端点选择正确的协议。",
       "apiModeChatCompletions": "OpenAI Chat Completions",
@@ -3169,6 +3168,7 @@
       "modelName": "显示名称",
       "modelNamePlaceholder": "Claude Opus 5",
       "contextLength": "上下文长度",
+      "supportsVision": "支持图片输入",
       "toggleModelDetails": "展开或收起模型详情",
       "removeModel": "移除模型",
       "advancedOptions": "高级选项",
@@ -3317,7 +3317,20 @@
       "requiresProjectContext": "配置的相对 sessionDir“{{path}}”需要 Pi 启动时的项目上下文，Web 端不会猜测目录。"
     },
     "form": {
-      "providerKeyDuplicate": "该供应商标识已存在"
+      "providerKeyDuplicate": "该供应商标识已存在",
+      "addCompatibilityOption": "添加",
+      "compatibility": "接口兼容性",
+      "compatibilityHint": "只在接口自称兼容 OpenAI、却拒收某些请求时才需要填。每一项说明这家接口的一个特殊之处，比如 supportsDeveloperRole 填 false 表示它不认 developer 角色，maxTokensField 填 max_tokens 表示它只认旧的字段名。选预设时需要的项会自动填好；留空就按默认处理。",
+      "contextWindow": "上下文长度",
+      "imageInput": "支持图片输入",
+      "maxTokens": "最大输出 Token 数",
+      "noCompatibilityOptions": "未设置，按默认处理",
+      "optionKey": "选项",
+      "optionValue": "值",
+      "reasoning": "支持扩展思考",
+      "removeCompatibilityOption": "移除兼容性选项",
+      "thinkingLevelUnsupported": "不可用",
+      "thinkingLevelsLabel": "思考档位"
     },
     "modelsEditor": {
       "add": "添加模型",
@@ -3767,8 +3780,7 @@
     "modeDirect": "直连",
     "modeProxy": "需要路由",
     "modelMappingToggle": "需要模型映射",
-    "modelMappingOffHint": "仅当供应商直接接受 Claude Desktop 可识别的三档角色 ID（claude-sonnet-* / claude-opus-* / claude-haiku-*）时才适用直连；其他模型名（含 claude-3-5-sonnet-… 等旧式 ID）请选择模型映射。",
-    "modelMappingOnHint": "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。选择模型映射后，CC Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。",
+    "modelModeHint": "如果你的供应商提供原生 Claude 系列模型，可以使用直连；如果是 DeepSeek、Kimi 等第三方模型，请使用模型映射。",
     "routeMapTitle": "模型映射",
     "routeMapHint": "为 Sonnet、Opus、Haiku 三档分别填写实际请求模型；菜单显示名可写 DeepSeek、Kimi 等品牌名。留空的档会自动沿用 Sonnet（或第一个已填档）的模型，确保子 agent 调用的 Haiku 始终可用。",
     "routeModelLabel": "模型角色",

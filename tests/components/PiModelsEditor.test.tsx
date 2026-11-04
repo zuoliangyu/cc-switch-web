@@ -39,6 +39,40 @@ vi.mock("@/components/JsonEditor", () => ({
     />
   ),
 }));
+vi.mock("@/components/providers/forms/FetchedModelPicker", () => ({
+  FetchedModelPicker: ({
+    onFetch,
+    onApply,
+    isFetching,
+    configuredModelIds,
+  }: {
+    onFetch: () => void;
+    onApply: (selection: { add: string[]; remove: string[] }) => void;
+    isFetching: boolean;
+    configuredModelIds: string[];
+  }) => (
+    <>
+      <button type="button" onClick={onFetch} disabled={isFetching}>
+        fetchModels
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onApply({ add: ["old", "picked-a", "picked-b"], remove: [] })
+        }
+      >
+        apply-picker
+      </button>
+      <button
+        type="button"
+        onClick={() => onApply({ add: [], remove: ["old"] })}
+      >
+        remove-old
+      </button>
+      <output data-testid="configured">{configuredModelIds.join(",")}</output>
+    </>
+  ),
+}));
 vi.mock("@/components/providers/forms/shared/ModelDropdown", () => ({
   ModelDropdown: ({ onSelect }: { onSelect: (id: string) => void }) => (
     <button type="button" onClick={() => onSelect("new-model")}>
@@ -194,5 +228,55 @@ describe("Pi structured model editing", () => {
       name: "replacement",
       contextWindow: 42,
     });
+  });
+});
+
+describe("Pi fetched model picker", () => {
+  beforeEach(() => {
+    mocks.fill.mockReset();
+  });
+
+  it("adds checked models as rows, drops unchecked ones and fills each row quietly", () => {
+    render(<Editor />);
+    expect(screen.getByTestId("configured")).toHaveTextContent("old");
+
+    fireEvent.click(screen.getByText("apply-picker"));
+
+    // 勾上的按弹窗顺序接在后面，已配置的不重复加
+    expect(draft().map((model: { id: string }) => model.id)).toEqual([
+      "old",
+      "picked-a",
+      "picked-b",
+    ]);
+    expect(mocks.fill.mock.calls.map((call) => call[0])).toEqual([
+      "picked-a",
+      "picked-b",
+    ]);
+    for (const call of mocks.fill.mock.calls) {
+      expect(call[2]).toMatchObject({ silent: true });
+    }
+
+    // 同一批的几行各自补完，后补的不因前一行的补全被当成外部改动
+    const applies = mocks.fill.mock.calls.map(
+      (call) => call[1] as (metadata: ResolvedModelMetadata) => boolean,
+    );
+    act(() => {
+      expect(applies[1](metadata)).toBe(true);
+      expect(applies[0](metadata)).toBe(true);
+    });
+    const rows = draft();
+    expect(rows[0]).toEqual(
+      expect.objectContaining({ id: "old", extra: "keep" }),
+    );
+    expect(rows[0]).not.toHaveProperty("contextWindow");
+    expect(rows[1]).toMatchObject({ id: "picked-a", contextWindow: 128000 });
+    expect(rows[2]).toMatchObject({ id: "picked-b", contextWindow: 128000 });
+
+    // 取消勾选的已配置模型连行一起移除
+    fireEvent.click(screen.getByText("remove-old"));
+    expect(draft().map((model: { id: string }) => model.id)).toEqual([
+      "picked-a",
+      "picked-b",
+    ]);
   });
 });

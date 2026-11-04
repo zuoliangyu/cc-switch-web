@@ -159,6 +159,48 @@ let sessionMessagesState = createDefaultSessionMessages();
 const cloneProviders = (value: ProvidersByApp) =>
   JSON.parse(JSON.stringify(value)) as ProvidersByApp;
 
+export interface CustomIconFixture {
+  id: string;
+  name: string;
+  data: string;
+  createdAt: number;
+}
+
+let customIconsState: CustomIconFixture[] = [];
+
+const cloneIcons = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+export const listCustomIcons = () => cloneIcons(customIconsState);
+
+export const setCustomIcons = (icons: CustomIconFixture[]) => {
+  customIconsState = cloneIcons(icons);
+};
+
+/** 和后端一样：同一张图不重复存，新的排最前面 */
+export const addCustomIcon = (name: string, data: string) => {
+  const existing = customIconsState.find((icon) => icon.data === data);
+  if (existing) return { icon: cloneIcons(existing), existed: true };
+  const icon = {
+    id: `icon-${customIconsState.length + 1}`,
+    name: name.trim(),
+    data,
+    createdAt: Date.now(),
+  };
+  customIconsState = [icon, ...customIconsState];
+  return { icon: cloneIcons(icon), existed: false };
+};
+
+export const renameCustomIcon = (id: string, name: string) => {
+  const icon = customIconsState.find((item) => item.id === id);
+  if (!icon) throw new Error("not found");
+  icon.name = name.trim();
+  return cloneIcons(icon);
+};
+
+export const deleteCustomIcon = (id: string) => {
+  customIconsState = customIconsState.filter((icon) => icon.id !== id);
+};
+
 export const resetProviderState = () => {
   providers = createDefaultProviders();
   current = createDefaultCurrent();
@@ -171,6 +213,7 @@ export const resetProviderState = () => {
     language: "zh",
   };
   appConfigDirOverride = null;
+  customIconsState = [];
 };
 
 export const getProviders = (appType: AppId) =>

@@ -1,6 +1,5 @@
 import type { AppModeView } from "@/types/proxy";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Plus, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +9,8 @@ import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { sortProvidersByName } from "@/utils/providerSort";
 import {
   useOpenClawLiveProviderIds,
@@ -358,7 +359,13 @@ export function ProviderList({
     const keyword = searchTerm.trim().toLowerCase();
     if (!keyword) return sortedProviders;
     return sortedProviders.filter((provider) => {
-      const fields = [provider.name, provider.notes, provider.websiteUrl];
+      // 名称、备注、网站之外也按请求地址匹配（各应用存法不同，统一由 extractProviderBaseUrl 取）
+      const fields = [
+        provider.name,
+        provider.notes,
+        provider.websiteUrl,
+        extractProviderBaseUrl(provider.settingsConfig),
+      ];
       return fields.some((field) =>
         field?.toString().toLowerCase().includes(keyword),
       );
@@ -602,23 +609,60 @@ export function ProviderList({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant={
-                isSearchOpen || searchTerm.trim() ? "default" : "outline"
-              }
-              className="min-w-[8rem]"
-              onClick={() => setIsSearchOpen(true)}
-            >
-              <Search className="mr-2 h-4 w-4" />
-              {searchTerm.trim()
-                ? t("provider.searching", {
-                    defaultValue: "筛选中",
-                  })
-                : t("provider.search", {
-                    defaultValue: "搜索",
-                  })}
-            </Button>
+            {isSearchOpen ? (
+              // 搜索框放在工作台这一行的末尾：不浮在卡片上挡住操作，也不把卡片往下推
+              <HoverTip
+                content={`${t("provider.searchScopeHint", {
+                  defaultValue: "Matches provider name, notes, and URL.",
+                })} ${t("provider.searchCloseHint", {
+                  defaultValue: "Press Esc to close",
+                })}`}
+              >
+                <div className="relative flex w-full items-center sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder={t("provider.searchPlaceholder", {
+                      defaultValue: "Search name, notes, or URL...",
+                    })}
+                    aria-label={t("provider.searchAriaLabel", {
+                      defaultValue: "Search providers",
+                    })}
+                    className="pl-9 pr-9"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2"
+                    onClick={() => setIsSearchOpen(false)}
+                    aria-label={t("provider.searchCloseAriaLabel", {
+                      defaultValue: "Close provider search",
+                    })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </HoverTip>
+            ) : (
+              <Button
+                type="button"
+                variant={searchTerm.trim() ? "default" : "outline"}
+                className="min-w-[8rem]"
+                onClick={() => setIsSearchOpen(true)}
+              >
+                <Search className="mr-2 h-4 w-4" />
+                {searchTerm.trim()
+                  ? t("provider.searching", {
+                      defaultValue: "筛选中",
+                    })
+                  : t("provider.search", {
+                      defaultValue: "搜索",
+                    })}
+              </Button>
+            )}
             {onCreate && (
               <Button
                 type="button"
@@ -652,70 +696,6 @@ export function ProviderList({
           </div>
         )}
       </div>
-
-      <AnimatePresence>
-        {isSearchOpen && (
-          <motion.div
-            key="provider-search"
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed left-1/2 top-[7.75rem] z-40 w-[min(92vw,28rem)] -translate-x-1/2 sm:right-6 sm:left-auto sm:translate-x-0"
-          >
-            <div className="p-4 space-y-3 border shadow-md rounded-2xl border-white/10 bg-background/95 shadow-black/20 backdrop-blur-md">
-              <div className="relative flex items-center gap-2">
-                <Search className="absolute w-4 h-4 -translate-y-1/2 pointer-events-none left-3 top-1/2 text-muted-foreground" />
-                <Input
-                  ref={searchInputRef}
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder={t("provider.searchPlaceholder", {
-                    defaultValue: "Search name, notes, or URL...",
-                  })}
-                  aria-label={t("provider.searchAriaLabel", {
-                    defaultValue: "Search providers",
-                  })}
-                  className="pr-16 pl-9"
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute text-xs -translate-y-1/2 right-11 top-1/2"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    {t("common.clear", { defaultValue: "Clear" })}
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto"
-                  onClick={() => setIsSearchOpen(false)}
-                  aria-label={t("provider.searchCloseAriaLabel", {
-                    defaultValue: "Close provider search",
-                  })}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                <span>
-                  {t("provider.searchScopeHint", {
-                    defaultValue: "Matches provider name, notes, and URL.",
-                  })}
-                </span>
-                <span>
-                  {t("provider.searchCloseHint", {
-                    defaultValue: "Press Esc to close",
-                  })}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {filteredProviders.length === 0 ? (
         <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-10 text-center">

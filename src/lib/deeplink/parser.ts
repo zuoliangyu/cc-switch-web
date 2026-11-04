@@ -37,6 +37,18 @@ type DeepLinkConfigFormat = "json" | "toml";
 const ENV_KEY_ONLY_ERROR =
   "这条链接只通过 env_key 间接提供 API Key，不能从不可信的链接导入；请手动添加供应商并自行填写 Key";
 
+/**
+ * icon 只收内置图标名的形状：小写字母、数字、`-`、`_`、`.`，不超过 64 个字符；只看形状，
+ * 不核对图标是否存在（找不到时显示首字母）。图片不能借这个参数直接把 data URI 之类的
+ * 内容塞进库：不合格的值丢掉，不让整条链接失败。
+ */
+const parseBuiltinIconName = (value: string | null): string | undefined => {
+  const name = value?.trim().toLowerCase();
+  return name && name.length <= 64 && /^[a-z0-9._-]+$/.test(name)
+    ? name
+    : undefined;
+};
+
 const parseBoolean = (value: string | null): boolean | undefined => {
   if (value === null) return undefined;
   if (value === "true") return true;
@@ -441,7 +453,7 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
     homepage: url.searchParams.get("homepage") ?? undefined,
     endpoint: url.searchParams.get("endpoint") ?? undefined,
     apiKey: url.searchParams.get("apiKey") ?? undefined,
-    icon: url.searchParams.get("icon")?.trim().toLowerCase() || undefined,
+    icon: parseBuiltinIconName(url.searchParams.get("icon")),
     model: url.searchParams.get("model") ?? undefined,
     notes: url.searchParams.get("notes") ?? undefined,
     haikuModel: url.searchParams.get("haikuModel") ?? undefined,

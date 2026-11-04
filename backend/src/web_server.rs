@@ -1622,6 +1622,55 @@ async fn sync_universal_provider(
     Ok(Json(result))
 }
 
+// 「我的图标」：用户上传过的自定义图标库（存在 settings 的 custom_icons 键下，随同步）
+
+#[derive(Deserialize)]
+struct AddCustomIconRequest {
+    name: String,
+    data: String,
+}
+
+#[derive(Deserialize)]
+struct RenameCustomIconRequest {
+    name: String,
+}
+
+async fn get_custom_icons(
+    State(state): State<WebApiState>,
+) -> Result<Json<Vec<crate::database::CustomIconEntry>>, ApiError> {
+    crate::services::provider::icon::list_library_icons(&state.app_state.db)
+        .map(Json)
+        .map_err(|e| ApiError::internal(e.to_string()))
+}
+
+async fn add_custom_icon(
+    State(state): State<WebApiState>,
+    Json(body): Json<AddCustomIconRequest>,
+) -> Result<Json<crate::services::provider::icon::AddLibraryIconResult>, ApiError> {
+    crate::services::provider::icon::add_library_icon(&state.app_state.db, &body.name, &body.data)
+        .map(Json)
+        .map_err(|e| ApiError::bad_request(e.to_string()))
+}
+
+async fn rename_custom_icon(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+    Json(body): Json<RenameCustomIconRequest>,
+) -> Result<Json<crate::database::CustomIconEntry>, ApiError> {
+    crate::services::provider::icon::rename_library_icon(&state.app_state.db, &id, &body.name)
+        .map(Json)
+        .map_err(|e| ApiError::bad_request(e.to_string()))
+}
+
+async fn delete_custom_icon(
+    State(state): State<WebApiState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    crate::services::provider::icon::delete_library_icon(&state.app_state.db, &id)
+        .map(|()| StatusCode::NO_CONTENT)
+        .map_err(|e| ApiError::internal(e.to_string()))
+}
+
 async fn get_installed_skills(
     State(state): State<WebApiState>,
 ) -> Result<Json<Vec<crate::app_config::InstalledSkill>>, ApiError> {
@@ -5057,6 +5106,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/universal-providers/:id/sync",
             post(sync_universal_provider),
+        )
+        .route(
+            "/api/custom-icons",
+            get(get_custom_icons).post(add_custom_icon),
+        )
+        .route(
+            "/api/custom-icons/:id",
+            axum::routing::put(rename_custom_icon).delete(delete_custom_icon),
         )
         .route("/api/skills/installed", get(get_installed_skills))
         .route("/api/skills/backups", get(get_skill_backups))

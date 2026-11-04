@@ -73,6 +73,10 @@ import {
   clearWebClaudeOnboardingSkip,
   getWebUniversalProvider,
   getWebUniversalProviders,
+  getWebCustomIcons,
+  addWebCustomIcon,
+  renameWebCustomIcon,
+  deleteWebCustomIcon,
   getWebOpenClawAgentsDefaults,
   getWebOpenClawDefaultModel,
   getWebOpenClawEnv,
@@ -552,6 +556,20 @@ export async function invoke<T>(
       return (await deleteWebUniversalProvider(args?.id as string)) as T;
     case "sync_universal_provider":
       return (await syncWebUniversalProvider(args?.id as string)) as T;
+    case "get_custom_icons":
+      return (await getWebCustomIcons()) as T;
+    case "add_custom_icon":
+      return (await addWebCustomIcon(
+        args?.name as string,
+        args?.data as string,
+      )) as T;
+    case "rename_custom_icon":
+      return (await renameWebCustomIcon(
+        args?.id as string,
+        args?.name as string,
+      )) as T;
+    case "delete_custom_icon":
+      return (await deleteWebCustomIcon(args?.id as string)) as T;
     case "get_opencode_live_provider_ids":
       return (await getWebLiveProviderIds("opencode")) as T;
     case "get_openclaw_live_provider_ids":

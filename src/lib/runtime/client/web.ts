@@ -1,6 +1,7 @@
 import type { SkillDiscoveryResult, SkillUpdateCheckResult, SkillAppSyncOutcome } from "@/lib/api/skills";
 import type { AppMode, AppModeView, RouteSwitchResult } from "@/types/proxy";
 import type { Settings } from "@/types";
+import type { AddCustomIconResult, CustomIconEntry } from "@/lib/api/customIcons";
 import type {
   CustomEndpoint,
   Provider,
@@ -1017,6 +1018,39 @@ export async function syncWebUniversalProvider(id: string): Promise<boolean> {
   return requestWithBody<boolean>(
     `/api/universal-providers/${encodeURIComponent(id)}/sync`,
     "POST",
+  );
+}
+
+// 「我的图标」：用户上传过的自定义图标库
+export async function getWebCustomIcons(): Promise<CustomIconEntry[]> {
+  return requestJson<CustomIconEntry[]>("/api/custom-icons");
+}
+
+export async function addWebCustomIcon(
+  name: string,
+  data: string,
+): Promise<AddCustomIconResult> {
+  return requestWithBody<AddCustomIconResult>("/api/custom-icons", "POST", {
+    name,
+    data,
+  });
+}
+
+export async function renameWebCustomIcon(
+  id: string,
+  name: string,
+): Promise<CustomIconEntry> {
+  return requestWithBody<CustomIconEntry>(
+    `/api/custom-icons/${encodeURIComponent(id)}`,
+    "PUT",
+    { name },
+  );
+}
+
+export async function deleteWebCustomIcon(id: string): Promise<void> {
+  await requestWithBody<void>(
+    `/api/custom-icons/${encodeURIComponent(id)}`,
+    "DELETE",
   );
 }
 

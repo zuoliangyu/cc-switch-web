@@ -56,6 +56,7 @@ import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { discardUnsavedChanges, hasUnsavedChanges } from "@/lib/unsavedChanges";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { AppModePanel } from "@/components/proxy/AppModePanel";
@@ -221,6 +222,15 @@ function App() {
 
   const handleViewChange = (nextView: View) => {
     setCurrentView(nextView);
+  };
+
+  // 编辑页里有未保存的修改：先确认，确认放弃后再执行这次导航
+  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
+  const confirmLeaveRef = useRef<(proceed: () => void) => boolean>(() => false);
+  confirmLeaveRef.current = (proceed) => {
+    if (!hasUnsavedChanges()) return false;
+    setPendingLeave(() => proceed);
+    return true;
   };
 
   useEffect(() => {
@@ -525,7 +535,10 @@ function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "," && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        setCurrentView("settings");
+        // 已在设置页：不算离开，不弹确认，也不清掉编辑页的未保存登记
+        if (currentViewRef.current === "settings") return;
+        const openSettings = () => setCurrentView("settings");
+        if (!confirmLeaveRef.current(openSettings)) openSettings();
         return;
       }
 
@@ -1682,6 +1695,21 @@ function App() {
         }
         onConfirm={() => void handleConfirmAction()}
         onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        isOpen={pendingLeave !== null}
+        title={t("common.unsavedLeaveTitle")}
+        message={t("common.unsavedLeaveMessage")}
+        confirmText={t("common.unsavedLeaveConfirm")}
+        cancelText={t("common.unsavedLeaveCancel")}
+        zIndex="top"
+        onConfirm={() => {
+          const proceed = pendingLeave;
+          setPendingLeave(null);
+          discardUnsavedChanges();
+          proceed?.();
+        }}
+        onCancel={() => setPendingLeave(null)}
       />
       <ConfirmDialog
         isOpen={launchDashboardOpen}

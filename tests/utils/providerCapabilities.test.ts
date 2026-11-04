@@ -154,3 +154,35 @@ describe("providerNeedsRouting", () => {
     ).toBe(false);
   });
 });
+
+describe("providerNeedsRouting for Claude Desktop", () => {
+  it("模型映射卡与托管 OAuth 要经路由，普通直连卡与官方卡不用", () => {
+    expect(
+      providerNeedsRouting(
+        "claude-desktop",
+        provider({ meta: { claudeDesktopMode: "proxy" } }),
+      ),
+    ).toBe(true);
+    expect(
+      providerNeedsRouting(
+        "claude-desktop",
+        provider({ meta: { providerType: "codex_oauth" } }),
+      ),
+    ).toBe(true);
+    expect(
+      providerNeedsRouting(
+        "claude-desktop",
+        provider({ meta: { claudeDesktopMode: "direct" } }),
+      ),
+    ).toBe(false);
+    expect(
+      providerNeedsRouting(
+        "claude-desktop",
+        provider({
+          category: "official",
+          meta: { claudeDesktopMode: "proxy" },
+        }),
+      ),
+    ).toBe(false);
+  });
+});

@@ -268,11 +268,6 @@ export function OpenClawFormFields({
           onValueChange={onBaseUrlChange}
           placeholder="https://api.example.com/v1"
         />
-        <p className="text-xs text-muted-foreground">
-          {t("openclaw.baseUrlHint", {
-            defaultValue: "供应商的 API 端点地址。",
-          })}
-        </p>
       </div>
 
       {/* API Key */}

@@ -104,6 +104,7 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
   return (
     <FullScreenPanel
       isOpen={true}
+      trackUnsavedChanges
       title={title}
       onClose={onClose}
       footer={

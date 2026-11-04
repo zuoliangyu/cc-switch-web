@@ -1,5 +1,5 @@
 import { sortProvidersByName } from "@/utils/providerSort";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useLayoutEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,8 +60,8 @@ export function UniversalProviderFormModal({
   const [pendingProvider, setPendingProvider] =
     useState<UniversalProvider | null>(null);
 
-  // 初始化表单
-  useEffect(() => {
+  // 绘制前填好：打开面板时不会先露出空的或上一次的字段
+  useLayoutEffect(() => {
     if (editingProvider) {
       // 编辑模式：加载现有数据
       setName(editingProvider.name);
@@ -344,6 +344,7 @@ requires_openai_auth = true`;
   return (
     <FullScreenPanel
       isOpen={isOpen}
+      trackUnsavedChanges
       title={
         isEditMode
           ? t("universalProvider.edit", { defaultValue: "编辑统一供应商" })

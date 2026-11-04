@@ -75,7 +75,11 @@
     "resync": "今すぐ再同期",
     "resyncResult": "同期結果",
     "saved": "保存しました",
-    "undo": "元に戻す"
+    "undo": "元に戻す",
+    "unsavedLeaveTitle": "未保存の変更があります",
+    "unsavedLeaveMessage": "移動すると、この編集ページの変更は保存されません。",
+    "unsavedLeaveConfirm": "破棄して移動",
+    "unsavedLeaveCancel": "編集を続ける"
   },
   "firstRunNotice": {
     "title": "CC Switch へようこそ",
@@ -298,7 +302,9 @@
     "openclawNoModels": "モデルが設定されていません",
     "backfillWarning": "切り替え成功しましたが、前のプロバイダーへの設定保存に失敗しました",
     "codexAuthCleanupFailed": "切り替えは成功しましたが、auth.json を削除できませんでした。公式ログイン資格情報がディスクに残っています。完全に削除するには Codex 設定ディレクトリの auth.json を手動で削除してください",
-    "geminiRestart": "切り替えた設定を反映するには Gemini CLI を再起動してください。"
+    "geminiRestart": "切り替えた設定を反映するには Gemini CLI を再起動してください。",
+    "proxyReasonDesktopMapping": "モデルマッピングを使っており（Claude Desktop は Claude のモデル名しか受け付けません）",
+    "proxyReasonRoutingRequired": "リクエスト処理にローカルルーティングが必要であり"
   },
   "confirm": {
     "deleteProvider": "プロバイダーを削除",
@@ -1852,16 +1858,13 @@
     "npmPackage": "API フォーマット",
     "nativeConfigHint": "OpenCode V2 ネイティブ設定は下の JSON で編集します。保存時にプロバイダーとモデルのフィールドを保持します。",
     "selectPackage": "API フォーマットを選択",
-    "npmPackageHint": "AI サービスの API フォーマットを選択",
     "builtinDefaults": "OpenCode 組み込みプロバイダーの既定値を使用",
     "customProviderRequired": "新しいプロバイダー ID には npm パッケージと少なくとも1つのモデルが必要です。設定に既に存在する同じ ID のプロバイダーのみ既定の定義を継承できます。",
     "duplicateRequiresDefinition": "npm パッケージまたはモデル定義が不足しているため、そのまま複製できません。npm パッケージと少なくとも1つのモデルを指定してから、カスタムプロバイダーとして複製してください。",
     "duplicateRequiresNativeDefinition": "この V2 ネイティブプロバイダーには package またはモデル定義が不足しているため、そのまま複製できません。package と少なくとも1つのモデルを指定してから、新しい ID で複製してください。",
     "nativeCustomProviderRequired": "新しいプロバイダー ID には package と少なくとも1つのモデルが必要です。設定に既に存在する同じ ID のプロバイダーのみ既定の定義を継承できます。",
     "baseUrl": "Base URL",
-    "baseUrlHint": "カスタム API エンドポイント URL",
     "models": "モデル設定",
-    "modelsHint": "利用可能なモデルとその表示名を設定",
     "addModel": "モデルを追加",
     "modelId": "モデル ID",
     "modelName": "表示名",
@@ -2534,7 +2537,6 @@
     "selectProtocol": "API プロトコルを選択",
     "apiProtocolHint": "プロバイダーの API と互換性のあるプロトコルタイプを選択してください。ほとんどのプロバイダーは OpenAI Completions 形式を使用します。",
     "baseUrl": "API エンドポイント",
-    "baseUrlHint": "プロバイダーの API エンドポイントアドレス。",
     "models": "モデル一覧",
     "addModel": "モデルを追加",
     "noModels": "モデルが設定されていません。「モデルを追加」をクリックして利用可能なモデルを設定してください。",
@@ -2870,6 +2872,32 @@
       "cloud": "クラウドプラットフォーム",
       "tool": "開発ツール",
       "other": "その他"
+    },
+    "clear": "アイコンをクリア",
+    "myIcons": "マイアイコン",
+    "builtinIcons": "内蔵アイコン",
+    "myIconsEmpty": "アップロードして名前を付けた画像はここに保存され、ほかのプロバイダーでも選べます。",
+    "currentIcon": "現在のアイコン",
+    "saveToLibrary": "マイアイコンに保存",
+    "saveCurrentTitle": "現在のアイコンを「マイアイコン」に保存",
+    "uploadTitle": "アイコンに名前を付ける",
+    "uploadDescription": "「マイアイコン」に保存すると、ほかのプロバイダーでも選べます。",
+    "saveAndUse": "保存して使用",
+    "renameTitle": "アイコン名を変更",
+    "rename": "名前を変更",
+    "delete": "削除",
+    "deleteTitle": "アイコンを削除",
+    "deleteMessage": "「マイアイコン」から「{{name}}」を削除しますか？すでに使用中のプロバイダーには影響しません。",
+    "alreadySaved": "この画像はすでに「マイアイコン」に「{{name}}」として保存されています",
+    "nameLabel": "名前",
+    "namePlaceholder": "例：自分の中継サービス",
+    "upload": "アップロード",
+    "uploadHint": "PNG、JPG、WebP、SVG（2 MB まで）に対応。画像は小さな PNG に縮小して「マイアイコン」に保存され、クラウド同期でも引き継がれます。",
+    "uploadError": {
+      "unsupported": "この画像形式には対応していません。PNG・JPG・WebP・SVG を選んでください",
+      "tooLarge": "画像が 2 MB を超えています",
+      "decodeFailed": "この画像を読み込めませんでした。別の画像をお試しください",
+      "dimensions": "画像が大きすぎます（幅・高さは 4096 ピクセル以下）"
     }
   },
   "providerIcon": {
@@ -3141,7 +3169,6 @@
   "hermes": {
     "form": {
       "baseUrl": "API エンドポイント",
-      "baseUrlHint": "プロバイダーの API エンドポイント URL。",
       "providerKey": "プロバイダーキー",
       "providerKeyPlaceholder": "my-provider",
       "providerKeyHint": "小文字、数字、ハイフンのみ。config.yaml のプロバイダー名として使用されます。",
@@ -3152,7 +3179,6 @@
       "providerKeyBuiltin": "「{{key}}」は Hermes 組み込みプロバイダーの ID です。Hermes は組み込みプロバイダー（専用の環境変数の API キーが必要）を使い、このカードのエンドポイントとキーは使われません。cc-switch-{{key}} など別のキーにしてください。",
       "providerKeyBuiltinLocked": "「{{key}}」は Hermes 組み込みプロバイダーの ID です。Hermes は組み込みプロバイダーを使い、このカードのエンドポイントとキーは使われません。キーはロックされているため、別のキー（例: cc-switch-{{key}}）でこのプロバイダーを追加し直してから、このカードを削除してください。",
       "apiMode": "API モード",
-      "apiModeHint": "プロバイダーの API プロトコル。エンドポイントに合わせて正しい形式を選択してください。",
       "apiModeChatCompletions": "OpenAI Chat Completions",
       "apiModeAnthropicMessages": "Anthropic Messages",
       "apiModeCodexResponses": "OpenAI Responses",
@@ -3867,7 +3893,6 @@
     "rebindHint": "待受アドレスを保存すると再起動します。バインドに失敗すると元のアドレスに戻ります。",
     "officialDefaultAdvice": "集約モデル ID のないリクエストには、公式アカウントを集約の既定に設定することをお勧めします。",
     "desktopRouteNote": "Claude Desktop は起動時にのみ設定を読み込みます。モード、ルート先のプロバイダー、集約モデルを変更した後は Claude Desktop を再起動してください。ルーティング中は CC Switch を起動したままにしてください。CC Switch を終了しても Desktop は直接接続に戻りません。",
-    "claudeModelsRestart": "集約モデルやメンバーを変更した後は、Claude Code を再起動してモデル一覧を更新してください。",
     "adoptCatalog": "CC Switch のモデルカタログを使う",
     "adoptCatalogDone": "CC Switch のモデルカタログに切り替えました。Codex を再起動すると反映されます",
     "staleClients": {

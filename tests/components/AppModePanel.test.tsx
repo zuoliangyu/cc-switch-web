@@ -340,3 +340,39 @@ describe("模式与聚合操作", () => {
     expect(screen.getByTitle("common.delete")).toBeDisabled();
   });
 });
+
+describe("运行模式状态徽标", () => {
+  const renderWith = async (view: Record<string, unknown>) => {
+    server.use(
+      http.post("http://runtime.local/get_app_mode", () =>
+        HttpResponse.json({
+          directProviderId: "a",
+          routeProviderId: "z",
+          eligibleProviderIds: ["a", "z"],
+          aggregation: { active: false, members: [] },
+          ...view,
+        }),
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ModePanel />
+      </QueryClientProvider>,
+    );
+    return await screen.findByTestId("app-mode-status-dot");
+  };
+
+  it("已接上路由时用模式色，并写出实际生效的那家", async () => {
+    const dot = await renderWith({ mode: "routing", attached: true });
+    expect(dot.className).toContain("bg-sky-500");
+    expect(dot.parentElement).toHaveTextContent("Zulu");
+  });
+
+  it("路由还没接上客户端时显示灰点", async () => {
+    const dot = await renderWith({ mode: "routing", attached: false });
+    expect(dot.className).not.toContain("bg-sky-500");
+  });
+});

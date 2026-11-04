@@ -6,7 +6,7 @@ import type { AppId } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { AggregationActions } from "@/components/providers/ProviderActions";
 import { ProviderActions } from "@/components/providers/ProviderActions";
-import { ProviderIcon } from "@/components/ProviderIcon";
+import { ProviderIconBox } from "@/components/ProviderIconBox";
 import UsageFooter from "@/components/UsageFooter";
 import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
@@ -24,7 +24,8 @@ import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge"
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
 import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
-import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
+import { getRoutingReason } from "@/utils/routingReason";
 import {
   isKimiOfficialAccount,
   providerNeedsRouting,
@@ -76,27 +77,7 @@ const extractApiUrl = (provider: Provider, fallbackText: string) => {
     return provider.websiteUrl;
   }
 
-  const config = provider.settingsConfig;
-
-  if (config && typeof config === "object") {
-    const envBase =
-      (config as Record<string, any>)?.env?.ANTHROPIC_BASE_URL ||
-      (config as Record<string, any>)?.env?.GOOGLE_GEMINI_BASE_URL;
-    if (typeof envBase === "string" && envBase.trim()) {
-      return envBase;
-    }
-
-    const baseUrl = (config as Record<string, any>)?.config;
-
-    if (typeof baseUrl === "string" && baseUrl.includes("base_url")) {
-      const extractedBaseUrl = extractCodexBaseUrl(baseUrl);
-      if (extractedBaseUrl) {
-        return extractedBaseUrl;
-      }
-    }
-  }
-
-  return fallbackText;
+  return extractProviderBaseUrl(provider.settingsConfig) ?? fallbackText;
 };
 
 function isOfficialProvider(provider: Provider, appId: AppId): boolean {
@@ -280,6 +261,10 @@ export function ProviderCard({
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
   const needsRouting = providerNeedsRouting(appId, provider);
+  // 徽标的说明：这家为什么需要路由（和直连切换时的提示同一份）
+  const routingReason = needsRouting
+    ? getRoutingReason(appId, provider, t)
+    : null;
   const supportsOfficialRouting = supportsOfficialProxyTakeover(
     appId,
     provider,
@@ -399,14 +384,14 @@ export function ProviderCard({
       />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-border-default bg-background/80 shadow-sm transition-transform duration-300 group-hover:scale-105">
-            <ProviderIcon
-              icon={provider.icon}
-              name={provider.name}
-              color={provider.iconColor}
-              size={20}
-            />
-          </div>
+          <ProviderIconBox
+            icon={provider.icon}
+            name={provider.name}
+            color={provider.iconColor}
+            size={44}
+            glyphSize={20}
+            className="rounded-2xl bg-background/80 shadow-sm transition-transform duration-300 group-hover:scale-105"
+          />
 
           <div className="min-w-0 space-y-1.5">
             <div className="flex min-h-7 flex-wrap items-center gap-2">
@@ -438,8 +423,11 @@ export function ProviderCard({
                   <FailoverPriorityBadge priority={failoverPriority} />
                 )}
 
-              {(appId === "claude" || appId === "codex") && needsRouting && (
-                <span className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+              {needsRouting && (
+                <span
+                  className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                  title={routingReason ?? undefined}
+                >
                   {t("codex.needsRouting", {
                     defaultValue: "需要路由",
                   })}

@@ -75,7 +75,11 @@
     "resync": "Resync now",
     "resyncResult": "Sync results",
     "saved": "Saved",
-    "undo": "Undo"
+    "undo": "Undo",
+    "unsavedLeaveTitle": "Unsaved changes",
+    "unsavedLeaveMessage": "If you leave, the changes on this editor page will not be saved.",
+    "unsavedLeaveConfirm": "Discard and leave",
+    "unsavedLeaveCancel": "Keep editing"
   },
   "firstRunNotice": {
     "title": "Welcome to CC Switch",
@@ -298,7 +302,9 @@
     "openclawNoModels": "No models configured",
     "backfillWarning": "Switched successfully, but failed to save changes back to the previous provider",
     "codexAuthCleanupFailed": "Switched successfully, but auth.json could not be removed — the official login credentials are still on disk; delete auth.json from the Codex config directory to remove them",
-    "geminiRestart": "Restart Gemini CLI to apply the switched configuration."
+    "geminiRestart": "Restart Gemini CLI to apply the switched configuration.",
+    "proxyReasonDesktopMapping": "uses model mapping (Claude Desktop only accepts Claude model names)",
+    "proxyReasonRoutingRequired": "requires local routing to process requests"
   },
   "confirm": {
     "deleteProvider": "Delete Provider",
@@ -1852,16 +1858,13 @@
     "npmPackage": "API Format",
     "nativeConfigHint": "Edit native OpenCode V2 configuration as JSON below. Provider and model fields are preserved when saving.",
     "selectPackage": "Select API format",
-    "npmPackageHint": "Select the API format for the AI service",
     "builtinDefaults": "Use OpenCode built-in provider defaults",
     "customProviderRequired": "A new provider ID requires an npm package and at least one model. Only an existing ID in the live config may inherit defaults.",
     "duplicateRequiresDefinition": "This provider is missing an npm package or model definitions and cannot be duplicated directly. Specify an npm package and at least one model before copying it as a custom provider.",
     "duplicateRequiresNativeDefinition": "This native V2 provider is missing a package or model definitions and cannot be duplicated directly. Add a package and at least one model before copying it under a new ID.",
     "nativeCustomProviderRequired": "A new provider ID requires a package and at least one model. Only an existing ID in the live config may inherit defaults.",
     "baseUrl": "Base URL",
-    "baseUrlHint": "Custom API endpoint URL",
     "models": "Models",
-    "modelsHint": "Configure available models and their display names",
     "addModel": "Add Model",
     "modelId": "Model ID",
     "modelName": "Display Name",
@@ -2534,7 +2537,6 @@
     "selectProtocol": "Select API Protocol",
     "apiProtocolHint": "Select the protocol type compatible with the provider's API. Most providers use OpenAI Completions format.",
     "baseUrl": "API Endpoint",
-    "baseUrlHint": "The provider's API endpoint address.",
     "models": "Models",
     "addModel": "Add Model",
     "noModels": "No models configured. Click Add Model to configure available models.",
@@ -2870,6 +2872,32 @@
       "cloud": "Cloud Platforms",
       "tool": "Dev Tools",
       "other": "Other"
+    },
+    "clear": "Clear icon",
+    "myIcons": "My Icons",
+    "builtinIcons": "Built-in Icons",
+    "myIconsEmpty": "Images you upload and name are kept here, so other providers can use them too.",
+    "currentIcon": "Current icon",
+    "saveToLibrary": "Save to My Icons",
+    "saveCurrentTitle": "Save the current icon to My Icons",
+    "uploadTitle": "Name this icon",
+    "uploadDescription": "Once it is in My Icons, other providers can use it too.",
+    "saveAndUse": "Save and Use",
+    "renameTitle": "Rename Icon",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteTitle": "Delete Icon",
+    "deleteMessage": "Delete \"{{name}}\" from My Icons? Providers already using it are not affected.",
+    "alreadySaved": "This image is already in My Icons as \"{{name}}\"",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. My relay",
+    "upload": "Upload",
+    "uploadHint": "PNG, JPG, WebP or SVG, up to 2 MB. The image is shrunk to a small PNG, saved to My Icons and carried along by cloud sync.",
+    "uploadError": {
+      "unsupported": "Unsupported image format. Choose a PNG, JPG, WebP or SVG file",
+      "tooLarge": "The image is larger than 2 MB",
+      "decodeFailed": "Couldn't read this image, please try another one",
+      "dimensions": "The image is too large (width and height must not exceed 4096 px)"
     }
   },
   "providerIcon": {
@@ -3141,7 +3169,6 @@
   "hermes": {
     "form": {
       "baseUrl": "API Endpoint",
-      "baseUrlHint": "The API endpoint URL for this provider.",
       "providerKey": "Provider Key",
       "providerKeyPlaceholder": "my-provider",
       "providerKeyHint": "Lowercase letters, numbers, and hyphens only. Used as the provider name in config.yaml.",
@@ -3152,7 +3179,6 @@
       "providerKeyBuiltin": "\"{{key}}\" is the ID of a Hermes built-in provider. Hermes will use the built-in provider (which needs its own API key environment variable) and ignore this card's endpoint and key. Use a different key, e.g. cc-switch-{{key}}.",
       "providerKeyBuiltinLocked": "\"{{key}}\" is the ID of a Hermes built-in provider. Hermes will use the built-in provider and ignore this card's endpoint and key. The key is locked: add this provider again under another key (e.g. cc-switch-{{key}}), then delete this card.",
       "apiMode": "API Mode",
-      "apiModeHint": "Provider API protocol. Choose the format that matches your endpoint.",
       "apiModeChatCompletions": "OpenAI Chat Completions",
       "apiModeAnthropicMessages": "Anthropic Messages",
       "apiModeCodexResponses": "OpenAI Responses",
@@ -3867,7 +3893,6 @@
     "rebindHint": "Saving the listen address restarts the service. If binding fails, the previous address is restored.",
     "officialDefaultAdvice": "Consider using an official account as the aggregation default for requests without an aggregated model ID.",
     "desktopRouteNote": "Claude Desktop reads its configuration only at launch: restart Claude Desktop after switching modes or changing the route provider or aggregated models. Keep CC Switch running in routing mode; quitting CC Switch does not switch Desktop back to direct.",
-    "claudeModelsRestart": "Restart Claude Code after changing aggregation models or members to refresh its model catalog.",
     "adoptCatalog": "Use CC Switch's model catalog",
     "adoptCatalogDone": "Now using CC Switch's model catalog. Restart Codex to apply",
     "staleClients": {

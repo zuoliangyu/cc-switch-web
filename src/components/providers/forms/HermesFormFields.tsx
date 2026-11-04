@@ -240,11 +240,6 @@ export function HermesFormFields({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          {t("hermes.form.apiModeHint", {
-            defaultValue: "供应商 API 协议。请根据端点选择正确的协议。",
-          })}
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -264,14 +259,8 @@ export function HermesFormFields({
               : undefined
           }
         />
-        {showBaseUrlError ? (
+        {showBaseUrlError && (
           <p className="text-xs text-destructive">{baseUrlErrorMessage}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {t("hermes.form.baseUrlHint", {
-              defaultValue: "供应商的 API 端点地址。",
-            })}
-          </p>
         )}
       </div>
 

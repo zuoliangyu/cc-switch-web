@@ -1,11 +1,12 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { isWindows, isLinux } from "@/lib/platform";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { useUnsavedChangesTracker } from "@/lib/unsavedChanges";
 import { cn } from "@/lib/utils";
 
 interface FullScreenPanelProps {
@@ -15,10 +16,43 @@ interface FullScreenPanelProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   contentClassName?: string;
+  /** 默认不做动画：淡入淡出会在开关面板时露出下面的页面 */
+  motionPreset?: "none" | "slide-from-right";
+  /**
+   * 编辑表单：用户改过内容后，用快捷键（⌘/Ctrl+,）离开当前页前会先确认。
+   * 只给编辑页打开；测速、只读这类页面不需要。
+   */
+  trackUnsavedChanges?: boolean;
 }
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px - match App.tsx
 const HEADER_HEIGHT = 64; // px - match App.tsx
+
+let bodyScrollLockCount = 0;
+let bodyOverflowBeforeFirstLock: string | null = null;
+
+const lockBodyScroll = () => {
+  if (bodyScrollLockCount === 0) {
+    bodyOverflowBeforeFirstLock = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  bodyScrollLockCount += 1;
+};
+
+const unlockBodyScroll = () => {
+  bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+  if (bodyScrollLockCount === 0) {
+    document.body.style.overflow = bodyOverflowBeforeFirstLock ?? "";
+    bodyOverflowBeforeFirstLock = null;
+  }
+};
+
+/**
+ * 打开着的面板，后打开的在最后。面板里再开面板（编辑供应商 → 选图标、编辑定价）时
+ * 每层都在 window 上挂了 ESC 监听，stopPropagation 拦不住同一目标上的其他监听，
+ * 所以只让栈顶那层响应，一次 ESC 只退一层。
+ */
+const openPanelStack: object[] = [];
 
 /**
  * Reusable full-screen panel component
@@ -32,15 +66,23 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   children,
   footer,
   contentClassName,
+  motionPreset = "none",
+  trackUnsavedChanges = false,
 }) => {
+  // 面板关掉后组件可能还挂着：只在打开时登记，关掉即撤销
+  const unsavedChangesHandlers = useUnsavedChangesTracker(
+    trackUnsavedChanges && isOpen,
+  );
   const { t } = useTranslation();
+  const prefersReducedMotion = useReducedMotion();
+  const shouldSlideFromRight =
+    motionPreset === "slide-from-right" && !prefersReducedMotion;
+
   React.useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    if (!isOpen) return;
+
+    lockBodyScroll();
+    return unlockBodyScroll;
   }, [isOpen]);
 
   // ESC 键关闭面板
@@ -53,8 +95,16 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   React.useEffect(() => {
     if (!isOpen) return;
 
+    const entry = {};
+    openPanelStack.push(entry);
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // 上面还叠着别的面板：交给最上面那层
+        if (openPanelStack[openPanelStack.length - 1] !== entry) {
+          return;
+        }
+
         // 子组件（例如 Radix 的 Select/Dialog/Dropdown）如果已经消费了 ESC，就不要再关闭整个面板
         if (event.defaultPrevented) {
           return;
@@ -73,6 +123,8 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
     window.addEventListener("keydown", handleKeyDown, false);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, false);
+      const index = openPanelStack.indexOf(entry);
+      if (index >= 0) openPanelStack.splice(index, 1);
     };
   }, [isOpen]);
 
@@ -80,10 +132,15 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.992 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.992 }}
-          transition={{ duration: 0.22, ease: "easeOut" }}
+          // 淡入淡出会在开关时露出下面的列表（闪一下），默认直接出现、直接消失
+          initial={shouldSlideFromRight ? { x: "100%" } : false}
+          animate={shouldSlideFromRight ? { x: 0 } : { opacity: 1 }}
+          exit={shouldSlideFromRight ? { x: "100%" } : { opacity: 1 }}
+          transition={
+            shouldSlideFromRight
+              ? { duration: 0.26, ease: [0.22, 1, 0.36, 1] }
+              : { duration: 0 }
+          }
           className="app-shell fixed inset-0 z-[60] flex flex-col bg-background"
         >
           {/* Drag region - match App.tsx */}
@@ -129,6 +186,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                 "mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-6 sm:py-6",
                 contentClassName,
               )}
+              {...unsavedChangesHandlers}
             >
               {children}
             </div>

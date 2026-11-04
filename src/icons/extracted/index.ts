@@ -117,4 +117,4 @@ export function hasIcon(name: string): boolean {
   return name.toLowerCase() in icons;
 }
 
-export { getIconMetadata } from "./metadata";
+export { getIconMetadata, isTileIcon } from "./metadata";

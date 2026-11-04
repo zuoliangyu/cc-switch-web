@@ -193,6 +193,34 @@ describe("Codex editor snapshots", () => {
       expect(apiMocks.getLiveProviderSettings).not.toHaveBeenCalled();
     },
   );
+  it("keeps the list visible until the initial editor projection is ready", async () => {
+    let resolveView!: (view: typeof snapshot) => void;
+    apiMocks.getCodexEditorView.mockReturnValue(
+      new Promise((resolve) => {
+        resolveView = resolve;
+      }),
+    );
+    render(
+      <EditProviderDialog
+        open
+        provider={provider}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        appId="codex"
+      />,
+    );
+    // 首份投影到之前不打开面板，也就没有一闪而过的加载页
+    expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "common.save" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-config")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveView(snapshot);
+    });
+    expect(screen.getByTestId("settings-config")).toBeInTheDocument();
+  });
   it("blocks saving when reading the client fails and allows retry", async () => {
     apiMocks.getCodexEditorView
       .mockRejectedValueOnce(new Error("broken TOML"))

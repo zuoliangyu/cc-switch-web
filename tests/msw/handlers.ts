@@ -20,6 +20,10 @@ import {
   getAppConfigDirOverride,
   getResolvedAppConfigDir,
   setAppConfigDirOverrideState,
+  listCustomIcons,
+  addCustomIcon,
+  renameCustomIcon,
+  deleteCustomIcon,
 } from "./state";
 
 const RUNTIME_ENDPOINT = "http://runtime.local";
@@ -390,4 +394,22 @@ export const handlers = [
     }),
   ),
   http.post(`${RUNTIME_ENDPOINT}/reset_circuit_breaker`, () => success(true)),
+  http.post(`${RUNTIME_ENDPOINT}/get_custom_icons`, () =>
+    success(listCustomIcons()),
+  ),
+  http.post(`${RUNTIME_ENDPOINT}/add_custom_icon`, async ({ request }) => {
+    const { name, data } = await withJson<{ name: string; data: string }>(
+      request,
+    );
+    return success(addCustomIcon(name, data));
+  }),
+  http.post(`${RUNTIME_ENDPOINT}/rename_custom_icon`, async ({ request }) => {
+    const { id, name } = await withJson<{ id: string; name: string }>(request);
+    return success(renameCustomIcon(id, name));
+  }),
+  http.post(`${RUNTIME_ENDPOINT}/delete_custom_icon`, async ({ request }) => {
+    const { id } = await withJson<{ id: string }>(request);
+    deleteCustomIcon(id);
+    return success(null);
+  }),
 ];

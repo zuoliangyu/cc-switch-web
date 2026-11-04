@@ -22,16 +22,8 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { injectCodingPlanUsageScript } from "@/config/codingPlanProviders";
 import { openclawKeys } from "@/hooks/useOpenClaw";
-import {
-  extractCodexWireApi,
-  isCodexAnthropicWireApi,
-  isCodexChatWireApi,
-} from "@/utils/providerConfigUtils";
-import { isOAuthProviderType } from "@/config/constants";
-import {
-  providerNeedsRouting,
-  supportsOfficialProxyTakeover,
-} from "@/utils/providerCapabilities";
+import { getRoutingReason } from "@/utils/routingReason";
+import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -161,85 +153,15 @@ export function useProviderActions(
       const isCopilotProvider =
         activeApp === "claude" &&
         provider.meta?.providerType === "github_copilot";
-      // 跟随上游 cc-switch 1c82b8a3：Codex provider 走 Chat 协议也需要代理路由
-      const isCodexChatFormat =
-        (activeApp === "codex" || activeApp === "grokbuild") &&
-        (provider.meta?.apiFormat === "openai_chat" ||
-          (typeof (provider.settingsConfig as Record<string, any>)?.config ===
-            "string" &&
-            isCodexChatWireApi(
-              extractCodexWireApi(
-                (provider.settingsConfig as Record<string, any>).config,
-              ),
-            )));
-      const isCodexAnthropicFormat =
-        (activeApp === "codex" || activeApp === "grokbuild") &&
-        (provider.meta?.apiFormat === "anthropic" ||
-          (typeof (provider.settingsConfig as Record<string, any>)?.config ===
-            "string" &&
-            isCodexAnthropicWireApi(
-              extractCodexWireApi(
-                (provider.settingsConfig as Record<string, any>).config,
-              ),
-            )));
-
       const routingReady =
         activeApp === "claude-desktop"
           ? isProxyRunning === true
           : isProxyTakeover === true;
 
-      // Determine why this provider requires the proxy
-      let proxyRequiredReason: string | null = null;
-      if (!routingReady && providerNeedsRouting(activeApp, provider)) {
-        if (isCopilotProvider) {
-          proxyRequiredReason = t("notifications.proxyReasonCopilot", {
-            defaultValue: "使用 GitHub Copilot 作为 Claude 供应商",
-          });
-        } else if (isOAuthProviderType(provider.meta?.providerType)) {
-          proxyRequiredReason = t("notifications.proxyReasonManagedOAuth", {
-            defaultValue: "使用托管 OAuth 登录（令牌由本地路由注入）",
-          });
-        } else if (
-          provider.meta?.apiFormat === "openai_chat" &&
-          activeApp === "claude"
-        ) {
-          proxyRequiredReason = t("notifications.proxyReasonOpenAIChat", {
-            defaultValue: "使用 OpenAI Chat 接口格式",
-          });
-        } else if (isCodexChatFormat) {
-          proxyRequiredReason = t("notifications.proxyReasonOpenAIChat", {
-            defaultValue: "使用 OpenAI Chat 接口格式",
-          });
-        } else if (isCodexAnthropicFormat) {
-          proxyRequiredReason = t(
-            "notifications.proxyReasonAnthropicMessages",
-            { defaultValue: "使用 Anthropic Messages 接口格式" },
-          );
-        } else if (
-          provider.meta?.apiFormat === "openai_responses" &&
-          activeApp === "claude"
-        ) {
-          proxyRequiredReason = t("notifications.proxyReasonOpenAIResponses", {
-            defaultValue: "使用 OpenAI Responses 接口格式",
-          });
-        } else if (
-          provider.meta?.apiFormat === "gemini_native" &&
-          activeApp === "claude"
-        ) {
-          proxyRequiredReason = t("notifications.proxyReasonGeminiNative", {
-            defaultValue: "使用 Gemini Native generateContent 接口格式",
-          });
-        } else if (
-          provider.meta?.isFullUrl &&
-          (activeApp === "claude" ||
-            activeApp === "codex" ||
-            activeApp === "grokbuild")
-        ) {
-          proxyRequiredReason = t("notifications.proxyReasonFullUrl", {
-            defaultValue: "开启了完整 URL 连接模式",
-          });
-        }
-      }
+      // 路由没就绪时，要经路由的卡不能直连切换（原因和卡片上「需要路由」徽标的说明同一份）
+      const proxyRequiredReason = routingReady
+        ? null
+        : getRoutingReason(activeApp, provider, t);
 
       if (proxyRequiredReason) {
         toast.warning(

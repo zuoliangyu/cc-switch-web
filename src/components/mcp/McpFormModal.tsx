@@ -603,6 +603,7 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
   return (
     <FullScreenPanel
       isOpen
+      trackUnsavedChanges
       title={title}
       onClose={() => {
         if (!savingRef.current) onClose();

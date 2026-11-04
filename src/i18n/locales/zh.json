@@ -75,7 +75,11 @@
     "resync": "立即重新同步",
     "resyncResult": "重新同步结果",
     "saved": "已保存",
-    "undo": "撤销"
+    "undo": "撤销",
+    "unsavedLeaveTitle": "有未保存的修改",
+    "unsavedLeaveMessage": "离开后，当前编辑页里的修改不会保存。",
+    "unsavedLeaveConfirm": "放弃修改并离开",
+    "unsavedLeaveCancel": "继续编辑"
   },
   "firstRunNotice": {
     "title": "欢迎使用 CC Switch",
@@ -298,7 +302,9 @@
     "openclawNoModels": "该供应商没有配置模型",
     "backfillWarning": "切换成功，但旧供应商配置回填失败，您手动修改的配置可能未保存",
     "codexAuthCleanupFailed": "切换成功，但未能删除 auth.json，官方登录凭据仍留在磁盘上；如需彻底移除请手动删除 Codex 配置目录中的 auth.json",
-    "geminiRestart": "切换后请重启 Gemini CLI，使配置生效。"
+    "geminiRestart": "切换后请重启 Gemini CLI，使配置生效。",
+    "proxyReasonDesktopMapping": "使用模型映射（Claude Desktop 只认 Claude 模型名）",
+    "proxyReasonRoutingRequired": "需要本地路由处理请求"
   },
   "confirm": {
     "deleteProvider": "删除供应商",
@@ -1852,16 +1858,13 @@
     "npmPackage": "接口格式",
     "nativeConfigHint": "请在下方以 JSON 编辑 OpenCode V2 原生配置。保存时保留供应商和模型字段。",
     "selectPackage": "选择接口格式",
-    "npmPackageHint": "选择 AI 服务的 API 接口格式",
     "builtinDefaults": "使用 OpenCode 内置供应商默认值",
     "customProviderRequired": "新的供应商标识需要填写 npm 包和至少一个模型；只有配置中已有的同名供应商可以沿用默认定义",
     "duplicateRequiresDefinition": "此供应商缺少 npm 包或模型定义，无法直接复制。请先补全 npm 包和至少一个模型，再复制为自定义供应商。",
     "duplicateRequiresNativeDefinition": "此 V2 原生供应商缺少 package 或模型定义，无法直接复制。请先补全 package 和至少一个模型，再以新的标识复制。",
     "nativeCustomProviderRequired": "新的供应商标识需要填写 package 和至少一个模型；只有配置中已有的同名供应商可以沿用默认定义",
     "baseUrl": "Base URL",
-    "baseUrlHint": "自定义 API 端点地址",
     "models": "模型配置",
-    "modelsHint": "配置可用的模型及其显示名称",
     "addModel": "添加模型",
     "modelId": "模型 ID",
     "modelName": "显示名称",
@@ -2534,7 +2537,6 @@
     "selectProtocol": "选择 API 协议",
     "apiProtocolHint": "选择与供应商 API 兼容的协议类型。大多数供应商使用 OpenAI Completions 格式。",
     "baseUrl": "API 端点",
-    "baseUrlHint": "供应商的 API 端点地址。",
     "models": "模型列表",
     "addModel": "添加模型",
     "noModels": "暂无模型配置。点击添加模型来配置可用模型。",
@@ -2870,6 +2872,32 @@
       "cloud": "云平台",
       "tool": "开发工具",
       "other": "其他"
+    },
+    "clear": "清除图标",
+    "myIcons": "我的图标",
+    "builtinIcons": "内置图标",
+    "myIconsEmpty": "上传的图片起好名字后存在这里，其他供应商也能直接选用。",
+    "currentIcon": "当前图标",
+    "saveToLibrary": "存入我的图标",
+    "saveCurrentTitle": "把当前图标存入「我的图标」",
+    "uploadTitle": "给图标起个名字",
+    "uploadDescription": "存进「我的图标」后，其他供应商也能直接选用。",
+    "saveAndUse": "保存并使用",
+    "renameTitle": "重命名图标",
+    "rename": "重命名",
+    "delete": "删除",
+    "deleteTitle": "删除图标",
+    "deleteMessage": "从「我的图标」中删除「{{name}}」？已经在用它的供应商不受影响。",
+    "alreadySaved": "这张图片已经在「我的图标」里了，名为「{{name}}」",
+    "nameLabel": "名称",
+    "namePlaceholder": "例如：我的中转站",
+    "upload": "上传",
+    "uploadHint": "支持 PNG、JPG、WebP、SVG，不超过 2 MB。图片会缩成小尺寸 PNG 存进「我的图标」，随云同步一起带走。",
+    "uploadError": {
+      "unsupported": "不支持这种图片格式，请选择 PNG、JPG、WebP 或 SVG",
+      "tooLarge": "图片超过 2 MB",
+      "decodeFailed": "无法读取这张图片，请换一张试试",
+      "dimensions": "图片尺寸太大（宽高不能超过 4096 像素）"
     }
   },
   "providerIcon": {
@@ -3141,7 +3169,6 @@
   "hermes": {
     "form": {
       "baseUrl": "API 端点",
-      "baseUrlHint": "供应商的 API 端点地址。",
       "providerKey": "供应商标识",
       "providerKeyPlaceholder": "my-provider",
       "providerKeyHint": "只能使用小写字母、数字和连字符。用作 config.yaml 中的供应商名称。",
@@ -3152,7 +3179,6 @@
       "providerKeyBuiltin": "「{{key}}」是 Hermes 内置供应商的标识。Hermes 会改用内置供应商（要它自己的环境变量 Key），这张卡的地址和 Key 不会生效。请换一个标识，例如 cc-switch-{{key}}。",
       "providerKeyBuiltinLocked": "「{{key}}」是 Hermes 内置供应商的标识。Hermes 会改用内置供应商，这张卡的地址和 Key 不会生效。标识已锁定无法修改，请用其他标识（例如 cc-switch-{{key}}）重新添加这个供应商，再删除这张卡。",
       "apiMode": "API 模式",
-      "apiModeHint": "供应商 API 协议。请根据端点选择正确的协议。",
       "apiModeChatCompletions": "OpenAI Chat Completions",
       "apiModeAnthropicMessages": "Anthropic Messages",
       "apiModeCodexResponses": "OpenAI Responses",
@@ -3867,7 +3893,6 @@
     "rebindHint": "保存监听地址会重启服务；绑定失败时恢复原地址。",
     "officialDefaultAdvice": "建议将官方账号设为聚合默认供应商，以便处理不带聚合模型标识的请求。",
     "desktopRouteNote": "Claude Desktop 只在启动时读取配置：切换模式、路由那家或聚合模型变化后请重启 Claude Desktop。路由模式下请保持 CC Switch 运行；退出 CC Switch 时不会把 Desktop 改回直连。",
-    "claudeModelsRestart": "聚合模型或成员变化后，请重启 Claude Code 以刷新模型目录。",
     "adoptCatalog": "改用 CC Switch 的模型目录",
     "adoptCatalogDone": "已改用 CC Switch 的模型目录，重启 Codex 后生效",
     "staleClients": {

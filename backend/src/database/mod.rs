@@ -34,6 +34,7 @@ mod schema;
 mod tests;
 
 // Failover 队列项仅在 crate 内部 API 层使用
+pub use dao::custom_icons::{CustomIconEntry, CUSTOM_ICONS_KEY};
 pub(crate) use dao::{FailoverQueueItem, Profile};
 
 use crate::config::get_app_config_dir;

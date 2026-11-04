@@ -13,6 +13,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "astron",
     displayName: "Astron",
     category: "ai-provider",
+    shape: "tile",
     keywords: [
       "astron",
       "讯飞星辰",
@@ -49,6 +50,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "tuzi",
     displayName: "Tu-zi",
     category: "ai-provider",
+    shape: "tile",
     keywords: [
       "tuzi",
       "tu-zi",
@@ -64,6 +66,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "commandcode",
     displayName: "Command Code",
     category: "ai-provider",
+    shape: "tile",
     keywords: [
       "commandcode",
       "command code",
@@ -79,6 +82,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "88api",
     displayName: "88API",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["88api", "88", "aggregator", "gateway"],
     defaultColor: "currentColor",
   },
@@ -205,6 +209,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "eflowcode",
     displayName: "E-FlowCode",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["e-flowcode", "eflowcode", "flowcode"],
     defaultColor: "#000000",
   },
@@ -465,6 +470,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "pipellm",
     displayName: "PIPELLM",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["pipellm", "pipe"],
     defaultColor: "currentColor",
   },
@@ -472,6 +478,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "shengsuanyun",
     displayName: "Shengsuanyun",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["shengsuanyun", "shengsuanyun"],
     defaultColor: "currentColor",
   },
@@ -500,6 +507,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "aihubmix",
     displayName: "AiHubMix",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["aihubmix", "hub", "mix", "aggregator"],
     defaultColor: "#006FFB",
   },
@@ -507,6 +515,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "xiaomimimo",
     displayName: "Xiaomi MiMo",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["xiaomimimo", "xiaomi", "mimo"],
     defaultColor: "#000000",
   },
@@ -586,6 +595,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "fluxa",
     displayName: "FluxA",
     category: "ai-provider",
+    shape: "tile",
     keywords: ["fluxa", "fluxapay", "agentmarket", "tokenplan", "marketplace"],
     defaultColor: "currentColor",
   },
@@ -621,6 +631,7 @@ export const iconMetadata: Record<string, IconMetadata> = {
     name: "sub2api",
     displayName: "Sub2API",
     category: "ai-provider",
+    shape: "tile",
     keywords: [
       "sub2api",
       "sub2",
@@ -1157,6 +1168,10 @@ export const iconMetadata: Record<string, IconMetadata> = {
 
 export function getIconMetadata(name: string): IconMetadata | undefined {
   return iconMetadata[name.toLowerCase()];
+}
+
+export function isTileIcon(name?: string): boolean {
+  return !!name && getIconMetadata(name)?.shape === "tile";
 }
 
 export function searchIcons(query: string): string[] {

@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { getIcon, hasIcon, getIconMetadata } from "@/icons/extracted";
 import { getLocalIconUrl, hasLocalIcon } from "@/icons/local";
 import { cn } from "@/lib/utils";
+import { isCustomIcon } from "@/utils/customIcon";
 
 interface ProviderIconProps {
   icon?: string; // 图标名称
@@ -22,18 +23,26 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
 }) => {
   // 获取图标 SVG
   const iconSvg = useMemo(() => {
-    if (icon && hasIcon(icon)) {
+    if (icon && !isCustomIcon(icon) && hasIcon(icon)) {
       return getIcon(icon);
     }
     return "";
   }, [icon]);
 
+  // 本地光栅图标，或用户上传的 PNG。自定义图标只认我们自己编码的 PNG data URI，
+  // 从不把外链地址当图标加载
   const localIconUrl = useMemo(() => {
+    if (isCustomIcon(icon)) {
+      return icon;
+    }
     if (icon && hasLocalIcon(icon)) {
       return getLocalIconUrl(icon);
     }
     return "";
   }, [icon]);
+
+  // 解码失败的图片（截断、损坏的自定义图标）记下来，退回首字母，不显示破图
+  const [brokenUrl, setBrokenUrl] = useState<string>();
 
   // 计算尺寸样式
   const sizeStyle = useMemo(() => {
@@ -64,10 +73,11 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
     return undefined;
   }, [color, icon]);
 
-  if (localIconUrl) {
+  if (localIconUrl && localIconUrl !== brokenUrl) {
     return (
       <img
         src={localIconUrl}
+        onError={() => setBrokenUrl(localIconUrl)}
         alt={name}
         title={name}
         className={cn(

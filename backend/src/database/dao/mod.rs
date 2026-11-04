@@ -2,6 +2,7 @@
 //!
 //! Database access operations for each domain
 
+pub mod custom_icons;
 mod failover;
 mod mcp;
 mod profiles;

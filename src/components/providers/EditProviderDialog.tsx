@@ -295,7 +295,10 @@ export function EditProviderDialog({
     <>
       {editorConflict.dialog}
       <FullScreenPanel
-        isOpen={open}
+        // 首份编辑视图到了再打开：本地读取很快，先显示加载页会闪一下；加载失败仍打开，
+        // 让用户看到原因并重试
+        isOpen={open && (editorReady || !!providerEditor.error)}
+        trackUnsavedChanges
         title={t("provider.editProvider")}
         onClose={() => onOpenChange(false)}
         footer={

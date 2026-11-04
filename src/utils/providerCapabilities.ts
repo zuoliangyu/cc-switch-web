@@ -102,10 +102,19 @@ export function providerNeedsRouting(
   ) {
     return false;
   }
+
+  const isManagedOAuth = isOAuthProviderType(provider.meta?.providerType);
+
+  // Desktop：模型映射卡（上游模型名 Desktop 不认）、托管 OAuth（凭据由路由注入）要经路由；
+  // 和后端 claude_desktop_config::needs_routing 同一条规则
+  if (appId === "claude-desktop") {
+    return isManagedOAuth || provider.meta?.claudeDesktopMode === "proxy";
+  }
+
   if (appId !== "claude" && appId !== "codex" && appId !== "grokbuild") {
     return false;
   }
-  if (isOAuthProviderType(provider.meta?.providerType)) return true;
+  if (isManagedOAuth) return true;
 
   const format = provider.meta?.apiFormat;
   if (appId === "claude") {

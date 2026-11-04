@@ -13,10 +13,18 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { sortProvidersByName } from "@/utils/providerSort";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import { CodexStackSettings } from "./CodexStackSettings";
+
+/** 状态徽标里各模式的圆点颜色 */
+const MODE_DOT: Record<AppMode, string> = {
+  direct: "bg-emerald-500",
+  routing: "bg-sky-500",
+  aggregation: "bg-violet-500",
+};
 
 /** 回到直连时改写的客户端文件（确认框里写明，用默认位置）。 */
 const CLIENT_FILE: Partial<Record<AppId, string>> = {
@@ -67,6 +75,10 @@ export function AppModePanel({
     active === "direct"
       ? state.data.directProviderId
       : state.data.routeProviderId;
+  const connected =
+    !!inUseId &&
+    !!providers[inUseId] &&
+    (active === "direct" || state.data.attached);
   const stale = state.data.aggregation.staleClients;
   const staleRevision = state.data.aggregation.staleRevision ?? "";
   const showStale = !!stale && dismissedStale !== staleRevision;
@@ -151,12 +163,28 @@ export function AppModePanel({
             </Button>
           );
         })}
+        {/* 实际生效的连接，不跟随正在查看的模式：模式色圆点表示已接上，灰点表示还没接上 */}
         <span
-          className="min-w-0 max-w-full truncate text-sm text-muted-foreground"
+          className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border-default px-2.5 py-0.5 text-sm"
           title={inUseId ? providers[inUseId]?.name : undefined}
         >
-          {t(`webMode.${active}`)} ·{" "}
-          {inUseId ? providers[inUseId]?.name : t("webMode.noProvider")}
+          <span
+            aria-hidden="true"
+            data-testid="app-mode-status-dot"
+            className={cn(
+              "me-1 h-1.5 w-1.5 shrink-0 rounded-full",
+              connected ? MODE_DOT[active] : "bg-muted-foreground/40",
+            )}
+          />
+          <span className="shrink-0 text-muted-foreground">
+            {t(`webMode.${active}`)}
+          </span>
+          <span aria-hidden="true" className="text-muted-foreground">
+            ·
+          </span>
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {inUseId ? providers[inUseId]?.name : t("webMode.noProvider")}
+          </span>
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -170,11 +198,6 @@ export function AppModePanel({
       {app === "claude-desktop" && selected !== "direct" && (
         <p role="note" className="text-sm text-muted-foreground">
           {t("webMode.desktopRouteNote")}
-        </p>
-      )}
-      {app === "claude" && active === "aggregation" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("webMode.claudeModelsRestart")}
         </p>
       )}
       {state.data.startupError && (

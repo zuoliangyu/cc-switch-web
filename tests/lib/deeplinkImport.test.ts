@@ -85,6 +85,23 @@ const importCodexWithConfig = async (
   ).settingsConfig;
 
 describe("deeplink 解析阶段的检查", () => {
+  it("icon 只收内置图标名，其余值丢掉但链接照常解析", () => {
+    // 大小写和空白照旧归一
+    expect(
+      parseDeepLinkUrl(providerLink("claude", { icon: " DeepSeek " })).icon,
+    ).toBe("deepseek");
+    // data URI、外链地址都不是图标名
+    for (const icon of [
+      "data:image/png;base64,iVBORw0KGgo=",
+      "https://example.com/logo.png",
+      "<svg>",
+    ]) {
+      const request = parseDeepLinkUrl(providerLink("claude", { icon }));
+      expect(request.icon).toBeUndefined();
+      expect(request.name).toBe("Example");
+    }
+  });
+
   it("在解析阶段拒绝 configUrl", () => {
     expect(() =>
       parseDeepLinkUrl(

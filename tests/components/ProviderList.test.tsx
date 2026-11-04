@@ -352,6 +352,43 @@ describe("ProviderList Component", () => {
     ).toBeInTheDocument();
   });
 
+  it("matches the API address and keeps the search field out of the card area", () => {
+    const relay = createProvider({
+      id: "relay",
+      name: "Relay",
+      settingsConfig: {
+        env: { ANTHROPIC_BASE_URL: "https://relay.example.com" },
+      },
+    });
+    const other = createProvider({ id: "other", name: "Other" });
+
+    renderWithQueryClient(
+      <ProviderList
+        providers={{ relay, other }}
+        currentProviderId=""
+        appId="claude"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /provider\.search|搜索/ }),
+    );
+    const searchInput = screen.getByPlaceholderText(
+      "Search name, notes, or URL...",
+    );
+    // 搜索框就在工作台那一行里，不是浮在卡片上的面板
+    expect(searchInput.closest(".fixed")).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: "relay.example" } });
+    expect(screen.getByTestId("provider-card-relay")).toBeInTheDocument();
+    expect(screen.queryByTestId("provider-card-other")).not.toBeInTheDocument();
+  });
+
   it("shows Claude Desktop configuration drift", async () => {
     const provider = createProvider();
     getClaudeDesktopStatusMock.mockResolvedValueOnce({

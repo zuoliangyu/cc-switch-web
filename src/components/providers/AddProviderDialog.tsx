@@ -391,6 +391,7 @@ export function AddProviderDialog({
       {editorConflict.dialog}
       <FullScreenPanel
         isOpen={open}
+        trackUnsavedChanges={!accountLogin}
         title={t("provider.addNewProvider")}
         onClose={() => onOpenChange(false)}
         footer={footer}

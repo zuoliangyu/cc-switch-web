@@ -52,7 +52,7 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
   // Edit state
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [content, setContent] = useState("");
-  const [loadingContent, setLoadingContent] = useState(false);
+  const contentRequestRef = useRef(0);
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -197,20 +197,26 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
     }
   }, [isOpen, loadFiles]);
 
-  // Open file for editing
+  // 面板关掉或卸载后再读完的内容一律丢掉
+  useEffect(() => {
+    return () => {
+      contentRequestRef.current += 1;
+    };
+  }, [isOpen]);
+
+  // 读到内容再进入编辑：先显示加载页会闪一下
   const openFile = useCallback(
     async (filename: string) => {
-      setLoadingContent(true);
-      setEditingFile(filename);
+      const request = ++contentRequestRef.current;
       try {
         const data = await workspaceApi.readDailyMemoryFile(filename);
+        if (request !== contentRequestRef.current) return;
         setContent(data ?? "");
+        setEditingFile(filename);
       } catch (err) {
+        if (request !== contentRequestRef.current) return;
         console.error("Failed to read daily memory file:", err);
         toast.error(t("workspace.dailyMemory.loadFailed"));
-        setEditingFile(null);
-      } finally {
-        setLoadingContent(false);
       }
     },
     [t],
@@ -227,6 +233,7 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
       return;
     }
     // Open editor with empty content — no file created until user saves
+    contentRequestRef.current += 1;
     setEditingFile(filename);
     setContent("");
   }, [files, openFile]);
@@ -249,6 +256,8 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
   // Delete file
   const handleDelete = useCallback(async () => {
     if (!deletingFile) return;
+    // 删除期间和删除后，还在读的内容都不能再把这个文件打开
+    contentRequestRef.current += 1;
     try {
       await workspaceApi.deleteDailyMemoryFile(deletingFile);
       toast.success(t("workspace.dailyMemory.deleteSuccess"));
@@ -290,6 +299,7 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
 
   // Close panel entirely — clear search state
   const handleClose = useCallback(() => {
+    contentRequestRef.current += 1;
     setEditingFile(null);
     setContent("");
     setIsSearchOpen(false);
@@ -321,27 +331,22 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
       <>
         <FullScreenPanel
           isOpen={isOpen}
+          trackUnsavedChanges
           title={t("workspace.editing", { filename: editingFile })}
           onClose={handleBackToList}
           footer={
-            <Button onClick={handleSave} disabled={saving || loadingContent}>
+            <Button onClick={handleSave} disabled={saving}>
               {saving ? t("common.saving") : t("common.save")}
             </Button>
           }
         >
-          {loadingContent ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              {t("prompts.loading")}
-            </div>
-          ) : (
-            <MarkdownEditor
-              value={content}
-              onChange={setContent}
-              darkMode={isDarkMode}
-              placeholder={`# ${editingFile}\n\n...`}
-              minHeight="calc(100vh - 240px)"
-            />
-          )}
+          <MarkdownEditor
+            value={content}
+            onChange={setContent}
+            darkMode={isDarkMode}
+            placeholder={`# ${editingFile}\n\n...`}
+            minHeight="calc(100vh - 240px)"
+          />
         </FullScreenPanel>
 
         <ConfirmDialog
@@ -501,7 +506,7 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
               </div>
             )
           ) : // --- Normal file list ---
-          loadingList ? (
+          loadingList && files.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-muted-foreground">
               {t("prompts.loading")}
             </div>

@@ -742,12 +742,6 @@ export function OpenCodeFormFields({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          {t("opencode.npmPackageHint", {
-            defaultValue:
-              "Select the AI SDK package that matches your provider.",
-          })}
-        </p>
       </div>
 
       {/* API Key */}
@@ -772,12 +766,6 @@ export function OpenCodeFormFields({
           onValueChange={onBaseUrlChange}
           placeholder="https://api.example.com/v1"
         />
-        <p className="text-xs text-muted-foreground">
-          {t("opencode.baseUrlHint", {
-            defaultValue:
-              "The base URL for the API endpoint. Leave empty to use the default endpoint for official SDKs.",
-          })}
-        </p>
       </div>
 
       <RequestHeadersEditor
@@ -1260,13 +1248,6 @@ export function OpenCodeFormFields({
             ))}
           </div>
         )}
-
-        <p className="text-xs text-muted-foreground">
-          {t("opencode.modelsHint", {
-            defaultValue:
-              "Configure available models. Model ID is the API identifier, Display Name is shown in the UI.",
-          })}
-        </p>
       </div>
     </>
   );

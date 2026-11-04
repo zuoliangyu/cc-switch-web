@@ -28,6 +28,7 @@ pub(crate) mod gemini_direct;
 pub(crate) mod gemini_editor;
 pub(crate) mod grok_direct;
 pub(crate) mod grok_editor;
+pub(crate) mod icon;
 #[cfg(test)]
 mod kimi_tests;
 mod live;
@@ -284,6 +285,37 @@ mod tests {
                 None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
             }
         }
+    }
+
+    #[test]
+    #[serial]
+    fn universal_provider_icon_is_validated_on_save_and_sync() {
+        let _home = TestHome::new();
+        crate::settings::reload_settings().expect("reload settings");
+        let db = std::sync::Arc::new(crate::database::Database::memory().expect("memory db"));
+        let state = AppState::new(db.clone());
+        let mut universal = crate::provider::UniversalProvider::new(
+            "icon".into(),
+            "Icon".into(),
+            "custom".into(),
+            "https://api.example".into(),
+            "key".into(),
+        );
+        universal.apps.claude = true;
+        // 只有文件头、没有像素数据的「PNG」
+        universal.icon =
+            Some("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAAA=".into());
+        assert!(ProviderService::upsert_universal(&state, universal.clone()).is_err());
+        assert!(state.db.get_universal_provider("icon").unwrap().is_none());
+
+        // 绕过保存直接写进库的坏图标，同步到应用时也不会复制给子供应商
+        state.db.save_universal_provider(&universal).unwrap();
+        assert!(ProviderService::sync_universal_to_apps(&state, "icon").is_err());
+        assert!(state
+            .db
+            .get_provider_by_id("universal-claude-icon", "claude")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -4271,6 +4303,7 @@ impl ProviderService {
     }
 
     fn validate_provider_settings(app_type: &AppType, provider: &Provider) -> Result<(), AppError> {
+        icon::validate_icon(provider.icon.as_deref())?;
         match app_type {
             AppType::Claude | AppType::ClaudeDesktop => {
                 if !provider.settings_config.is_object() {
@@ -4829,6 +4862,7 @@ impl ProviderService {
         state: &AppState,
         provider: UniversalProvider,
     ) -> Result<bool, AppError> {
+        icon::validate_icon(provider.icon.as_deref())?;
         // 保存统一供应商
         state.db.save_universal_provider(&provider)?;
 
@@ -4868,6 +4902,8 @@ impl ProviderService {
             .db
             .get_universal_provider(id)?
             .ok_or_else(|| AppError::Message(format!("统一供应商 {id} 不存在")))?;
+        // 子供应商经 save_provider 直接入库，不走保存校验，图标在这里把关
+        icon::validate_icon(provider.icon.as_deref())?;
 
         // 各应用独立同步数据库与 live：一个损坏的配置文件不能阻止其余应用更新，
         // 但必须报告出来而不是返回成功（上游 926af949）。

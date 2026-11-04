@@ -1,10 +1,8 @@
-use crate::app_config::AppType;
 use serde::Serialize;
 use serde_json::{json, Value};
-#[cfg(test)]
-use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::app_config::AppType;
 #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
 use crate::config::get_home_dir;
 use crate::config::read_json_file;
@@ -16,6 +14,7 @@ use crate::live::floor;
 use crate::live::patch::json::{self as patch_json, ClearScope, JsonPatch};
 use crate::live::patch::{KeyPath, LivePatch, LiveWriteError};
 use crate::mode::operation::{self, FileChange};
+use crate::mode::stack::DesktopStackModel;
 use crate::mode::state::{self, PendingTarget};
 use crate::provider::{ClaudeDesktopMode, Provider};
 
@@ -28,7 +27,11 @@ const CONFIG_FILE: &str = "claude_desktop_config.json";
 const CONFIG_LIBRARY_DIR: &str = "configLibrary";
 const GATEWAY_TOKEN_SETTING_KEY: &str = "claude_desktop_gateway_token";
 const CLAUDE_DESKTOP_PROXY_PREFIX: &str = "/claude-desktop";
-const DEFAULT_CREATED_AT: &str = "2024-01-01T00:00:00Z";
+pub const DEFAULT_CREATED_AT: &str = "2024-01-01T00:00:00Z";
+/// `inferenceModels` 的上限（Desktop 的 schema 写着 `maxItems: 200`）。
+const MAX_INFERENCE_MODELS: usize = 200;
+const MIMO_REDACTED_THINKING_PLACEHOLDER: &str = "[redacted thinking]";
+const MIMO_TOOL_CALL_THINKING_PLACEHOLDER: &str = "tool call";
 
 /// Claude Desktop 模型菜单识别的 route ID 前缀。
 pub const CLAUDE_ROUTE_PREFIX: &str = "claude-";
@@ -38,44 +41,12 @@ pub const ANTHROPIC_CLAUDE_ROUTE_PREFIX: &str = "anthropic/claude-";
 /// Claude Desktop schema 不接受此后缀，import 边界翻译为 `supports1m` 字段。
 pub const ONE_M_CONTEXT_MARKER: &str = "[1m]";
 
-const NON_ANTHROPIC_ROUTE_MARKERS: &[&str] = &[
-    "ark-code",
-    "astron",
-    "command-r",
-    "deepseek",
-    "doubao",
-    "gemini",
-    "gemma",
-    "glm",
-    "gpt",
-    "grok",
-    "hermes",
-    "hy3",
-    "kimi",
-    "lfm",
-    "llama",
-    "longcat",
-    "mimo",
-    "minimax",
-    "mistral",
-    "mixtral",
-    "moonshot",
-    "nemotron",
-    "openai",
-    "qianfan",
-    "qwen",
-    "stepfun",
-    "seed-",
-    "hunyuan",
-    "nova-",
-    "ernie",
-    "codex",
-    "abab",
-    "jamba",
-    "arctic",
-    "solar",
-    "mercury",
-];
+const CURRENT_OPUS_ROUTE_ID: &str = "claude-opus-5";
+const LEGACY_OPUS_ROUTE_ID: &str = "claude-opus-4-8";
+/// 映射表 Haiku 档的键（前端 `CLAUDE_DESKTOP_ROLE_ROUTE_IDS.haiku`），目标不是旧 Haiku 时
+/// 发布成 [`CURRENT_HAIKU_ROUTE_ID`]。
+const LEGACY_HAIKU_ROUTE_ID: &str = "claude-haiku-4-5";
+const CURRENT_HAIKU_ROUTE_ID: &str = "claude-haiku-5-5";
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,30 +59,41 @@ pub struct ClaudeDesktopDefaultRoute {
 
 pub const DEFAULT_PROXY_ROUTES: &[ClaudeDesktopDefaultRoute] = &[
     ClaudeDesktopDefaultRoute {
-        route_id: "claude-sonnet-4-6",
+        route_id: "claude-sonnet-5",
         env_key: "ANTHROPIC_DEFAULT_SONNET_MODEL",
         supports_1m: true,
     },
     ClaudeDesktopDefaultRoute {
-        route_id: "claude-opus-4-7",
+        route_id: CURRENT_OPUS_ROUTE_ID,
         env_key: "ANTHROPIC_DEFAULT_OPUS_MODEL",
         supports_1m: true,
     },
     ClaudeDesktopDefaultRoute {
-        route_id: "claude-haiku-4-5",
+        route_id: LEGACY_HAIKU_ROUTE_ID,
         env_key: "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        supports_1m: true,
+    },
+    // fable 置于末尾：next_catalog_safe_route_id 给非安全品牌 route 借用合法
+    // 角色名时仍按 sonnet→opus→haiku 顺序分配（向后兼容既有 catalog），不会把
+    // 无关品牌模型借用成 fable 顶配档名。UI 行序由前端 ROLE_ORDER 独立控制为
+    // Sonnet/Opus/Fable/Haiku（所有 proxy 路径都经 normalizeProxyRows 重排），
+    // 与此处物理顺序无关。
+    ClaudeDesktopDefaultRoute {
+        route_id: "claude-fable-5",
+        env_key: "ANTHROPIC_DEFAULT_FABLE_MODEL",
         supports_1m: true,
     },
 ];
 
 #[derive(Debug, Clone)]
 struct ClaudeDesktopPaths {
-    device: DeviceStore,
     normal_config_path: PathBuf,
     threep_config_path: PathBuf,
     config_library_path: PathBuf,
     profile_path: PathBuf,
     meta_path: PathBuf,
+    /// 写前意图和首写备份所在的设备目录。
+    device: DeviceStore,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,24 +136,87 @@ struct InferenceModelSpec {
     supports_1m: bool,
 }
 
+/// 直连模式下把 `provider` 写进 Desktop 的配置（同步、编辑当前那家）。模型映射卡要经路由，
+/// 直连写不进去（见 [`needs_routing`]）。
 pub fn apply_provider(db: &Database, provider: &Provider) -> Result<(), AppError> {
-    let paths = current_platform_paths()?;
-    apply_provider_to_paths(db, provider, &paths)
-}
-
-/// 切换供应商时把 current 指针与文件写入放在同一份恢复日志中。
-pub fn switch_provider(db: &Database, provider: &Provider) -> Result<(), AppError> {
-    let paths = current_platform_paths()?;
-    apply_provider_to_paths_with_target(
+    write_direct(
         db,
-        provider,
-        &paths,
-        PendingTarget::pointer(Some(provider.id.clone())),
+        state::op::APPLY,
+        Some(provider),
+        PendingTarget::default(),
     )
 }
 
+/// 写进 Desktop 配置的内容。
+pub enum DesktopTarget<'a> {
+    /// 官方：两个配置文件改回 `1p`，摘掉 CC Switch 的 profile。
+    Official,
+    /// 第三方网关 profile（直连那家的，或指向本地路由的）。
+    Profile(&'a Value),
+}
+
+/// 直连模式下要写的东西：`None` 和官方卡写回官方。
+pub fn direct_target(provider: Option<&Provider>) -> Result<Option<Value>, AppError> {
+    match provider {
+        Some(provider) if !is_official_provider(provider) => direct_profile(provider).map(Some),
+        _ => Ok(None),
+    }
+}
+
+/// 直连写入：`provider` 为 `None` 或官方卡时写回官方。文件和 `target`（指针、模式状态）在
+/// 同一个操作里提交。
+pub fn write_direct(
+    db: &Database,
+    op: &str,
+    provider: Option<&Provider>,
+    target: PendingTarget,
+) -> Result<(), AppError> {
+    let profile = direct_target(provider)?;
+    let write = match &profile {
+        Some(profile) => DesktopTarget::Profile(profile),
+        None => DesktopTarget::Official,
+    };
+    run(db, op, Some(write), target)
+}
+
+/// 写 Desktop 的配置文件，和 `target` 在同一个操作里提交。`write` 为 `None` 时只落定
+/// `target`（契约没变，客户端文件不用动）。
+pub fn run(
+    db: &Database,
+    op: &str,
+    write: Option<DesktopTarget<'_>>,
+    target: PendingTarget,
+) -> Result<(), AppError> {
+    if write.is_none() {
+        // 不碰文件，平台不支持时也能落定模式。
+        return operation::commit_target(
+            db,
+            &DeviceStore::for_device(),
+            AppType::ClaudeDesktop.as_str(),
+            &target,
+        );
+    }
+    let paths = current_platform_paths()?;
+    run_at_paths(db, &paths, op, write, target)
+}
+
+fn run_at_paths(
+    db: &Database,
+    paths: &ClaudeDesktopPaths,
+    op: &str,
+    write: Option<DesktopTarget<'_>>,
+    target: PendingTarget,
+) -> Result<(), AppError> {
+    match write {
+        None => write_desktop_files(db, paths, op, &[], target),
+        Some(DesktopTarget::Official) => restore_official_at_paths(db, paths, op, target),
+        Some(DesktopTarget::Profile(profile)) => {
+            write_profile_at_paths(db, paths, op, profile.clone(), target)
+        }
+    }
+}
+
 pub fn get_status(db: &Database, proxy_running: bool) -> Result<ClaudeDesktopStatus, AppError> {
-    operation::settle(db, AppType::ClaudeDesktop.as_str())?;
     if !is_supported_platform() {
         return Ok(ClaudeDesktopStatus {
             supported: false,
@@ -193,6 +238,7 @@ pub fn get_status(db: &Database, proxy_running: bool) -> Result<ClaudeDesktopSta
     let paths = current_platform_paths()?;
     let applied_id = read_applied_id(&paths.meta_path);
     let profile = read_json_or_empty(&paths.profile_path).unwrap_or_else(|_| json!({}));
+    // 切回官方后 profile 文件保留、只清关键字段，所以不能按文件在不在判断。
     let configured =
         meta_has_profile_entry(&paths.meta_path) || profile.get("inferenceProvider").is_some();
     let actual_base_url = profile
@@ -215,14 +261,17 @@ pub fn get_status(db: &Database, proxy_running: bool) -> Result<ClaudeDesktopSta
         .ok()
         .flatten()
         .is_some_and(|token| !token.trim().is_empty());
-    let current_provider = crate::settings::get_effective_current_provider(
-        db,
-        &crate::app_config::AppType::ClaudeDesktop,
-    )
-    .ok()
-    .flatten()
-    .and_then(|id| db.get_provider_by_id(&id, "claude-desktop").ok().flatten());
-    let mode = current_provider.as_ref().map(provider_mode);
+    // 路由模式下看路由那家，直连模式下看直连那家。
+    let routed = crate::mode::current::is_proxy(&AppType::ClaudeDesktop);
+    let current_provider = crate::mode::current::provider_in_use(db, &AppType::ClaudeDesktop)
+        .ok()
+        .flatten()
+        .filter(|provider| !is_official_provider(provider));
+    let mode = if routed {
+        Some(ClaudeDesktopMode::Proxy)
+    } else {
+        current_provider.as_ref().map(|_| ClaudeDesktopMode::Direct)
+    };
     let expected_base_url = match mode {
         Some(ClaudeDesktopMode::Proxy) => proxy_gateway_base_url_from_db(db).ok(),
         Some(ClaudeDesktopMode::Direct) => current_provider
@@ -231,10 +280,10 @@ pub fn get_status(db: &Database, proxy_running: bool) -> Result<ClaudeDesktopSta
             .map(|credentials| credentials.base_url),
         None => None,
     };
-    let missing_route_mappings = current_provider.as_ref().is_some_and(|provider| {
-        matches!(provider_mode(provider), ClaudeDesktopMode::Proxy)
-            && proxy_model_routes(provider).is_err()
-    });
+    let missing_route_mappings = routed
+        && current_provider
+            .as_ref()
+            .is_some_and(|provider| proxy_model_routes(provider).is_err());
 
     Ok(ClaudeDesktopStatus {
         supported: true,
@@ -271,6 +320,31 @@ pub fn is_official_provider(provider: &Provider) -> bool {
     provider.id == CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID
 }
 
+/// 这张卡在直连模式下写不进去，要经本地路由：模型映射卡（上游模型名 Desktop 不认）、托管
+/// OAuth（凭据由路由注入）。和前端 `providerNeedsRouting`、托盘的 `provider_needs_routing`
+/// 是同一条规则。卡片上的 `claudeDesktopMode` 只说明这张卡是哪种，不再决定 Desktop 的模式
+/// （模式在 `live-state.json`，见 `mode::controller`）。
+pub fn needs_routing(provider: &Provider) -> bool {
+    !is_official_provider(provider)
+        && (matches!(provider_mode(provider), ClaudeDesktopMode::Proxy)
+            || is_managed_oauth_proxy_provider(provider))
+}
+
+/// 升级前旧版的状态：直连指针是模型映射卡（旧版按卡片决定模式，这张卡生效时 Desktop 指着
+/// 本地路由）。启动时据此把 Desktop 定为路由模式、路由到这张卡。
+pub fn legacy_mapping_card(db: &Database) -> Option<Provider> {
+    if current_platform_paths().is_err() {
+        return None;
+    }
+    crate::mode::current::direct_provider(db, &AppType::ClaudeDesktop)
+        .ok()
+        .flatten()
+        .filter(|provider| {
+            !is_official_provider(provider)
+                && matches!(provider_mode(provider), ClaudeDesktopMode::Proxy)
+        })
+}
+
 pub fn provider_mode(provider: &Provider) -> ClaudeDesktopMode {
     provider
         .meta
@@ -281,19 +355,29 @@ pub fn provider_mode(provider: &Provider) -> ClaudeDesktopMode {
 
 pub fn is_claude_safe_model_id(model: &str) -> bool {
     let normalized = model.trim().to_ascii_lowercase();
-    let has_allowed_shape = (normalized.starts_with(CLAUDE_ROUTE_PREFIX)
-        && normalized.len() > CLAUDE_ROUTE_PREFIX.len())
-        || (normalized.starts_with(ANTHROPIC_CLAUDE_ROUTE_PREFIX)
-            && normalized.len() > ANTHROPIC_CLAUDE_ROUTE_PREFIX.len())
-        || matches!(normalized.as_str(), "sonnet" | "opus" | "haiku")
-        || (normalized.starts_with("sonnet-") && normalized.len() > "sonnet-".len())
-        || (normalized.starts_with("opus-") && normalized.len() > "opus-".len())
-        || (normalized.starts_with("haiku-") && normalized.len() > "haiku-".len());
-    has_allowed_shape
-        && !normalized.contains(ONE_M_CONTEXT_MARKER)
-        && !NON_ANTHROPIC_ROUTE_MARKERS
-            .iter()
-            .any(|marker| normalized.contains(marker))
+    if normalized.contains(ONE_M_CONTEXT_MARKER) {
+        return false;
+    }
+
+    let Some(route_tail) = normalized
+        .strip_prefix(ANTHROPIC_CLAUDE_ROUTE_PREFIX)
+        .or_else(|| normalized.strip_prefix(CLAUDE_ROUTE_PREFIX))
+    else {
+        return false;
+    };
+
+    // 角色前缀后必须还有实际模型标识，拒绝 claude-sonnet- 这类退化值
+    // （否则会写入 profile 并触发 Claude Desktop fail-all 拒收整组）。
+    // Claude Desktop 1.12603.1+ 的 fail-all validator 角色白名单已纳入 fable
+    // （app.asar 内 ["sonnet","opus","haiku","fable","mythos"]），故 claude-fable-*
+    // 可安全写入 profile。mythos 官方未公开发布，暂不暴露给用户。
+    ["sonnet-", "opus-", "haiku-", "fable-"]
+        .iter()
+        .any(|prefix| {
+            route_tail
+                .strip_prefix(prefix)
+                .is_some_and(|rest| !rest.is_empty())
+        })
 }
 
 fn inference_model_json(spec: &InferenceModelSpec) -> Value {
@@ -304,6 +388,9 @@ fn inference_model_json(spec: &InferenceModelSpec) -> Value {
         }
         if spec.supports_1m {
             item["supports1m"] = json!(true);
+            // 只有 `supports1m` 时 Desktop 每个模型列两行（原名 + 「1M context window」）。
+            // 加上 `prefer1m`（1.21459.0 起）只列原名，交给内嵌 CLI 时自动补 `[1m]`。
+            item["prefer1m"] = json!(true);
         }
         item
     } else {
@@ -520,6 +607,7 @@ fn is_managed_oauth_proxy_provider(provider: &Provider) -> bool {
         })
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // Web 保存时不调：写直连 / 路由 profile 时各自校验
 pub fn validate_provider(provider: &Provider) -> Result<(), AppError> {
     if is_official_provider(provider) {
         return Ok(());
@@ -558,6 +646,18 @@ fn direct_inference_model_specs(provider: &Provider) -> Result<Vec<InferenceMode
                 ),
             ));
         }
+        let upstream_model = route.model.trim();
+        if !upstream_model.is_empty() && upstream_model != route_id {
+            return Err(AppError::localized(
+                "claude_desktop.provider.direct_mapping_unsupported",
+                format!(
+                    "Claude Desktop 直连模式不能映射模型: {route_id} -> {upstream_model}；非 Claude 官方模型请使用本地路由模式"
+                ),
+                format!(
+                    "Claude Desktop direct mode cannot map models: {route_id} -> {upstream_model}; use proxy mode for non-Claude official models"
+                ),
+            ));
+        }
         result.push(InferenceModelSpec {
             name: route_id.to_string(),
             label_override: route
@@ -570,18 +670,52 @@ fn direct_inference_model_specs(provider: &Provider) -> Result<Vec<InferenceMode
         });
     }
 
-    // Sort supports_1m=true first within each name so the subsequent dedup_by
-    // (which keeps the first occurrence) preserves the 1M-capable variant.
+    // 档位序（sonnet → opus → fable → haiku）优先，档位内保持字典序；
+    // supports_1m=true 排前，保证后续 dedup_by（保留首个）留住 1M 档变体。
     result.sort_by(|a, b| {
-        a.name
-            .cmp(&b.name)
+        claude_role_rank(&a.name)
+            .cmp(&claude_role_rank(&b.name))
+            .then_with(|| a.name.cmp(&b.name))
             .then_with(|| b.supports_1m.cmp(&a.supports_1m))
     });
     result.dedup_by(|a, b| a.name == b.name);
     Ok(result)
 }
 
+fn uses_default_proxy_routes(provider: &Provider) -> bool {
+    !is_official_provider(provider)
+        && !needs_routing(provider)
+        && provider
+            .meta
+            .as_ref()
+            .is_none_or(|meta| meta.claude_desktop_model_routes.is_empty())
+}
+
 pub fn proxy_model_routes(provider: &Provider) -> Result<Vec<ResolvedModelRoute>, AppError> {
+    // 原生直连卡允许留空模型列表。先用同名角色路由进入代理，之后才能保存模型映射，
+    // 否则「先开路由」和「先存映射」会互相阻挡。显式映射卡仍须配置模型。
+    if uses_default_proxy_routes(provider) {
+        validate_direct_provider(provider)?;
+        let mut routes = DEFAULT_PROXY_ROUTES
+            .iter()
+            .map(|route| ResolvedModelRoute {
+                route_id: route.route_id.to_string(),
+                upstream_model: route.route_id.to_string(),
+                label_override: None,
+                supports_1m: false,
+            })
+            .collect::<Vec<_>>();
+        routes.sort_by_key(|route| (claude_role_rank(&route.route_id), route.route_id.clone()));
+        return Ok(routes);
+    }
+
+    configured_proxy_model_routes(provider)
+}
+
+/// 聚合成员只能发布用户配置过的模型，不能把路由引导用的默认角色当成上游目录。
+pub(crate) fn configured_proxy_model_routes(
+    provider: &Provider,
+) -> Result<Vec<ResolvedModelRoute>, AppError> {
     let routes = provider
         .meta
         .as_ref()
@@ -616,7 +750,7 @@ pub fn proxy_model_routes(provider: &Provider) -> Result<Vec<ResolvedModelRoute>
             next_catalog_safe_route_id(&result, &reserved_route_ids)
         };
         result.push(ResolvedModelRoute {
-            route_id: repaired_route_id,
+            route_id: published_route_id(repaired_route_id, upstream_model, &reserved_route_ids),
             upstream_model: upstream_model.to_string(),
             label_override: route
                 .label_override
@@ -631,7 +765,11 @@ pub fn proxy_model_routes(provider: &Provider) -> Result<Vec<ResolvedModelRoute>
         });
     }
 
-    result.sort_by(|a, b| a.route_id.cmp(&b.route_id));
+    result.sort_by(|a, b| {
+        claude_role_rank(&a.route_id)
+            .cmp(&claude_role_rank(&b.route_id))
+            .then_with(|| a.route_id.cmp(&b.route_id))
+    });
     result.dedup_by(|a, b| a.route_id == b.route_id);
 
     if result.is_empty() {
@@ -643,6 +781,41 @@ pub fn proxy_model_routes(provider: &Provider) -> Result<Vec<ResolvedModelRoute>
     }
 
     Ok(result)
+}
+
+/// 发布给 Desktop 的模型名。Desktop 按这个名字决定请求参数：映射表里的 Opus / Sonnet 键固定是
+/// `claude-opus-5` / `claude-sonnet-5`，目标是 5.5 时照写，5.5 上游会拒收按 5 组的请求（#8082）。
+/// 和 Claude Code 的路由契约一样换成目录里的 5.5 名字；映射表里的键不变，旧 profile 发来的
+/// 原键仍按键查到目标（见 [`legacy_raw_route_upstream_model`]）。用户自己配了这个名字的路由
+/// 时不换，免得两条撞名。
+///
+/// Haiku 档的键是 `claude-haiku-4-5`，Desktop 把它当旧模型：只有 extended 思考、没有 effort
+/// 档位，和 Claude Code 路由契约早已改用的 `claude-haiku-5-5` 不一致（#8118、#9096）。目标
+/// 不是旧 Haiku（4.x / 3.x）时同样发布 `claude-haiku-5-5`；目标就是旧 Haiku 时照旧，免得
+/// Desktop 按新模型组请求。只换用户自己的键：修复非法 route 时借来的 `claude-haiku-4-5`
+/// 不在 `reserved` 里，换名后下一条还能再借到它，两条会撞名。
+fn published_route_id(
+    route_id: String,
+    upstream_model: &str,
+    reserved: &std::collections::HashSet<String>,
+) -> String {
+    crate::live::project::claude::point_release_client_id(&route_id, upstream_model)
+        .or_else(|| {
+            (route_id == LEGACY_HAIKU_ROUTE_ID
+                && reserved.contains(LEGACY_HAIKU_ROUTE_ID)
+                && !is_pre_5_claude_haiku(upstream_model))
+            .then_some(CURRENT_HAIKU_ROUTE_ID)
+        })
+        .filter(|catalog_id| !reserved.contains(*catalog_id))
+        .map_or(route_id, str::to_string)
+}
+
+/// 上游是 Haiku 5 之前的 Claude Haiku（`claude-haiku-4-5-20251001`、`claude-3-5-haiku` 等）。
+fn is_pre_5_claude_haiku(upstream_model: &str) -> bool {
+    let id = upstream_model.to_ascii_lowercase();
+    ["haiku-4", "haiku-3", "-3-haiku", "-3-5-haiku", "-3.5-haiku"]
+        .iter()
+        .any(|old| id.contains(old))
 }
 
 fn next_catalog_safe_route_id(
@@ -671,6 +844,24 @@ fn next_catalog_safe_route_id(
     }
 }
 
+/// Desktop 从模型发现接口最多收这么长的说明。
+const MAX_MODEL_DESCRIPTION_CHARS: usize = 100;
+
+/// 本地 `/v1/models` 给 Desktop 的模型说明。没有说明时 Desktop 按 id 里的档位词显示
+/// Anthropic 写死的那句（`claude-fable-*` 一律是 Fable 的），映射到别家模型就名不副实；
+/// 上游就是 Claude 模型也看不出走的是哪家。所以一律写 `<供应商名> · <上游模型名> · <窗口>`。
+pub fn discovered_model_description(
+    provider_name: &str,
+    upstream: &str,
+    supports_1m: bool,
+) -> String {
+    let window = if supports_1m { 1_000_000 } else { 0 };
+    crate::mode::stack::provider_model_description(provider_name, upstream, window)
+        .chars()
+        .take(MAX_MODEL_DESCRIPTION_CHARS)
+        .collect()
+}
+
 pub fn model_list_response(provider: &Provider) -> Result<Value, AppError> {
     let routes = proxy_model_routes(provider)?;
     let data: Vec<Value> = routes
@@ -685,6 +876,11 @@ pub fn model_list_response(provider: &Provider) -> Result<Value, AppError> {
             if route.supports_1m {
                 item["supports1m"] = json!(true);
             }
+            item["description"] = json!(discovered_model_description(
+                &provider.name,
+                &route.upstream_model,
+                route.supports_1m,
+            ));
             item
         })
         .collect();
@@ -708,7 +904,7 @@ pub fn model_list_response(provider: &Provider) -> Result<Value, AppError> {
 }
 
 pub fn map_proxy_request_model(mut body: Value, provider: &Provider) -> Result<Value, AppError> {
-    let requested = body
+    let requested_raw = body
         .get("model")
         .and_then(Value::as_str)
         .map(str::trim)
@@ -721,24 +917,264 @@ pub fn map_proxy_request_model(mut body: Value, provider: &Provider) -> Result<V
                 "Claude Desktop request is missing the model field",
             )
         })?;
+    let requested = strip_one_m_suffix_for_route_lookup(&requested_raw);
 
     let routes = proxy_model_routes(provider)?;
-    let route = routes.iter().find(|r| r.route_id == requested);
-    let Some(route) = route else {
-        return Err(AppError::localized(
-            "claude_desktop.provider.route_unknown",
-            format!("Claude Desktop 模型路由未配置: {requested}"),
-            format!("Claude Desktop model route is not configured: {requested}"),
-        ));
+    // 默认列表只提供进入路由时的角色菜单，不把原生的日期后缀或版本别名改成默认 ID。
+    if uses_default_proxy_routes(provider) && is_claude_safe_model_id(requested) {
+        body["model"] = json!(requested);
+        return Ok(normalize_upstream_request(body, provider));
+    }
+    let upstream_model = routes
+        .iter()
+        .find(|r| r.route_id == requested)
+        .or_else(|| {
+            routes
+                .iter()
+                .find(|r| is_compatible_opus_route_alias(&r.route_id, requested))
+        })
+        .map(|route| route.upstream_model.clone())
+        .or_else(|| legacy_raw_route_upstream_model(provider, requested))
+        .or_else(|| {
+            // 角色关键词回落:Claude Desktop 的部分调用(如子 agent)会请求带发布
+            // 日期后缀的完整官方名(claude-haiku-4-5-20251001),与 manifest 暴露的
+            // 简短 route_id(claude-haiku-4-5)不精确相等。按 opus/haiku/fable/sonnet
+            // 归类到同档已配置路由,对齐 Claude Code model_mapper 的宽松匹配。
+            // 匹配前已剥离本地 [1m] 标记；这里仍只对 Claude Desktop 认可的
+            // 安全模型名回落，避免非 Claude route 被误映射。
+            if !is_claude_safe_model_id(requested) {
+                return None;
+            }
+            let role = claude_role_keyword(requested)?;
+            routes
+                .iter()
+                .find(|route| claude_role_keyword(&route.route_id) == Some(role))
+                // 老用户只配了 Sonnet/Opus/Haiku 三档时，fable 请求降级到 opus 档，
+                // 与官方安全分类器的降级方向一致，避免 route_unknown 硬错误。
+                // 用户一旦显式配置 fable 档，上面的精确角色匹配会优先命中。
+                .or_else(|| {
+                    (role == "fable")
+                        .then(|| {
+                            routes
+                                .iter()
+                                .find(|route| claude_role_keyword(&route.route_id) == Some("opus"))
+                        })
+                        .flatten()
+                })
+                .map(|route| route.upstream_model.clone())
+        })
+        .ok_or_else(|| {
+            AppError::localized(
+                "claude_desktop.provider.route_unknown",
+                format!("Claude Desktop 模型路由未配置: {requested_raw}"),
+                format!("Claude Desktop model route is not configured: {requested_raw}"),
+            )
+        })?;
+
+    body["model"] = json!(upstream_model);
+    Ok(normalize_upstream_request(body, provider))
+}
+
+/// 请求体的 `model` 已经是上游名（路由映射过，或聚合模型直接解出了上游名）之后，按上游的
+/// 怪癖做的整理：目前只有 MiMo 的 Anthropic 接口要补 thinking 历史。
+pub fn normalize_upstream_request(mut body: Value, provider: &Provider) -> Value {
+    let upstream_model = body
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    if should_normalize_mimo_anthropic_thinking_history(provider, &upstream_model) {
+        normalize_mimo_anthropic_thinking_history(&mut body);
+    }
+    body
+}
+
+fn strip_one_m_suffix_for_route_lookup(model: &str) -> &str {
+    let trimmed = model.trim();
+    let marker = ONE_M_CONTEXT_MARKER.as_bytes();
+    let bytes = trimmed.as_bytes();
+    if bytes.len() >= marker.len()
+        && bytes[bytes.len() - marker.len()..].eq_ignore_ascii_case(marker)
+    {
+        return trimmed[..trimmed.len() - marker.len()].trim_end();
+    }
+    trimmed
+}
+
+fn legacy_raw_route_upstream_model(provider: &Provider, requested: &str) -> Option<String> {
+    provider
+        .meta
+        .as_ref()?
+        .claude_desktop_model_routes
+        .iter()
+        .find(|(route_id, _)| route_id.trim() == requested)
+        .and_then(|(_, route)| {
+            let upstream_model = route.model.trim();
+            (!upstream_model.is_empty()).then(|| upstream_model.to_string())
+        })
+}
+
+fn is_compatible_opus_route_alias(route_id: &str, requested: &str) -> bool {
+    matches!(
+        (route_id, requested),
+        (CURRENT_OPUS_ROUTE_ID, LEGACY_OPUS_ROUTE_ID)
+            | (LEGACY_OPUS_ROUTE_ID, CURRENT_OPUS_ROUTE_ID)
+    )
+}
+
+/// 按角色关键词(opus / haiku / fable / sonnet)归类一个 Claude 模型名/route_id。
+/// 仅在命中明确角色词时返回 Some,未知模型返回 None(不回落,保持精确报错语义)。
+/// 与前端 `routeRoleFromId` 同序(opus → haiku → fable → sonnet)。
+fn claude_role_keyword(model: &str) -> Option<&'static str> {
+    let normalized = model.to_ascii_lowercase();
+    if normalized.contains("opus") {
+        Some("opus")
+    } else if normalized.contains("haiku") {
+        Some("haiku")
+    } else if normalized.contains("fable") {
+        Some("fable")
+    } else if normalized.contains("sonnet") {
+        Some("sonnet")
+    } else {
+        None
+    }
+}
+
+/// 档位输出顺序：与前端表单固定档位顺序一致（sonnet → opus → fable → haiku，
+/// 见前端 ROLE_ORDER），未命中角色词的条目排在最后。
+/// inferenceModels 与本地 /v1/models 都按此序输出，Claude Desktop 模型菜单
+/// 才能跟随界面档位顺序且多次启用保持稳定。
+fn claude_role_rank(model: &str) -> usize {
+    match claude_role_keyword(model) {
+        Some("sonnet") => 0,
+        Some("opus") => 1,
+        Some("fable") => 2,
+        Some("haiku") => 3,
+        _ => 4,
+    }
+}
+
+fn should_normalize_mimo_anthropic_thinking_history(
+    provider: &Provider,
+    upstream_model: &str,
+) -> bool {
+    if !provider_uses_anthropic_messages_format(provider) {
+        return false;
+    }
+
+    is_mimo_identifier(upstream_model) || provider_has_mimo_endpoint(provider)
+}
+
+fn provider_uses_anthropic_messages_format(provider: &Provider) -> bool {
+    let api_format = provider
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.api_format.as_deref())
+        .or_else(|| {
+            provider
+                .settings_config
+                .get("api_format")
+                .and_then(Value::as_str)
+        })
+        .map(str::trim)
+        .unwrap_or("anthropic");
+
+    api_format.is_empty() || api_format == "anthropic"
+}
+
+fn provider_has_mimo_endpoint(provider: &Provider) -> bool {
+    let settings = &provider.settings_config;
+    [
+        settings
+            .get("env")
+            .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
+            .and_then(Value::as_str),
+        settings.get("base_url").and_then(Value::as_str),
+        settings.get("baseURL").and_then(Value::as_str),
+        settings.get("apiEndpoint").and_then(Value::as_str),
+    ]
+    .into_iter()
+    .flatten()
+    .any(is_mimo_identifier)
+}
+
+fn is_mimo_identifier(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    value.contains("mimo") || value.contains("xiaomimimo")
+}
+
+fn normalize_mimo_anthropic_thinking_history(body: &mut Value) {
+    let Some(messages) = body.get_mut("messages").and_then(Value::as_array_mut) else {
+        return;
     };
 
-    body["model"] = json!(route.upstream_model);
-    Ok(body)
+    for message in messages {
+        if message.get("role").and_then(Value::as_str) != Some("assistant") {
+            continue;
+        }
+
+        let Some(content) = message.get_mut("content").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        if !content
+            .iter()
+            .any(|block| block.get("type").and_then(Value::as_str) == Some("tool_use"))
+        {
+            continue;
+        }
+
+        let mut has_thinking = false;
+        for block in content.iter_mut() {
+            match block.get("type").and_then(Value::as_str) {
+                Some("thinking") => {
+                    let has_non_empty_thinking = block
+                        .get("thinking")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| !value.trim().is_empty());
+                    if let Some(obj) = block.as_object_mut() {
+                        obj.remove("signature");
+                    }
+                    if has_non_empty_thinking {
+                        has_thinking = true;
+                    } else if let Some(obj) = block.as_object_mut() {
+                        obj.insert(
+                            "thinking".to_string(),
+                            json!(MIMO_TOOL_CALL_THINKING_PLACEHOLDER),
+                        );
+                        has_thinking = true;
+                    }
+                }
+                Some("redacted_thinking") => {
+                    *block = json!({
+                        "type": "thinking",
+                        "thinking": MIMO_REDACTED_THINKING_PLACEHOLDER
+                    });
+                    has_thinking = true;
+                }
+                _ => {}
+            }
+        }
+
+        if !has_thinking {
+            content.insert(
+                0,
+                json!({
+                    "type": "thinking",
+                    "thinking": MIMO_TOOL_CALL_THINKING_PLACEHOLDER
+                }),
+            );
+        }
+    }
 }
 
 pub fn proxy_gateway_base_url_from_db(db: &Database) -> Result<String, AppError> {
     // 同步投影也会从异步模式控制器调用，不能嵌套启动 futures 执行器。
     let config = db.get_global_proxy_config_sync()?;
+    if config.listen_port == 0 {
+        return Err(AppError::Config(
+            "Claude Desktop 代理地址需要真实监听端口；请先启动本地代理或使用固定端口".to_string(),
+        ));
+    }
     Ok(format!(
         "{}{}",
         proxy_origin_from_parts(&config.listen_address, config.listen_port),
@@ -746,58 +1182,109 @@ pub fn proxy_gateway_base_url_from_db(db: &Database) -> Result<String, AppError>
     ))
 }
 
-fn apply_provider_to_paths(
-    db: &Database,
-    provider: &Provider,
-    paths: &ClaudeDesktopPaths,
-) -> Result<(), AppError> {
-    apply_provider_to_paths_with_target(db, provider, paths, PendingTarget::default())
-}
-
-fn apply_provider_to_paths_with_target(
-    db: &Database,
-    provider: &Provider,
-    paths: &ClaudeDesktopPaths,
-    target: PendingTarget,
-) -> Result<(), AppError> {
-    if is_official_provider(provider) {
-        return restore_official_at_paths(db, paths, target);
-    }
-
-    validate_provider(provider)?;
-    let profile = match provider_mode(provider) {
-        ClaudeDesktopMode::Direct => {
-            let credentials = direct_gateway_credentials(provider)?;
-            let model_specs = direct_inference_model_specs(provider)?;
-            build_gateway_profile(
-                &credentials.base_url,
-                &credentials.api_key,
-                (!model_specs.is_empty()).then_some(model_specs.as_slice()),
-            )
-        }
-        ClaudeDesktopMode::Proxy => {
-            let base_url = proxy_gateway_base_url_from_db(db)?;
-            let api_key = get_or_create_gateway_token(db)?;
-            let routes = proxy_model_routes(provider)?;
-            let model_specs = routes
-                .iter()
-                .map(|route| InferenceModelSpec {
-                    name: route.route_id.clone(),
-                    label_override: route.label_override.clone(),
-                    supports_1m: route.supports_1m,
-                })
-                .collect::<Vec<_>>();
-            build_gateway_profile(&base_url, &api_key, Some(model_specs.as_slice()))
-        }
+fn proxy_origin_from_parts(listen_address: &str, listen_port: u16) -> String {
+    let connect_host = match listen_address {
+        "0.0.0.0" => "127.0.0.1",
+        "::" => "::1",
+        value => value,
+    };
+    let connect_host_for_url = if connect_host.contains(':') && !connect_host.starts_with('[') {
+        format!("[{connect_host}]")
+    } else {
+        connect_host.to_string()
     };
 
+    format!("http://{}:{}", connect_host_for_url, listen_port)
+}
+
+/// 直连那家的网关 profile：地址和 Key 直接写进去。模型映射卡、托管 OAuth 要经路由，拒绝。
+fn direct_profile(provider: &Provider) -> Result<Value, AppError> {
+    validate_direct_provider(provider)?;
+    let credentials = direct_gateway_credentials(provider)?;
+    let model_specs = direct_inference_model_specs(provider)?;
+    Ok(build_gateway_profile(
+        &credentials.base_url,
+        &credentials.api_key,
+        (!model_specs.is_empty()).then_some(model_specs.as_slice()),
+    ))
+}
+
+/// 本地路由的 `/claude-desktop` 入口。`proxy_url` 是路由服务的地址（不带路径）。
+pub fn gateway_base_url(proxy_url: &str) -> String {
+    format!(
+        "{}{}",
+        proxy_url.trim_end_matches('/'),
+        CLAUDE_DESKTOP_PROXY_PREFIX
+    )
+}
+
+/// 路由模式的网关 profile：指向本地路由、带 gateway token，模型列表是路由那家的模型表
+/// （模型映射卡的映射表，直连卡的模型列表）。换路由那家，模型列表跟着变，要重写文件、
+/// 重启 Desktop。
+///
+/// 聚合模式下 `stack` 是其他几家发布的模型，排在路由那家后面（第一项是默认模型，仍是路由
+/// 那家的）。Desktop 最多收 200 条，多出的不写。
+///
+/// 模型发现显式打开：只要有 `inferenceModels`，Desktop 就只用这份列表，发现到的条目只补
+/// 名字和说明，不会多出模型；不写这个开关时有列表就跳过发现，本地 `/v1/models` 给的说明
+/// 就用不上（见 [`discovered_model_description`]）。
+pub fn route_profile(
+    db: &Database,
+    route: &Provider,
+    proxy_url: &str,
+    stack: &[DesktopStackModel],
+) -> Result<Value, AppError> {
+    if is_official_provider(route) {
+        return Err(AppError::localized(
+            "claude_desktop.provider.official_not_routable",
+            "Claude Desktop 官方账号不经过本地路由",
+            "The Claude Desktop official account does not go through local routing",
+        ));
+    }
+    validate_proxy_provider(route)?;
+    let mut model_specs = proxy_model_routes(route)?
+        .into_iter()
+        .map(|route| InferenceModelSpec {
+            name: route.route_id,
+            label_override: route.label_override,
+            supports_1m: route.supports_1m,
+        })
+        .chain(stack.iter().map(|model| InferenceModelSpec {
+            name: model.id.clone(),
+            label_override: Some(model.label.clone()),
+            supports_1m: model.supports_1m,
+        }))
+        .collect::<Vec<_>>();
+    if model_specs.len() > MAX_INFERENCE_MODELS {
+        log::warn!(
+            "Claude Desktop 最多 {MAX_INFERENCE_MODELS} 个模型，聚合的模型共 {} 个，多出的不写入",
+            model_specs.len()
+        );
+        model_specs.truncate(MAX_INFERENCE_MODELS);
+    }
+    let mut profile = build_gateway_profile(
+        &gateway_base_url(proxy_url),
+        &get_or_create_gateway_token(db)?,
+        Some(model_specs.as_slice()),
+    );
+    profile["modelDiscoveryEnabled"] = json!(true);
+    Ok(profile)
+}
+
+fn write_profile_at_paths(
+    db: &Database,
+    paths: &ClaudeDesktopPaths,
+    op: &str,
+    profile: Value,
+    target: PendingTarget,
+) -> Result<(), AppError> {
     let deployment = deployment_mode_patch("3p");
     let profile = gateway_profile_patch(profile);
     let meta = MetaPatch { applied: true };
     write_desktop_files(
         db,
         paths,
-        target,
+        op,
         &[
             FileChange {
                 file: LiveFile::shared(&paths.normal_config_path),
@@ -816,6 +1303,7 @@ fn apply_provider_to_paths_with_target(
                 patch: &meta,
             },
         ],
+        target,
     )
 }
 
@@ -828,6 +1316,7 @@ fn apply_provider_to_paths_with_target(
 fn restore_official_at_paths(
     db: &Database,
     paths: &ClaudeDesktopPaths,
+    op: &str,
     target: PendingTarget,
 ) -> Result<(), AppError> {
     let normal = deployment_mode_patch("1p");
@@ -866,28 +1355,23 @@ fn restore_official_at_paths(
             patch: &profile,
         });
     }
-    write_desktop_files(db, paths, target, &changes)
+    write_desktop_files(db, paths, op, &changes, target)
 }
 
-/// Desktop 的几个文件作为一次操作写入：任何一个解析失败都不写；写到一半失败或崩溃，
-/// 下次写入或启动时按写前意图补完。
+/// Desktop 的几个文件作为一次操作写入，`target`（直连指针、模式状态）在文件都写完之后
+/// 落定：任何一个解析失败都不写；写到一半失败或崩溃，下次写入或启动时按写前意图补完。
 fn write_desktop_files(
     db: &Database,
     paths: &ClaudeDesktopPaths,
-    target: PendingTarget,
+    op: &str,
     changes: &[FileChange<'_>],
+    target: PendingTarget,
 ) -> Result<(), AppError> {
-    let guard = lock_app(AppType::ClaudeDesktop.as_str());
-    operation::run(
-        &paths.device,
-        &guard,
-        state::op::APPLY,
-        changes,
-        target,
-        &|target| {
-            operation::commit_target(db, &paths.device, AppType::ClaudeDesktop.as_str(), target)
-        },
-    )?;
+    let app = AppType::ClaudeDesktop.as_str();
+    let guard = lock_app(app);
+    operation::run(&paths.device, &guard, op, changes, target, &|target| {
+        operation::commit_target(db, &paths.device, app, target)
+    })?;
     Ok(())
 }
 
@@ -1018,6 +1502,7 @@ fn build_gateway_profile(
     model_specs: Option<&[InferenceModelSpec]>,
 ) -> Value {
     let mut profile = json!({
+        "coworkEgressAllowedHosts": ["*"],
         "disableDeploymentModeChooser": true,
         "inferenceGatewayApiKey": api_key,
         "inferenceGatewayAuthScheme": "bearer",
@@ -1210,28 +1695,13 @@ fn paths_from_dirs(normal_dir: PathBuf, threep_dir: PathBuf) -> ClaudeDesktopPat
     let meta_path = config_library_path.join("_meta.json");
 
     ClaudeDesktopPaths {
-        device: DeviceStore::for_device(),
         normal_config_path: normal_dir.join(CONFIG_FILE),
         threep_config_path: threep_dir.join(CONFIG_FILE),
         config_library_path,
         profile_path,
         meta_path,
+        device: DeviceStore::for_device(),
     }
-}
-
-fn proxy_origin_from_parts(listen_address: &str, listen_port: u16) -> String {
-    let connect_host = match listen_address {
-        "0.0.0.0" => "127.0.0.1",
-        "::" => "::1",
-        value => value,
-    };
-    let connect_host_for_url = if connect_host.contains(':') && !connect_host.starts_with('[') {
-        format!("[{connect_host}]")
-    } else {
-        connect_host.to_string()
-    };
-
-    format!("http://{}:{}", connect_host_for_url, listen_port)
 }
 
 #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
@@ -1250,6 +1720,7 @@ mod tests {
     use crate::database::Database;
     use crate::provider::{ClaudeDesktopModelRoute, ProviderMeta};
     use serde_json::json;
+    use std::fs;
     use tempfile::TempDir;
 
     fn test_paths(home: &Path) -> ClaudeDesktopPaths {
@@ -1261,8 +1732,47 @@ mod tests {
                 .join("Application Support")
                 .join("Claude-3p"),
         );
-        paths.device = DeviceStore::at(home.join("web-device"));
+        paths.device = DeviceStore::at(home.join(".cc-switch"));
         paths
+    }
+
+    /// 按卡片写一次：模型映射卡写成路由 profile（路由模式下路由到它），其余直连。
+    fn apply_provider_to_paths(
+        db: &Database,
+        provider: &Provider,
+        paths: &ClaudeDesktopPaths,
+    ) -> Result<(), AppError> {
+        let profile = if is_official_provider(provider) {
+            None
+        } else if needs_routing(provider) {
+            let gateway = proxy_gateway_base_url_from_db(db)?;
+            let origin = gateway
+                .strip_suffix(CLAUDE_DESKTOP_PROXY_PREFIX)
+                .unwrap_or(&gateway);
+            Some(route_profile(db, provider, origin, &[])?)
+        } else {
+            Some(direct_profile(provider)?)
+        };
+        let write = match &profile {
+            Some(profile) => DesktopTarget::Profile(profile),
+            None => DesktopTarget::Official,
+        };
+        run_at_paths(
+            db,
+            paths,
+            state::op::APPLY,
+            Some(write),
+            PendingTarget::default(),
+        )
+    }
+
+    fn restore_official(paths: &ClaudeDesktopPaths) -> Result<(), AppError> {
+        restore_official_at_paths(
+            &test_db(),
+            paths,
+            state::op::APPLY,
+            PendingTarget::default(),
+        )
     }
 
     #[cfg(any(target_os = "linux", all(test, unix)))]
@@ -1308,6 +1818,15 @@ mod tests {
         Database::memory().expect("memory db")
     }
 
+    fn set_proxy_port(db: &Database, port: u16) {
+        let mut config = db
+            .get_global_proxy_config_sync()
+            .expect("read proxy config");
+        config.listen_port = port;
+        futures::executor::block_on(db.update_global_proxy_config(config))
+            .expect("update proxy config");
+    }
+
     fn direct_provider(id: &str) -> Provider {
         let mut provider = Provider::with_id(
             id.to_string(),
@@ -1326,6 +1845,19 @@ mod tests {
             ..Default::default()
         });
         provider
+    }
+
+    #[test]
+    fn proxy_gateway_base_url_rejects_unresolved_ephemeral_port() {
+        let db = test_db();
+        set_proxy_port(&db, 0);
+
+        let err = proxy_gateway_base_url_from_db(&db)
+            .expect_err("unresolved ephemeral port should not produce a :0 URL");
+        assert!(
+            err.to_string().contains("真实监听端口"),
+            "unexpected error: {err}"
+        );
     }
 
     fn official_provider() -> Provider {
@@ -1350,6 +1882,31 @@ mod tests {
                 ClaudeDesktopModelRoute {
                     model: "kimi-k2".to_string(),
                     label_override: Some("Kimi K2".to_string()),
+                    supports_1m: Some(true),
+                },
+            )]),
+            ..Default::default()
+        });
+        provider
+    }
+
+    fn mimo_anthropic_proxy_provider(id: &str) -> Provider {
+        let mut provider = direct_provider(id);
+        provider.name = "MiMo Proxy".to_string();
+        provider.settings_config = json!({
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://api.xiaomimimo.com/anthropic",
+                "ANTHROPIC_AUTH_TOKEN": "test-token"
+            }
+        });
+        provider.meta = Some(ProviderMeta {
+            claude_desktop_mode: Some(ClaudeDesktopMode::Proxy),
+            api_format: Some("anthropic".to_string()),
+            claude_desktop_model_routes: std::collections::HashMap::from([(
+                "claude-sonnet-4-6".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "mimo-v2.5-pro".to_string(),
+                    label_override: Some("MiMo v2.5 Pro".to_string()),
                     supports_1m: Some(true),
                 },
             )]),
@@ -1446,6 +2003,7 @@ mod tests {
         assert_eq!(profile["inferenceGatewayApiKey"], json!("test-token"));
         assert_eq!(profile["inferenceGatewayAuthScheme"], json!("bearer"));
         assert_eq!(profile["disableDeploymentModeChooser"], json!(true));
+        assert_eq!(profile["coworkEgressAllowedHosts"], json!(["*"]));
         assert!(profile.get("inferenceModels").is_none());
         assert_eq!(meta["appliedId"], json!(PROFILE_ID));
         assert!(meta["entries"]
@@ -1471,8 +2029,233 @@ mod tests {
         );
         assert_eq!(
             profile["inferenceModels"],
-            json!([{ "name": "claude-sonnet-4-6", "supports1m": true }])
+            json!([{ "name": "claude-sonnet-4-6", "supports1m": true, "prefer1m": true }])
         );
+    }
+
+    #[test]
+    fn claude_desktop_direct_writes_inference_models_in_tier_order() {
+        let temp = TempDir::new().expect("tempdir");
+        let paths = test_paths(temp.path());
+        let mut provider = direct_provider("direct-tier-order");
+        provider.meta = Some(ProviderMeta {
+            claude_desktop_mode: Some(ClaudeDesktopMode::Direct),
+            api_format: Some("anthropic".to_string()),
+            claude_desktop_model_routes: [
+                "claude-haiku-4-5",
+                "claude-sonnet-4-6",
+                "claude-fable-1-0",
+                "claude-opus-4-3",
+            ]
+            .into_iter()
+            .map(|route_id| {
+                (
+                    route_id.to_string(),
+                    ClaudeDesktopModelRoute {
+                        model: route_id.to_string(),
+                        label_override: None,
+                        supports_1m: Some(false),
+                    },
+                )
+            })
+            .collect(),
+            ..Default::default()
+        });
+        let db = test_db();
+
+        apply_provider_to_paths(&db, &provider, &paths).expect("apply provider");
+
+        let profile: Value = read_json_file(&paths.profile_path).expect("read profile");
+        let names: Vec<&str> = profile["inferenceModels"]
+            .as_array()
+            .expect("inferenceModels")
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .or_else(|| item.get("name").and_then(Value::as_str))
+                    .expect("model name")
+            })
+            .collect();
+        // 界面固定档位顺序：Sonnet → Opus → Fable → Haiku（前端 ROLE_ORDER）。
+        assert_eq!(
+            names,
+            vec![
+                "claude-sonnet-4-6",
+                "claude-opus-4-3",
+                "claude-fable-1-0",
+                "claude-haiku-4-5",
+            ]
+        );
+    }
+
+    #[test]
+    fn claude_desktop_proxy_writes_inference_models_in_tier_order() {
+        let mut provider = proxy_provider("proxy-tier-order");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = [
+            "claude-haiku-4-5",
+            "claude-sonnet-4-6",
+            "claude-fable-1-0",
+            "claude-opus-4-3",
+        ]
+        .into_iter()
+        .map(|route_id| {
+            (
+                route_id.to_string(),
+                ClaudeDesktopModelRoute {
+                    model: format!("upstream-{route_id}"),
+                    label_override: None,
+                    supports_1m: Some(false),
+                },
+            )
+        })
+        .collect();
+
+        let routes = proxy_model_routes(&provider).expect("resolve proxy routes");
+        let route_ids: Vec<&str> = routes.iter().map(|route| route.route_id.as_str()).collect();
+        assert_eq!(
+            route_ids,
+            vec![
+                "claude-sonnet-4-6",
+                "claude-opus-4-3",
+                "claude-fable-1-0",
+                "claude-haiku-4-5",
+            ]
+        );
+    }
+
+    #[test]
+    fn claude_desktop_direct_rejects_model_mapping_to_non_claude_upstream() {
+        let mut provider = direct_provider_with_models("direct-non-claude");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes
+            .get_mut("claude-sonnet-4-6")
+            .expect("route")
+            .model = "mimo-v2.5-pro".to_string();
+
+        let err = validate_provider(&provider).expect_err("direct mapping should fail");
+        assert!(err.to_string().contains("本地路由模式"));
+    }
+
+    #[test]
+    fn claude_desktop_native_provider_without_catalog_can_start_routing() {
+        for with_meta in [false, true] {
+            let mut provider = direct_provider("native");
+            if !with_meta {
+                provider.meta = None;
+            } else {
+                provider.meta.as_mut().unwrap().claude_desktop_mode =
+                    Some(ClaudeDesktopMode::Direct);
+            }
+            let before = serde_json::to_value(&provider).expect("provider snapshot");
+            let db = test_db();
+            let profile = route_profile(&db, &provider, "http://127.0.0.1:15721", &[])
+                .expect("native provider should not need a pre-existing mapping");
+
+            assert_eq!(
+                profile["inferenceGatewayBaseUrl"],
+                json!("http://127.0.0.1:15721/claude-desktop")
+            );
+            assert_eq!(
+                profile["inferenceModels"],
+                json!([
+                    "claude-sonnet-5",
+                    "claude-opus-5",
+                    "claude-fable-5",
+                    "claude-haiku-4-5"
+                ])
+            );
+            let models = model_list_response(&provider).expect("local model discovery");
+            configured_proxy_model_routes(&provider)
+                .expect_err("bootstrap defaults must not become a configured catalog");
+            assert_eq!(models["data"].as_array().expect("models").len(), 4);
+            assert!(models["data"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|model| model.get("supports1m").is_none()));
+            assert_eq!(
+                models["data"][0]["description"],
+                json!(format!("{} · claude-sonnet-5", provider.name))
+            );
+            assert_eq!(profile["modelDiscoveryEnabled"], json!(true));
+            assert_eq!(serde_json::to_value(&provider).unwrap(), before);
+            assert!(direct_profile(&provider)
+                .expect("direct profile remains valid")
+                .get("inferenceModels")
+                .is_none());
+        }
+    }
+
+    #[test]
+    fn claude_desktop_native_default_routes_preserve_requested_model_versions() {
+        let provider = direct_provider("native");
+        for model in [
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-8",
+            "anthropic/claude-sonnet-4-6",
+        ] {
+            let mapped = map_proxy_request_model(
+                json!({"model": format!("{model} [1M]"), "messages": []}),
+                &provider,
+            )
+            .expect("native model should pass through without a version rewrite");
+            assert_eq!(mapped["model"], json!(model));
+        }
+        map_proxy_request_model(json!({"model": "unconfigured-model"}), &provider)
+            .expect_err("default native routes must not accept arbitrary model names");
+    }
+
+    #[test]
+    fn claude_desktop_native_default_routes_follow_tier_order() {
+        let provider = direct_provider("native");
+        let route_ids: Vec<String> = proxy_model_routes(&provider)
+            .expect("native default routes")
+            .into_iter()
+            .map(|route| route.route_id)
+            .collect();
+        assert_eq!(
+            route_ids,
+            [
+                "claude-sonnet-5",
+                CURRENT_OPUS_ROUTE_ID,
+                "claude-fable-5",
+                "claude-haiku-4-5",
+            ]
+        );
+    }
+
+    #[test]
+    fn claude_desktop_mapping_provider_still_requires_explicit_routes() {
+        let mut provider = proxy_provider("mapping");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes
+            .clear();
+
+        let error = validate_proxy_provider(&provider).expect_err("mapping is required");
+        assert!(error.to_string().contains("至少需要一个模型路由映射"));
+        route_profile(&test_db(), &provider, "http://127.0.0.1:15721", &[])
+            .expect_err("an empty mapping must not silently become native defaults");
+    }
+
+    #[test]
+    fn claude_desktop_default_routes_do_not_bypass_native_provider_validation() {
+        let mut provider = direct_provider("invalid-native");
+        provider.meta.as_mut().expect("meta").api_format = Some("openai_chat".to_string());
+        proxy_model_routes(&provider).expect_err("native defaults require native API format");
+
+        provider.meta.as_mut().expect("meta").api_format = Some("anthropic".to_string());
+        provider.settings_config["env"]["ANTHROPIC_AUTH_TOKEN"] = json!("");
+        proxy_model_routes(&provider).expect_err("native defaults require credentials");
     }
 
     #[test]
@@ -1490,6 +2273,7 @@ mod tests {
             json!("http://127.0.0.1:15721/claude-desktop")
         );
         assert_eq!(profile["inferenceGatewayAuthScheme"], json!("bearer"));
+        assert_eq!(profile["coworkEgressAllowedHosts"], json!(["*"]));
         assert_ne!(profile["inferenceGatewayApiKey"], json!("test-token"));
         assert!(profile["inferenceGatewayApiKey"]
             .as_str()
@@ -1497,7 +2281,7 @@ mod tests {
             .starts_with("ccs-"));
         assert_eq!(
             profile["inferenceModels"],
-            json!([{ "name": "claude-sonnet-4-6", "labelOverride": "Kimi K2", "supports1m": true }])
+            json!([{ "name": "claude-sonnet-4-6", "labelOverride": "Kimi K2", "supports1m": true, "prefer1m": true }])
         );
         assert!(!profile.to_string().contains("kimi-k2"));
     }
@@ -1543,10 +2327,515 @@ mod tests {
         let models = model_list_response(&provider).expect("model list");
         assert_eq!(models["data"][0]["id"], json!("claude-sonnet-4-6"));
         assert_eq!(models["data"][0]["supports1m"], json!(true));
+        // 不带说明 Desktop 会按 id 里的 sonnet 显示 Anthropic 的那句。
+        assert_eq!(
+            models["data"][0]["description"],
+            json!("Proxy · kimi-k2 · 1M")
+        );
 
-        let err = map_proxy_request_model(json!({"model": "claude-opus-4-7"}), &provider)
+        let err = map_proxy_request_model(json!({"model": "claude-opus-4-8"}), &provider)
             .expect_err("unknown route should fail");
-        assert!(err.to_string().contains("claude-opus-4-7"));
+        assert!(err.to_string().contains("claude-opus-4-8"));
+    }
+
+    #[test]
+    fn claude_desktop_discovered_description_names_provider_and_upstream() {
+        assert_eq!(
+            discovered_model_description("DeepSeek", "deepseek-v4", false),
+            "DeepSeek · deepseek-v4"
+        );
+        assert_eq!(
+            discovered_model_description("Zhipu", "glm-5.2", true),
+            "Zhipu · glm-5.2 · 1M"
+        );
+        assert_eq!(
+            discovered_model_description(" ", "glm-5.2", false),
+            "glm-5.2"
+        );
+        assert_eq!(
+            discovered_model_description("Relay", "Claude-Opus-5", true),
+            "Relay · Claude-Opus-5 · 1M"
+        );
+        let long = "x".repeat(150);
+        assert_eq!(
+            discovered_model_description("Relay", &long, false)
+                .chars()
+                .count(),
+            MAX_MODEL_DESCRIPTION_CHARS
+        );
+    }
+
+    #[test]
+    fn claude_desktop_proxy_publishes_catalog_ids_for_point_release_targets() {
+        let route = |model: &str| ClaudeDesktopModelRoute {
+            model: model.to_string(),
+            label_override: None,
+            supports_1m: None,
+        };
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([
+            ("claude-opus-5".to_string(), route("claude-opus-5.5")),
+            (
+                "claude-sonnet-5".to_string(),
+                route("anthropic/claude-sonnet-5-5-20261001"),
+            ),
+            ("claude-haiku-4-5".to_string(), route("glm-5")),
+        ]);
+
+        let names = |provider: &Provider| -> Vec<String> {
+            proxy_model_routes(provider)
+                .expect("routes")
+                .into_iter()
+                .map(|route| route.route_id)
+                .collect()
+        };
+        assert_eq!(
+            names(&provider),
+            ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"]
+        );
+        let models = model_list_response(&provider).expect("model list");
+        assert_eq!(models["data"][1]["id"], json!("claude-opus-5-5"));
+        // 上游就是 Claude 模型的留给 Desktop 自己说明，别家模型换成真正的模型名。
+        assert_eq!(
+            models["data"][1]["description"],
+            json!("Proxy · claude-opus-5.5")
+        );
+        assert_eq!(models["data"][2]["description"], json!("Proxy · glm-5"));
+
+        // 新名字、旧 profile 里的原键、带日期的全名都落到同一个目标。
+        for (requested, upstream) in [
+            ("claude-opus-5-5", "claude-opus-5.5"),
+            ("claude-opus-5", "claude-opus-5.5"),
+            ("claude-opus-5-5-20261001[1m]", "claude-opus-5.5"),
+            ("claude-sonnet-5-5", "anthropic/claude-sonnet-5-5-20261001"),
+            ("claude-sonnet-5", "anthropic/claude-sonnet-5-5-20261001"),
+            ("claude-haiku-5-5", "glm-5"),
+            ("claude-haiku-4-5", "glm-5"),
+        ] {
+            let mapped =
+                map_proxy_request_model(json!({ "model": requested }), &provider).expect(requested);
+            assert_eq!(mapped["model"], json!(upstream), "{requested}");
+        }
+
+        // 用户自己配了 claude-opus-5-5 这条路由时，原键不换名，两条各走各的。
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes
+            .insert(
+                "claude-opus-5-5".to_string(),
+                route("claude-opus-5-5-thinking"),
+            );
+        assert_eq!(
+            names(&provider),
+            [
+                "claude-sonnet-5-5",
+                "claude-opus-5",
+                "claude-opus-5-5",
+                "claude-haiku-5-5"
+            ]
+        );
+        let mapped = map_proxy_request_model(json!({ "model": "claude-opus-5" }), &provider)
+            .expect("original key");
+        assert_eq!(mapped["model"], json!("claude-opus-5.5"));
+    }
+
+    #[test]
+    fn claude_desktop_proxy_publishes_current_haiku_unless_target_is_old_haiku() {
+        let route = |model: &str| ClaudeDesktopModelRoute {
+            model: model.to_string(),
+            label_override: None,
+            supports_1m: None,
+        };
+        let mut provider = proxy_provider("proxy-haiku");
+        let set_haiku = |provider: &mut Provider, upstream: &str| {
+            provider
+                .meta
+                .as_mut()
+                .expect("meta")
+                .claude_desktop_model_routes = std::collections::HashMap::from([
+                ("claude-sonnet-5".to_string(), route("glm-5")),
+                ("claude-haiku-4-5".to_string(), route(upstream)),
+            ]);
+        };
+        let haiku_id = |provider: &Provider| -> String {
+            proxy_model_routes(provider)
+                .expect("routes")
+                .into_iter()
+                .find(|route| route.route_id.contains("haiku"))
+                .expect("haiku route")
+                .route_id
+        };
+
+        for upstream in ["glm-5", "claude-haiku-5-5", "anthropic/claude-haiku-5.5"] {
+            set_haiku(&mut provider, upstream);
+            assert_eq!(haiku_id(&provider), "claude-haiku-5-5", "{upstream}");
+            for requested in [
+                "claude-haiku-5-5",
+                "claude-haiku-4-5",
+                "claude-haiku-4-5-20251001",
+            ] {
+                let mapped = map_proxy_request_model(json!({ "model": requested }), &provider)
+                    .expect(requested);
+                assert_eq!(
+                    mapped["model"],
+                    json!(upstream),
+                    "{upstream} <- {requested}"
+                );
+            }
+        }
+
+        // 目标本身是旧 Haiku：Desktop 按旧模型组请求才对得上。
+        for upstream in [
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001",
+            "anthropic/claude-haiku-4.5",
+            "claude-3-5-haiku-20241022",
+        ] {
+            set_haiku(&mut provider, upstream);
+            assert_eq!(haiku_id(&provider), "claude-haiku-4-5", "{upstream}");
+        }
+
+        // 用户自己配了 claude-haiku-5-5 这条路由时，原键不换名。
+        set_haiku(&mut provider, "glm-5");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes
+            .insert("claude-haiku-5-5".to_string(), route("minimax-m3"));
+        let names: Vec<String> = proxy_model_routes(&provider)
+            .expect("routes")
+            .into_iter()
+            .map(|route| route.route_id)
+            .collect();
+        assert_eq!(
+            names,
+            ["claude-sonnet-5", "claude-haiku-4-5", "claude-haiku-5-5"]
+        );
+    }
+
+    #[test]
+    fn claude_desktop_proxy_maps_dated_role_alias_via_keyword() {
+        // 复现反馈：Claude Desktop 子 agent 请求带发布日期后缀的完整官方名
+        // （claude-haiku-4-5-20251001），与 manifest 的简短 route_id（claude-haiku-4-5）
+        // 不精确相等，旧逻辑会报 route_unknown。角色关键词回落应将其映射到 Haiku 档。
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([
+            (
+                "claude-sonnet-4-6".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "deepseek-v4-pro".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+            (
+                "claude-opus-4-8".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "deepseek-v4-pro".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+            (
+                "claude-haiku-4-5".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "deepseek-v4-flash".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+        ]);
+
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-haiku-4-5-20251001", "messages": []}),
+            &provider,
+        )
+        .expect("dated Haiku alias should map via role keyword");
+        assert_eq!(mapped["model"], json!("deepseek-v4-flash"));
+
+        let mapped_sonnet = map_proxy_request_model(
+            json!({"model": "claude-sonnet-4-5-20250101", "messages": []}),
+            &provider,
+        )
+        .expect("dated Sonnet alias should map via role keyword");
+        assert_eq!(mapped_sonnet["model"], json!("deepseek-v4-pro"));
+
+        // 不含任何角色关键词的模型仍然报错，避免被误映射。
+        let err = map_proxy_request_model(json!({"model": "gpt-5"}), &provider)
+            .expect_err("model without a role keyword should still fail");
+        assert!(err.to_string().contains("gpt-5"));
+    }
+
+    #[test]
+    fn claude_desktop_proxy_maps_fable_to_opus_tier() {
+        // issue #4026/#4049：老用户只配 Sonnet/Opus/Haiku 三档、未显式配置
+        // fable 档时，fable 请求按官方分类器降级方向回落到 opus 档兜底。
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([
+            (
+                "claude-opus-4-8".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-opus".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+            (
+                "claude-sonnet-4-6".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-sonnet".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+        ]);
+
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-fable-5", "messages": []}),
+            &provider,
+        )
+        .expect("fable should fall back to the opus tier");
+        assert_eq!(mapped["model"], json!("upstream-opus"));
+
+        // 带 [1m] 标记与日期后缀的形态也应命中同一回落。
+        let mapped_one_m = map_proxy_request_model(
+            json!({"model": "claude-fable-5[1m]", "messages": []}),
+            &provider,
+        )
+        .expect("fable with [1m] marker should fall back to the opus tier");
+        assert_eq!(mapped_one_m["model"], json!("upstream-opus"));
+
+        let mapped_dated = map_proxy_request_model(
+            json!({"model": "claude-fable-5-20260609", "messages": []}),
+            &provider,
+        )
+        .expect("dated fable alias should fall back to the opus tier");
+        assert_eq!(mapped_dated["model"], json!("upstream-opus"));
+    }
+
+    #[test]
+    fn claude_desktop_proxy_fable_without_opus_route_still_errors() {
+        // 没有 opus 档可回落时保持精确报错语义，不静默落到其他档。
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([(
+            "claude-sonnet-4-6".to_string(),
+            ClaudeDesktopModelRoute {
+                model: "upstream-sonnet".to_string(),
+                label_override: None,
+                supports_1m: Some(true),
+            },
+        )]);
+
+        let err = map_proxy_request_model(
+            json!({"model": "claude-fable-5", "messages": []}),
+            &provider,
+        )
+        .expect_err("fable without an opus route should fail");
+        assert!(err.to_string().contains("claude-fable-5"));
+    }
+
+    #[test]
+    fn claude_desktop_proxy_maps_fable_to_dedicated_route() {
+        // Desktop 1.12603.1+ fail-all 校验已放行 claude-fable-5，用户可显式配置
+        // 独立 fable 档；此时 fable 请求精确命中 fable 档，不再降级到 opus。
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([
+            (
+                "claude-opus-4-8".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-opus".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+            (
+                "claude-fable-5".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-fable".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+        ]);
+
+        // 精确匹配优先命中 fable 档
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-fable-5", "messages": []}),
+            &provider,
+        )
+        .expect("explicit fable route should match");
+        assert_eq!(mapped["model"], json!("upstream-fable"));
+
+        // 带日期后缀经角色关键词回落仍归 fable 档，而非降级 opus
+        let mapped_dated = map_proxy_request_model(
+            json!({"model": "claude-fable-5-20260609", "messages": []}),
+            &provider,
+        )
+        .expect("dated fable alias should map via fable role keyword");
+        assert_eq!(mapped_dated["model"], json!("upstream-fable"));
+    }
+
+    #[test]
+    fn claude_desktop_proxy_accepts_opus_4_7_4_8_alias_during_rollout() {
+        let mut provider = proxy_provider("proxy");
+        let current_routes = std::collections::HashMap::from([(
+            "claude-opus-4-8".to_string(),
+            ClaudeDesktopModelRoute {
+                model: "upstream-opus-new".to_string(),
+                label_override: None,
+                supports_1m: Some(true),
+            },
+        )]);
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = current_routes;
+
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-opus-4-7", "messages": []}),
+            &provider,
+        )
+        .expect("legacy Opus route should map to current route");
+        assert_eq!(mapped["model"], json!("upstream-opus-new"));
+
+        let legacy_routes = std::collections::HashMap::from([(
+            "claude-opus-4-7".to_string(),
+            ClaudeDesktopModelRoute {
+                model: "upstream-opus-legacy".to_string(),
+                label_override: None,
+                supports_1m: Some(true),
+            },
+        )]);
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = legacy_routes;
+
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-opus-4-8", "messages": []}),
+            &provider,
+        )
+        .expect("current Opus route should map to legacy saved route");
+        assert_eq!(mapped["model"], json!("upstream-opus-legacy"));
+    }
+
+    #[test]
+    fn claude_desktop_mimo_anthropic_rewrites_redacted_thinking_for_tool_history() {
+        let provider = mimo_anthropic_proxy_provider("mimo");
+
+        let mapped = map_proxy_request_model(
+            json!({
+                "model": "claude-sonnet-4-6",
+                "messages": [{
+                    "role": "assistant",
+                    "content": [
+                        {"type": "redacted_thinking", "data": "opaque"},
+                        {"type": "tool_use", "id": "call_1", "name": "read_file", "input": {"path": "README.md"}}
+                    ]
+                }]
+            }),
+            &provider,
+        )
+        .expect("map MiMo route");
+
+        assert_eq!(mapped["model"], json!("mimo-v2.5-pro"));
+        assert_eq!(
+            mapped["messages"][0]["content"][0]["type"],
+            json!("thinking")
+        );
+        assert_eq!(
+            mapped["messages"][0]["content"][0]["thinking"],
+            json!("[redacted thinking]")
+        );
+        assert_eq!(
+            mapped["messages"][0]["content"][1]["type"],
+            json!("tool_use")
+        );
+    }
+
+    #[test]
+    fn claude_desktop_mimo_anthropic_injects_thinking_for_tool_history_without_one() {
+        let provider = mimo_anthropic_proxy_provider("mimo");
+
+        let mapped = map_proxy_request_model(
+            json!({
+                "model": "claude-sonnet-4-6",
+                "messages": [{
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "call_1", "name": "read_file", "input": {"path": "README.md"}}
+                    ]
+                }]
+            }),
+            &provider,
+        )
+        .expect("map MiMo route");
+
+        assert_eq!(
+            mapped["messages"][0]["content"][0]["type"],
+            json!("thinking")
+        );
+        assert_eq!(
+            mapped["messages"][0]["content"][0]["thinking"],
+            json!("tool call")
+        );
+        assert_eq!(
+            mapped["messages"][0]["content"][1]["type"],
+            json!("tool_use")
+        );
+    }
+
+    #[test]
+    fn claude_desktop_mimo_anthropic_keeps_thinking_text_but_drops_signature() {
+        let provider = mimo_anthropic_proxy_provider("mimo");
+
+        let mapped = map_proxy_request_model(
+            json!({
+                "model": "claude-sonnet-4-6",
+                "messages": [{
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Need to inspect the file.", "signature": "anthropic-signature"},
+                        {"type": "tool_use", "id": "call_1", "name": "read_file", "input": {"path": "README.md"}}
+                    ]
+                }]
+            }),
+            &provider,
+        )
+        .expect("map MiMo route");
+
+        assert_eq!(
+            mapped["messages"][0]["content"][0]["thinking"],
+            json!("Need to inspect the file.")
+        );
+        assert!(mapped["messages"][0]["content"][0]
+            .get("signature")
+            .is_none());
     }
 
     #[test]
@@ -1565,9 +2854,17 @@ mod tests {
                     },
                 ),
                 (
-                    "claude-sonnet-4-6".to_string(),
+                    "claude-old".to_string(),
                     ClaudeDesktopModelRoute {
-                        model: "claude-sonnet-4-6".to_string(),
+                        model: "legacy-upstream".to_string(),
+                        label_override: None,
+                        supports_1m: Some(false),
+                    },
+                ),
+                (
+                    "claude-sonnet-5".to_string(),
+                    ClaudeDesktopModelRoute {
+                        model: "claude-sonnet-5".to_string(),
                         label_override: None,
                         supports_1m: Some(false),
                     },
@@ -1577,45 +2874,100 @@ mod tests {
         });
 
         let routes = proxy_model_routes(&provider).expect("routes");
-        assert_eq!(routes.len(), 2);
+        assert_eq!(routes.len(), 3);
         let repaired = routes
             .iter()
             .find(|route| route.upstream_model == "deepseek-v4-pro")
             .expect("repaired route");
-        assert_eq!(repaired.route_id, "claude-opus-4-7");
+        assert_eq!(repaired.route_id, "claude-opus-5");
         assert_eq!(repaired.label_override.as_deref(), Some("deepseek-v4-pro"));
         assert!(repaired.supports_1m);
+        let repaired_old = routes
+            .iter()
+            .find(|route| route.upstream_model == "legacy-upstream")
+            .expect("legacy route should be repaired");
+        assert_eq!(repaired_old.route_id, "claude-haiku-4-5");
+        assert_eq!(
+            repaired_old.label_override.as_deref(),
+            Some("legacy-upstream")
+        );
 
         let mapped = map_proxy_request_model(
-            json!({"model": "claude-opus-4-7", "messages": []}),
+            json!({"model": "claude-opus-4-8", "messages": []}),
             &provider,
         )
         .expect("map repaired route");
         assert_eq!(mapped["model"], json!("deepseek-v4-pro"));
+
+        let legacy_mapped =
+            map_proxy_request_model(json!({"model": "claude-old", "messages": []}), &provider)
+                .expect("map stale profile route");
+        assert_eq!(legacy_mapped["model"], json!("legacy-upstream"));
     }
 
     #[test]
-    fn claude_desktop_proxy_rejects_1m_suffix_route() {
-        let provider = proxy_provider("proxy");
+    fn claude_desktop_proxy_strips_1m_suffix_before_route_lookup() {
+        let mut provider = proxy_provider("proxy");
+        provider
+            .meta
+            .as_mut()
+            .expect("meta")
+            .claude_desktop_model_routes = std::collections::HashMap::from([
+            (
+                "claude-sonnet-4-6".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-sonnet".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+            (
+                "claude-opus-4-8".to_string(),
+                ClaudeDesktopModelRoute {
+                    model: "upstream-opus".to_string(),
+                    label_override: None,
+                    supports_1m: Some(true),
+                },
+            ),
+        ]);
 
-        let err = map_proxy_request_model(
+        let mapped = map_proxy_request_model(
+            json!({"model": "claude-opus-4-8[1m]", "messages": []}),
+            &provider,
+        )
+        .expect("compact 1M suffix should map to Opus route");
+        assert_eq!(mapped["model"], json!("upstream-opus"));
+
+        let mapped = map_proxy_request_model(
             json!({"model": "claude-sonnet-4-6 [1M]", "messages": []}),
             &provider,
         )
-        .expect_err("1M suffix route should not be accepted");
-        assert!(err.to_string().contains("claude-sonnet-4-6 [1M]"));
+        .expect("spaced uppercase 1M suffix should map to Sonnet route");
+        assert_eq!(mapped["model"], json!("upstream-sonnet"));
+
+        let err = map_proxy_request_model(json!({"model": "gpt-5[1m]", "messages": []}), &provider)
+            .expect_err("non-Claude route should still fail after stripping 1M suffix");
+        assert!(err.to_string().contains("gpt-5[1m]"));
     }
 
     #[test]
     fn claude_desktop_rejects_1m_suffix_as_model_id() {
         assert!(!is_claude_safe_model_id("claude-sonnet-4-6 [1m]"));
         assert!(!is_claude_safe_model_id("  claude-sonnet-4-6  [1M]  "));
+        assert!(!is_claude_safe_model_id("claude-old"));
+        assert!(!is_claude_safe_model_id("claude-3-5-sonnet-20241022"));
         assert!(!is_claude_safe_model_id("claude-deepseek-v4-pro"));
         assert!(!is_claude_safe_model_id("claude-gpt-5-4"));
         assert!(!is_claude_safe_model_id("claude-"));
         assert!(!is_claude_safe_model_id("anthropic/claude-"));
+        assert!(!is_claude_safe_model_id("sonnet"));
         assert!(!is_claude_safe_model_id("sonnet-"));
+        // 角色前缀后无实际标识的退化值必须拒绝
+        assert!(!is_claude_safe_model_id("claude-sonnet-"));
+        assert!(!is_claude_safe_model_id("claude-opus-"));
+        assert!(!is_claude_safe_model_id("anthropic/claude-haiku-"));
         assert!(is_claude_safe_model_id("  claude-sonnet-4-6  "));
+        assert!(is_claude_safe_model_id("anthropic/claude-opus-4-8"));
     }
 
     #[test]
@@ -1673,7 +3025,7 @@ mod tests {
         let db = test_db();
 
         apply_provider_to_paths(&db, &provider, &paths).expect("apply provider");
-        restore_official_at_paths(&db, &paths, PendingTarget::default()).expect("restore official");
+        restore_official(&paths).expect("restore official");
 
         let normal: Value = read_json_file(&paths.normal_config_path).expect("read normal config");
         let threep: Value = read_json_file(&paths.threep_config_path).expect("read 3p config");
@@ -1712,7 +3064,7 @@ mod tests {
         .unwrap();
 
         apply_provider_to_paths(&db, &direct_provider_with_models("b"), &paths).expect("apply b");
-        restore_official_at_paths(&db, &paths, PendingTarget::default()).expect("restore official");
+        restore_official(&paths).expect("restore official");
         apply_provider_to_paths(&db, &direct_provider("a"), &paths).expect("apply a again");
 
         let profile: Value = read_json_file(&paths.profile_path).expect("read profile");
@@ -1756,7 +3108,7 @@ mod tests {
         );
         assert_eq!(meta["appliedId"], json!(PROFILE_ID));
 
-        restore_official_at_paths(&db, &paths, PendingTarget::default()).expect("restore");
+        restore_official(&paths).expect("restore");
         let meta: Value = read_json_file(&paths.meta_path).expect("read meta");
         assert_eq!(
             meta["entries"],
@@ -1807,12 +3159,13 @@ mod tests {
         let direct = direct_provider("direct");
         assert!(is_compatible_direct_provider(&direct));
 
-        let claude_official = Provider::with_id(
+        let mut claude_official = Provider::with_id(
             "claude-official".to_string(),
             "Claude Official".to_string(),
             json!({"env": {}}),
             Some("https://www.anthropic.com/claude-code".to_string()),
         );
+        claude_official.category = Some("official".to_string());
         assert!(!is_compatible_direct_provider(&claude_official));
 
         let mut openai_format = direct_provider("openai");

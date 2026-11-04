@@ -6,7 +6,7 @@ import { proxyApi } from "@/lib/api/proxy";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 export const supportsAppMode = (app: AppId) =>
-  ["claude", "codex", "gemini", "grokbuild"].includes(app);
+  ["claude", "claude-desktop", "codex", "gemini", "grokbuild"].includes(app);
 
 type Action =
   | { kind: "restartDaemon" }

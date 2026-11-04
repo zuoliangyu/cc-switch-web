@@ -3808,6 +3808,7 @@
     "saveRestart": "保存并重启服务",
     "rebindHint": "保存监听地址会重启服务；绑定失败时恢复原地址。",
     "officialDefaultAdvice": "建议将官方账号设为聚合默认供应商，以便处理不带聚合模型标识的请求。",
+    "desktopRouteNote": "Claude Desktop 只在启动时读取配置：切换模式、路由那家或聚合模型变化后请重启 Claude Desktop。路由模式下请保持 CC Switch 运行；退出 CC Switch 时不会把 Desktop 改回直连。",
     "claudeModelsRestart": "聚合模型或成员变化后，请重启 Claude Code 以刷新模型目录。",
     "adoptCatalog": "改用 CC Switch 的模型目录",
     "adoptCatalogDone": "已改用 CC Switch 的模型目录，重启 Codex 后生效",

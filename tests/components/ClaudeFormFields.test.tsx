@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, PropsWithChildren } from "react";
 import { useForm } from "react-hook-form";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -116,10 +116,10 @@ describe("ClaudeFormFields role-based model mapping", () => {
       "CLAUDE_CODE_SUBAGENT_MODEL",
       "shared-model[1M]",
     );
-    // Haiku 不支持 1M：写入前剥离标记
+    // Haiku 也保留 1M 标记（上游 3d46e06c）
     expect(onModelChange).toHaveBeenCalledWith(
       "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-      "shared-model",
+      "shared-model[1M]",
     );
     expect(onModelChange).toHaveBeenCalledWith(
       "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
@@ -153,12 +153,33 @@ describe("ClaudeFormFields role-based model mapping", () => {
     renderForm({ onModelChange });
 
     const checkboxes = screen.getAllByRole("checkbox");
-    // 行序：Sonnet、Opus、Fable、Subagent（Haiku 无 1M），最后是兜底模型
+    // 行序：Sonnet、Opus、Fable、Haiku、Subagent，最后是兜底模型
     fireEvent.click(checkboxes[0]);
 
     expect(onModelChange).toHaveBeenCalledWith(
       "ANTHROPIC_DEFAULT_SONNET_MODEL",
       "claude-sonnet[1M]",
+    );
+  });
+
+  // 上游 3d46e06c
+  it("Haiku 行也能勾 1M：勾选状态即模型名的 [1M] 后缀", () => {
+    const onModelChange = vi.fn();
+    renderForm({
+      defaultHaikuModel: "glm-5.3-flash[1M]",
+      defaultHaikuModelName: "",
+      onModelChange,
+    });
+
+    const haikuRow = screen.getByText("Haiku").parentElement!;
+    expect(within(haikuRow).getByDisplayValue("glm-5.3-flash")).toBeTruthy();
+    const checkbox = within(haikuRow).getByRole("checkbox");
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(checkbox);
+    expect(onModelChange).toHaveBeenCalledWith(
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "glm-5.3-flash",
     );
   });
 

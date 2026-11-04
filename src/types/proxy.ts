@@ -179,7 +179,13 @@ export interface AppModeView {
   eligibleProviderIds: string[];
   aggregation: {
     active: boolean;
-    members: { providerId: string; modelIds: string[]; route: boolean }[];
+    members: {
+      providerId: string;
+      modelIds: string[];
+      route: boolean;
+      /** 这家不做默认、只做成员时发布几个模型（默认那家的 `modelIds` 可能为空）。 */
+      memberModels?: number;
+    }[];
     /**
      * Codex 聚合模型客户端看不到或看不全：`routeOwnsCatalog` 默认那家使用自己的模型目录文件；
      * 官方做默认时：`officialModelsBundled` 暂用 Codex 自带的列表，`officialModelsUnavailable`

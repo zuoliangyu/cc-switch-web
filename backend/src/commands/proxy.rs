@@ -48,9 +48,9 @@ pub(crate) async fn stop_proxy_with_restore_internal(state: &AppState) -> Result
 pub(crate) async fn get_proxy_takeover_status_internal(
     _state: &AppState,
 ) -> Result<ProxyTakeoverStatus, String> {
-    let [claude, codex, gemini, grokbuild] = crate::mode::state::mode_states(
+    let [claude, codex, gemini, grokbuild, claude_desktop] = crate::mode::state::mode_states(
         &crate::live::engine::DeviceStore::for_device(),
-        ["claude", "codex", "gemini", "grokbuild"],
+        ["claude", "codex", "gemini", "grokbuild", "claude-desktop"],
     )
     .map_err(|e| e.to_string())?
     .map(|mode| mode.is_proxy());
@@ -59,6 +59,7 @@ pub(crate) async fn get_proxy_takeover_status_internal(
         codex,
         gemini,
         grokbuild,
+        claude_desktop,
         ..Default::default()
     })
 }

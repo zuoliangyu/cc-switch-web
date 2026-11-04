@@ -115,8 +115,37 @@ pub async fn handle_claude_desktop_models(
         .await
         .map_err(|e| ProxyError::DatabaseError(e.to_string()))?;
     let provider = providers.first().ok_or(ProxyError::NoAvailableProvider)?;
-    let response = crate::claude_desktop_config::model_list_response(provider)
+    let mut response = crate::claude_desktop_config::model_list_response(provider)
         .map_err(|e| ProxyError::ConfigError(e.to_string()))?;
+    // 聚合的模型 Desktop 只从 profile 里拿，这里补上是为了带上说明，两边也一致
+    let stacked = crate::mode::stack::desktop_published_now(&state.db).unwrap_or_else(|error| {
+        log::warn!("[Claude Desktop] 读取聚合模型失败，只返回路由那家的: {error}");
+        Vec::new()
+    });
+    if let Some(data) = response.get_mut("data").and_then(Value::as_array_mut) {
+        data.extend(stacked.into_iter().map(|model| {
+            let mut item = json!({
+                "type": "model",
+                "id": model.id,
+                "display_name": model.label,
+                "created_at": crate::claude_desktop_config::DEFAULT_CREATED_AT,
+            });
+            if model.supports_1m {
+                item["supports1m"] = json!(true);
+            }
+            item["description"] =
+                json!(crate::claude_desktop_config::discovered_model_description(
+                    &model.provider_name,
+                    &model.upstream,
+                    model.supports_1m,
+                ));
+            item
+        }));
+        let last_id = data.last().and_then(|item| item.get("id")).cloned();
+        if let Some(last_id) = last_id {
+            response["last_id"] = last_id;
+        }
+    }
     Ok(Json(response))
 }
 
@@ -2154,10 +2183,11 @@ fn resolve_stack_target(
     }
 }
 
-/// Stack 模型解不出来时的错误体：Claude 用 Anthropic 的错误信封，Codex 用 OpenAI 的。
+/// Stack 模型解不出来时的错误体：Claude Code、Claude Desktop 用 Anthropic 的错误信封，Codex 用
+/// OpenAI 的。
 fn stack_miss_body(app_type: &AppType, message: &str) -> Value {
     match app_type {
-        AppType::Claude => json!({
+        AppType::Claude | AppType::ClaudeDesktop => json!({
             "type": "error",
             "error": { "type": "invalid_request_error", "message": message },
         }),

@@ -213,7 +213,7 @@
 | `db8069ef` | v4.0.2 | fix(codex): keep the reasoning levels column from stretching the model catalog | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `91765357` | v4.0.2 | feat(ui): pick fetched models into the Codex model mapping table | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx` | 待迁移 |
 | `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
-| `9ec89fe8` | v4.0.2 | feat(claude): list aggregated models through modelPicker instead of gateway discovery | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `9ec89fe8` | v4.0.2 | feat(claude): list aggregated models through modelPicker instead of gateway discovery | 4 模式/路由 | 4c：聚合模式下 Claude Code 的 /model 改用顶层 modelPicker（replaceBuiltInOptions，每个聚合模型一行），不再写 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY（旧契约写过的按独有字段删）；路由契约逐字节不变；floor 与前端键字段镜像加 modelPicker | 已迁移 |
 | `600fdb0c` | v4.0.2 | fix(ui): drop the restart hints for Claude Code aggregation changes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/forms/ClaudeStackModelsField.tsx`、`components/providers/mode/ModeDialog.tsx`等 4 个 | 待迁移 |
 | `08f789a8` | v4.0.2 | chore(release): v4.0.2 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `bf2fe0d0` | v4.0.2 | docs(release): add v4.0.2 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -478,13 +478,13 @@
 | `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b：设备级聚合设置：子代理模型与推理强度（按合并目录校验后写 [agents]）、codexStackClassicTools 默认开；Stack 视图给出 subagentModels；设置变了立即重写、失败回滚。Web 在模式面板的聚合设置区编辑；上游「切换到聚合」确认框里的子代理选择与 ModeTabs / StackSettingsSheet 外壳不迁移；docs/ 用户手册不适用 | 部分迁移 |
 | `e70e844c` | v4.0.13 | feat(codex): let Auto Review use another model | 4 模式/路由 | 4b：自动审批模型：卡上 modelCatalog.autoReviewModel（只能选映射里的，写进目录行 auto_review_model_override，读回时还原）；聚合下用设备级 codexStackAutoReviewModel（按合并目录校验） | 已迁移 |
 | `f9e0d537` | v4.0.13 | feat(mode): confirm before going back to direct | 4 模式/路由 | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx`等 4 个 | 待迁移 |
-| `3e9eede4` | v4.0.13 | feat(claude-desktop): move Desktop into the device-level direct/route mode | 4 模式/路由 | 需新建或映射：`commands/profile.rs` | 待迁移 |
+| `3e9eede4` | v4.0.13 | feat(claude-desktop): move Desktop into the device-level direct/route mode | 4 模式/路由 | 4c：Claude Desktop 并入设备级直连 / 路由模式：路由模式写指向本地路由 /claude-desktop 的网关 profile，直连模式写直连那家，要经路由的卡（模型映射、托管 OAuth）在直连下拒绝（switch.desktop_needs_routing），退出路由写不进去时退回官方；退出 CC Switch 不分离 Desktop；去掉按卡片启停映射服务；接管状态带 claude-desktop；Web 模式面板对 Desktop 开放。托盘、项目 Profile 命令（Web 无 commands/profile.rs）不适用 | 部分迁移 |
 | `19a3e8d4` | v4.0.13 | feat(claude-desktop): show Desktop with the shared direct/route mode panel | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx`等 9 个 | 待迁移 |
-| `b93bf12d` | v4.0.13 | feat(claude-desktop): support aggregation (stack) mode on the backend | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `b93bf12d` | v4.0.13 | feat(claude-desktop): support aggregation (stack) mode on the backend | 4 模式/路由 | 4c：Desktop 聚合：成员发布 claude-fable-ccs-<数字> 模型（标签「供应商 / 模型」，最多 200 条），聚合请求跳过映射表只做上游整形，解不出用 Anthropic 错误信封；/claude-desktop/v1/models 补上聚合模型；成员须可路由且映射表完整；托盘部分不适用 | 已迁移 |
 | `e5508224` | v4.0.13 | feat(claude-desktop): offer aggregation mode in the Desktop panel | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/presentation.ts`等 3 个 | 待迁移 |
-| `e4367db5` | v4.0.13 | fix(claude-desktop): resolve colliding aggregation ids to the listed provider | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `58354f91` | v4.0.13 | fix(claude-desktop): split a legacy mapping card into route and official direct | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `78d2517a` | v4.0.13 | fix(mode): preview the old default's models and fill in Desktop's app name | 4 模式/路由 | 需新建或映射：`components/providers/mode/ModeDialog.tsx`、`components/providers/mode/SwitchModePanel.tsx` | 待迁移 |
+| `e4367db5` | v4.0.13 | fix(claude-desktop): resolve colliding aggregation ids to the listed provider | 4 模式/路由 | 4c：Desktop 聚合 id 撞号时解析到名单里列出的那一家 | 已迁移 |
+| `58354f91` | v4.0.13 | fix(claude-desktop): split a legacy mapping card into route and official direct | 4 模式/路由 | 4c：启动时旧版映射卡拆成路由模式（路由到这张卡）＋直连指针改官方卡，先落定模式再改指针；Web 不预置官方卡，迁移时没有就补一行 claude-desktop-official | 已迁移 |
+| `78d2517a` | v4.0.13 | fix(mode): preview the old default's models and fill in Desktop's app name | 4 模式/路由 | 4c：Stack 成员视图带 memberModels（换默认预览用）；上游 ModeDialog 的换默认预览与 {{app}} 文案修正不适用（Web 确认框只选默认供应商） | 部分迁移 |
 | `7c763cf3` | v4.0.13 | fix(claude-desktop): give the back-to-direct confirmation Desktop's own notes | 5a 供应商与全局 UI | 需新建或映射：`components/providers/mode/ModeDialog.tsx` | 待迁移 |
 | `35423712` | v4.0.13 | test(uninstall): borrow single paths as slices for clippy | 1d 资源/设置/工具 | 1d：卸载测试 clippy 修正（随测试最终版本） | 已迁移 |
 | `eb2b0d36` | v4.0.13 | test(apps): wait for re-probed rows before Update all after a remount | 1d 资源/设置/工具 | 1d：应用页测试等待重新探测后再全部更新 | 已迁移 |
@@ -494,13 +494,13 @@
 | `894cce82` | v4.0.13 | chore(release): v4.0.13 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `4ec75e71` | v4.0.13 | docs(release): add v4.0.13 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `e7a76adc` | v4.0.13 | feat(presets): add TokenFactory sponsor presets across seven apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `3d46e06c` | v4.0.13 | feat(claude): allow declaring 1M context on the Haiku tier | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `3d46e06c` | v4.0.13 | feat(claude): allow declaring 1M context on the Haiku tier | 4 模式/路由 | 4c：Haiku 档也能声明 1M：表单每行都有 1M 勾选、一键设置保留标记；聚合模式 Haiku 别名带 [1M] | 已迁移 |
 | `31038e68` | v4.0.13 | fix(presets): pre-check 1M for presets whose models have a 1M window | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `5fd57811` | v4.0.13 | fix(presets): declare 1M on Claude Desktop presets that relay Claude 5 | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `0a6eb00e` | v4.0.13 | feat(presets): add Modelflare sponsor presets across nine apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `6f6eee0c` | v4.0.13 | fix(presets): restore sponsor promo copy for four sponsors | — | 赞助商推广文案/排位；Web 不展示赞助身份且按名称 A–Z 排序 | 不适用 |
 | `0a8d0645` | v4.0.13 | docs(release): update v4.0.13 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `d4f2d4e4` | v4.0.14 | fix(claude-desktop): show one picker row per 1M model | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `d4f2d4e4` | v4.0.14 | fix(claude-desktop): show one picker row per 1M model | 4 模式/路由 | 4c：Desktop 每个 1M 模型在选择器里只显示一行（prefer1m） | 已迁移 |
 | `a756a1aa` | v4.0.14 | docs(readme): remove TokenFactory sponsor entry | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `a96e2fcc` | v4.0.14 | fix(presets): drop TokenFactory sponsor status and localize its name | 1a 预设/定价/图标 | 1a：补齐 `providerForm.presets.tokenfactory` 三语名称；赞助身份字段仅兼容不展示 | 已迁移 |
 | `8c2c89e0` | v4.0.14 | feat(providers): explain and remember the folder for Open Terminal | 5a 供应商与全局 UI | 需新建或映射：`components/providers/OpenTerminalDialog.tsx` | 待迁移 |
@@ -533,7 +533,7 @@
 | `d858ab4c` | v4.0.14 | chore(release): v4.0.14 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `5de6feb4` | v4.0.14 | docs(release): add v4.0.14 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `797e0276` | v4.0.15 | fix(proxy): preserve Claude JSON session identity (#8236) | 1b 代理协议 | 1b：会话提取识别 Claude metadata.user_id 中的 JSON session_id；Web 的 Codex OAuth prompt_cache_key 仍按供应商固定，上游缓存键断言不适用 | 已迁移 |
-| `7344cc37` | v4.0.15 | fix(claude-desktop): allow native providers to bootstrap local routing (#8444) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `7344cc37` | v4.0.15 | fix(claude-desktop): allow native providers to bootstrap local routing (#8444) | 4 模式/路由 | 4c：没存模型列表的原生直连卡可按默认档位进路由（不把默认目录存进行）；聚合成员仍要求显式映射表 | 已迁移 |
 | `caf70b52` | v4.0.15 | fix(i18n): translate new Turkish uninstall strings (#8291) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `6fcbb054` | v4.0.15 | fix(sidebar): show only the numbers in the usage Today badge | — | 侧栏今日用量徽标改动已被上游撤销，净效果为空 | 不适用 |
 | `24d87028` | v4.0.15 | fix(skills): stop branch fallback from masking non-404 download errors | 1d 资源/设置/工具 | 1d：Skill 下载只在 404 时换分支，其他错误直接返回并补上仓库坐标 | 已迁移 |
@@ -568,7 +568,7 @@
 | `73cdfbb7` | v4.0.16 | fix(i18n): improve Turkish UI wording (#8481) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `77c6dc79` | v4.0.16 | feat(tray): replace the tray menu with a glass panel (#8432) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `75e93281` | v4.0.16 | fix(proxy): allow unforced Claude WebSearch through Codex OAuth (#7936) | 1b 代理协议 | 1b：未强制的 Claude WebSearch 可经 Codex OAuth | 已迁移 |
-| `adc223af` | v4.0.16 | fix(claude): use catalog ids for 5.5 upstreams in routing takeover (#8450) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `adc223af` | v4.0.16 | fix(claude): use catalog ids for 5.5 upstreams in routing takeover (#8450) | 4 模式/路由 | 4c：路由接管时 5.5 上游用目录 id（live/project/claude.rs、model_mapper） | 已迁移 |
 | `8d8dc456` | v4.0.16 | fix(proxy): keep Chat tool outputs contiguous across hoisted developer notices (#8445) | 1b 代理协议 | 1b：开发者提示上移后 Chat 工具输出保持连续；历史仓库补回部分 Web 无对应模块（无 CodexChatHistoryStore） | 已迁移 |
 | `a94f997f` | v4.0.16 | fix(codex): honor configured GPT context windows (#8385) | 4 模式/路由 | 4a：第三方供应商上镜像官方 GPT 的目录行接受显式窗口（contextWindow / model_context_window），max_context_window 与压缩点同步；vendor 官方目录行同样处理；Gemini 输入超限归一为 context_length_exceeded、SSE 非字符串错误码转字符串。handlers 层把输入超限 400 改写为 response.failed 流未迁移：Web 的 Codex 代理原样透传上游错误，没有上游的 Chat 错误规整层 | 部分迁移 |
 | `734c4831` | v4.0.16 | feat(minimax): add MiniMax-M3.1-Flash to the official MiniMax presets (#8518) | 1a 预设/定价/图标 | 1a：七类预设默认 M3.1-Flash 与定价已同步；Hermes 标题模型钉选（`hermes_config.rs`）转入 1d | 部分迁移 |
@@ -591,7 +591,7 @@
 | `bb05f9d6` | v4.0.16 | fix(pricing): correct Kimi K3 and Step 5 Preview prices and seed new Qwen models | 1a 预设/定价/图标 | 1a：修正 Kimi K3、Step 5 Preview 价格并新增 Qwen；仅修复仍为旧内置值的行，Web 定价断言随之更新 | 已迁移 |
 | `1e36b107` | v4.0.16 | fix(usage): recover the model name for MiniMax Code usage rows that lack one | 1c 会话/用量导入 | 1c：MiniMax Code 用量行缺模型名时从会话恢复 | 已迁移 |
 | `2c2d6c43` | v4.0.16 | fix(codex): show the on-disk login in the official card's auth.json editor | 4 模式/路由 | 4a：没绑托管账号的 Codex 官方卡，编辑器 auth.json 框显示切换后盘上的登录（只读预测 predicted_auth_file）；不改直接保存则保留行里原来的 auth；上游集成测试改写为 codex_runtime_tests | 已迁移 |
-| `8e51101e` | v4.0.16 | fix(claude-desktop): publish catalog ids for 5.5 targets in route mode | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `8e51101e` | v4.0.16 | fix(claude-desktop): publish catalog ids for 5.5 targets in route mode | 4 模式/路由 | 4c：Desktop 路由模式为 5.5 目标发布目录 id | 已迁移 |
 | `6c36d68a` | v4.0.16 | fix(codex): keep the ChatGPT login when CC Switch detaches from routing | 4 模式/路由 | 4a：退出时的分离（op::DETACH）不按「保留官方登录」开关删 auth.json；进入或接上代理且第三方路由旁没有登录时，把最近暂存的登录还回去，只还一次（登出不复活） | 已迁移 |
 | `8b09732a` | v4.0.16 | fix(usage): don't auto-enable Volcengine plan quota without AccessKey | 1d 资源/设置/工具 | Web 套餐列表无 Volcengine/ZenMux，codingPlanEnabledByDefault 无需排除对象 | 不适用 |
 | `5fa00079` | v4.0.16 | fix(icons): soften the macOS app icon tile to light grey | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
@@ -814,7 +814,7 @@
 | `ee8ee25e` | v4.0.22 | docs(readme): move DIT.ai ahead of OpenModel in the sponsor table | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `33833a6a` | v4.0.22 | fix(proxy): accept x-api-key in Claude Desktop gateway auth (#5123) | 1b 代理协议 | 1b：Claude Desktop 网关认证接受 x-api-key | 已迁移 |
 | `1718a261` | v4.0.22 | fix(proxy): use constant-time Claude Desktop token check (#7488) | 1b 代理协议 | 1b：Claude Desktop 网关令牌常量时间比较，统一 401 响应；新增 subtle 依赖 | 已迁移 |
-| `983113a1` | v4.0.22 | fix(claude-desktop): write inferenceModels in the UI tier order (#7491) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `983113a1` | v4.0.22 | fix(claude-desktop): write inferenceModels in the UI tier order (#7491) | 4 模式/路由 | 4c：Desktop inferenceModels 按界面档位顺序（Sonnet / Opus / Fable / Haiku）写入 | 已迁移 |
 | `32db0e57` | v4.0.22 | fix(minimax): keep the weekly window visible after its quota runs out (#8124) | 1a 预设/定价/图标 | Web 的 MiniMax 解析按周总量判断，不依赖 `current_weekly_status`；额度耗尽时周桶照常显示，无需迁移 | 不适用 |
 | `6d6b7162` | v4.0.22 | feat(skills): add functionality to open installed skill directory and copy skill name (#8993) | 1d 资源/设置/工具 | 1d：点击 Skill 名称复制名称；“打开目录”按用户决定改为复制主副本目录路径（新增 /api/skills/installed-dir），三语文案 | 已迁移 |
 | `9077b432` | v4.0.22 | perf(skills): discover only the changed repo instead of every repo (#8907) | 5a 供应商与全局 UI | 按仓库增量发现 Skill 依赖 useSkills.helpers 与 SkillsPage 的缓存结构，随 5a 的 Skills 页面处理 | 待迁移 |
@@ -890,7 +890,7 @@
 | `93d0bf18` | v4.0.23 | feat(proxy): map Claude thinking settings to Gemini thinkingConfig | 1b 代理协议 | 1b：Claude thinking 设置映射到 Gemini thinkingConfig | 已迁移 |
 | `bd89109e` | v4.0.23 | feat(presets): add Gemini CLI presets for providers that serve Gemini | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `f75cb1b6` | v4.0.23 | fix(tray): restore the main window from a second launch in lightweight mode | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
-| `54115a8c` | v4.0.23 | fix(claude-desktop): publish claude-haiku-5-5 for the Haiku tier in route mode | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `54115a8c` | v4.0.23 | fix(claude-desktop): publish claude-haiku-5-5 for the Haiku tier in route mode | 4 模式/路由 | 4c：Desktop 路由模式 Haiku 档发布 claude-haiku-5-5（目标是旧 Haiku 时除外） | 已迁移 |
 | `959e4a95` | v4.0.23 | fix(usage): read MiniMax Code and Kimi credentials for native usage queries | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
 | `1ddacbd8` | v4.0.23 | docs(sponsors): refresh pinned Kimi banner and copy for K3.1 Pro | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `57169e4b` | v4.0.23 | chore(release): v4.0.23 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -908,7 +908,7 @@
 | `889e50ac` | v4.0.24 | chore(presets): move A6API to the a6api.vip domain | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c0189078` | v4.0.24 | docs(release): update v4.0.24 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `9119deca` | v4.0.25 | chore(ci): remove Dependabot version update config | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
-| `686ba51e` | v4.0.25 | fix(claude): keep the route-mode placeholder out of ANTHROPIC_API_KEY (#8111) | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `686ba51e` | v4.0.25 | fix(claude): keep the route-mode placeholder out of ANTHROPIC_API_KEY (#8111) | 4 模式/路由 | 4c：路由模式本地跳只写 ANTHROPIC_AUTH_TOKEN 占位符，行里只有 ANTHROPIC_API_KEY 时本地也不出现该键 | 已迁移 |
 | `a9e607c3` | v4.0.25 | feat(codex): add sub-agent concurrency limit field to the provider form (#9056) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `9bd8fe51` | v4.0.25 | fix(terminal): prefer PowerShell 7 (pwsh) when PowerShell is the preferred Windows terminal (#8992) | 1d 资源/设置/工具 | 1d：首选终端为 PowerShell 时，PATH 上有 pwsh.exe 就用 PowerShell 7 | 已迁移 |
 | `b8112ca5` | v4.0.25 | feat(mcp): check MCP server connectivity on demand (#8348) | 1d 资源/设置/工具 | 1d：MCP 按需连通性检查（stdio/Streamable HTTP/旧版 SSE 握手，最多 3 并发、每项 30 秒，进程树回收）；Web 无 IPC 通道，改为 /api/mcp/connectivity 启动 + 轮询取结果 + 取消；页面按钮与行内测试、状态点 | 已迁移 |
@@ -923,10 +923,10 @@
 | `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 合并到 Web 已改文件 | 待迁移 |
 | `4cf15aea` | v4.0.25 | feat(session): implement Kimi session deletion and update related hints (#9157) | 2b Kimi Code | 2b：Kimi 会话删除（后端 session_manager 最终版本；Web 会话列表原本只禁止 MiniMax Code 删除，前端无需改动） | 已迁移 |
 | `0103f4c8` | v4.0.25 | chore(presets): move Qwen pay-as-you-go and Token Plan to the new MaaS domains | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `9267ec8b` | v4.0.25 | feat(claude-desktop): describe routed models with provider and upstream model | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
+| `9267ec8b` | v4.0.25 | feat(claude-desktop): describe routed models with provider and upstream model | 4 模式/路由 | 4c：Desktop 路由 / 聚合模型带「供应商 · 上游模型 · 窗口」说明（/v1/models 返回 description，profile 打开 modelDiscoveryEnabled） | 已迁移 |
 | `e6d0bf61` | v4.0.25 | fix(proxy): reject browser-originated requests to the local router | 1b 代理协议 | 1b：本地路由拒绝带 Origin 的网页请求（/claude-desktop/* 仍靠网关令牌），回环监听只接受不可被公网 DNS 指向的 Host；同时移除 Web 遗留的宽松 CORS 层（上游 2937eb67）。监听 0.0.0.0（Docker/局域网）时不校验 Host；独立客户端地址随 f88068b9（批次 4）接入 | 已迁移 |
-| `2e2a59cc` | v4.0.25 | feat(claude-code): describe routed and stacked models with provider and upstream model | 4 模式/路由 | 合并到 Web 已改文件 | 待迁移 |
-| `3071cae9` | v4.0.25 | fix(terminal): keep proxy and stack settings out of provider terminals | 4 模式/路由 | 供应商终端剔除代理/聚合设置依赖聚合模式下的 modelPicker 投影，随 4 模式/路由处理 | 待迁移 |
+| `2e2a59cc` | v4.0.25 | feat(claude-code): describe routed and stacked models with provider and upstream model | 4 模式/路由 | 4c：Claude Code 路由档位与聚合模型的说明带供应商名与上游模型；上游托盘 / SwitchModePanel 展示部分不适用 | 部分迁移 |
+| `3071cae9` | v4.0.25 | fix(terminal): keep proxy and stack settings out of provider terminals | 4 模式/路由 | 4c：打开终端的临时 settings 写卡自己的 modelPicker，并把切换会清掉、卡上没有的键写成空值挡住（claude_editor::switch_drops）；上游 claude_terminal_launch 结构不同，用例改为直接测 write_claude_config | 部分迁移 |
 | `aa379e09` | v4.0.25 | chore(presets): remove DIT.ai sponsor and presets | — | DIT.ai 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `aa42a93d` | v4.0.25 | feat(codex): add configurable pre-exhaustion quota protection (#8395) | 4 模式/路由 | Codex 官方额度耗尽前保护（可配置），新增 proxy 模块与设置 API；需新建或映射：`proxy/codex_quota_protection.rs`、`components/settings/CodexAuthSettings.tsx`等 3 个 | 待迁移 |
 | `eb6ba268` | v4.0.25 | fix(mcp): release cancelled connectivity checks and share the probe limit (#9149) | 1d 资源/设置/工具 | 1d：取消的连通性检查释放许可，并发上限跨批次共享（随服务最终版本） | 已迁移 |
@@ -1067,3 +1067,10 @@
   - 接口：`POST /api/proxy/codex/adopt-catalog`、`POST /api/proxy/codex/stale-clients/acknowledge`、`GET /api/settings/codex-forces-multi-agent-v2`。
   - 不适用：Stack 表单布局的帮助提示（4f08989a、84ca4f00，Web 无该布局）；上游 ModeTabs / StackSettingsSheet 外壳与 docs/ 用户手册。
   - 验证：`cargo test --lib` 3500 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 178 个文件 1878 项通过、2 项跳过。
+- 2026-11-04：完成批次 4c（Claude 与 Claude Desktop 路由 / 聚合，17 项：13 项已迁移、4 项部分迁移）。
+  - Claude Desktop 并入设备级直连 / 路由 / 聚合模式（模式记在 `live-state.json`，不再由卡片决定）：路由模式写指向本地 `/claude-desktop` 的网关 profile；直连模式拒绝要经路由的卡；聚合成员发布 `claude-fable-ccs-<数字>` 模型并带「供应商 · 上游模型」说明；启动时把旧版映射卡迁成路由模式、直连指针改为官方卡（Web 不预置官方卡，迁移时没有就补一行 `claude-desktop-official`）。模式面板对 Desktop 开放，`/api/proxy/apps/:app/mode` 与聚合成员接口接受 `claude-desktop`。
+  - 基线缺口：Web 的 `claude_desktop_config.rs` 比 a189980f 基线还旧（缺 Opus 5 / Fable / 4.8 别名路由、严格模型 id 校验、[1M] 后缀剥离、角色关键词兜底、MiMo thinking 规整、`coworkEgressAllowedHosts` 等），本批取上游最终版本，只有网关地址仍按 Web 的同步配置（独立连接地址随 4d）。
+  - Claude Code：聚合模式用 `modelPicker` 列出聚合模型；路由占位只写 `ANTHROPIC_AUTH_TOKEN`；5.5 上游用目录 id；Haiku 档可声明 1M；供应商终端的临时 settings 挡住代理与聚合留下的键。
+  - 修正：Desktop 加入 `PROXY_APPS` 后 `ProviderService::switch` 已持有服务锁，直连切换里再次加锁会死锁，已去掉重复加锁。
+  - 不适用：托盘、项目 Profile 命令、上游 ModeDialog 换默认预览；“需要路由”标签随 5a。
+  - 验证：`cargo test --lib` 3539 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 178 个文件 1880 项通过、2 项跳过。

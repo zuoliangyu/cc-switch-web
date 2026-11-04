@@ -1158,6 +1158,7 @@ function App() {
               activeApp !== "dsh" && (
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settingsData?.enableFailoverToggle &&
+                    activeApp !== "claude-desktop" &&
                     appMode.data?.mode === "routing" && (
                       <FailoverToggle activeApp={activeApp} />
                     )}

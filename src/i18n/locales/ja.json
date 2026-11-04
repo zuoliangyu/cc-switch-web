@@ -3808,6 +3808,7 @@
     "saveRestart": "保存してサービスを再起動",
     "rebindHint": "待受アドレスを保存すると再起動します。バインドに失敗すると元のアドレスに戻ります。",
     "officialDefaultAdvice": "集約モデル ID のないリクエストには、公式アカウントを集約の既定に設定することをお勧めします。",
+    "desktopRouteNote": "Claude Desktop は起動時にのみ設定を読み込みます。モード、ルート先のプロバイダー、集約モデルを変更した後は Claude Desktop を再起動してください。ルーティング中は CC Switch を起動したままにしてください。CC Switch を終了しても Desktop は直接接続に戻りません。",
     "claudeModelsRestart": "集約モデルやメンバーを変更した後は、Claude Code を再起動してモデル一覧を更新してください。",
     "adoptCatalog": "CC Switch のモデルカタログを使う",
     "adoptCatalogDone": "CC Switch のモデルカタログに切り替えました。Codex を再起動すると反映されます",

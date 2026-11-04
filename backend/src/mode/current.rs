@@ -21,16 +21,9 @@ pub enum Purpose {
     InUse,
 }
 
-/// 这个应用的模式状态；不支持本地路由的应用恒为直连。
-fn supports_proxy(app: &AppType) -> bool {
-    matches!(
-        app,
-        AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
-    )
-}
-
+/// 这个应用的模式状态；没有路由模式的应用恒为直连。
 pub fn mode_state(app: &AppType) -> ModeState {
-    if !supports_proxy(app) {
+    if !app.has_route_mode() {
         return ModeState::default();
     }
     state::mode_state(&DeviceStore::for_device(), app.as_str()).unwrap_or_else(|err| {

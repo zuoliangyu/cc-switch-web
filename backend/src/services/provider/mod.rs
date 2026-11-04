@@ -5,6 +5,7 @@
 pub(crate) mod agy_direct;
 pub(crate) mod claude_direct;
 pub(crate) mod claude_editor;
+pub(crate) use claude_editor::{switch_drops as claude_switch_drops, SwitchDrops};
 pub(crate) mod claude_official;
 pub(crate) mod codex_client_catalog;
 pub(crate) mod codex_direct;
@@ -91,6 +92,15 @@ pub struct ProviderService;
 #[serde(rename_all = "camelCase")]
 pub struct SwitchResult {
     pub warnings: Vec<String>,
+}
+
+/// Claude Desktop 直连模式下用不了要经路由的卡。
+pub(crate) fn desktop_needs_routing_error() -> AppError {
+    AppError::localized(
+        "switch.desktop_needs_routing",
+        "这个供应商要经本地路由才能用（模型映射或托管账号），请先把 Claude Desktop 切到路由模式",
+        "This provider only works through local routing (model mapping or a managed account); switch Claude Desktop to the routing mode first",
+    )
 }
 
 /// 官方供应商通常禁止代理接管；Codex 固定内置条目是唯一例外。
@@ -205,6 +215,17 @@ pub(crate) fn sync_live_for_provider_respecting_takeover(
     app_type: &AppType,
     provider: &Provider,
 ) -> Result<bool, AppError> {
+    if *app_type == AppType::ClaudeDesktop {
+        // 路由模式下 Desktop 的配置文件归路由那家（指向本地路由的 profile），直连那家不写；
+        // 要经路由的卡直连写不进去。
+        if crate::mode::current::is_proxy(app_type)
+            || crate::claude_desktop_config::needs_routing(provider)
+        {
+            return Ok(false);
+        }
+        crate::claude_desktop_config::apply_provider(state.db.as_ref(), provider)?;
+        return Ok(true);
+    }
     let (owned, has_live_backup) = proxy_owns_live_config(state, app_type);
     if owned {
         futures::executor::block_on(
@@ -2249,8 +2270,17 @@ impl ProviderService {
         state.db.save_provider(app_type.as_str(), &provider)?;
 
         if matches!(app_type, AppType::ClaudeDesktop) {
-            if current.is_none() {
-                crate::claude_desktop_config::switch_provider(state.db.as_ref(), &provider)?;
+            // 要经路由的卡直连写不进去，路由模式下配置文件归路由那家：只存行。
+            if current.is_none()
+                && !crate::mode::current::is_proxy(&app_type)
+                && !crate::claude_desktop_config::needs_routing(&provider)
+            {
+                crate::claude_desktop_config::write_direct(
+                    state.db.as_ref(),
+                    crate::mode::state::op::SWITCH,
+                    Some(&provider),
+                    crate::mode::state::PendingTarget::pointer(Some(provider.id.clone())),
+                )?;
             }
             return Ok(true);
         }
@@ -2942,8 +2972,7 @@ impl ProviderService {
         }
 
         if matches!(app_type, AppType::ClaudeDesktop) {
-            futures::executor::block_on(crate::mode::controller::switch_desktop(state, id))?;
-            return Ok(SwitchResult::default());
+            return Self::switch_desktop(state, _provider);
         }
 
         if app_type == AppType::Kimi {
@@ -3364,7 +3393,11 @@ impl ProviderService {
         let _service = futures::executor::block_on(crate::mode::controller::lock_service());
         let _switch_guard = if matches!(
             app_type,
-            AppType::Claude | AppType::Codex | AppType::Gemini | AppType::GrokBuild
+            AppType::Claude
+                | AppType::Codex
+                | AppType::Gemini
+                | AppType::GrokBuild
+                | AppType::ClaudeDesktop
         ) {
             Some(futures::executor::block_on(
                 state.proxy_service.lock_switch_for_app(app_type.as_str()),

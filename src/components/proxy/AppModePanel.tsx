@@ -38,7 +38,7 @@ export function AppModePanel({
     state.data?.eligibleProviderIds.includes(p.id),
   );
   const modes: AppMode[] =
-    app === "claude" || app === "codex"
+    app === "claude" || app === "codex" || app === "claude-desktop"
       ? ["direct", "routing", "aggregation"]
       : ["direct", "routing"];
   if (state.isError)
@@ -127,6 +127,11 @@ export function AppModePanel({
       {selected === "aggregation" && (
         <p className="text-sm text-muted-foreground">
           {t("webMode.officialDefaultAdvice")}
+        </p>
+      )}
+      {app === "claude-desktop" && selected !== "direct" && (
+        <p role="note" className="text-sm text-muted-foreground">
+          {t("webMode.desktopRouteNote")}
         </p>
       )}
       {app === "claude" && active === "aggregation" && (

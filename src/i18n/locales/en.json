@@ -3808,6 +3808,7 @@
     "saveRestart": "Save and restart service",
     "rebindHint": "Saving the listen address restarts the service. If binding fails, the previous address is restored.",
     "officialDefaultAdvice": "Consider using an official account as the aggregation default for requests without an aggregated model ID.",
+    "desktopRouteNote": "Claude Desktop reads its configuration only at launch: restart Claude Desktop after switching modes or changing the route provider or aggregated models. Keep CC Switch running in routing mode; quitting CC Switch does not switch Desktop back to direct.",
     "claudeModelsRestart": "Restart Claude Code after changing aggregation models or members to refresh its model catalog.",
     "adoptCatalog": "Use CC Switch's model catalog",
     "adoptCatalogDone": "Now using CC Switch's model catalog. Restart Codex to apply",

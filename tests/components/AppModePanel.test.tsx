@@ -21,7 +21,11 @@ const providers: Record<string, Provider> = Object.fromEntries(
     ["o", "Official"],
   ].map(([id, name]) => [id, { id, name, settingsConfig: {} }]),
 );
-function ModePanel({ app = "claude" }: { app?: "claude" | "codex" }) {
+function ModePanel({
+  app = "claude",
+}: {
+  app?: "claude" | "codex" | "claude-desktop";
+}) {
   const state = useAppMode(app);
   return <AppModePanel app={app} providers={providers} state={state} />;
 }
@@ -175,6 +179,55 @@ describe("模式与聚合操作", () => {
     );
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    client.clear();
+  });
+
+  // 上游 3e9eede4 / b93bf12d：Claude Desktop 也有设备级的直连 / 路由 / 聚合模式
+  it("Claude Desktop 提供三种模式，并提示只在启动时读取配置", async () => {
+    const calls: unknown[] = [];
+    server.use(
+      http.post("http://runtime.local/get_app_mode", () =>
+        HttpResponse.json({
+          mode: "direct",
+          attached: false,
+          directProviderId: "a",
+          routeProviderId: null,
+          eligibleProviderIds: ["z", "a"],
+          aggregation: { active: false, members: [] },
+        }),
+      ),
+      http.post("http://runtime.local/set_app_mode", async ({ request }) => {
+        calls.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ModePanel app="claude-desktop" />
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByRole("button", { name: "webMode.aggregation" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("webMode.desktopRouteNote")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "webMode.routing" }));
+    expect(screen.getByText("webMode.desktopRouteNote")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "webMode.activate" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "common.confirm" }),
+    );
+    await waitFor(() =>
+      expect(calls).toEqual([
+        { appType: "claude-desktop", mode: "routing", routeProviderId: "a" },
+      ]),
     );
     client.clear();
   });

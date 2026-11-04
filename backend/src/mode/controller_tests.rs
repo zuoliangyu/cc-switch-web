@@ -309,6 +309,10 @@ async fn codex_aggregation_publishes_each_model_and_sinks_window_per_provider() 
 async fn unchanged_route_contract_does_not_read_or_rewrite_client_file() {
     let f = setup();
     let state = &f.state;
+    // 名字也一样：`/model` 的说明带供应商名，名字不同契约就不同（上游 2e2a59cc）。
+    let mut b = row("b");
+    b.name = "a".into();
+    state.db.save_provider("claude", &b).unwrap();
     let mut global = state.db.get_global_proxy_config().await.unwrap();
     global.listen_port = 0;
     state.db.update_global_proxy_config(global).await.unwrap();
@@ -497,9 +501,14 @@ async fn editing_aggregation_route_commits_global_edits_and_contract_together() 
         live["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
         "ccs-claude-b--new-model"
     );
+    // 聚合模型经 `/model` 菜单列出，不再打开网关模型发现（上游 9ec89fe8）。
+    assert!(live["env"]
+        .get("CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY")
+        .is_none());
+    assert_eq!(live["modelPicker"]["replaceBuiltInOptions"], true);
     assert_eq!(
-        live["env"]["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"],
-        "1"
+        live["modelPicker"]["options"][0]["model"],
+        "ccs-claude-b--new-model"
     );
     assert_eq!(
         state.db.get_current_provider("claude").unwrap().as_deref(),
@@ -1186,4 +1195,31 @@ async fn codex_proxy_route_table_keeps_compaction_and_retry_keys() {
     assert!(proxy.get("stream_max_retries").is_none());
     assert!(proxy.get("stream_idle_timeout_ms").is_none());
     exit(state, &AppType::Codex).await.unwrap();
+}
+
+/// OpenCode Go 这类预设把凭据存在 `ANTHROPIC_API_KEY`（上游跳要 x-api-key）：路由模式的本地
+/// 占位符只能写 `ANTHROPIC_AUTH_TOKEN`，残留的 `ANTHROPIC_API_KEY` 一并清掉，否则 Claude Code
+/// 弹自定义 key 确认框，默认拒绝后就是未登录会话（上游 686ba51e）。
+#[tokio::test]
+#[serial]
+async fn claude_route_keeps_api_key_rows_off_the_local_hop() {
+    let f = setup();
+    let state = &f.state;
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    let go = Provider::with_id(
+        "go".into(),
+        "OpenCode Go".into(),
+        json!({"env":{"ANTHROPIC_BASE_URL":"https://opencode.ai/zen/go","ANTHROPIC_API_KEY":"sk-go"}}),
+        None,
+    );
+    state.db.save_provider("claude", &go).unwrap();
+    enter(state, &AppType::Claude, Some("go")).await.unwrap();
+    let live: Value =
+        serde_json::from_slice(&std::fs::read(crate::config::get_claude_settings_path()).unwrap())
+            .unwrap();
+    assert_eq!(live["env"]["ANTHROPIC_AUTH_TOKEN"], PROXY_TOKEN_PLACEHOLDER);
+    assert!(live["env"].get("ANTHROPIC_API_KEY").is_none(), "{live}");
+    exit(state, &AppType::Claude).await.unwrap();
 }

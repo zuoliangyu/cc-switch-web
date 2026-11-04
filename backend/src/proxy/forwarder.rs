@@ -1391,7 +1391,11 @@ impl RequestForwarder {
         // 应用模型映射（独立于格式转换）
         // Claude Desktop proxy 模式必须先把 Desktop 可见的 claude-* route
         // 映射成真实上游模型名，未知 route 直接报错，不走默认模型兜底。
-        let mapped_body = if self.stack_request {
+        // 聚合模型的请求已经解出了上游名，不再查映射表（查不到会报错，按档位回落会发错模型），
+        // Desktop 只做和上游有关的整形（MiMo 的 thinking 历史）。
+        let mapped_body = if self.stack_request && matches!(app_type, AppType::ClaudeDesktop) {
+            crate::claude_desktop_config::normalize_upstream_request(body.clone(), provider)
+        } else if self.stack_request {
             body.clone()
         } else if matches!(app_type, AppType::ClaudeDesktop) {
             crate::claude_desktop_config::map_proxy_request_model(body.clone(), provider)

@@ -5,6 +5,7 @@ use super::{
     state::{self, op, Mode, ModeState, PendingTarget, StackState},
 };
 use crate::app_config::AppType;
+use crate::claude_desktop_config::{self, DesktopTarget};
 use crate::error::AppError;
 use crate::live::engine::DeviceStore;
 use crate::live::project::claude::{
@@ -32,11 +33,14 @@ pub(crate) enum EditorEdits<'a> {
     Grok(&'a crate::services::provider::editor_toml::TomlEdits),
 }
 
-pub const PROXY_APPS: [AppType; 4] = [
+/// 有路由模式的应用（[`AppType::has_route_mode`]）。Claude Desktop 也在内：它经同一个路由
+/// 服务转发，只是没有故障转移。
+pub const PROXY_APPS: [AppType; 5] = [
     AppType::Claude,
     AppType::Codex,
     AppType::Gemini,
     AppType::GrokBuild,
+    AppType::ClaudeDesktop,
 ];
 fn require_app(app: &AppType) -> Result<(), AppError> {
     if PROXY_APPS.contains(app) {
@@ -165,11 +169,12 @@ async fn write_proxy_with_edits(
                             .is_none(),
                 }
             } else {
-                ProxyAuth::FollowRow
+                ProxyAuth::AuthToken
             };
             let default = stack::claude_route_default(&members);
             let mut projection = proxy_projection(
                 &ClaudeProjection::of(&row.settings_config),
+                &row.name,
                 url,
                 auth,
                 default
@@ -313,6 +318,25 @@ async fn write_proxy_with_edits(
                 },
             )?;
         }
+        AppType::ClaudeDesktop => {
+            // 路由模式写指向本地路由 `/claude-desktop` 的网关 profile，模型列表是路由那家的映射表，
+            // 聚合模式再跟上别家发布的模型。契约是 profile 的摘要：换路由时模型列表没变就不重写
+            // 文件（Desktop 只在启动时读配置，重写就要重启它）。
+            let profile = claude_desktop_config::route_profile(
+                &state.db,
+                row,
+                url,
+                &stack::desktop_published(&members),
+            )?;
+            after.contract = Some(contract::claude_desktop(&profile));
+            let unchanged = before.attached && before.contract == after.contract;
+            claude_desktop_config::run(
+                &state.db,
+                op_name,
+                (!unchanged).then_some(DesktopTarget::Profile(&profile)),
+                pending_mode(after),
+            )?;
+        }
         _ => require_app(app)?,
     }
     Ok(())
@@ -416,6 +440,25 @@ fn write_direct(state: &AppState, app: &AppType, detach: bool) -> Result<(), App
                 op_name,
                 owner.as_ref(),
                 Some(&projection),
+                PendingTarget::mode(after),
+            )?;
+        }
+        AppType::ClaudeDesktop => {
+            // 直连那家写不进去（模型映射卡、托管账号、配置不全）也不能让 Desktop 一直指着路由：
+            // 退回官方。
+            let profile =
+                claude_desktop_config::direct_target(direct.as_ref()).unwrap_or_else(|error| {
+                    log::warn!("写回直连的 Claude Desktop 配置失败，改为官方: {error}");
+                    None
+                });
+            let write = match &profile {
+                Some(profile) => DesktopTarget::Profile(profile),
+                None => DesktopTarget::Official,
+            };
+            claude_desktop_config::run(
+                &state.db,
+                op_name,
+                Some(write),
                 PendingTarget::mode(after),
             )?;
         }
@@ -560,17 +603,12 @@ pub async fn exit(state: &AppState, app: &AppType) -> Result<(), AppError> {
     operation::settle(&state.db, app.as_str())?;
     write_direct(state, app, false)?;
     state.mode_startup_errors.write().await.remove(app.as_str());
+    // 没有应用接着路由（含 Claude Desktop 的路由模式）时停掉服务。
     let mut attached = false;
     for app in PROXY_APPS {
         attached |= stored_mode(&app)?.attached;
     }
-    let desktop_mapping = current::direct_provider(&state.db, &AppType::ClaudeDesktop)?
-        .is_some_and(|row| {
-            !crate::claude_desktop_config::is_official_provider(&row)
-                && crate::claude_desktop_config::provider_mode(&row)
-                    == crate::provider::ClaudeDesktopMode::Proxy
-        });
-    if !attached && !desktop_mapping && state.proxy_service.is_running().await {
+    if !attached && state.proxy_service.is_running().await {
         state
             .proxy_service
             .stop()
@@ -746,9 +784,19 @@ pub async fn check_codex_official_models(state: &AppState) {
     resync_codex_if_behind(state).await;
 }
 
+/// Claude Desktop 的卡要能做路由、映射表要完整，才发布得出模型（做默认时写入也会失败）。
+/// 没存映射表、靠默认档位进路由的原生卡不算。
+fn check_desktop_member(row: &Provider) -> Result<(), AppError> {
+    claude_desktop_config::validate_proxy_provider(row)?;
+    claude_desktop_config::configured_proxy_model_routes(row)?;
+    Ok(())
+}
+
 fn add_default(app: &AppType, roster: &mut StackState, row: &Provider) {
     if !stack::supports_stack(app)
         || (matches!(app, AppType::Codex) && codex_direct::is_official(row))
+        || (matches!(app, AppType::ClaudeDesktop)
+            && (row.category.as_deref() == Some("official") || check_desktop_member(row).is_err()))
     {
         return;
     }
@@ -782,8 +830,10 @@ pub async fn set_stack_member(
                 "官方账号可作为默认路由，不能作为聚合成员".into(),
             ));
         }
-        if matches!(app, AppType::Codex) {
-            codex_direct::check_stack_member(&row)?;
+        match app {
+            AppType::Codex => codex_direct::check_stack_member(&row)?,
+            AppType::ClaudeDesktop => check_desktop_member(&row)?,
+            _ => {}
         }
         add_default(app, &mut roster, &row);
     } else {
@@ -842,7 +892,7 @@ pub async fn stack_view(state: &AppState, app: &AppType) -> Result<stack::StackV
     let members = stack::members(&state.db, app, &roster, route)?;
     let mut view = stack::StackView {
         active: mode.is_proxy() && roster.enabled,
-        members: stack::member_views(&members),
+        members: stack::member_views(app, &members),
         ..stack::StackView::default()
     };
     if matches!(app, AppType::Codex) {
@@ -983,22 +1033,34 @@ fn official_models_reasons(
     }
 }
 
-/// Claude Code 的模型发现开关：打开后启动时向 `ANTHROPIC_BASE_URL/v1/models` 取模型列表，
-/// Stack 模型才会出现在 `/model` 里。独有字段：记进契约，退出代理时按记录删（同值才删），
-/// 用户自己设的全局值在直连切换时不受影响。
-const CLAUDE_GATEWAY_DISCOVERY_ENV: &str = "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY";
 const CLAUDE_MAX_CONTEXT_ENV: &str = "CLAUDE_CODE_MAX_CONTEXT_TOKENS";
 
-/// 发布了 Stack 模型时：打开模型发现；`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 改由 Stack 模型决定，取
-/// 非 1M 模型里最小的窗口（等于默认 200K 时不写）。四档别名也写成 Stack id，同样受 MAX 约束；
-/// 1M 的 Stack 模型不受 MAX 影响。没有发布 Stack 模型时契约和原来逐字节一致。
+/// `/model` 选择器的配置（顶层关键字段）。`replaceBuiltInOptions` 让选择器只剩 Default 和
+/// 这里列的行：内置的 Opus / Sonnet / Haiku 行都指向默认那家的模型，留着就是几行重复，
+/// 还会把那个模型自己的行去重吃掉。四档别名仍然要写，Default、`--model opus` 和子代理靠它们。
+const CLAUDE_MODEL_PICKER: &str = "modelPicker";
+
+/// 发布了 Stack 模型时：`/model` 换成 Stack 模型列表；`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 改由
+/// Stack 模型决定，取非 1M 模型里最小的窗口（等于默认 200K 时不写）。四档别名也写成 Stack id，
+/// 同样受 MAX 约束；1M 的 Stack 模型不受 MAX 影响。没有发布 Stack 模型时契约和原来逐字节一致。
+/// 旧契约写过的 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY` 是独有字段，下次重写时按记录删。
 fn with_stack_models(projection: &mut ClaudeProjection, stack: &[stack::StackModel]) {
     if stack.is_empty() {
         return;
     }
-    projection.exclusive.insert(
-        CLAUDE_GATEWAY_DISCOVERY_ENV.to_string(),
-        serde_json::Value::String("1".to_string()),
+    let options: Vec<serde_json::Value> = stack
+        .iter()
+        .map(|model| {
+            serde_json::json!({
+                "model": model.id,
+                "label": model.display_name,
+                "description": model.description,
+            })
+        })
+        .collect();
+    projection.top.insert(
+        CLAUDE_MODEL_PICKER.to_string(),
+        serde_json::json!({ "replaceBuiltInOptions": true, "options": options }),
     );
     projection.exclusive.shift_remove(CLAUDE_MAX_CONTEXT_ENV);
     let smallest = stack
@@ -1029,7 +1091,13 @@ pub async fn exit_all(state: &AppState) -> Result<(), AppError> {
 
 async fn exit_all_locked(state: &AppState, detach: bool) -> Result<(), AppError> {
     let mut errors = Vec::new();
-    for app in PROXY_APPS {
+    // Claude Desktop 不分离：它只在启动时读配置，运行中的 Desktop 改了文件也照样连着路由；
+    // 分离反而会在 CC Switch 关着时把 Desktop 换成直连那家（映射卡写不进去时是官方登录），
+    // 下次打开 CC Switch 又换回来，每次都要重启 Desktop。
+    for app in PROXY_APPS
+        .into_iter()
+        .filter(|app| !detach || *app != AppType::ClaudeDesktop)
+    {
         let _app = state.proxy_service.lock_switch_for_app(app.as_str()).await;
         let result = operation::settle(&state.db, app.as_str()).and_then(|_| {
             if stored_mode(&app)?.attached || !detach {
@@ -1066,15 +1134,6 @@ pub async fn startup(state: &AppState) -> Vec<(String, String)> {
             failures.push((app.as_str().to_string(), error.to_string()));
         }
     }
-    if let Some(row) = current::direct_provider(&state.db, &AppType::ClaudeDesktop)
-        .ok()
-        .flatten()
-        .filter(desktop_row_uses_mapping)
-    {
-        if let Err(error) = switch_desktop(state, &row.id).await {
-            failures.push(("claude-desktop".into(), error.to_string()));
-        }
-    }
     crate::services::provider::codex_client_catalog::observe(&DeviceStore::for_device());
     *state.mode_startup_errors.write().await = failures.iter().cloned().collect();
     failures
@@ -1093,7 +1152,21 @@ async fn startup_app(state: &AppState, app: &AppType) -> Result<(), AppError> {
                 )
             },
         );
-    let (legacy_enabled, _) = state.db.get_proxy_flags_sync(app.as_str());
+    let legacy_enabled = if *app == AppType::ClaudeDesktop {
+        // 旧版按卡片决定 Desktop 走不走路由：直连指针是模型映射卡就是在用路由。只在第一次
+        // （模式还没有值）时看。
+        let card = mode
+            .mode
+            .is_none()
+            .then(|| claude_desktop_config::legacy_mapping_card(&state.db))
+            .flatten();
+        if let Some(card) = &card {
+            adopt_legacy_desktop_card(state, &mut mode, card)?;
+        }
+        card.is_some()
+    } else {
+        state.db.get_proxy_flags_sync(app.as_str()).0
+    };
     let want_proxy = if backup.is_some() || placeholder {
         legacy_enabled
     } else {
@@ -1138,6 +1211,60 @@ async fn startup_app(state: &AppState, app: &AppType) -> Result<(), AppError> {
         state.db.delete_live_backup(app.as_str()).await?;
     }
     Ok(())
+}
+
+/// 旧版的 Desktop 映射卡拆成新版的三样：旧版给映射卡写的一律是本地路由地址，所以客户端
+/// 已经接上（`attached`，接不上退回直连时才会把它写回去）；路由那家是这张卡；直连指针改成
+/// 官方卡（映射卡直连写不进去，退出路由时 Desktop 本来就会回到官方，指针要跟着一致）。
+/// 指针只改本机记录：`provider_for` 先读它，库里的 `is_current` 会随云同步到别的设备。
+/// 先落定模式再改指针：中途崩了，下次启动按已落定的路由模式接上，不会因为指针已经不是
+/// 映射卡而认不出旧版状态。
+fn adopt_legacy_desktop_card(
+    state: &AppState,
+    mode: &mut ModeState,
+    card: &Provider,
+) -> Result<(), AppError> {
+    let app = AppType::ClaudeDesktop;
+    mode.mode = Some(Mode::Proxy);
+    mode.attached = true;
+    mode.proxy_route = Some(card.id.clone());
+    operation::commit_target(
+        &state.db,
+        &DeviceStore::for_device(),
+        app.as_str(),
+        &PendingTarget::mode(mode.clone()),
+    )?;
+    ensure_desktop_official_row(state)?;
+    crate::settings::set_current_provider(
+        &app,
+        Some(crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID),
+    )?;
+    log::info!(
+        "Claude Desktop 旧版映射卡 {} 迁移为路由模式：路由到这张卡，直连指针改为官方",
+        card.id
+    );
+    Ok(())
+}
+
+/// Web 不预置官方卡：迁移要把直连指针指到官方卡时，没有就按上游的官方种子补一行（已有的
+/// 不动，尊重用户改过的名字和图标）。
+fn ensure_desktop_official_row(state: &AppState) -> Result<(), AppError> {
+    let id = crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID;
+    let app = AppType::ClaudeDesktop.as_str();
+    if state.db.get_provider_by_id(id, app)?.is_some() {
+        return Ok(());
+    }
+    let mut official = Provider::with_id(
+        id.to_string(),
+        "Claude Desktop Official".to_string(),
+        serde_json::json!({ "env": {} }),
+        Some("https://claude.ai/download".to_string()),
+    );
+    official.category = Some("official".to_string());
+    official.icon = Some("claude".to_string());
+    official.icon_color = Some("#D97757".to_string());
+    official.created_at = Some(chrono::Utc::now().timestamp_millis());
+    state.db.save_provider(app, &official)
 }
 
 /// 新模式的故障转移只记代理路由；None 表示尚未迁移的旧设备状态。
@@ -1275,15 +1402,6 @@ pub async fn configure_service(
             operation::settle(&state.db, app.as_str())?;
             reapply_after_save_locked(state, &app, None).await?;
         }
-        if let Some(row) = current::direct_provider(&state.db, &AppType::ClaudeDesktop)?
-            .filter(desktop_row_uses_mapping)
-        {
-            let _app = state
-                .proxy_service
-                .lock_switch_for_app("claude-desktop")
-                .await;
-            crate::claude_desktop_config::apply_provider(&state.db, &row)?;
-        }
     } else if running {
         state
             .proxy_service
@@ -1341,73 +1459,6 @@ pub async fn view(state: &AppState, app: &AppType) -> Result<ModeView, AppError>
             .map(|row| row.id.clone())
             .collect(),
     })
-}
-
-pub(crate) fn desktop_uses_mapping(state: &AppState) -> Result<bool, AppError> {
-    Ok(
-        current::direct_provider(&state.db, &AppType::ClaudeDesktop)?
-            .as_ref()
-            .is_some_and(desktop_row_uses_mapping),
-    )
-}
-fn desktop_row_uses_mapping(row: &Provider) -> bool {
-    !crate::claude_desktop_config::is_official_provider(row)
-        && crate::claude_desktop_config::provider_mode(row)
-            == crate::provider::ClaudeDesktopMode::Proxy
-}
-
-/// 调用方持有服务锁和 Desktop 切换锁；映射卡需先启动服务，再提交 profile。
-pub(crate) async fn apply_desktop_locked(
-    state: &AppState,
-    row: &Provider,
-    was_mapping: bool,
-) -> Result<(), AppError> {
-    let mapping = desktop_row_uses_mapping(row);
-    let running = state.proxy_service.is_running().await;
-    let previous = state.db.get_global_proxy_config().await?;
-    if mapping && !running {
-        if let Err(error) = state.proxy_service.start().await {
-            state.db.update_global_proxy_config(previous).await?;
-            return Err(AppError::Message(error));
-        }
-    }
-    if let Err(error) = crate::claude_desktop_config::switch_provider(&state.db, row) {
-        if mapping && !running && !operation::has_pending("claude-desktop") {
-            state
-                .proxy_service
-                .stop()
-                .await
-                .map_err(AppError::Message)?;
-            state.db.update_global_proxy_config(previous).await?;
-        }
-        return Err(error);
-    }
-    if was_mapping && !mapping {
-        let mut needed = false;
-        for app in PROXY_APPS {
-            needed |= stored_mode(&app)?.attached;
-        }
-        if !needed && state.proxy_service.is_running().await {
-            state
-                .proxy_service
-                .stop()
-                .await
-                .map_err(AppError::Message)?;
-        }
-    }
-    Ok(())
-}
-
-pub async fn switch_desktop(state: &AppState, id: &str) -> Result<(), AppError> {
-    let _service = SERVICE_LOCK.lock().await;
-    let _app = state
-        .proxy_service
-        .lock_switch_for_app("claude-desktop")
-        .await;
-    operation::settle(&state.db, "claude-desktop")?;
-    let row = provider(state, &AppType::ClaudeDesktop, id)?;
-    let was_mapping = desktop_uses_mapping(state)?;
-    apply_desktop_locked(state, &row, was_mapping).await
 }
 
 #[cfg(test)]

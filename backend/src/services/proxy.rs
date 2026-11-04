@@ -289,6 +289,10 @@ impl ProxyService {
             codex: codex_enabled,
             gemini: gemini_enabled,
             grokbuild: grokbuild_enabled,
+            // Desktop 没有 `proxy_config` 行：路由模式就是它的接管状态
+            claude_desktop: crate::mode::current::is_proxy(
+                &crate::app_config::AppType::ClaudeDesktop,
+            ),
             opencode: opencode_enabled,
             openclaw: openclaw_enabled,
         })

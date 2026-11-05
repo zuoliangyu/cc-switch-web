@@ -3378,8 +3378,6 @@
   },
   "pi": {
     "provider": {
-      "preset": "离线预设",
-      "selectPreset": "选择 Pi Provider 预设",
       "key": "Provider 标识",
       "baseUrl": "API 端点",
       "apiKey": "API Key",

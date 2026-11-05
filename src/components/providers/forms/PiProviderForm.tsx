@@ -1,4 +1,3 @@
-import { compareProviderNames } from "@/utils/providerSort";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -39,6 +38,7 @@ import {
   type YamlNodeError,
 } from "./helpers/yamlNode";
 import { NativeConfigEditor } from "./shared/NativeConfigEditor";
+import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import type { ProviderCategory } from "@/types";
 import type { ProviderFormProps, ProviderFormValues } from "./ProviderForm";
 
@@ -181,15 +181,14 @@ export function PiProviderForm({
   const presets: readonly PiFamilyPreset[] = isOmp
     ? ompProviderPresets
     : piProviderPresets;
-  const sortedPresets = useMemo(
+  // 预设交给共用的分组选择器（添加页第 1 步）；id 按预设文件里的位置编，与上游一致
+  const presetEntries = useMemo(
     () =>
-      [...presets].sort((a, b) =>
-        compareProviderNames(
-          getPiPresetDisplayName(a, t),
-          getPiPresetDisplayName(b, t),
-        ),
-      ),
-    [presets, t],
+      presets.map((preset, index) => ({
+        id: `pi-${index}`,
+        preset,
+      })),
+    [presets],
   );
   const initialConfig = useMemo(
     () => asObject(initialData?.settingsConfig),
@@ -218,6 +217,9 @@ export function PiProviderForm({
   const [submitting, setSubmitting] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<PiFamilyPreset | null>(
     null,
+  );
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
+    initialData ? null : "custom",
   );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const { data: existingProviders } = useProvidersQuery(isOmp ? "omp" : "pi");
@@ -249,8 +251,23 @@ export function PiProviderForm({
     }
   };
 
-  const applyPreset = (presetKey: string) => {
-    const preset = presets.find((entry) => entry.providerKey === presetKey);
+  const selectPreset = (id: string) => {
+    setSelectedPresetId(id);
+    if (id === "custom") {
+      // 自定义：回到空白表单
+      setSelectedPreset(null);
+      setProviderKey("");
+      setName("");
+      setWebsiteUrl("");
+      setBaseUrl("");
+      setApiKey("");
+      setApi("openai-completions");
+      setHeaders({});
+      setModelsText("[]");
+      setConfigText("{}");
+      return;
+    }
+    const preset = presetEntries.find((entry) => entry.id === id)?.preset;
     if (!preset) return;
     const config = structuredClone(preset.settingsConfig) as Record<
       string,
@@ -434,21 +451,12 @@ export function PiProviderForm({
   return (
     <form id="provider-form" onSubmit={handleSubmit} className="space-y-5 pb-6">
       {!initialData && (
-        <div className="space-y-2">
-          <Label>{t("pi.provider.preset")}</Label>
-          <Select onValueChange={applyPreset}>
-            <SelectTrigger>
-              <SelectValue placeholder={t("pi.provider.selectPreset")} />
-            </SelectTrigger>
-            <SelectContent>
-              {sortedPresets.map((preset) => (
-                <SelectItem key={preset.providerKey} value={preset.providerKey}>
-                  {getPiPresetDisplayName(preset, t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <ProviderPresetSelector
+          selectedPresetId={selectedPresetId}
+          presetEntries={presetEntries}
+          onPresetChange={selectPreset}
+          category={selectedPreset?.category ?? "custom"}
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

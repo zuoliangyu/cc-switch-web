@@ -3378,8 +3378,6 @@
   },
   "pi": {
     "provider": {
-      "preset": "オフラインプリセット",
-      "selectPreset": "Pi Provider プリセットを選択",
       "key": "Provider キー",
       "baseUrl": "API エンドポイント",
       "apiKey": "API キー",

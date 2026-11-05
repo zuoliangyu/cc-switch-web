@@ -6,7 +6,7 @@
 
 CC Switch Web is the web branch repository of [cc-switch](https://github.com/farion1231/cc-switch), carrying the web-oriented implementation and branch-specific customizations of CC Switch.
 
-CC Switch Web shows no sponsor or partner tags, badges, stars, hearts, special highlighting, or preferential placement for providers. Provider and preset lists use case-insensitive A–Z display-name order, without manual ranking by drag and drop. Failover queues retain their routing priority.
+CC Switch Web shows no sponsor or partner tags, badges, stars, hearts, special highlighting, or preferential placement for providers. Saved provider lists use case-insensitive A–Z display-name order, without manual ranking by drag and drop. Presets for adding a provider are grouped into sign-in, vendor, third-party, cloud, local, and plugin sections, A–Z by display name within each group, with one row per provider for its regions and plans. Failover queues retain their routing priority.
 
 Architecture and positioning:
 

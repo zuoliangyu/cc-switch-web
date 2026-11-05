@@ -3378,8 +3378,6 @@
   },
   "pi": {
     "provider": {
-      "preset": "Offline preset",
-      "selectPreset": "Select a Pi provider preset",
       "key": "Provider key",
       "baseUrl": "API endpoint",
       "apiKey": "API key",

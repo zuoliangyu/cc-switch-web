@@ -23,6 +23,8 @@ interface FullScreenPanelProps {
    * 只给编辑页打开；测速、只读这类页面不需要。
    */
   trackUnsavedChanges?: boolean;
+  /** 返回按钮的无障碍名称（默认「返回」），比如添加供应商第 2 步写「返回选择预设」 */
+  backLabel?: string;
 }
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px - match App.tsx
@@ -68,6 +70,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   contentClassName,
   motionPreset = "none",
   trackUnsavedChanges = false,
+  backLabel,
 }) => {
   // 面板关掉后组件可能还挂着：只在打开时登记，关掉即撤销
   const unsavedChangesHandlers = useUnsavedChangesTracker(
@@ -162,7 +165,8 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                   variant="outline"
                   size="icon"
                   onClick={onClose}
-                  aria-label={t("common.back")}
+                  aria-label={backLabel ?? t("common.back")}
+                  title={backLabel}
                   className="h-10 w-10 rounded-2xl border-border-default bg-background/80 select-none"
                 >
                   <ArrowLeft className="h-4 w-4" />

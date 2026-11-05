@@ -278,7 +278,8 @@
     },
     "openTerminalIsolated": "Open Terminal (isolated)",
     "deleteBlockedInUse": "The provider in use can't be deleted. Switch to another one first.",
-    "deleteBlockedDirectDefault": "Leaving routing switches back to this provider, so it can't be deleted. Go back to direct and switch to another provider first."
+    "deleteBlockedDirectDefault": "Leaving routing switches back to this provider, so it can't be deleted. Go back to direct and switch to another provider first.",
+    "backToList": "Back to providers"
   },
   "notifications": {
     "providerAdded": "Provider added",
@@ -1414,12 +1415,6 @@
     "codexOfficialNoApiKey": "Official does not require API Key, save directly",
     "codexApiKeyAutoFill": "Just fill in here, auth.json below will be auto-filled",
     "apiKeyAutoFill": "Just fill in here, config below will be auto-filled",
-    "cnOfficialApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",
-    "aggregatorApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",
-    "thirdPartyApiKeyHint": "💡 Only need to fill in API Key, endpoint is preset",
-    "customApiKeyHint": "💡 Custom configuration requires manually filling all necessary fields",
-    "omoHint": "💡 OMO config manages Agent model assignments and writes to oh-my-opencode.jsonc",
-    "officialHint": "💡 Official provider uses browser login, no API Key needed",
     "getApiKey": "Get API Key",
     "partnerPromotion": {
       "kimi": "New Kimi users get 10% of their first successful top-up back as bonus API credit, up to CNY ¥1,000.",
@@ -1922,28 +1917,24 @@
     "modelOptionValuePlaceholder": "{\"order\": [\"baseten\"]}"
   },
   "providerPreset": {
-    "label": "Provider Preset",
     "custom": "Custom Configuration",
-    "other": "Other",
-    "hint": "You can continue to adjust the fields below after selecting a preset.",
-    "searchTooltip": "Search presets",
     "searchAriaLabel": "Search provider presets",
-    "searchPlaceholder": "Search preset names...",
+    "searchPlaceholder": "Search name or URL, e.g. kimi, zhipu, openrouter",
     "sortAriaLabel": "Toggle preset sorting",
-    "sortNameAscTooltip": "Sort by name A-Z",
     "sortOriginalTooltip": "Restore default grouped order",
-    "noSearchResults": "No provider presets match your search.",
     "family": {
       "tencent": "Tencent Cloud",
       "volcengine": "Volcengine"
     },
     "group": {
+      "all": "All",
       "login": "Account sign-in",
       "vendor": "Model vendors",
       "thirdparty": "Third-party platforms",
       "cloud": "Cloud providers",
       "local": "Local",
-      "plugin": "Plugin configs"
+      "plugin": "Plugin configs",
+      "universal": "Universal providers"
     },
     "versionLabel": "Version",
     "planLabel": "Plan",
@@ -1979,8 +1970,27 @@
       "thirdparty": "Platforms that aggregate many models, or relays reselling official models.",
       "cloud": "Call models with a cloud provider account.",
       "local": "Inference servers running on this computer. Start the server and pull a model first; the key is just a placeholder.",
-      "plugin": "Model assignment configs for OpenCode plugins."
-    }
+      "plugin": "Model assignment configs for OpenCode plugins.",
+      "universal": "Configure once, synced to Claude Code, Codex and Gemini CLI."
+    },
+    "clearSearch": "Clear search",
+    "categoriesLabel": "Preset categories",
+    "crossApp": "Across apps",
+    "noResults": "Nothing found for “{{query}}”",
+    "noResultsHint": "You can use a custom config and fill in the request URL and API key yourself.",
+    "useCustom": "Add with a custom config",
+    "customDetail": "Fill in the request URL and API key yourself",
+    "customBar": "Custom config · fill in every field yourself",
+    "change": "Change",
+    "backToPick": "Back to presets",
+    "universalDetail": "Synced to Claude Code, Codex, Gemini CLI",
+    "manageUniversal": "Manage existing universal providers ›",
+    "versionCount": "{{domain}} · {{n}} versions",
+    "matchedVersion": "Matches {{name}}",
+    "matchedVersions": "Matches {{name}} and {{more}} more",
+    "switchVersionTitle": "Switch to {{version}}?",
+    "switchVersionMessage": "The form will be refilled for the new version. The API key you entered and any other changes will be cleared.",
+    "switchVersionConfirm": "Switch"
   },
   "usage": {
     "title": "Usage Statistics",
@@ -3515,7 +3525,6 @@
     "deleted": "Universal provider deleted",
     "addSuccess": "Universal provider added successfully",
     "addFailed": "Failed to add universal provider",
-    "hint": "Cross-app unified config, auto-sync to Claude/Codex/Gemini",
     "manage": "Manage",
     "loadError": "Failed to load universal providers",
     "saveError": "Failed to save universal provider",

@@ -278,7 +278,8 @@
     },
     "openTerminalIsolated": "打开终端（环境隔离）",
     "deleteBlockedInUse": "正在用的这家不能删除，先切到别家。",
-    "deleteBlockedDirectDefault": "退出路由后会回到这家，所以不能删除。先回到直连并切到别家，再删除。"
+    "deleteBlockedDirectDefault": "退出路由后会回到这家，所以不能删除。先回到直连并切到别家，再删除。",
+    "backToList": "返回供应商列表"
   },
   "notifications": {
     "providerAdded": "供应商已添加",
@@ -1414,12 +1415,6 @@
     "codexOfficialNoApiKey": "官方无需填写 API Key，直接保存即可",
     "codexApiKeyAutoFill": "只需要填这里，下方 auth.json 会自动填充",
     "apiKeyAutoFill": "只需要填这里，下方配置会自动填充",
-    "cnOfficialApiKeyHint": "💡 只需填写 API Key，请求地址已预设",
-    "aggregatorApiKeyHint": "💡 只需填写 API Key，请求地址已预设",
-    "thirdPartyApiKeyHint": "💡 只需填写 API Key，请求地址已预设",
-    "customApiKeyHint": "💡 自定义配置需手动填写所有必要字段",
-    "omoHint": "💡 OMO 配置管理 Agent 模型分配，写入 oh-my-opencode.jsonc",
-    "officialHint": "💡 官方供应商使用浏览器登录，无需配置 API Key",
     "getApiKey": "获取 API Key",
     "partnerPromotion": {
       "kimi": "Kimi 新用户首次成功充值，即可获赠充值金额 10% 的 API 额度，最高赠送 ¥1000。",
@@ -1922,28 +1917,24 @@
     "modelOptionValuePlaceholder": "{\"order\": [\"baseten\"]}"
   },
   "providerPreset": {
-    "label": "预设供应商",
     "custom": "自定义配置",
-    "other": "其他",
-    "hint": "选择预设后可继续调整下方字段。",
-    "searchTooltip": "搜索预设",
     "searchAriaLabel": "搜索预设供应商",
-    "searchPlaceholder": "搜索预设名称...",
+    "searchPlaceholder": "搜索名称或网址，例如 kimi、智谱、openrouter",
     "sortAriaLabel": "切换预设排序",
-    "sortNameAscTooltip": "按名称 A-Z 排序",
     "sortOriginalTooltip": "恢复默认分组顺序",
-    "noSearchResults": "没有匹配的预设供应商。",
     "family": {
       "tencent": "腾讯云",
       "volcengine": "火山引擎"
     },
     "group": {
+      "all": "全部",
       "login": "账号登录",
       "vendor": "模型厂商",
       "thirdparty": "第三方平台",
       "cloud": "云服务商",
       "local": "本地",
-      "plugin": "插件配置"
+      "plugin": "插件配置",
+      "universal": "统一供应商"
     },
     "versionLabel": "版本",
     "planLabel": "套餐",
@@ -1979,8 +1970,27 @@
       "thirdparty": "聚合多家模型的平台，或转售官方模型的中转服务。",
       "cloud": "用云厂商账号调用模型。",
       "local": "在本机运行的推理服务，先启动服务并下载模型。Key 填占位值即可。",
-      "plugin": "OpenCode 插件的模型分配配置。"
-    }
+      "plugin": "OpenCode 插件的模型分配配置。",
+      "universal": "一次配置，同步到 Claude Code、Codex、Gemini CLI。"
+    },
+    "clearSearch": "清空搜索",
+    "categoriesLabel": "预设分类",
+    "crossApp": "跨应用",
+    "noResults": "没有找到「{{query}}」",
+    "noResultsHint": "可以用自定义配置，手动填写请求地址和 API Key。",
+    "useCustom": "用自定义配置添加",
+    "customDetail": "手动填写请求地址和 API Key",
+    "customBar": "自定义配置 · 手动填写所有字段",
+    "change": "更换",
+    "backToPick": "返回选择预设",
+    "universalDetail": "同步到 Claude Code、Codex、Gemini CLI",
+    "manageUniversal": "管理已有的统一供应商 ›",
+    "versionCount": "{{domain}} · {{n}} 个版本",
+    "matchedVersion": "匹配：{{name}}",
+    "matchedVersions": "匹配：{{name}} 等 {{n}} 个版本",
+    "switchVersionTitle": "切换到 {{version}}？",
+    "switchVersionMessage": "表单会按新版本重新填写，已填的 API Key 和其他修改会清空。",
+    "switchVersionConfirm": "切换"
   },
   "usage": {
     "title": "使用统计",
@@ -3515,7 +3525,6 @@
     "deleted": "统一供应商已删除",
     "addSuccess": "统一供应商添加成功",
     "addFailed": "统一供应商添加失败",
-    "hint": "跨应用统一配置，自动同步到 Claude/Codex/Gemini",
     "manage": "管理",
     "loadError": "加载统一供应商失败",
     "saveError": "保存统一供应商失败",

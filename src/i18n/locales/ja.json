@@ -278,7 +278,8 @@
     },
     "openTerminalIsolated": "ターミナルを開く（環境を分離）",
     "deleteBlockedInUse": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。",
-    "deleteBlockedDirectDefault": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続に戻してほかのプロバイダーに切り替えてください。"
+    "deleteBlockedDirectDefault": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続に戻してほかのプロバイダーに切り替えてください。",
+    "backToList": "プロバイダー一覧に戻る"
   },
   "notifications": {
     "providerAdded": "プロバイダーを追加しました",
@@ -1414,12 +1415,6 @@
     "codexOfficialNoApiKey": "公式は API Key 不要です。そのまま保存してください",
     "codexApiKeyAutoFill": "ここに入力すれば auth.json も自動で埋まります",
     "apiKeyAutoFill": "ここに入力すれば下の設定も自動で埋まります",
-    "cnOfficialApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",
-    "aggregatorApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",
-    "thirdPartyApiKeyHint": "💡 API Key のみ入力すれば OK。エンドポイントはプリセット済みです",
-    "customApiKeyHint": "💡 カスタム設定では必要な項目をすべて手動で入力してください",
-    "omoHint": "💡 OMO 設定は Agent のモデル割り当てを管理し、oh-my-opencode.jsonc に書き込みます",
-    "officialHint": "💡 公式プロバイダーはブラウザログインで、API Key は不要です",
     "getApiKey": "API Key を取得",
     "partnerPromotion": {
       "kimi": "Kimi の新規ユーザーは、初回チャージに成功するとチャージ金額の 10%（最大 CNY ¥1,000）が API クレジットとして進呈されます。",
@@ -1922,28 +1917,24 @@
     "modelOptionValuePlaceholder": "{\"order\": [\"baseten\"]}"
   },
   "providerPreset": {
-    "label": "プロバイダータイプ",
     "custom": "カスタム設定",
-    "other": "その他",
-    "hint": "プリセットを選んだ後でも、下のフィールドで調整できます。",
-    "searchTooltip": "プリセットを検索",
     "searchAriaLabel": "プロバイダープリセットを検索",
-    "searchPlaceholder": "プリセット名を検索...",
+    "searchPlaceholder": "名前または URL で検索（例：kimi、智譜、openrouter）",
     "sortAriaLabel": "プリセットの並び順を切り替え",
-    "sortNameAscTooltip": "名前順 A-Z で並び替え",
     "sortOriginalTooltip": "既定のグループ順に戻す",
-    "noSearchResults": "一致するプロバイダープリセットがありません。",
     "family": {
       "tencent": "Tencent Cloud",
       "volcengine": "Volcengine"
     },
     "group": {
+      "all": "すべて",
       "login": "アカウントでログイン",
       "vendor": "モデルベンダー",
       "thirdparty": "サードパーティ",
       "cloud": "クラウド事業者",
       "local": "ローカル",
-      "plugin": "プラグイン設定"
+      "plugin": "プラグイン設定",
+      "universal": "統合プロバイダー"
     },
     "versionLabel": "バージョン",
     "planLabel": "プラン",
@@ -1979,8 +1970,27 @@
       "thirdparty": "複数のモデルをまとめたプラットフォーム、または公式モデルを再販する中継サービス。",
       "cloud": "クラウド事業者のアカウントでモデルを呼び出します。",
       "local": "このコンピューターで動かす推論サーバー。先にサーバーを起動してモデルを取得してください。キーはプレースホルダーで構いません。",
-      "plugin": "OpenCode プラグインのモデル割り当て設定。"
-    }
+      "plugin": "OpenCode プラグインのモデル割り当て設定。",
+      "universal": "一度の設定で Claude Code・Codex・Gemini CLI に同期します。"
+    },
+    "clearSearch": "検索をクリア",
+    "categoriesLabel": "プリセットの分類",
+    "crossApp": "アプリ横断",
+    "noResults": "「{{query}}」は見つかりませんでした",
+    "noResultsHint": "カスタム設定でリクエスト URL と API Key を手動入力できます。",
+    "useCustom": "カスタム設定で追加",
+    "customDetail": "リクエスト URL と API Key を手動で入力",
+    "customBar": "カスタム設定 · すべての項目を手動で入力",
+    "change": "変更",
+    "backToPick": "プリセットの選択に戻る",
+    "universalDetail": "Claude Code・Codex・Gemini CLI に同期",
+    "manageUniversal": "既存の統合プロバイダーを管理 ›",
+    "versionCount": "{{domain}} · {{n}} バージョン",
+    "matchedVersion": "一致：{{name}}",
+    "matchedVersions": "一致：{{name}} ほか {{more}} 件",
+    "switchVersionTitle": "{{version}} に切り替えますか？",
+    "switchVersionMessage": "フォームは新しいバージョンの内容で入力し直され、入力済みの API Key やその他の変更は消去されます。",
+    "switchVersionConfirm": "切り替える"
   },
   "usage": {
     "title": "利用統計",
@@ -3515,7 +3525,6 @@
     "deleted": "統合プロバイダーを削除しました",
     "addSuccess": "統合プロバイダーを追加しました",
     "addFailed": "統合プロバイダーの追加に失敗しました",
-    "hint": "クロスアプリ統合設定。Claude/Codex/Gemini に自動同期します",
     "manage": "管理",
     "loadError": "統合プロバイダーの読み込みに失敗しました",
     "saveError": "統合プロバイダーの保存に失敗しました",

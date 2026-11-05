@@ -1,7 +1,10 @@
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import type { ProviderFormValues } from "@/components/providers/forms/ProviderForm";
+import { usePresetStep } from "@/components/providers/forms/presetStep";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => (
@@ -25,25 +28,53 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 let mockFormValues: ProviderFormValues;
+let mockHasPresetSelector = false;
+let universalProps: {
+  onUniversalPresetSelect?: unknown;
+  onManageUniversalProviders?: unknown;
+} = {};
 
 vi.mock("@/components/providers/forms/ProviderForm", () => ({
   ProviderForm: ({
     onSubmit,
+    onUniversalPresetSelect,
+    onManageUniversalProviders,
   }: {
     onSubmit: (values: ProviderFormValues) => void;
-  }) => (
-    <form
-      id="provider-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(mockFormValues);
-      }}
-    />
-  ),
+    onUniversalPresetSelect?: unknown;
+    onManageUniversalProviders?: unknown;
+  }) => {
+    const presetStep = usePresetStep();
+    const registerSelector = presetStep?.registerSelector;
+    universalProps = { onUniversalPresetSelect, onManageUniversalProviders };
+    useEffect(() => {
+      if (mockHasPresetSelector) return registerSelector?.();
+    }, [registerSelector]);
+    return (
+      <form
+        id="provider-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit(mockFormValues);
+        }}
+      >
+        {mockHasPresetSelector && presetStep?.step === "pick" && presetStep.host
+          ? createPortal(
+              <button type="button" onClick={() => presetStep.setStep("form")}>
+                pick-preset
+              </button>,
+              presetStep.host,
+            )
+          : null}
+      </form>
+    );
+  },
 }));
 
 describe("AddProviderDialog", () => {
   beforeEach(() => {
+    mockHasPresetSelector = false;
+    universalProps = {};
     mockFormValues = {
       name: "Test Provider",
       websiteUrl: "https://provider.example.com",
@@ -59,7 +90,7 @@ describe("AddProviderDialog", () => {
     };
   });
 
-  it("显示预设填写提示并收紧顶部间距", () => {
+  it("显示预设填写提示并收紧顶部间距", async () => {
     const { container } = render(
       <AddProviderDialog
         open
@@ -69,7 +100,10 @@ describe("AddProviderDialog", () => {
       />,
     );
 
-    expect(screen.getByText("provider.addFooterHint")).toBeInTheDocument();
+    // 表单里没有预设选择器（ProviderForm 是替身）：编辑视图到了直接进第 2 步
+    expect(
+      await screen.findByText("provider.addFooterHint"),
+    ).toBeInTheDocument();
     expect(container.ownerDocument.querySelector(".pt-3")).not.toBeNull();
   });
 
@@ -214,5 +248,66 @@ context_window = 500000
     expect(handleSubmit.mock.calls[0][0].ensureGrokBuildOfficialSeed).toBe(
       true,
     );
+  });
+  it("先选预设再填写，第 2 步的返回回到选预设", async () => {
+    mockHasPresetSelector = true;
+    const onOpenChange = vi.fn();
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={onOpenChange}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "pick-preset" }));
+    expect(
+      screen.getByRole("button", { name: "common.add" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "providerPreset.backToPick" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "pick-preset" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "common.add" }),
+    ).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    // 第 1 步的返回关掉添加页
+    fireEvent.click(
+      screen.getByRole("button", { name: "provider.backToList" }),
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("只有能接收统一供应商的应用才拿到统一预设入口", async () => {
+    const { rerender } = render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="omp"
+        onSubmit={vi.fn()}
+      />,
+    );
+    await screen.findByRole("button", { name: "common.add" });
+    expect(universalProps.onUniversalPresetSelect).toBeUndefined();
+    expect(universalProps.onManageUniversalProviders).toBeUndefined();
+
+    rerender(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(universalProps.onUniversalPresetSelect).toBeTypeOf("function"),
+    );
+    expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
   });
 });

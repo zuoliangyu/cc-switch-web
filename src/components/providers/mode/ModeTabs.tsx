@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Layers, Plug, Route, Shuffle } from "lucide-react";
+import { Layers, Plug, Route, Settings2, Shuffle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { HelpTip } from "@/components/ui/help-tip";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -35,6 +36,10 @@ interface ModeTabsProps {
     disabled?: boolean;
     onChange: (enabled: boolean) => void;
   };
+  /** 路由页签上的「路由设置」（超时、重试、熔断） */
+  onOpenRouteSettings?: () => void;
+  /** Codex 聚合页签上的「聚合设置」（子代理模型、经典子代理、自动审批） */
+  onOpenStackSettings?: () => void;
   /** 供应商搜索框挂在模式行右侧（由列表通过 portal 渲染进来） */
   searchSlotRef?: (node: HTMLDivElement | null) => void;
 }
@@ -42,7 +47,7 @@ interface ModeTabsProps {
 /**
  * 模式行（上游 v7）：页签只负责查看。凸起的底只给正在看的那段；生效的那段只用模式色文字和圆点，
  * 不铺底（否则彩色那格比正在看的更抢眼）。组右边的「?」说明各模式的区别。
- * 右侧依次是搜索框的位置、故障转移开关（纯图标 + HoverTip）。
+ * 右侧依次是搜索框的位置、故障转移开关、路由 / 聚合设置（纯图标 + HoverTip）。
  */
 export function ModeTabs({
   modes,
@@ -50,6 +55,8 @@ export function ModeTabs({
   view,
   onView,
   failover,
+  onOpenRouteSettings,
+  onOpenStackSettings,
   searchSlotRef,
 }: ModeTabsProps) {
   const { t } = useTranslation();
@@ -144,6 +151,32 @@ export function ModeTabs({
               aria-label={t("mode.failover")}
             />
           </label>
+        </HoverTip>
+      )}
+      {onOpenRouteSettings && (
+        <HoverTip content={t("mode.routeSettings")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 shrink-0 px-0"
+            aria-label={t("mode.routeSettings")}
+            onClick={onOpenRouteSettings}
+          >
+            <Settings2 className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
+        </HoverTip>
+      )}
+      {onOpenStackSettings && (
+        <HoverTip content={t("mode.stackSettings.title")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 shrink-0 px-0"
+            aria-label={t("mode.stackSettings.title")}
+            onClick={onOpenStackSettings}
+          >
+            <Settings2 className="h-4 w-4" strokeWidth={1.75} />
+          </Button>
         </HoverTip>
       )}
     </div>

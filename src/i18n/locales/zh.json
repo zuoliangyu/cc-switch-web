@@ -277,7 +277,8 @@
     "disable": "停用",
     "directProviderHint": "退出路由后恢复为这个供应商",
     "openTerminalWithProvider": "使用此供应商打开终端",
-    "stackBadgeNoModels": "这家没有配置模型，不会出现在模型选择器里"
+    "stackBadgeNoModels": "这家没有配置模型，不会出现在模型选择器里",
+    "formSubtitleStack": "{{app}}（聚合模式）"
   },
   "notifications": {
     "providerAdded": "供应商已添加",
@@ -469,8 +470,6 @@
         "description": "控制代理服务开关、查看状态与端口信息",
         "enableFeature": "在主页面显示本地代理开关",
         "enableFeatureDescription": "开启后，主页面顶部将显示代理和故障转移开关",
-        "enableFailoverToggle": "在主页面显示故障转移开关",
-        "enableFailoverToggleDescription": "开启后，主页面顶部将独立显示故障转移开关",
         "running": "运行中",
         "stopped": "已停止"
       },
@@ -991,7 +990,10 @@
       "reset": "恢复默认值",
       "hint": "任一达到即暂停。默认 95% / 98%，保存后立即对新请求生效。",
       "invalid": "请输入 1–99 的整数。"
-    }
+    },
+    "codexStackClassicSubagents": "聚合模式下子 agent 用经典工具",
+    "codexStackClassicSubagentsDescription": "主、子 agent 不在同一家供应商时必须打开，否则子 agent 收不到任务。",
+    "codexStackClassicSubagentsForcedV2": "Codex 的 config.toml 里打开了 [features] multi_agent_v2，它比这个开关优先，开关不会生效"
   },
   "apps": {
     "claude": "Claude",
@@ -1572,7 +1574,15 @@
     "fallbackModelHelp": "没落到 Sonnet、Opus、Fable、Haiku 任一档的请求，改用这个模型发给上游。",
     "fallbackModelHelpDirect": "写进 ANTHROPIC_MODEL，是 Claude Code 启动时用的主模型。后台任务另用 Haiku 那一档。",
     "fallbackModelMissing": "没填：没落到任何一档的请求会用原始 Claude 模型名发给上游，可能报错。",
-    "fallbackModelHaikuMissing": "Haiku 一档没填：后台任务会用原始 Claude 模型名请求上游，第三方端点可能报错。"
+    "fallbackModelHaikuMissing": "Haiku 一档没填：后台任务会用原始 Claude 模型名请求上游，第三方端点可能报错。",
+    "stackLayout": {
+      "noModels": "模型列表为空：把这家加入聚合后，模型选择器里不会多出它的模型"
+    },
+    "stackModelsLabel": "模型列表",
+    "stackModelDefaultHelp": "这些模型会出现在 Claude Code 的 /model 里，选中后请求直达这家。第一行是默认模型，也会写成这张卡的 ANTHROPIC_MODEL。",
+    "addStackModel": "手动添加",
+    "stackModelsEmpty": "未配置模型：把这家加入聚合后，模型选择器里不会多出它的模型",
+    "stackModelPlaceholder": "例如 deepseek-v4-pro"
   },
   "codex": {
     "needsRouting": "需要路由",
@@ -1753,7 +1763,8 @@
     "defaultModelNotInList": "默认模型 {{model}} 不在列表里：Codex 默认仍请求它，但 /model 里没有这一项。",
     "addToModelList": "加入列表",
     "routeOnlySettingsHint": "以下两项只在路由、聚合模式下生效。",
-    "upstreamFormatCopilotRouteHint": "所有模式都需要开启路由，由路由注入 Copilot 账号凭据；手动指定的协议模型不支持时会报错。"
+    "upstreamFormatCopilotRouteHint": "所有模式都需要开启路由，由路由注入 Copilot 账号凭据；手动指定的协议模型不支持时会报错。",
+    "stackModelDefaultHelp": "这些模型会出现在 Codex 的 /model 里，选中后请求直达这家。第一行是默认模型：这家被设为默认时，Codex 默认用它。"
   },
   "codexOauth": {
     "authStatus": "认证状态",
@@ -2954,10 +2965,6 @@
     "priority": {
       "tooltip": "故障转移优先级 {{priority}}"
     },
-    "tooltip": {
-      "enabled": "{{app}} 故障转移已启用\n按队列优先级（P1→P2→...）选择供应商",
-      "disabled": "启用 {{app}} 故障转移\n将立即切换到队列 P1，并在失败时自动切换到下一个"
-    },
     "officialUnavailable": "官方账号不支持加入故障转移队列。",
     "queueAddFailed": "加入队列失败：{{detail}}",
     "queueRemoveFailed": "移出队列失败：{{detail}}"
@@ -3875,15 +3882,6 @@
       "cliFailed": "Codex 自带列表：Codex 命令行没能输出模型列表（详情见日志）",
       "nothingUsable": "Codex 自带列表：里面没有能用的模型，请把 Codex 升级到最新版"
     },
-    "models": {
-      "title": "聚合模型",
-      "custom": "指定此供应商发布的模型",
-      "hint": "默认沿用模型映射。自定义列表的第一个模型作为默认；列表为空时不发布模型。",
-      "id": "模型 {{index}} 的 ID",
-      "name": "模型 {{index}} 的显示名称",
-      "first": "移到首位，设为默认模型",
-      "add": "手动添加"
-    },
     "saveRestart": "保存并重启服务",
     "rebindHint": "保存监听地址会重启服务；绑定失败时恢复原地址。",
     "officialDefaultAdvice": "建议将官方账号设为聚合默认供应商，以便处理不带聚合模型标识的请求。",
@@ -3897,28 +3895,6 @@
       "unverifiedHint": "CC Switch 看不到桌面版和编辑器插件是否在运行；没开着的话直接关掉这条提示即可。",
       "daemon": "命令行：重开 codex 不够，要重启后台的守护进程。",
       "others": "桌面版：要彻底退出再重开（macOS 上按 ⌘Q，只关窗口不行）；编辑器插件要重开编辑器窗口。"
-    },
-    "stackSettings": {
-      "title": "聚合设置",
-      "subagentDescription": "子代理默认跟随主模型。选一个聚合里的模型后，主代理派出的子代理默认用它（主代理派单时自己指定了模型的除外）。不用重启 Codex，新开的对话就会用上；已经开着的对话仍按原来的设置。",
-      "subagentModel": "子代理模型",
-      "followMain": "跟随主模型",
-      "subagentEffort": "子代理推理强度",
-      "effortModelDefault": "模型默认",
-      "effortModelDefaultNamed": "模型默认（{{effort}}）",
-      "unavailableOption": "{{model}}（已不在聚合里）",
-      "unavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），子代理暂时跟随主模型；加回来后自动恢复。",
-      "noModels": "聚合名单里还没有发布的模型，先把供应商加入聚合。",
-      "classicOff": "子代理和主代理不在同一家，Codex 新版的子 agent 工具会把任务加密，只有主代理那家解得开，子代理会收不到任务。必须打开下面的「聚合模式下子 agent 用经典工具」。",
-      "classicTools": "聚合模式下子 agent 用经典工具",
-      "classicToolsDescription": "主、子 agent 不在同一家供应商时必须打开，否则子 agent 收不到任务。",
-      "classicToolsForcedV2": "Codex 的 config.toml 里打开了 [features] multi_agent_v2，它比这个开关优先，开关不会生效",
-      "autoReviewModel": "自动审批模型",
-      "autoReviewDescription": "Codex 开了自动审批（Approve for me）时，判断操作能不能放行用的模型，可以选聚合里别家的模型。改完需要重启 Codex。",
-      "autoReviewDefaultOfficial": "官方 Auto Review（默认）",
-      "autoReviewDefaultMain": "主模型自己审批（默认）",
-      "autoReviewUnavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），审批暂时用默认模型；加回来后自动恢复。",
-      "saveFailed": "保存失败：{{error}}"
     },
     "toast": {
       "routeRemembered": "已记住供应商 {{provider}}，客户端接入路由或聚合后使用。",
@@ -4737,13 +4713,51 @@
       "needsRouteTitle": "{{provider}} 需要路由",
       "needsRouteLead": "{{provider}}：{{reason}}。直连切换过去，{{app}} 会无法使用它。",
       "switchAnyway": "仍然直连切换",
-      "routeAndUse": "开始路由并使用它"
+      "routeAndUse": "开始路由并使用它",
+      "stackSubagentLead": "子代理默认跟随主模型，也可以选聚合里的一个模型（之后在「聚合设置」里随时能改）。"
     },
     "help": {
       "title": "连接模式的区别",
       "direct": "直连：CC Switch 不经手任何请求，客户端直接连所选供应商，体验最原生。",
       "route": "路由：请求经本机 CC Switch 转发，可热切换供应商，并支持故障转移、格式转换等高级功能。",
       "stack": "聚合：多家供应商的模型同列在 /model，在客户端内即可无感切换。"
-    }
+    },
+    "toast": {
+      "enteredRoute": "{{app}} 已开始路由 → {{provider}}。",
+      "enteredStack": "{{app}} 已切换到聚合模式。重启 {{app}} 后，聚合的模型出现在 /model 里。",
+      "enteredStackLive": "{{app}} 已切换到聚合模式，聚合的模型已出现在 /model 里。",
+      "enteredStackDesktop": "{{app}} 已切换到聚合模式。重启 {{app}} 后，聚合的模型出现在模型列表里。",
+      "exited": "已回到直连：{{app}} 现在直接连接 {{provider}}。",
+      "routeRemembered": "已记住供应商 {{provider}}，客户端接入路由或聚合后使用。",
+      "routeTargetChanged": "路由目标已设为 {{provider}}。",
+      "routeSwitched": "路由已切换至 {{provider}}，后续新请求将使用该供应商。",
+      "stackDefaultChanged": "聚合默认供应商已设为 {{provider}}；已选聚合模型仍使用各自的供应商。",
+      "clientConfigChanged": "客户端配置也已更新；重启 {{app}} 以加载更新后的配置。",
+      "defaultRemembered": "切换到聚合模式后，默认供应商是 {{provider}}。",
+      "restartHint": "重启 {{app}} 后生效。",
+      "failed": "切换失败：{{detail}}"
+    },
+    "stackSettings": {
+      "title": "聚合设置",
+      "subagentDescription": "子代理默认跟随主模型。选一个聚合里的模型后，主代理派出的子代理默认用它（主代理派单时自己指定了模型的除外）。不用重启 Codex，新开的对话就会用上；已经开着的对话仍按原来的设置。",
+      "subagentModel": "子代理模型",
+      "followMain": "跟随主模型",
+      "subagentEffort": "子代理推理强度",
+      "effortModelDefault": "模型默认",
+      "effortModelDefaultNamed": "模型默认（{{effort}}）",
+      "unavailableOption": "{{model}}（已不在聚合里）",
+      "unavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），子代理暂时跟随主模型；加回来后自动恢复。",
+      "noModels": "聚合名单里还没有发布的模型，先把供应商加入聚合。",
+      "classicOff": "子代理和主代理不在同一家，Codex 新版的子 agent 工具会把任务加密，只有主代理那家解得开，子代理会收不到任务。必须打开下面的「聚合模式下子 agent 用经典工具」。",
+      "autoReviewModel": "自动审批模型",
+      "autoReviewDescription": "Codex 开了自动审批（Approve for me）时，判断操作能不能放行用的模型，可以选聚合里别家的模型。改完需要重启 Codex。",
+      "autoReviewDefaultOfficial": "官方 Auto Review（默认）",
+      "autoReviewDefaultMain": "主模型自己审批（默认）",
+      "autoReviewUnavailable": "所选模型已不在聚合名单里（成员被移除或模型不再发布），审批暂时用默认模型；加回来后自动恢复。",
+      "saveFailed": "保存失败：{{error}}"
+    },
+    "routeSettings": "路由设置",
+    "routeSettingsTitle": "路由设置",
+    "moreRouteSettings": "更多路由设置"
   }
 }

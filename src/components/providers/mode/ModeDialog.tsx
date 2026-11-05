@@ -21,6 +21,11 @@ import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isOfficialAccount } from "@/utils/providerCapabilities";
 import type { ModeView } from "@/components/providers/presentation";
+import type { AppModeSubagentModel } from "@/types/proxy";
+import {
+  StackSubagentFields,
+  type StackSubagentValue,
+} from "./StackSubagentFields";
 
 /** 路由模式改写的客户端文件（确认框里写明，用默认位置）。 */
 const CLIENT_FILE: Partial<Record<AppId, string>> = {
@@ -50,7 +55,20 @@ interface ModeDialogProps {
   /** 聚合名单（含默认那家）及各家只做成员时发布的模型数；框里按选中的默认那家算「另有」哪几家 */
   stackMembers: { id: string; name: string; models: number }[];
   onClose: () => void;
-  onEnter: (target: Exclude<ModeView, "direct">, pick: string) => Promise<void>;
+  /**
+   * Codex 切换到聚合时框里的子代理设置（上游 6aeaeb17）：能选的模型（含默认那家，框里按选中的
+   * 默认那家去掉）和当前值。不传就不显示。
+   */
+  stackSubagent?: {
+    models: AppModeSubagentModel[];
+    value: StackSubagentValue;
+  };
+  /** `subagent`：进入聚合时框里的子代理设置（没改过也传，由调用方比对后保存） */
+  onEnter: (
+    target: Exclude<ModeView, "direct">,
+    pick: string,
+    subagent?: StackSubagentValue,
+  ) => Promise<void>;
   /** 回到直连（`useProviderId` 见 `exit` 状态） */
   onExit: (useProviderId?: string) => Promise<void>;
   /** 「需要路由」框里的「仍然直连切换」 */
@@ -109,6 +127,7 @@ function EnterBody({
   eligibleIds,
   defaultPick,
   stackMembers,
+  stackSubagent,
   onClose,
   onEnter,
 }: ModeDialogProps & {
@@ -134,9 +153,19 @@ function EnterBody({
     !isOfficialAccount(app, pickedProvider) &&
     eligible.some((p) => isOfficialAccount(app, p));
 
+  const showSubagent = target === "stack" && stackSubagent !== undefined;
+  const [subagent, setSubagent] = useState<StackSubagentValue | undefined>(
+    stackSubagent?.value,
+  );
+  // 默认那家不发布 `ccs-*` 模型：它自己的模型不能当子代理
+  const subagentModels = (stackSubagent?.models ?? []).filter(
+    (model) => model.providerId !== pick,
+  );
+
   useEffect(() => {
     setPick(initialPick);
     // 每次打开按传进来的预选重置
+    setSubagent(stackSubagent?.value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
@@ -195,7 +224,7 @@ function EnterBody({
     setBusy(true);
     setError(null);
     try {
-      await onEnter(target, pick);
+      await onEnter(target, pick, showSubagent ? subagent : undefined);
       onClose();
     } catch (err) {
       setError(extractErrorMessage(err) || t("common.unknown"));
@@ -261,6 +290,20 @@ function EnterBody({
           </p>
         )}
       </div>
+
+      {showSubagent && subagent && (
+        <div className="space-y-2 border-t border-border-default pt-4">
+          <p className="text-xs text-muted-foreground">
+            {t("mode.dialog.stackSubagentLead")}
+          </p>
+          <StackSubagentFields
+            models={subagentModels}
+            value={subagent}
+            onChange={setSubagent}
+            disabled={busy}
+          />
+        </div>
+      )}
 
       <NoteList notes={notes} />
 

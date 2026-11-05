@@ -277,7 +277,8 @@
     "disable": "無効にする",
     "directProviderHint": "ルーティングを終了するとこのプロバイダに戻ります",
     "openTerminalWithProvider": "このプロバイダーでターミナルを開く",
-    "stackBadgeNoModels": "モデルが設定されていないため、モデル選択には表示されません"
+    "stackBadgeNoModels": "モデルが設定されていないため、モデル選択には表示されません",
+    "formSubtitleStack": "{{app}}（集約モード）"
   },
   "notifications": {
     "providerAdded": "プロバイダーを追加しました",
@@ -469,8 +470,6 @@
         "description": "プロキシサービスの切り替え、ステータスとポート情報を表示",
         "enableFeature": "メインページにプロキシ切り替えを表示",
         "enableFeatureDescription": "有効にすると、メインページ上部にプロキシとフェイルオーバーの切り替えが表示されます",
-        "enableFailoverToggle": "メインページにフェイルオーバー切り替えを表示",
-        "enableFailoverToggleDescription": "有効にすると、メインページ上部にフェイルオーバー切り替えが独立して表示されます",
         "running": "実行中",
         "stopped": "停止中"
       },
@@ -991,7 +990,10 @@
       "reset": "既定値に戻す",
       "hint": "いずれかに達すると停止。既定値は 95% / 98%。保存後の新しいリクエストから適用します。",
       "invalid": "1～99 の整数を入力してください。"
-    }
+    },
+    "codexStackClassicSubagents": "集約モードでサブエージェントにクラシックツールを使う",
+    "codexStackClassicSubagentsDescription": "メインとサブのエージェントが別のプロバイダーを使う場合は必ずオンにしてください。オフだとサブエージェントにタスクが届きません。",
+    "codexStackClassicSubagentsForcedV2": "Codex の config.toml で [features] multi_agent_v2 がオンになっています。こちらが優先されるため、この設定は効きません。"
   },
   "apps": {
     "claude": "Claude",
@@ -1572,7 +1574,15 @@
     "fallbackModelHelp": "Sonnet・Opus・Fable・Haiku のどの枠にも当たらないリクエストは、このモデルで上流へ送ります。",
     "fallbackModelHelpDirect": "ANTHROPIC_MODEL に書き込まれ、Claude Code の起動時のメインモデルになります。バックグラウンドタスクは Haiku の枠を使います。",
     "fallbackModelMissing": "未設定です。どの枠にも当たらないリクエストが元の Claude モデル名で上流へ送られ、エラーになることがあります。",
-    "fallbackModelHaikuMissing": "Haiku の枠が未設定です。バックグラウンドタスクが元の Claude モデル名で上流へ要求し、サードパーティのエンドポイントではエラーになることがあります。"
+    "fallbackModelHaikuMissing": "Haiku の枠が未設定です。バックグラウンドタスクが元の Claude モデル名で上流へ要求し、サードパーティのエンドポイントではエラーになることがあります。",
+    "stackLayout": {
+      "noModels": "モデル一覧が空です：集約に追加してもモデル選択には表示されません"
+    },
+    "stackModelsLabel": "モデル一覧",
+    "stackModelDefaultHelp": "これらのモデルは Claude Code の /model に表示され、選ぶとこのプロバイダーへ直接送られます。先頭の行がデフォルトモデルで、このカードの ANTHROPIC_MODEL にも書き込まれます。",
+    "addStackModel": "手動で追加",
+    "stackModelsEmpty": "モデルが未設定です：集約に追加してもモデル選択には表示されません",
+    "stackModelPlaceholder": "例: deepseek-v4-pro"
   },
   "codex": {
     "needsRouting": "ルーティング必須",
@@ -1753,7 +1763,8 @@
     "defaultModelNotInList": "デフォルトモデル {{model}} は一覧にありません。Codex は既定でこれをリクエストしますが、/model には表示されません。",
     "addToModelList": "一覧に追加",
     "routeOnlySettingsHint": "以下の二つはルーティングモードと集約モードでのみ有効です。",
-    "upstreamFormatCopilotRouteHint": "どのモードでもルーティングが必要で、ルーティングが Copilot アカウントの認証情報を注入します。手動指定したプロトコルにモデルが対応していないとエラーになります。"
+    "upstreamFormatCopilotRouteHint": "どのモードでもルーティングが必要で、ルーティングが Copilot アカウントの認証情報を注入します。手動指定したプロトコルにモデルが対応していないとエラーになります。",
+    "stackModelDefaultHelp": "これらのモデルは Codex の /model に表示され、選ぶとこのプロバイダーへ直接送られます。先頭の行がデフォルトモデルで、このプロバイダーがデフォルトのとき使われます。"
   },
   "codexOauth": {
     "authStatus": "認証状態",
@@ -2954,10 +2965,6 @@
     "priority": {
       "tooltip": "フェイルオーバー優先度 {{priority}}"
     },
-    "tooltip": {
-      "enabled": "{{app}} フェイルオーバーが有効\nキューの優先度（P1→P2→...）で使用します",
-      "disabled": "{{app}} フェイルオーバーを有効にする\nキューの P1 に即時切替し、失敗時は次を順に試行します"
-    },
     "officialUnavailable": "公式アカウントはフェイルオーバーキューに追加できません。",
     "queueAddFailed": "キューへの追加に失敗しました: {{detail}}",
     "queueRemoveFailed": "キューからの削除に失敗しました: {{detail}}"
@@ -3875,15 +3882,6 @@
       "cliFailed": "Codex 内蔵の一覧：Codex CLI がモデル一覧を出力しませんでした（詳細はログを参照）",
       "nothingUsable": "Codex 内蔵の一覧：使えるモデルがありません。Codex を最新版に更新してください"
     },
-    "models": {
-      "title": "集約モデル",
-      "custom": "このプロバイダーが公開するモデルを指定",
-      "hint": "既定ではモデルマッピングを使用します。リストの先頭が既定となり、空のリストではモデルを公開しません。",
-      "id": "モデル {{index}} の ID",
-      "name": "モデル {{index}} の表示名",
-      "first": "先頭に移動して既定モデルにする",
-      "add": "手動で追加"
-    },
     "saveRestart": "保存してサービスを再起動",
     "rebindHint": "待受アドレスを保存すると再起動します。バインドに失敗すると元のアドレスに戻ります。",
     "officialDefaultAdvice": "集約モデル ID のないリクエストには、公式アカウントを集約の既定に設定することをお勧めします。",
@@ -3897,28 +3895,6 @@
       "unverifiedHint": "CC Switch からはデスクトップ版やエディター拡張が起動中かどうか確認できません。開いていなければ、この通知を閉じてください。",
       "daemon": "CLI：codex を開き直すだけでは反映されません。バックグラウンドのデーモンを再起動する必要があります。",
       "others": "デスクトップ版：完全に終了してから開き直してください（macOS では ⌘Q。ウィンドウを閉じるだけでは不十分です）。エディター拡張：エディターのウィンドウを開き直してください。"
-    },
-    "stackSettings": {
-      "title": "集約設定",
-      "subagentDescription": "サブエージェントは既定でメインモデルに従います。集約内のモデルを選ぶと、メインエージェントが起動するサブエージェントは既定でそのモデルを使います（起動時にメインエージェントがモデルを指定した場合を除く）。Codex の再起動は不要で、新しく開いた会話から反映されます。開いたままの会話は以前の設定のままです。",
-      "subagentModel": "サブエージェントのモデル",
-      "followMain": "メインモデルに従う",
-      "subagentEffort": "サブエージェントの推論強度",
-      "effortModelDefault": "モデルの既定",
-      "effortModelDefaultNamed": "モデルの既定（{{effort}}）",
-      "unavailableOption": "{{model}}（集約から外れています）",
-      "unavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、サブエージェントは一時的にメインモデルに従います。再び追加すると自動で戻ります。",
-      "noModels": "集約で公開されているモデルがまだありません。先にプロバイダーを集約に追加してください。",
-      "classicOff": "サブエージェントがメインと別のプロバイダーで動くため、Codex の新しいサブエージェントツールはタスクを暗号化し、メイン側のプロバイダーしか読めず、サブエージェントにタスクが届きません。下の「集約モードでサブエージェントにクラシックツールを使う」を必ずオンにしてください。",
-      "classicTools": "集約モードでサブエージェントにクラシックツールを使う",
-      "classicToolsDescription": "メインとサブのエージェントが別のプロバイダーを使う場合は必ずオンにしてください。オフだとサブエージェントにタスクが届きません。",
-      "classicToolsForcedV2": "Codex の config.toml で [features] multi_agent_v2 がオンになっています。こちらが優先されるため、この設定は効きません。",
-      "autoReviewModel": "自動承認モデル",
-      "autoReviewDescription": "Codex の自動承認（Approve for me）が有効なとき、操作を許可するかどうかの判断に使うモデルです。集約内の他のプロバイダーのモデルも選べます。変更後は Codex を再起動してください。",
-      "autoReviewDefaultOfficial": "公式 Auto Review（既定）",
-      "autoReviewDefaultMain": "メインモデル自身が承認（既定）",
-      "autoReviewUnavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、承認は一時的に既定のモデルを使います。再び追加すると自動で戻ります。",
-      "saveFailed": "保存に失敗しました：{{error}}"
     },
     "toast": {
       "routeRemembered": "プロバイダー {{provider}} を記録しました。クライアントがルーティングまたは集約で接続したときに使用します。",
@@ -4737,13 +4713,51 @@
       "needsRouteTitle": "{{provider}} にはルーティングが必要です",
       "needsRouteLead": "{{provider}}：{{reason}}。直接接続で切り替えると {{app}} では使えません。",
       "switchAnyway": "それでも直接切り替える",
-      "routeAndUse": "ルーティングを開始して使う"
+      "routeAndUse": "ルーティングを開始して使う",
+      "stackSubagentLead": "サブエージェントは既定でメインモデルに従います。集約内のモデルを選ぶこともできます（あとから「集約設定」でいつでも変更できます）。"
     },
     "help": {
       "title": "接続モードの違い",
       "direct": "直接接続：CC Switch はリクエストに一切関与せず、クライアントが選んだプロバイダーに直接つながる、最もネイティブな使い方です。",
       "route": "ルーティング：リクエストはこのマシンの CC Switch を経由し、プロバイダーのホットスイッチ、フェイルオーバー、フォーマット変換などの高度な機能が使えます。",
       "stack": "集約：複数のプロバイダーのモデルが /model に並び、クライアント内でシームレスに切り替えられます。"
-    }
+    },
+    "toast": {
+      "enteredRoute": "{{app}} のルーティングを開始しました → {{provider}}。",
+      "enteredStack": "{{app}} を集約に切り替えました。{{app}} を再起動すると /model に集約したモデルが表示されます。",
+      "enteredStackLive": "{{app}} を集約に切り替えました。集約したモデルが /model に表示されます。",
+      "enteredStackDesktop": "{{app}} を集約に切り替えました。{{app}} を再起動すると、集約したモデルがモデル一覧に表示されます。",
+      "exited": "直接接続に戻しました：{{app}} は {{provider}} に直接接続しています。",
+      "routeRemembered": "プロバイダー {{provider}} を保存しました。クライアントがルーティングまたは集約に接続すると使用されます。",
+      "routeTargetChanged": "ルーティング先を {{provider}} に設定しました。",
+      "routeSwitched": "ルーティング先を {{provider}} に切り替えました。以降の新しいリクエストはこのプロバイダーを使用します。",
+      "stackDefaultChanged": "集約のデフォルトを {{provider}} に設定しました。選択済みの集約モデルは引き続き各モデルのプロバイダーを使用します。",
+      "clientConfigChanged": "クライアント設定も更新されました。更新後の設定を読み込むには {{app}} を再起動してください。",
+      "defaultRemembered": "集約に切り替えると、{{provider}} が既定のプロバイダーになります。",
+      "restartHint": "{{app}} の再起動後に反映されます。",
+      "failed": "切り替えに失敗しました：{{detail}}"
+    },
+    "stackSettings": {
+      "title": "集約設定",
+      "subagentDescription": "サブエージェントは既定でメインモデルに従います。集約内のモデルを選ぶと、メインエージェントが起動するサブエージェントは既定でそのモデルを使います（起動時にメインエージェントがモデルを指定した場合を除く）。Codex の再起動は不要で、新しく開いた会話から反映されます。開いたままの会話は以前の設定のままです。",
+      "subagentModel": "サブエージェントのモデル",
+      "followMain": "メインモデルに従う",
+      "subagentEffort": "サブエージェントの推論強度",
+      "effortModelDefault": "モデルの既定",
+      "effortModelDefaultNamed": "モデルの既定（{{effort}}）",
+      "unavailableOption": "{{model}}（集約から外れています）",
+      "unavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、サブエージェントは一時的にメインモデルに従います。再び追加すると自動で戻ります。",
+      "noModels": "集約で公開されているモデルがまだありません。先にプロバイダーを集約に追加してください。",
+      "classicOff": "サブエージェントがメインと別のプロバイダーで動くため、Codex の新しいサブエージェントツールはタスクを暗号化し、メイン側のプロバイダーしか読めず、サブエージェントにタスクが届きません。下の「集約モードでサブエージェントにクラシックツールを使う」を必ずオンにしてください。",
+      "autoReviewModel": "自動承認モデル",
+      "autoReviewDescription": "Codex の自動承認（Approve for me）が有効なとき、操作を許可するかどうかの判断に使うモデルです。集約内の他のプロバイダーのモデルも選べます。変更後は Codex を再起動してください。",
+      "autoReviewDefaultOfficial": "公式 Auto Review（既定）",
+      "autoReviewDefaultMain": "メインモデル自身が承認（既定）",
+      "autoReviewUnavailable": "選択したモデルは集約に含まれなくなったため（プロバイダーの削除またはモデルの公開停止）、承認は一時的に既定のモデルを使います。再び追加すると自動で戻ります。",
+      "saveFailed": "保存に失敗しました：{{error}}"
+    },
+    "routeSettings": "ルーティング設定",
+    "routeSettingsTitle": "ルーティング設定",
+    "moreRouteSettings": "その他のルーティング設定"
   }
 }

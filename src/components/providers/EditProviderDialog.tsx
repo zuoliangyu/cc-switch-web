@@ -17,6 +17,8 @@ import {
   providersApi,
   type AppId,
 } from "@/lib/api";
+import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
+import type { ModeView } from "@/components/providers/presentation";
 
 interface EditProviderDialogProps {
   open: boolean;
@@ -29,6 +31,8 @@ interface EditProviderDialogProps {
   }) => Promise<void> | void;
   appId: AppId;
   isProxyTakeover?: boolean; // 代理接管模式下不读取 live（避免显示被接管后的代理配置）
+  /** 从供应商页哪一格打开的，见 ProviderForm 的同名参数 */
+  modeView?: ModeView;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -43,8 +47,11 @@ export function EditProviderDialog({
   onSubmit,
   appId,
   isProxyTakeover = false,
+  modeView,
 }: EditProviderDialogProps) {
   const { t } = useTranslation();
+  // 表单用了聚合的简化布局：页头标「聚合模式」
+  const [stackLayout, setStackLayout] = useState(false);
   const editorConflict = useProviderEditorConflict(open, `${appId}:${provider?.id ?? ""}`);
   const providerEditor = useProviderEditorView(
     open &&
@@ -300,6 +307,11 @@ export function EditProviderDialog({
         isOpen={open && (editorReady || !!providerEditor.error)}
         trackUnsavedChanges
         title={t("provider.editProvider")}
+        subtitle={
+          stackLayout
+            ? t("provider.formSubtitleStack", { app: APP_DISPLAY_NAME[appId] })
+            : undefined
+        }
         onClose={() => onOpenChange(false)}
         footer={
           <Button
@@ -342,6 +354,8 @@ export function EditProviderDialog({
               appId={appId}
               providerId={provider.id}
               submitLabel={t("common.save")}
+              modeView={modeView}
+              onStackLayoutChange={setStackLayout}
               onSubmit={handleSubmit}
               onCancel={() => onOpenChange(false)}
               onSubmittingChange={setIsFormSubmitting}

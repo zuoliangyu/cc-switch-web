@@ -29,6 +29,8 @@ import { extractGrokBuildBaseUrl } from "@/utils/grokBuildConfig";
 import { GROKBUILD_OFFICIAL_PROVIDER_ID } from "@/utils/providerCapabilities";
 import type { OpenClawSuggestedDefaults } from "@/config/openclawProviderPresets";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
+import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
+import type { ModeView } from "@/components/providers/presentation";
 
 interface AddProviderDialogProps {
   open: boolean;
@@ -44,6 +46,8 @@ interface AddProviderDialogProps {
       editorSave?: ProviderEditorSave;
     },
   ) => Promise<void> | void;
+  /** 从供应商页哪一格打开的，见 ProviderForm 的同名参数 */
+  modeView?: ModeView;
 }
 
 export function AddProviderDialog({
@@ -51,8 +55,11 @@ export function AddProviderDialog({
   onOpenChange,
   appId,
   onSubmit,
+  modeView,
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
+  // 表单用了聚合的简化布局：页头标「聚合模式」
+  const [stackLayout, setStackLayout] = useState(false);
   const editorConflict = useProviderEditorConflict(open, appId);
   const providerEditor = useProviderEditorView(
     open &&
@@ -413,6 +420,11 @@ export function AddProviderDialog({
         isOpen={open}
         trackUnsavedChanges={step === "form" && !accountLogin}
         title={t("provider.addNewProvider")}
+        subtitle={
+          stackLayout
+            ? t("provider.formSubtitleStack", { app: APP_DISPLAY_NAME[appId] })
+            : undefined
+        }
         backLabel={
           step === "form"
             ? t("providerPreset.backToPick")
@@ -445,6 +457,8 @@ export function AddProviderDialog({
                 providerLiveBase={providerEditor.view?.settings}
                 appId={appId}
                 submitLabel={t("common.add")}
+                modeView={modeView}
+                onStackLayoutChange={setStackLayout}
                 onSubmit={handleSubmit}
                 onCancel={() => onOpenChange(false)}
                 onSubmittingChange={setIsFormSubmitting}

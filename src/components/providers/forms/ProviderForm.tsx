@@ -1,5 +1,11 @@
-import { normalizeAggregationModels } from "./ClaudeAggregationModels";
+import {
+  claudeStackModelsFromEnv,
+  createClaudeStackModelRow,
+  normalizeClaudeStackModels,
+  type ClaudeStackModelRow,
+} from "./ClaudeStackModelsField";
 import type { ClaudeStackModel } from "@/types";
+import { setClaudeOneMMarker } from "./hooks/useModelState";
 import { overlayCodexProviderConfig } from "@/utils/codexEditorOverlay";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -136,6 +142,7 @@ import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { useHermesLiveProviderIds } from "@/hooks/useHermes";
 import { useAppModeView } from "@/hooks/useAppMode";
+import { toModeView, type ModeView } from "@/components/providers/presentation";
 import type { DirectModeFormatNotice } from "./shared";
 import { GrokBuildProviderForm } from "./GrokBuildProviderForm";
 import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
@@ -256,6 +263,22 @@ const normalizeCodexChatReasoningForSave = (
 const normalizeProviderKey = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9-]/g, "");
 
+/**
+ * 表单里的聚合模型列表：行里配了就用它（空列表是用户清空了），没配是 `null`（跟着模型映射）。
+ */
+const initialClaudeStackRows = (
+  models: ClaudeStackModel[] | undefined,
+): ClaudeStackModelRow[] | null =>
+  models ? models.map((model) => createClaudeStackModelRow(model)) : null;
+
+/** 列表的第一个模型（默认模型）写进 `ANTHROPIC_MODEL` 的样子：1M 模型带标记。 */
+const claudeStackDefaultModel = (
+  rows: ClaudeStackModel[],
+): string | undefined => {
+  const first = normalizeClaudeStackModels(rows)[0];
+  return first && setClaudeOneMMarker(first.model, first.oneM === true);
+};
+
 export interface ProviderFormProps {
   providerLiveBase?: Record<string, unknown>;
   appId: AppId;
@@ -280,6 +303,13 @@ export interface ProviderFormProps {
     iconColor?: string;
   };
   showButtons?: boolean;
+  /**
+   * 从供应商页哪一格（直连 / 路由 / 聚合）打开的。Claude Code、Codex 只在聚合那格打开时用
+   * 聚合的简化表单；没给就按应用实际生效的模式（上游 fe831f0a）。
+   */
+  modeView?: ModeView;
+  /** 表单是否用了聚合的简化布局（页头据此在应用名后标「聚合模式」） */
+  onStackLayoutChange?: (stackLayout: boolean) => void;
 }
 
 function ProviderFormFull({
@@ -294,6 +324,8 @@ function ProviderFormFull({
   onSubmittingChange,
   initialData,
   showButtons = true,
+  modeView,
+  onStackLayoutChange,
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const isEditMode = Boolean(initialData);
@@ -314,9 +346,6 @@ function ProviderFormFull({
     }
   };
 
-  const [aggregationModels, setAggregationModels] = useState<
-    ClaudeStackModel[] | undefined
-  >(initialData?.meta?.stackModels);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     initialData ? null : "custom",
   );
@@ -394,6 +423,17 @@ function ProviderFormFull({
     isEditMode,
     initialCategory: initialData?.category,
   });
+  // 在聚合那格打开（没给就看应用实际是否在聚合模式）时，第三方卡用聚合的简化表单：
+  // 连接 + 模型列表 + 高级；两种布局共用同一份表单状态（上游 fe831f0a）。
+  const useStackLayout =
+    (modeView ?? (appModeView ? toModeView(appModeView.mode) : undefined)) ===
+      "stack" &&
+    (appId === "claude" || appId === "codex") &&
+    category !== "official";
+  useEffect(() => {
+    onStackLayoutChange?.(useStackLayout);
+    return () => onStackLayoutChange?.(false);
+  }, [useStackLayout, onStackLayoutChange]);
   const isOmoCategory = appId === "opencode" && category === "omo";
   const isOmoSlimCategory = appId === "opencode" && category === "omo-slim";
   const isAnyOmoCategory = isOmoCategory || isOmoSlimCategory;
@@ -427,6 +467,7 @@ function ProviderFormFull({
         initialData?.meta?.localProxyRequestOverrides?.body,
       ),
     );
+    setClaudeStackRows(initialClaudeStackRows(initialData?.meta?.stackModels));
   }, [appId, initialData, supportsFullUrl]);
 
   const defaultValues: ProviderFormData = useMemo(
@@ -554,6 +595,42 @@ function ProviderFormFull({
     onConfigChange: handleSettingsConfigChange,
     getSettingsConfig,
   });
+
+  // 聚合模式：Claude Code 的模型列表存在 meta.stackModels。`null` 表示没配列表，显示（后端也
+  // 按它发布）模型映射里的模型，跟着映射变；动过列表才存（上游 ClaudeStackModelsField）。
+  const [claudeStackRows, setClaudeStackRows] = useState<
+    ClaudeStackModelRow[] | null
+  >(() => initialClaudeStackRows(initialData?.meta?.stackModels));
+  // 按行里实际写的映射算（和后端一样），不用 useModelState 回填过的值。
+  const claudeSettingsConfig =
+    appId === "claude" ? form.watch("settingsConfig") : "";
+  const mappedClaudeStackRows = useMemo(() => {
+    let env: Record<string, unknown> | undefined;
+    try {
+      const parsed = JSON.parse(claudeSettingsConfig || "{}") as {
+        env?: unknown;
+      };
+      env =
+        parsed.env && typeof parsed.env === "object"
+          ? (parsed.env as Record<string, unknown>)
+          : undefined;
+    } catch {
+      env = undefined;
+    }
+    return claudeStackModelsFromEnv(env).map((model) =>
+      createClaudeStackModelRow(model),
+    );
+  }, [claudeSettingsConfig]);
+  const shownClaudeStackRows = claudeStackRows ?? mappedClaudeStackRows;
+  // 列表的第一个就是默认模型：它一变（删掉、改名），`ANTHROPIC_MODEL` 当场跟着变；没动第一个
+  // 就不碰。删光了也不碰。
+  const handleClaudeStackRowsChange = (rows: ClaudeStackModelRow[]) => {
+    setClaudeStackRows(rows);
+    const next = claudeStackDefaultModel(rows);
+    if (next && next !== claudeStackDefaultModel(shownClaudeStackRows)) {
+      handleModelChange("ANTHROPIC_MODEL", next);
+    }
+  };
 
   // 提交时的校验和身份判断要按 JSON 编辑器里的当前内容，不能用上一次渲染时 hook
   // 里的旧状态。
@@ -1456,6 +1533,16 @@ function ProviderFormFull({
           return;
         }
       }
+      // 聚合布局：一个模型都没有的供应商加进聚合后不会出现在模型选择器里。
+      if (useStackLayout) {
+        const hasNoModels =
+          appId === "claude"
+            ? normalizeClaudeStackModels(shownClaudeStackRows).length === 0
+            : normalizeCodexCatalogModelsForSave(codexCatalogModels).length ===
+                0 && !extractCodexModelName(codexConfig ?? "");
+        // 只提醒不拦：显式空列表就是这家在聚合里什么都不发布（上游最终版）
+        if (hasNoModels) toast.warning(t("providerForm.stackLayout.noModels"));
+      }
     }
 
     let settingsConfig: string;
@@ -1648,9 +1735,10 @@ function ProviderFormFull({
     payload.meta = {
       ...(baseMeta ?? {}),
       opencodeConfigFormat: isNativeOpencode ? "v2" : undefined,
+      // 动过列表才存；清空了存空列表（什么都不发布），和没配（跟着映射）区分开。
       stackModels:
-        appId === "claude" && aggregationModels !== undefined
-          ? normalizeAggregationModels(aggregationModels)
+        appId === "claude" && category !== "official" && claudeStackRows
+          ? normalizeClaudeStackModels(claudeStackRows)
           : undefined,
       isPartner: activePreset
         ? activePreset.isPartner
@@ -1873,6 +1961,8 @@ function ProviderFormFull({
 
   const handlePresetChange = (value: string) => {
     setSelectedPresetId(value);
+    // 聚合模型是这家自己的：换预设后回到跟着新预设的模型映射。
+    setClaudeStackRows(null);
     if (value === "custom") {
       setActivePreset(null);
       form.reset(defaultValues);
@@ -2305,9 +2395,10 @@ function ProviderFormFull({
 
           {appId === "claude" && (
             <ClaudeFormFields
+              variant={useStackLayout ? "stack" : "classic"}
               directModeFormatNotice={directModeFormatNotice}
-              aggregationModels={aggregationModels}
-              onAggregationModelsChange={setAggregationModels}
+              stackModelRows={shownClaudeStackRows}
+              onStackModelRowsChange={handleClaudeStackRowsChange}
               providerId={providerId}
               shouldShowApiKey={
                 (category !== "cloud_provider" ||
@@ -2446,6 +2537,7 @@ function ProviderFormFull({
                 }
                 autoSelect={endpointAutoSelect}
                 onAutoSelectChange={setEndpointAutoSelect}
+                variant={useStackLayout ? "stack" : "classic"}
                 directModeFormatNotice={directModeFormatNotice}
                 apiFormat={localCodexApiFormat}
                 onApiFormatChange={handleCodexApiFormatChange}
@@ -2610,8 +2702,10 @@ function ProviderFormFull({
             />
           )}
 
-          {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器 */}
-          {appId === "codex" ? (
+          {/* 配置编辑器：Codex、Claude、Gemini 分别使用不同的编辑器；聚合布局不显示 */}
+          {useStackLayout ? (
+            settingsConfigErrorField
+          ) : appId === "codex" ? (
             <>
               <CodexConfigEditor
                 keyFieldMode

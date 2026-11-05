@@ -212,7 +212,7 @@
 | `20222460` | v4.0.2 | docs(whats-new): add the 4.0.2 summary | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `db8069ef` | v4.0.2 | fix(codex): keep the reasoning levels column from stretching the model catalog | 5a 供应商与全局 UI | 5a1：Codex 模型目录行按上游最终形态补上思考档位列（多选档位 + 默认档位，相邻三档以上折成 first → last），列宽不被长标签撑开 | 已迁移 |
 | `91765357` | v4.0.2 | feat(ui): pick fetched models into the Codex model mapping table | 5a 供应商与全局 UI | 5a1b：Codex 模型列表标题上的「获取模型列表」打开同一个选择弹窗，选中的模型按 ID 建行并补窗口与思考档位；行内下拉仍可换单行模型；Codex 模型列表、Claude 聚合模型、OpenCode 列表的添加按钮改为「手动添加」 | 已迁移 |
-| `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 5a1：按打开表单的模式标签（直连 / 路由 / 聚合）选表单布局；Web 没有模式标签页与聚合表单布局，表单只有一种布局 | 不适用 |
+| `fe831f0a` | v4.0.2 | feat(ui): pick the provider form layout from the tab it was opened in | 5a 供应商与全局 UI | 5d3b：表单按打开时正在看的那格选布局：SwitchModePanel 用 onViewChange 报上来，App 在新增 / 编辑时传给 Add / EditProviderDialog → ProviderForm 的 modeView；Claude Code / Codex 的第三方卡只在聚合那格打开时用聚合的简化表单，没给就按应用实际模式；页头标「{{app}}（聚合模式）」（provider.formSubtitleStack，FullScreenPanel 新增 subtitle） | 已迁移 |
 | `9ec89fe8` | v4.0.2 | feat(claude): list aggregated models through modelPicker instead of gateway discovery | 4 模式/路由 | 4c：聚合模式下 Claude Code 的 /model 改用顶层 modelPicker（replaceBuiltInOptions，每个聚合模型一行），不再写 CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY（旧契约写过的按独有字段删）；路由契约逐字节不变；floor 与前端键字段镜像加 modelPicker | 已迁移 |
 | `600fdb0c` | v4.0.2 | fix(ui): drop the restart hints for Claude Code aggregation changes | 5a 供应商与全局 UI | 5a3a：Claude Code 聚合模型已写进 settings.json 的 modelPicker、运行中即生效，去掉模式面板「重启 Claude Code 刷新模型目录」提示（webMode.claudeModelsRestart）；Codex 的重启提示不变；Web 无 useStackModelsChangedHint 与进入聚合的 toast，无需改动 | 已迁移 |
 | `08f789a8` | v4.0.2 | chore(release): v4.0.2 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -344,13 +344,13 @@
 | `233310d7` | v4.0.9 | feat(presets): add OpenModel sponsor presets across ten apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `886915a7` | v4.0.9 | feat(presets): add BotCF presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c4770472` | v4.0.9 | feat(presets): add YYLX presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `4f08989a` | v4.0.9 | refactor(stack): explain the default model with a help tip instead of stars | 4 模式/路由 | 4b：上游 Stack 布局模型列表的星标改帮助提示；Web 的供应商表单没有 Stack 布局与星标，聚合模型编辑器（ClaudeAggregationModels）本来就是文字说明加「移到首位设为默认」 | 不适用 |
+| `4f08989a` | v4.0.9 | refactor(stack): explain the default model with a help tip instead of stars | 4 模式/路由 | 5d3b：默认模型用帮助提示说明，不用星标：Claude 列表标题旁的「?」写「第一行是默认模型」（providerForm.stackModelDefaultHelp），Codex 模型列表在聚合布局下用 codexConfig.stackModelDefaultHelp | 已迁移 |
 | `0dae89e2` | v4.0.9 | refactor(codex): move the model list out of the advanced options | 5a 供应商与全局 UI | 5a1b：Codex 模型列表移出高级选项，排在连接信息之后、默认模型之前，标题改为「模型列表」；去掉 Web 为 #6 加的「自定义模型目录」开关（be2ba289），列表常驻、留空即不生成目录，目录仍不决定是否需要路由，Chat 思考与缓存参数照旧独立；路由指南同步 | 已迁移 |
 | `9f7ac1fa` | v4.0.9 | refactor(codex): make the first row of the model list the default model | 5a 供应商与全局 UI | 5a1b：有模型列表时第一行就是默认模型、不再显示默认模型框；列表为空时显示，加第一行时用当前默认模型打底；改名 / 删除第一行时 model 当场跟着变；旧卡默认模型不在第一行时显示时挪到最前、不算修改 | 已迁移 |
-| `36e2ce2c` | v4.0.9 | refactor(codex): move field explanations into help tips | 5a 供应商与全局 UI | 5a1b：Codex 表单字段说明收进「?」，后果提示留在页面上；UA 与请求覆盖合成一组，开头说一次「只在路由、聚合模式下生效」。上游 Stack 布局与 Anthropic 格式专有字段 Web 的 Codex 表单没有，不适用 | 部分迁移 |
-| `84ca4f00` | v4.0.9 | refactor(stack): move aggregation layout explanations into help tips | 4 模式/路由 | 4b：上游聚合表单布局说明改为帮助提示；Web 的供应商表单没有聚合布局 | 不适用 |
+| `36e2ce2c` | v4.0.9 | refactor(codex): move field explanations into help tips | 5a 供应商与全局 UI | 5a1b/5d3b：Codex 字段说明收进「?」、UA 与请求覆盖合成一组随 5a1b；Codex 聚合布局随 5d3b。Anthropic 格式专有字段（冒充 Claude Code、最大输出 Token）不适用：Web 的 Codex 上游格式只有自动 / Chat / Responses | 部分迁移 |
+| `84ca4f00` | v4.0.9 | refactor(stack): move aggregation layout explanations into help tips | 4 模式/路由 | 5d3b：聚合简化表单：Claude 是连接（上游格式在 Key 前、Anthropic 格式时认证字段放 Key 旁）+ 上游 ClaudeStackModelsField 模型列表（没存过列表时从模型映射生成行、列表即发布的模型、首行默认并同步 ANTHROPIC_MODEL；显式空列表不发布）+ 折叠的高级（完整 URL、UA 与请求覆盖），不显示模型映射和配置编辑器；去掉 Web 的 ClaudeAggregationModels 与「自定义列表」开关；完整表单不显示聚合模型列表，思考强度并进高级里的格式字段；Codex 的简化表单把上游格式放在 Key 前面，高级里只有完整 URL、思考能力、UA 与请求覆盖；列表为空时提醒但可保存 | 已迁移 |
 | `5b78fc62` | v4.0.9 | docs(flatpak): explain skipping updater artifacts without a signing key | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `e615a6f4` | v4.0.9 | refactor(forms): make provider form hints follow the app's actual mode | 5a 供应商与全局 UI | 5a1b：表单按应用实际模式提示（新增不轮询的 useAppModeView）：直连时选了要转换的格式就在格式下提示后果（正在直连用的卡：保存后请求会失败；其他卡：要先切到路由或聚合）；Codex 的 Copilot 卡单独说明恒需路由。上游聚合布局 / ModeTabs 相关部分 Web 没有，不适用 | 部分迁移 |
+| `e615a6f4` | v4.0.9 | refactor(forms): make provider form hints follow the app's actual mode | 5a 供应商与全局 UI | 5a1b/5d3b：表单按应用实际模式提示随 5a1b；5d3b 补上按打开那格选布局，直连格式警告在简化表单的格式字段下照常显示 | 已迁移 |
 | `29998ed9` | v4.0.9 | fix(i18n): apply the saved language on cold start | 1d 资源/设置/工具 | 1d：拿到后端设置后用保存的语言校正首屏语言（Web 在 App 读取设置时同步，覆盖访问密钥门之后的首次加载） | 已迁移 |
 | `6e7811e5` | v4.0.9 | fix(proxy): send Bearer to OpenAI-format Claude upstreams and merge stack switches | 1b 代理协议 | 1b：OpenAI 格式 Claude 上游一律 Bearer、聚合成员兼容开关按性质合并、表单仅 Anthropic/Copilot 显示认证字段；Codex 主推理强度选择器依赖 Web 尚无的子代理表单字段，转入 5a | 部分迁移 |
 | `f59bba54` | v4.0.9 | refactor(forms): move Claude form explanations into help tips | 5a 供应商与全局 UI | 5a1b：Claude 表单的地址、上游格式、认证字段、模型映射、默认兜底模型说明收进「?」；后果只在适用时显示（第三方端点直连时 Haiku 档没填、路由时兜底模型没填）；UA 与请求覆盖共用一组说明，Copilot 卡不显示 | 已迁移 |
@@ -475,7 +475,7 @@
 | `16537fd3` | v4.0.13 | fix(codex): preserve compaction preferences in proxy config (#8339) | 4 模式/路由 | 4b：代理路由表保留路由那家的 remote_compaction 能力与「OpenAI」名字开关 | 已迁移 |
 | `09237ebd` | v4.0.13 | fix(windows): avoid native CSS drag regions (#8327) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
 | `be0a9cf0` | v4.0.13 | fix(presets): cap GPT context windows at the 272K subscription window | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b/5d3a：设备级聚合设置、子代理模型与强度、codexStackClassicTools 默认开（4b）；聚合设置仍在模式面板的聚合页里编辑，上游「切换到聚合」确认框里的子代理选择与 StackSettingsSheet 外壳随 5d3b | 部分迁移 |
+| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b/5d3b：设备级聚合设置（4b）；5d3b 迁入 StackSettingsSheet（模式行「聚合设置」按钮打开，含子代理模型 / 强度、经典子代理开关与自动审批模型，改了就保存），以及 Codex「切换到聚合」确认框里的子代理选择（StackSubagentFields 共用，确认时与设置不同才先存再进聚合）；替换原先内嵌在模式面板里的 CodexStackSettings | 已迁移 |
 | `e70e844c` | v4.0.13 | feat(codex): let Auto Review use another model | 4 模式/路由 | 4b：自动审批模型：卡上 modelCatalog.autoReviewModel（只能选映射里的，写进目录行 auto_review_model_override，读回时还原）；聚合下用设备级 codexStackAutoReviewModel（按合并目录校验） | 已迁移 |
 | `f9e0d537` | v4.0.13 | feat(mode): confirm before going back to direct | 4 模式/路由 | 4d：回到直连先确认：模式面板确认框写明直连那家、改写的客户端文件（Claude Desktop 为网关配置）、路由目标与队列保留 / 聚合模型消失；错误在确认框里就地显示；聚合切到路由也提示聚合模型会撤下 | 已迁移 |
 | `3e9eede4` | v4.0.13 | feat(claude-desktop): move Desktop into the device-level direct/route mode | 4 模式/路由 | 4c：Claude Desktop 并入设备级直连 / 路由模式：路由模式写指向本地路由 /claude-desktop 的网关 profile，直连模式写直连那家，要经路由的卡（模型映射、托管 OAuth）在直连下拒绝（switch.desktop_needs_routing），退出路由写不进去时退回官方；退出 CC Switch 不分离 Desktop；去掉按卡片启停映射服务；接管状态带 claude-desktop；Web 模式面板对 Desktop 开放。托盘、项目 Profile 命令（Web 无 commands/profile.rs）不适用 | 部分迁移 |
@@ -1164,3 +1164,10 @@
   - 与上游不同：故障转移队列不做上移 / 下移与拖动（删除 `queueMoveSortUpdates` 与相关文案）；模式行暂不放故障转移开关与路由设置面板（Web 页头已有 FailoverToggle，随 5d3b / 5d4 决定）；进入 / 退出模式成功不弹 toast；回到直连并改用另一家分两步完成。
   - 三语补上游 `providerCard.*`、`mode.*` 等文案，删除 73 项不再引用的旧文案；`docs/claude-codex-routing-guide-zh.md` 同步模式操作、分组与 Desktop 聚合支持的说法。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 225 个文件 2382 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。
+- 2026-11-06：完成布局收敛批次 5d3b（按模式的表单布局与模式设置面板）。fe831f0a、84ca4f00、4f08989a、e615a6f4、6aeaeb17 改为已迁移；36e2ce2c 仍为部分迁移（Web 的 Codex 没有 Anthropic 上游格式）。
+  - 表单按打开时查看的页签选布局：在聚合页签添加或编辑 Claude Code / Codex 第三方卡时用简化表单（连接、模型列表、高级），页头标「（聚合模式）」；从直连或路由页签打开的是完整表单，不再显示聚合模型列表。
+  - Claude 简化表单改用上游 `ClaudeStackModelsField`，去掉 Web 的 `ClaudeAggregationModels` 与「自定义列表」开关：没存过列表时从模型映射生成行（未改动保存不写 `stackModels`，发布不变），首行默认并同步 `ANTHROPIC_MODEL`，显式空列表不发布，保存时只提醒。
+  - 模式行：路由生效时显示故障转移开关与「路由设置」抽屉（当前应用的超时、重试、熔断）；Codex 聚合生效时显示「聚合设置」抽屉（子代理模型与强度、经典子代理、自动审批模型），切换到聚合的确认框也可选子代理。新增精简版 `ui/sheet.tsx`。
+  - 照上游删除页头 FailoverToggle 与设置里的「在主页面显示故障转移开关」，`enableFailoverToggle` 字段保留读取但不再起作用；首次在模式行开启故障转移时先确认。进入路由 / 聚合、回到直连成功后弹提示。
+  - 三语补上游文案约 135 项，删除不再引用的约 31 项；`docs/claude-codex-routing-guide-zh.md` 同步表单布局、模型列表与模式行设置的说法。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 227 个文件 2394 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。

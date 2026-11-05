@@ -185,6 +185,11 @@ interface CodexFormFieldsProps {
   onTakeoverEnabledChange?: (enabled: boolean) => void;
   /** 应用实际在直连时传：选了要靠路由转换的格式就在格式下面提示后果（上游 e615a6f4）。 */
   directModeFormatNotice?: DirectModeFormatNotice;
+  /**
+   * 布局：`classic` 是直连 / 路由用的完整表单；`stack` 是聚合模式的简化面板（连接 + 模型列表 +
+   * 高级），子代理、并发上限与自动审批改在聚合设置里（上游 fe831f0a / 4f08989a）。
+   */
+  variant?: "classic" | "stack";
 
   // API Format（跟随上游 cc-switch 1c82b8a3）
   apiFormat: CodexApiFormat;
@@ -619,6 +624,7 @@ export function CodexFormFields({
   takeoverEnabled = false,
   onTakeoverEnabledChange,
   directModeFormatNotice,
+  variant = "classic",
   apiFormat,
   onApiFormatChange,
   copilotApiFormat = "auto",
@@ -696,6 +702,11 @@ export function CodexFormFields({
     (!isGrokBuild && isChatFormat) ||
     isFullUrl;
   const [advancedExpanded, setAdvancedExpanded] = useState(hasAnyAdvancedValue);
+  const isStack = variant === "stack";
+  // 聚合布局的高级区（完整 URL、思考能力、User-Agent、请求覆盖）：开了或填了才展开。
+  const [stackAdvancedExpanded, setStackAdvancedExpanded] = useState(
+    isFullUrl || !!customUserAgent || hasRequestOverrides,
+  );
 
   useEffect(() => {
     if (hasAnyAdvancedValue) setAdvancedExpanded(true);
@@ -1508,6 +1519,12 @@ export function CodexFormFields({
         />
       )}
 
+      {/* 聚合布局：上游格式放在 Key 前面（完整表单里在高级选项） */}
+      {isStack &&
+        (shouldShowSpeedTest || isCopilotPreset) &&
+        !isXaiOauthPreset &&
+        upstreamFormatSelect}
+
       {/* Codex API Key 输入框（托管账号预设无需 Key） */}
       {!isCopilotPreset && !isXaiOauthPreset && (
         <ApiKeySection
@@ -1553,7 +1570,11 @@ export function CodexFormFields({
             <div className="flex items-center justify-between gap-3">
               {labelWithHelp(
                 t("codexConfig.modelListTitle"),
-                t("codexConfig.modelListDefaultHelp"),
+                t(
+                  isStack
+                    ? "codexConfig.stackModelDefaultHelp"
+                    : "codexConfig.modelListDefaultHelp",
+                ),
               )}
               {catalogActionButtons}
             </div>
@@ -1625,85 +1646,88 @@ export function CodexFormFields({
 
       {/* 子代理 —— config.toml 的 [agents] default_subagent_model / default_subagent_reasoning_effort。
           留空删键，子代理跟随主模型；聚合模式下改用聚合设置。 */}
-      {category !== "official" && !isGrokBuild && onSubagentModelChange && (
-        <div className="space-y-1.5">
-          {labelWithHelp(
-            t("codexConfig.subagentModelLabel"),
-            t("codexConfig.subagentModelHint"),
-            "codexSubagentModel",
-          )}
-          <div className="flex gap-1">
-            <Input
-              id="codexSubagentModel"
-              value={subagentModel}
-              onChange={(event) => onSubagentModelChange(event.target.value)}
-              placeholder={t("codexConfig.subagentModelPlaceholder")}
-              className="flex-1"
-            />
-            {modelSuggestions.length > 0 && (
-              <ModelDropdown
-                models={modelSuggestions}
-                onSelect={(id) => onSubagentModelChange(id)}
-              />
+      {!isStack &&
+        category !== "official" &&
+        !isGrokBuild &&
+        onSubagentModelChange && (
+          <div className="space-y-1.5">
+            {labelWithHelp(
+              t("codexConfig.subagentModelLabel"),
+              t("codexConfig.subagentModelHint"),
+              "codexSubagentModel",
             )}
-            {onSubagentReasoningEffortChange && (
-              <Select
-                value={subagentReasoningEffort || EFFORT_INHERIT}
-                onValueChange={(value) =>
-                  onSubagentReasoningEffortChange(
-                    value === EFFORT_INHERIT ? "" : value,
-                  )
-                }
-              >
-                <SelectTrigger
-                  aria-label={t("codexConfig.subagentReasoningEffortLabel")}
-                  className="w-36 shrink-0"
+            <div className="flex gap-1">
+              <Input
+                id="codexSubagentModel"
+                value={subagentModel}
+                onChange={(event) => onSubagentModelChange(event.target.value)}
+                placeholder={t("codexConfig.subagentModelPlaceholder")}
+                className="flex-1"
+              />
+              {modelSuggestions.length > 0 && (
+                <ModelDropdown
+                  models={modelSuggestions}
+                  onSelect={(id) => onSubagentModelChange(id)}
+                />
+              )}
+              {onSubagentReasoningEffortChange && (
+                <Select
+                  value={subagentReasoningEffort || EFFORT_INHERIT}
+                  onValueChange={(value) =>
+                    onSubagentReasoningEffortChange(
+                      value === EFFORT_INHERIT ? "" : value,
+                    )
+                  }
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={EFFORT_INHERIT}>
-                    {t("codexConfig.subagentReasoningEffortDefault")}
-                  </SelectItem>
-                  {subagentReasoningEffort &&
-                    !(CODEX_REASONING_LEVELS as readonly string[]).includes(
-                      subagentReasoningEffort,
-                    ) && (
-                      <SelectItem value={subagentReasoningEffort}>
-                        {subagentReasoningEffort}
-                      </SelectItem>
-                    )}
-                  {CODEX_REASONING_LEVELS.map((level) => (
-                    <SelectItem key={level} value={level}>
-                      {level}
+                  <SelectTrigger
+                    aria-label={t("codexConfig.subagentReasoningEffortLabel")}
+                    className="w-36 shrink-0"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={EFFORT_INHERIT}>
+                      {t("codexConfig.subagentReasoningEffortDefault")}
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {subagentReasoningEffort &&
+                      !(CODEX_REASONING_LEVELS as readonly string[]).includes(
+                        subagentReasoningEffort,
+                      ) && (
+                        <SelectItem value={subagentReasoningEffort}>
+                          {subagentReasoningEffort}
+                        </SelectItem>
+                      )}
+                    {CODEX_REASONING_LEVELS.map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {isSubagentModelOutsideCatalog && (
+              <p className="flex flex-wrap items-center gap-x-2 text-xs leading-relaxed text-muted-foreground">
+                {t("codexConfig.subagentModelNotInCatalog")}
+                {onCatalogModelsChange && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    onClick={handleAddSubagentModelToCatalog}
+                  >
+                    {t("codexConfig.addToModelList")}
+                  </Button>
+                )}
+              </p>
             )}
           </div>
-          {isSubagentModelOutsideCatalog && (
-            <p className="flex flex-wrap items-center gap-x-2 text-xs leading-relaxed text-muted-foreground">
-              {t("codexConfig.subagentModelNotInCatalog")}
-              {onCatalogModelsChange && (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-xs"
-                  onClick={handleAddSubagentModelToCatalog}
-                >
-                  {t("codexConfig.addToModelList")}
-                </Button>
-              )}
-            </p>
-          )}
-        </div>
-      )}
+        )}
 
       {/* 子代理并发上限 —— config.toml 的 [agents] max_threads，Codex 的全局设置（官方供应商也显示），
           保存时写进 live。留空删键，回到 Codex 默认值（上游 a9e607c3）。 */}
-      {!isGrokBuild && onAgentMaxThreadsChange && (
+      {!isStack && !isGrokBuild && onAgentMaxThreadsChange && (
         <div className="space-y-1.5">
           {labelWithHelp(
             t("codexConfig.agentMaxThreadsLabel"),
@@ -1729,184 +1753,205 @@ export function CodexFormFields({
 
       {/* 自动审批 —— 写进模型目录每一行的 auto_review_model_override，Codex 按主模型那一行
           选审批模型。只能选列表里的模型；聚合模式下改用聚合设置。 */}
-      {category !== "official" && !isGrokBuild && onAutoReviewModelChange && (
-        <div className="space-y-1.5">
-          {labelWithHelp(
-            t("codexConfig.autoReviewModelLabel"),
-            t("codexConfig.autoReviewModelHint"),
-            "codexAutoReviewModel",
-          )}
-          <Select
-            value={autoReviewSelectValue}
-            onValueChange={(next) => {
-              // 表单里的 Radix Select 带一个隐藏的原生 select：编辑页加载时列表和已存的值同时
-              // 到达，值先于选项注册，它会回报一次空串。选项都不是空值，空串只能是这个，忽略。
-              if (!next) return;
-              onAutoReviewModelChange(next === AUTO_REVIEW_DEFAULT ? "" : next);
-            }}
-            disabled={autoReviewChoices.length === 0}
-          >
-            <SelectTrigger
-              id="codexAutoReviewModel"
-              aria-label={t("codexConfig.autoReviewModelLabel")}
+      {!isStack &&
+        category !== "official" &&
+        !isGrokBuild &&
+        onAutoReviewModelChange && (
+          <div className="space-y-1.5">
+            {labelWithHelp(
+              t("codexConfig.autoReviewModelLabel"),
+              t("codexConfig.autoReviewModelHint"),
+              "codexAutoReviewModel",
+            )}
+            <Select
+              value={autoReviewSelectValue}
+              onValueChange={(next) => {
+                // 表单里的 Radix Select 带一个隐藏的原生 select：编辑页加载时列表和已存的值同时
+                // 到达，值先于选项注册，它会回报一次空串。选项都不是空值，空串只能是这个，忽略。
+                if (!next) return;
+                onAutoReviewModelChange(
+                  next === AUTO_REVIEW_DEFAULT ? "" : next,
+                );
+              }}
+              disabled={autoReviewChoices.length === 0}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={AUTO_REVIEW_DEFAULT}>
-                {autoReviewDefaultIsCodex
-                  ? t("codexConfig.autoReviewModelCodexDefault")
-                  : t("codexConfig.autoReviewModelMainDefault")}
-              </SelectItem>
-              {autoReviewChoices.map((choice) => (
-                <SelectItem key={choice.model} value={choice.model}>
-                  {choice.label}
+              <SelectTrigger
+                id="codexAutoReviewModel"
+                aria-label={t("codexConfig.autoReviewModelLabel")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AUTO_REVIEW_DEFAULT}>
+                  {autoReviewDefaultIsCodex
+                    ? t("codexConfig.autoReviewModelCodexDefault")
+                    : t("codexConfig.autoReviewModelMainDefault")}
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {autoReviewChoices.length === 0 && (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {t("codexConfig.autoReviewModelNoList")}
-            </p>
-          )}
-        </div>
-      )}
+                {autoReviewChoices.map((choice) => (
+                  <SelectItem key={choice.model} value={choice.model}>
+                    {choice.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {autoReviewChoices.length === 0 && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("codexConfig.autoReviewModelNoList")}
+              </p>
+            )}
+          </div>
+        )}
 
       {/* 高级选项 —— 上游格式 / 完整 URL / 思考能力 / 自定义 UA；预设供应商通常无需展开 */}
-      {category !== "official" && (
-        <Collapsible
-          open={advancedExpanded}
-          onOpenChange={setAdvancedExpanded}
-          className="rounded-lg border border-border-default p-4"
-        >
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant={null}
-              size="sm"
-              className="h-8 w-full justify-start gap-1.5 px-0 text-sm font-medium text-foreground hover:opacity-70"
-            >
-              {advancedExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
+      {category !== "official" &&
+        (!isStack ||
+          showFullUrlToggle ||
+          showChatOptions ||
+          userAgentAndOverrides) && (
+          <Collapsible
+            open={isStack ? stackAdvancedExpanded : advancedExpanded}
+            onOpenChange={
+              isStack ? setStackAdvancedExpanded : setAdvancedExpanded
+            }
+            className="rounded-lg border border-border-default p-4"
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant={null}
+                size="sm"
+                className="h-8 w-full justify-start gap-1.5 px-0 text-sm font-medium text-foreground hover:opacity-70"
+              >
+                {advancedExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                {t("providerForm.advancedOptionsToggle")}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 pt-3">
+              {isStack && showFullUrlToggle && (
+                <FullUrlToggle
+                  checked={isFullUrl}
+                  onCheckedChange={onFullUrlChange}
+                />
               )}
-              {t("providerForm.advancedOptionsToggle")}
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-3">
-            {(shouldShowSpeedTest || isCopilotPreset) && !isXaiOauthPreset && (
-              <div className="space-y-3">
-                {upstreamFormatSelect}
+              {!isStack &&
+                (shouldShowSpeedTest || isCopilotPreset) &&
+                !isXaiOauthPreset && (
+                  <div className="space-y-3">
+                    {upstreamFormatSelect}
 
-                {isGrokBuild && (
-                  <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
-                    {labelWithHelp(
-                      t("codexConfig.localRoutingToggle"),
-                      t(
-                        takeoverEnabled
-                          ? "codexConfig.localRoutingOnHint"
-                          : "codexConfig.localRoutingOffHint",
-                      ),
+                    {isGrokBuild && (
+                      <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
+                        {labelWithHelp(
+                          t("codexConfig.localRoutingToggle"),
+                          t(
+                            takeoverEnabled
+                              ? "codexConfig.localRoutingOnHint"
+                              : "codexConfig.localRoutingOffHint",
+                          ),
+                        )}
+                        <Switch
+                          checked={takeoverEnabled}
+                          onCheckedChange={onTakeoverEnabledChange}
+                          aria-label={t("codexConfig.localRoutingToggle")}
+                        />
+                      </div>
                     )}
-                    <Switch
-                      checked={takeoverEnabled}
-                      onCheckedChange={onTakeoverEnabledChange}
-                      aria-label={t("codexConfig.localRoutingToggle")}
-                    />
+
+                    {showFullUrlToggle && (
+                      <FullUrlToggle
+                        checked={isFullUrl}
+                        onCheckedChange={onFullUrlChange}
+                        className="border-t border-border-default pt-3"
+                      />
+                    )}
                   </div>
                 )}
 
-                {showFullUrlToggle && (
-                  <FullUrlToggle
-                    checked={isFullUrl}
-                    onCheckedChange={onFullUrlChange}
-                    className="border-t border-border-default pt-3"
-                  />
-                )}
-              </div>
-            )}
+              {showChatOptions && (
+                <div className="space-y-4 border-t border-border-default pt-3">
+                  <div className="space-y-1.5">
+                    {labelWithHelp(
+                      t("codexConfig.promptCacheRoutingLabel"),
+                      t("codexConfig.promptCacheRoutingHint"),
+                      "codexPromptCacheRouting",
+                    )}
+                    <Select
+                      value={promptCacheRouting}
+                      onValueChange={(value) =>
+                        onPromptCacheRoutingChange(
+                          value as PromptCacheRoutingMode,
+                        )
+                      }
+                    >
+                      <SelectTrigger id="codexPromptCacheRouting">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">
+                          {t("codexConfig.promptCacheRoutingAuto")}
+                        </SelectItem>
+                        <SelectItem value="enabled">
+                          {t("codexConfig.promptCacheRoutingEnabled")}
+                        </SelectItem>
+                        <SelectItem value="disabled">
+                          {t("codexConfig.promptCacheRoutingDisabled")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            {showChatOptions && (
-              <div className="space-y-4 border-t border-border-default pt-3">
-                <div className="space-y-1.5">
-                  {labelWithHelp(
-                    t("codexConfig.promptCacheRoutingLabel"),
-                    t("codexConfig.promptCacheRoutingHint"),
-                    "codexPromptCacheRouting",
-                  )}
-                  <Select
-                    value={promptCacheRouting}
-                    onValueChange={(value) =>
-                      onPromptCacheRoutingChange(
-                        value as PromptCacheRoutingMode,
-                      )
-                    }
-                  >
-                    <SelectTrigger id="codexPromptCacheRouting">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">
-                        {t("codexConfig.promptCacheRoutingAuto")}
-                      </SelectItem>
-                      <SelectItem value="enabled">
-                        {t("codexConfig.promptCacheRoutingEnabled")}
-                      </SelectItem>
-                      <SelectItem value="disabled">
-                        {t("codexConfig.promptCacheRoutingDisabled")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="border-t border-border-default pt-3">
+                    <FormLabel>
+                      {t("codexConfig.reasoningGroupTitle")}
+                    </FormLabel>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    {labelWithHelp(
+                      t("codexConfig.reasoningModeToggle"),
+                      t("codexConfig.reasoningModeHint"),
+                    )}
+                    <Switch
+                      checked={supportsThinking}
+                      onCheckedChange={handleReasoningThinkingChange}
+                      aria-label={t("codexConfig.reasoningModeToggle")}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
+                    {labelWithHelp(
+                      t("codexConfig.reasoningEffortToggle"),
+                      t(
+                        isGrokBuild
+                          ? "grokBuild.reasoningEffortHint"
+                          : "codexConfig.reasoningEffortHint",
+                      ),
+                    )}
+                    <Switch
+                      checked={supportsEffort}
+                      onCheckedChange={handleReasoningEffortChange}
+                      aria-label={t("codexConfig.reasoningEffortToggle")}
+                    />
+                  </div>
                 </div>
+              )}
 
-                <div className="border-t border-border-default pt-3">
-                  <FormLabel>{t("codexConfig.reasoningGroupTitle")}</FormLabel>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  {labelWithHelp(
-                    t("codexConfig.reasoningModeToggle"),
-                    t("codexConfig.reasoningModeHint"),
+              {userAgentAndOverrides && (
+                <div
+                  className={cn(
+                    "space-y-3",
+                    (shouldShowSpeedTest || showChatOptions) &&
+                      "border-t border-border-default pt-3",
                   )}
-                  <Switch
-                    checked={supportsThinking}
-                    onCheckedChange={handleReasoningThinkingChange}
-                    aria-label={t("codexConfig.reasoningModeToggle")}
-                  />
+                >
+                  {userAgentAndOverrides}
                 </div>
-                <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">
-                  {labelWithHelp(
-                    t("codexConfig.reasoningEffortToggle"),
-                    t(
-                      isGrokBuild
-                        ? "grokBuild.reasoningEffortHint"
-                        : "codexConfig.reasoningEffortHint",
-                    ),
-                  )}
-                  <Switch
-                    checked={supportsEffort}
-                    onCheckedChange={handleReasoningEffortChange}
-                    aria-label={t("codexConfig.reasoningEffortToggle")}
-                  />
-                </div>
-              </div>
-            )}
-
-            {userAgentAndOverrides && (
-              <div
-                className={cn(
-                  "space-y-3",
-                  (shouldShowSpeedTest || showChatOptions) &&
-                    "border-t border-border-default pt-3",
-                )}
-              >
-                {userAgentAndOverrides}
-              </div>
-            )}
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
       {/* 端点测速弹窗 - Codex */}
       {shouldShowSpeedTest && !isXaiOauthPreset && isEndpointModalOpen && (

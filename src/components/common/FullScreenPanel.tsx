@@ -25,6 +25,8 @@ interface FullScreenPanelProps {
   trackUnsavedChanges?: boolean;
   /** 返回按钮的无障碍名称（默认「返回」），比如添加供应商第 2 步写「返回选择预设」 */
   backLabel?: string;
+  /** 页头标题上方的小字（默认「Workspace Panel」），比如聚合布局的表单写「Codex（聚合模式）」 */
+  subtitle?: string;
 }
 
 const DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px - match App.tsx
@@ -64,6 +66,7 @@ const openPanelStack: object[] = [];
 export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
   isOpen,
   title,
+  subtitle,
   onClose,
   children,
   footer,
@@ -173,7 +176,7 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                 </Button>
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    Workspace Panel
+                    {subtitle ?? "Workspace Panel"}
                   </div>
                   <h2 className="truncate text-lg font-semibold text-foreground select-none sm:text-xl">
                     {title}

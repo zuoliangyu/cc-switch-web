@@ -277,7 +277,8 @@
     "disable": "Disable",
     "directProviderHint": "Leaving routing mode switches back to this provider",
     "openTerminalWithProvider": "Open Terminal with This Provider",
-    "stackBadgeNoModels": "This provider has no models configured, so nothing shows up in the model picker"
+    "stackBadgeNoModels": "This provider has no models configured, so nothing shows up in the model picker",
+    "formSubtitleStack": "{{app}} (Aggregation mode)"
   },
   "notifications": {
     "providerAdded": "Provider added",
@@ -469,8 +470,6 @@
         "description": "Control proxy service toggle, view status and port info",
         "enableFeature": "Show Proxy Toggle on Main Page",
         "enableFeatureDescription": "When enabled, the proxy and failover toggles will appear at the top of the main page",
-        "enableFailoverToggle": "Show Failover Toggle on Main Page",
-        "enableFailoverToggleDescription": "When enabled, the failover toggle will appear independently at the top of the main page",
         "running": "Running",
         "stopped": "Stopped"
       },
@@ -991,7 +990,10 @@
       "reset": "Restore defaults",
       "hint": "Pause at either cutoff. Defaults: 95% / 98%. Saved changes apply to new requests immediately.",
       "invalid": "Enter whole numbers from 1 to 99."
-    }
+    },
+    "codexStackClassicSubagents": "Classic sub-agent tools in aggregation",
+    "codexStackClassicSubagentsDescription": "Must be on when the main agent and a sub-agent use different providers, or the sub-agent cannot receive its task.",
+    "codexStackClassicSubagentsForcedV2": "Codex config.toml turns on [features] multi_agent_v2, which takes precedence over this setting, so it has no effect."
   },
   "apps": {
     "claude": "Claude",
@@ -1572,7 +1574,15 @@
     "fallbackModelHelp": "Requests that don't map to the Sonnet, Opus, Fable, or Haiku tier are sent upstream with this model.",
     "fallbackModelHelpDirect": "Written to ANTHROPIC_MODEL: the main model Claude Code starts with. Background tasks use the Haiku tier instead.",
     "fallbackModelMissing": "Empty: requests that don't map to any tier will send the original Claude model name upstream and may fail.",
-    "fallbackModelHaikuMissing": "Haiku tier is empty: background tasks will send the original Claude model name upstream, which third-party endpoints may reject."
+    "fallbackModelHaikuMissing": "Haiku tier is empty: background tasks will send the original Claude model name upstream, which third-party endpoints may reject.",
+    "stackLayout": {
+      "noModels": "The model list is empty: this provider won't appear in the model picker once added to the aggregation"
+    },
+    "stackModelsLabel": "Models",
+    "stackModelDefaultHelp": "These models appear in Claude Code's /model menu and picking one sends requests straight to this provider. The first row is the default model and is also written as this card's ANTHROPIC_MODEL.",
+    "addStackModel": "Add manually",
+    "stackModelsEmpty": "No models configured: this provider won't appear in the model picker once added to the aggregation",
+    "stackModelPlaceholder": "e.g. deepseek-v4-pro"
   },
   "codex": {
     "needsRouting": "Needs routing",
@@ -1753,7 +1763,8 @@
     "defaultModelNotInList": "The default model {{model}} is not in the list: Codex still requests it by default, but /model won't show it.",
     "addToModelList": "Add to list",
     "routeOnlySettingsHint": "The two settings below only apply in routing and Aggregation modes.",
-    "upstreamFormatCopilotRouteHint": "Every mode requires routing, which injects the Copilot account credentials. A protocol you pick explicitly fails for models that don't support it."
+    "upstreamFormatCopilotRouteHint": "Every mode requires routing, which injects the Copilot account credentials. A protocol you pick explicitly fails for models that don't support it.",
+    "stackModelDefaultHelp": "These models appear in Codex's /model menu and picking one sends requests straight to this provider. The first row is the default model, used while this provider is the default."
   },
   "codexOauth": {
     "authStatus": "Auth status",
@@ -2954,10 +2965,6 @@
     "priority": {
       "tooltip": "Failover priority {{priority}}"
     },
-    "tooltip": {
-      "enabled": "{{app}} failover enabled\nRequests follow queue priority (P1→P2→...)",
-      "disabled": "Enable {{app}} failover\nSwitches to queue P1 immediately, then falls back on failures"
-    },
     "officialUnavailable": "Official accounts cannot join the failover queue.",
     "queueAddFailed": "Failed to add to the queue: {{detail}}",
     "queueRemoveFailed": "Failed to remove from the queue: {{detail}}"
@@ -3875,15 +3882,6 @@
       "cliFailed": "Codex built-in list: the Codex CLI didn't output a model list (see the log for details)",
       "nothingUsable": "Codex built-in list: it has no usable models. Update Codex to the latest version"
     },
-    "models": {
-      "title": "Aggregated models",
-      "custom": "Choose the models this provider publishes",
-      "hint": "Uses model mappings by default. The first custom model is the default; an empty list publishes no models.",
-      "id": "Model {{index}} ID",
-      "name": "Model {{index}} display name",
-      "first": "Move first and use as default model",
-      "add": "Add manually"
-    },
     "saveRestart": "Save and restart service",
     "rebindHint": "Saving the listen address restarts the service. If binding fails, the previous address is restored.",
     "officialDefaultAdvice": "Consider using an official account as the aggregation default for requests without an aggregated model ID.",
@@ -3897,28 +3895,6 @@
       "unverifiedHint": "CC Switch can't tell whether the desktop app or editor extensions are running. If they aren't open, just close this notice.",
       "daemon": "CLI: reopening codex isn't enough; its background daemon needs a restart.",
       "others": "Desktop app: quit it completely and reopen it (⌘Q on macOS; closing the window isn't enough). Editor extensions: reopen the editor window."
-    },
-    "stackSettings": {
-      "title": "Aggregation settings",
-      "subagentDescription": "Sub-agents follow the main model by default. Pick an aggregated model and the sub-agents the main agent spawns use it by default (unless the main agent names a model when spawning). No Codex restart needed: new conversations pick it up, conversations already open keep the previous setting.",
-      "subagentModel": "Sub-agent model",
-      "followMain": "Follow the main model",
-      "subagentEffort": "Sub-agent reasoning effort",
-      "effortModelDefault": "Model default",
-      "effortModelDefaultNamed": "Model default ({{effort}})",
-      "unavailableOption": "{{model}} (no longer aggregated)",
-      "unavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so sub-agents follow the main model for now. It comes back once you add it again.",
-      "noModels": "No aggregated models are published yet. Add providers to the aggregation first.",
-      "classicOff": "The sub-agent runs on a different provider from the main agent, so Codex's new sub-agent tools encrypt its task where only the main agent's provider can read it, and the sub-agent receives nothing. You must turn on \"Classic sub-agent tools in aggregation\" below.",
-      "classicTools": "Classic sub-agent tools in aggregation",
-      "classicToolsDescription": "Must be on when the main agent and a sub-agent use different providers, or the sub-agent cannot receive its task.",
-      "classicToolsForcedV2": "Codex config.toml turns on [features] multi_agent_v2, which takes precedence over this setting, so it has no effect.",
-      "autoReviewModel": "Auto Review model",
-      "autoReviewDescription": "The model Codex uses to decide whether an action may go ahead when automatic approval (Approve for me) is on. It can be another provider's aggregated model. Restart Codex after changes.",
-      "autoReviewDefaultOfficial": "Official Auto Review (default)",
-      "autoReviewDefaultMain": "Main model reviews itself (default)",
-      "autoReviewUnavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so approvals use the default reviewer for now. It comes back once you add it again.",
-      "saveFailed": "Failed to save: {{error}}"
     },
     "toast": {
       "routeRemembered": "Provider {{provider}} saved for when the client connects through routing or aggregation.",
@@ -4737,13 +4713,51 @@
       "needsRouteTitle": "{{provider}} needs routing",
       "needsRouteLead": "{{provider}}: {{reason}}. If you switch to it directly, {{app}} won't be able to use it.",
       "switchAnyway": "Switch directly anyway",
-      "routeAndUse": "Start routing and use it"
+      "routeAndUse": "Start routing and use it",
+      "stackSubagentLead": "Sub-agents follow the main model by default; you can also pick an aggregated model (change it any time later in Aggregation settings)."
     },
     "help": {
       "title": "How the connection modes differ",
       "direct": "Direct: CC Switch never touches your requests; the client talks to the chosen provider itself for the most native experience.",
       "route": "Routing: requests go through CC Switch on this machine, unlocking hot-switching providers, failover, format conversion, and other advanced features.",
       "stack": "Aggregation: models from several providers sit together in /model, so you can switch between them seamlessly inside the client."
-    }
+    },
+    "toast": {
+      "enteredRoute": "{{app}} is now routing → {{provider}}.",
+      "enteredStack": "{{app}} switched to Aggregation. Restart {{app}} to see the aggregated models in /model.",
+      "enteredStackLive": "{{app}} switched to Aggregation. The aggregated models are now in /model.",
+      "enteredStackDesktop": "{{app}} switched to Aggregation. Restart {{app}} to see the aggregated models in its model list.",
+      "exited": "Back to direct: {{app}} now connects to {{provider}} directly.",
+      "routeRemembered": "Provider {{provider}} saved for when the client connects through routing or aggregation.",
+      "routeTargetChanged": "Route target set to {{provider}}.",
+      "routeSwitched": "Route switched to {{provider}}. New requests will use this provider.",
+      "stackDefaultChanged": "Aggregation default set to {{provider}}. Selected aggregated models still use their respective providers.",
+      "clientConfigChanged": " Client configuration also changed. Restart {{app}} to load the updated configuration.",
+      "defaultRemembered": "{{provider}} will be the default provider once you switch to Aggregation.",
+      "restartHint": " Restart {{app}} to apply.",
+      "failed": "Couldn't switch: {{detail}}"
+    },
+    "stackSettings": {
+      "title": "Aggregation settings",
+      "subagentDescription": "Sub-agents follow the main model by default. Pick an aggregated model and the sub-agents the main agent spawns use it by default (unless the main agent names a model when spawning). No Codex restart needed: new conversations pick it up, conversations already open keep the previous setting.",
+      "subagentModel": "Sub-agent model",
+      "followMain": "Follow the main model",
+      "subagentEffort": "Sub-agent reasoning effort",
+      "effortModelDefault": "Model default",
+      "effortModelDefaultNamed": "Model default ({{effort}})",
+      "unavailableOption": "{{model}} (no longer aggregated)",
+      "unavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so sub-agents follow the main model for now. It comes back once you add it again.",
+      "noModels": "No aggregated models are published yet. Add providers to the aggregation first.",
+      "classicOff": "The sub-agent runs on a different provider from the main agent, so Codex's new sub-agent tools encrypt its task where only the main agent's provider can read it, and the sub-agent receives nothing. You must turn on \"Classic sub-agent tools in aggregation\" below.",
+      "autoReviewModel": "Auto Review model",
+      "autoReviewDescription": "The model Codex uses to decide whether an action may go ahead when automatic approval (Approve for me) is on. It can be another provider's aggregated model. Restart Codex after changes.",
+      "autoReviewDefaultOfficial": "Official Auto Review (default)",
+      "autoReviewDefaultMain": "Main model reviews itself (default)",
+      "autoReviewUnavailable": "The selected model is no longer in the aggregation (the provider was removed or stopped publishing it), so approvals use the default reviewer for now. It comes back once you add it again.",
+      "saveFailed": "Failed to save: {{error}}"
+    },
+    "routeSettings": "Routing settings",
+    "routeSettingsTitle": "Routing settings",
+    "moreRouteSettings": "More routing settings"
   }
 }

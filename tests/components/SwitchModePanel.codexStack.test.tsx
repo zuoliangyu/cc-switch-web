@@ -186,8 +186,12 @@ describe("Codex 聚合：目录、旧客户端与聚合设置", () => {
       ),
     );
     const client = renderPanel();
+    // 聚合设置收进模式行的「聚合设置」面板（上游 StackSettingsSheet）
+    fireEvent.click(
+      await screen.findByRole("button", { name: "mode.stackSettings.title" }),
+    );
     const model = (await screen.findByRole("combobox", {
-      name: "webMode.stackSettings.subagentModel",
+      name: "mode.stackSettings.subagentModel",
     })) as HTMLSelectElement;
     await waitFor(() => expect(model.value).toBe("ccs-b/b-pro"));
     // 默认那家（a）不发布 `ccs-*` 模型，不列出
@@ -197,7 +201,7 @@ describe("Codex 聚合：目录、旧客户端与聚合设置", () => {
       "ccs-b/b-mini",
     ]);
     expect(
-      await screen.findByText("webMode.stackSettings.classicToolsForcedV2"),
+      await screen.findByText("settings.codexStackClassicSubagentsForcedV2"),
     ).toBeInTheDocument();
 
     fireEvent.change(model, { target: { value: "ccs-b/b-mini" } });
@@ -206,7 +210,7 @@ describe("Codex 聚合：目录、旧客户端与聚合设置", () => {
     expect(saved[0].codexStackSubagentReasoningEffort).toBeUndefined();
 
     const review = screen.getByRole("combobox", {
-      name: "webMode.stackSettings.autoReviewModel",
+      name: "mode.stackSettings.autoReviewModel",
     });
     await waitFor(() => expect(review).not.toBeDisabled());
     fireEvent.change(review, { target: { value: "ccs-b/b-pro" } });

@@ -3,6 +3,7 @@ import type { ProviderEditorSave } from "@/lib/api/providers";
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { ModeView } from "@/components/providers/presentation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,7 +68,6 @@ import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { useAppMode, supportsAppMode } from "@/hooks/useAppMode";
 import { RoutingActivationBrand } from "@/components/proxy/RoutingActivationBrand";
-import { FailoverToggle } from "@/components/proxy/FailoverToggle";
 import { McpIcon } from "@/components/BrandIcons";
 import { Button } from "@/components/ui/button";
 import {
@@ -220,6 +221,24 @@ function App() {
   const [currentView, setCurrentView] = useState<View>(getInitialView);
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // 供应商页顶部正在看的那格（直连 / 路由 / 聚合），由 SwitchModePanel 报上来。打开新增、
+  // 编辑时记下当时那格，表单按它选布局：在聚合那格打开就是聚合的简化表单（上游 fe831f0a）。
+  const [providerModeView, setProviderModeView] = useState<{
+    app: AppId;
+    view: ModeView;
+  } | null>(null);
+  const [formModeView, setFormModeView] = useState<ModeView>();
+  const handleProviderModeViewChange = useCallback(
+    (app: AppId, view: ModeView) => setProviderModeView({ app, view }),
+    [],
+  );
+  // 换了应用、新面板还没报上来时为 undefined：表单按应用实际生效的模式
+  const currentModeView =
+    providerModeView?.app === activeApp ? providerModeView.view : undefined;
+  const openAddProvider = (view: ModeView | undefined) => {
+    setFormModeView(view);
+    setIsAddOpen(true);
+  };
   // 供应商搜索面板：页头按钮和 ⌘F 都能打开；换应用或离开供应商页就收起
   const [providerSearchOpen, setProviderSearchOpen] = useState(false);
   // 页头里给模式连接徽标留的位置（SwitchModePanel 通过 portal 画进来）
@@ -921,6 +940,7 @@ function App() {
                         searchOpen: providerSearchOpen,
                         onSearchOpenChange: setProviderSearchOpen,
                         onEdit: (provider: Provider) => {
+                          setFormModeView(currentModeView);
                           setEditingProvider(provider);
                         },
                         onDelete: (provider: Provider) =>
@@ -934,7 +954,7 @@ function App() {
                           activeApp === "agy"
                             ? handleOpenTerminal
                             : undefined,
-                        onCreate: () => setIsAddOpen(true),
+                        onCreate: () => openAddProvider(currentModeView),
                       };
                       if (supportsAppMode(activeApp)) {
                         return (
@@ -948,6 +968,11 @@ function App() {
                             state={appMode}
                             serviceRunning={isProxyRunning}
                             onSwitch={switchProvider}
+                            onViewChange={handleProviderModeViewChange}
+                            onOpenRoutingSettings={() => {
+                              setSettingsDefaultTab("proxy");
+                              handleViewChange("settings");
+                            }}
                             {...listProps}
                           />
                         );
@@ -1175,22 +1200,6 @@ function App() {
 
           <div className="flex flex-1 min-w-0 items-center justify-end gap-1.5">
             {currentView === "providers" &&
-              activeApp !== "opencode" &&
-              activeApp !== "openclaw" &&
-              activeApp !== "hermes" &&
-              activeApp !== "pi" &&
-              activeApp !== "omp" &&
-              activeApp !== "mcode" &&
-              activeApp !== "dsh" && (
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {settingsData?.enableFailoverToggle &&
-                    activeApp !== "claude-desktop" &&
-                    appMode.data?.mode === "routing" && (
-                      <FailoverToggle activeApp={activeApp} />
-                    )}
-                </div>
-              )}
-            {currentView === "providers" &&
               activeApp !== "mcode" &&
               activeApp !== "dsh" &&
               (settingsData?.showProfileSwitcher ?? false) && (
@@ -1376,7 +1385,9 @@ function App() {
                           </>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={() => setIsAddOpen(true)}>
+                        <DropdownMenuItem
+                          onSelect={() => openAddProvider(currentModeView)}
+                        >
                           <Plus className="h-4 w-4" />
                           {t("header.addProvider")}
                         </DropdownMenuItem>
@@ -1547,7 +1558,7 @@ function App() {
                     </div>
 
                     <Button
-                      onClick={() => setIsAddOpen(true)}
+                      onClick={() => openAddProvider(currentModeView)}
                       size="icon"
                       className={`ml-2 hidden md:inline-flex ${addActionButtonClass}`}
                     >
@@ -1600,6 +1611,7 @@ function App() {
           onOpenChange={setIsAddOpen}
           appId={activeApp}
           onSubmit={addProvider}
+          modeView={formModeView}
         />
       </Suspense>
 
@@ -1615,6 +1627,7 @@ function App() {
           onSubmit={handleEditProvider}
           appId={activeApp}
           isProxyTakeover={isProxyRunning && isCurrentAppTakeoverActive}
+          modeView={formModeView}
         />
       </Suspense>
 

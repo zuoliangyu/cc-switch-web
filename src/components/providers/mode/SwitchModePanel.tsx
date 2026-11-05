@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -10,7 +11,11 @@ import {
   useAutoFailoverEnabled,
   useFailoverQueue,
   useRemoveFromFailoverQueue,
+  useSetAutoFailoverEnabled,
 } from "@/lib/query/failover";
+import { useSettingsQuery } from "@/lib/query/queries";
+import { settingsApi } from "@/lib/api/settings";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getRoutingReason } from "@/utils/routingReason";
 import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { cn } from "@/lib/utils";
@@ -26,7 +31,14 @@ import {
   toModeView,
   type ModeView,
 } from "@/components/providers/presentation";
-import { CodexStackSettings } from "@/components/proxy/CodexStackSettings";
+import { RouteSettingsSheet } from "./RouteSettingsSheet";
+import { StackSettingsSheet } from "./StackSettingsSheet";
+import {
+  sameStackSubagent,
+  stackSubagentSettings,
+  stackSubagentValue,
+  type StackSubagentValue,
+} from "./StackSubagentFields";
 import { ModeTabs, MODE_TONE } from "./ModeTabs";
 import { ModeDialog, type ModeDialogState } from "./ModeDialog";
 
@@ -58,7 +70,19 @@ interface SwitchModePanelProps extends ListCallbacks {
     provider: Provider,
     options?: { acknowledgedRouting?: boolean },
   ) => unknown;
+  /** 报告正在看的那格：App 打开新增 / 编辑时按它选表单布局（上游 fe831f0a） */
+  onViewChange?: (app: AppId, view: ModeView) => void;
+  /** 路由设置里的「更多路由设置」：去设置页的本地路由分组 */
+  onOpenRoutingSettings?: () => void;
 }
+
+/** 这几个客户端只在启动时读配置：改写了客户端文件要提示重启（Claude Code 会自己重读）。 */
+const RESTART_TO_APPLY = new Set<AppId>([
+  "codex",
+  "gemini",
+  "grokbuild",
+  "claude-desktop",
+]);
 
 /** Gemini CLI、Grok Build 没有聚合模式：那一格隐藏，前两格位置不变。 */
 const modesFor = (app: AppId): ModeView[] =>
@@ -79,9 +103,13 @@ export function SwitchModePanel({
   state,
   serviceRunning,
   onSwitch,
+  onViewChange,
+  onOpenRoutingSettings,
   ...listCallbacks
 }: SwitchModePanelProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { data: settings } = useSettingsQuery();
   const appName = APP_DISPLAY_NAME[app];
   const modes = modesFor(app);
   const modeView = state.data;
@@ -96,6 +124,9 @@ export function SwitchModePanel({
   useEffect(() => {
     setView(active);
   }, [app, active]);
+  useEffect(() => {
+    onViewChange?.(app, view);
+  }, [app, view, onViewChange]);
 
   // Claude Desktop 没有故障转移
   const hasFailover = app !== "claude-desktop";
@@ -104,11 +135,15 @@ export function SwitchModePanel({
     hasFailover,
   );
   const { data: queue } = useFailoverQueue(app, hasFailover);
+  const setFailover = useSetAutoFailoverEnabled();
   const addToQueue = useAddToFailoverQueue();
   const removeFromQueue = useRemoveFromFailoverQueue();
   const failoverOn = active === "route" && failoverEnabled;
 
   const [dialog, setDialog] = useState<ModeDialogState | null>(null);
+  const [routeSettingsOpen, setRouteSettingsOpen] = useState(false);
+  const [stackSettingsOpen, setStackSettingsOpen] = useState(false);
+  const [confirmFailover, setConfirmFailover] = useState(false);
   // 关掉的是哪一份提示（后端的 staleRevision）：目录或登录又变了就是新的一份，重新显示。
   const [staleDismissed, setStaleDismissed] = useState<string | null>(null);
   const stale = modeView?.aggregation.staleClients;
@@ -212,21 +247,92 @@ export function SwitchModePanel({
       ? Boolean(directId && providers[directId])
       : attached && Boolean(routeId && providers[routeId]);
 
-  const enterMode = (target: Exclude<ModeView, "direct">, pick: string) =>
-    state
-      .change({
-        kind: "mode",
-        mode: fromModeView(target),
-        route: pick,
-        quiet: true,
-      })
-      .then(() => undefined);
+  const restartHint = RESTART_TO_APPLY.has(app)
+    ? t("mode.toast.restartHint", { app: appName })
+    : "";
+
+  const handleFailoverChange = (enabled: boolean) => {
+    if (enabled && !settings?.failoverConfirmed) {
+      setConfirmFailover(true);
+      return;
+    }
+    setFailover.mutate({ appType: app, enabled });
+  };
+
+  const confirmFailoverOn = async () => {
+    setConfirmFailover(false);
+    try {
+      const current = await settingsApi.get();
+      await settingsApi.save({ ...current, failoverConfirmed: true });
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+    } catch (error) {
+      console.error(
+        "[SwitchModePanel] Failed to save failover confirmation",
+        error,
+      );
+    }
+    setFailover.mutate({ appType: app, enabled: true });
+  };
+
+  const enterMode = async (
+    target: Exclude<ModeView, "direct">,
+    pick: string,
+    subagent?: StackSubagentValue,
+  ) => {
+    // 框里改了子代理设置就先存（聚合还没生效时后端只存不写），进入聚合时随契约一起写进去
+    if (
+      subagent &&
+      !sameStackSubagent(subagent, stackSubagentValue(settings))
+    ) {
+      const current = await settingsApi.get();
+      await settingsApi.save({
+        ...current,
+        ...stackSubagentSettings(subagent),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+    }
+    await state.change({
+      kind: "mode",
+      mode: fromModeView(target),
+      route: pick,
+      quiet: true,
+    });
+    toast.success(
+      target === "route"
+        ? // Desktop 的模型列表也换成了路由那家的，要重启才看得到
+          t("mode.toast.enteredRoute", {
+            app: appName,
+            provider: nameOf(pick),
+          }) + (app === "claude-desktop" ? restartHint : "")
+        : t(
+            app === "codex"
+              ? "mode.toast.enteredStack"
+              : app === "claude-desktop"
+                ? "mode.toast.enteredStackDesktop"
+                : "mode.toast.enteredStackLive",
+            { app: appName },
+          ),
+      { closeButton: true },
+    );
+  };
 
   const exitToDirect = async (useProviderId?: string) => {
     await state.change({ kind: "mode", mode: "direct", quiet: true });
     // 回到直连后改用另一家：直连切换到它
     const target = useProviderId ? providers[useProviderId] : undefined;
     if (target && useProviderId !== directId) await onSwitch(target);
+    toast.success(
+      [
+        t("mode.toast.exited", {
+          app: appName,
+          provider: nameOf(useProviderId ?? directId),
+        }),
+        restartHint,
+      ]
+        .filter(Boolean)
+        .join(""),
+      { closeButton: true },
+    );
   };
 
   const notices: React.ReactNode[] = [];
@@ -429,6 +535,25 @@ export function SwitchModePanel({
             view={view}
             onView={setView}
             searchSlotRef={setSearchSlot}
+            failover={
+              hasFailover && view === "route" && active === "route"
+                ? {
+                    enabled: failoverEnabled,
+                    disabled: setFailover.isPending,
+                    onChange: handleFailoverChange,
+                  }
+                : undefined
+            }
+            onOpenRouteSettings={
+              hasFailover && view === "route" && active === "route"
+                ? () => setRouteSettingsOpen(true)
+                : undefined
+            }
+            onOpenStackSettings={
+              app === "codex" && view === "stack" && active === "stack"
+                ? () => setStackSettingsOpen(true)
+                : undefined
+            }
           />
           {/* 窄屏页头放不下徽标：改画在模式行下面 */}
           {modeView && (
@@ -438,14 +563,6 @@ export function SwitchModePanel({
             <div role="status" className="flex flex-col gap-2">
               {notices}
             </div>
-          )}
-          {app === "codex" && active === "stack" && view === "stack" && (
-            <CodexStackSettings
-              models={subagentModels}
-              routeOfficial={
-                !!routeId && providers[routeId]?.category === "official"
-              }
-            />
           )}
         </>
       )}
@@ -473,6 +590,14 @@ export function SwitchModePanel({
           name: nameOf(member.providerId),
           models: member.memberModels ?? member.modelIds.length,
         }))}
+        stackSubagent={
+          app === "codex"
+            ? {
+                models: modeView?.aggregation.subagentModels ?? [],
+                value: stackSubagentValue(settings),
+              }
+            : undefined
+        }
         onClose={() => setDialog(null)}
         onEnter={enterMode}
         onExit={exitToDirect}
@@ -480,6 +605,34 @@ export function SwitchModePanel({
           const provider = providers[providerId];
           if (provider) void onSwitch(provider, { acknowledgedRouting: true });
         }}
+      />
+
+      {hasFailover && (
+        <RouteSettingsSheet
+          app={app}
+          open={routeSettingsOpen}
+          onOpenChange={setRouteSettingsOpen}
+          onOpenSettings={onOpenRoutingSettings}
+        />
+      )}
+      {app === "codex" && (
+        <StackSettingsSheet
+          open={stackSettingsOpen}
+          onOpenChange={setStackSettingsOpen}
+          models={subagentModels}
+          routeOfficial={
+            !!routeId && providers[routeId]?.category === "official"
+          }
+        />
+      )}
+      <ConfirmDialog
+        isOpen={confirmFailover}
+        variant="info"
+        title={t("confirm.failover.title")}
+        message={t("confirm.failover.message")}
+        confirmText={t("confirm.failover.confirm")}
+        onConfirm={() => void confirmFailoverOn()}
+        onCancel={() => setConfirmFailover(false)}
       />
     </div>
   );

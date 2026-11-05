@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import {
   fireEvent,
   render,
@@ -295,7 +296,7 @@ describe("模式与聚合操作", () => {
     client.clear();
   });
 
-  it("聚合成员按钮不切换默认，默认卡和直连卡禁止删除", () => {
+  it("聚合成员按钮不切换默认，默认卡和直连卡禁止删除", async () => {
     const toggle = vi.fn();
     const switchProvider = vi.fn();
     const onDelete = vi.fn();
@@ -306,6 +307,7 @@ describe("模式与聚合操作", () => {
       onDuplicate: vi.fn(),
       onDelete,
     };
+    const user = userEvent.setup();
     const { rerender } = render(
       <ProviderActions
         {...base}
@@ -318,10 +320,15 @@ describe("模式与聚合操作", () => {
         }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "webMode.join" }));
+    fireEvent.click(screen.getByRole("button", { name: "加入" }));
     expect(toggle).toHaveBeenCalledOnce();
     expect(switchProvider).not.toHaveBeenCalled();
-    expect(screen.getByTitle("common.delete")).toBeDisabled();
+    // 删除收在「更多」菜单里
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    expect(
+      await screen.findByRole("menuitem", { name: /common\.delete/ }),
+    ).toHaveAttribute("data-disabled");
+    await user.keyboard("{Escape}");
     rerender(
       <ProviderActions
         {...base}
@@ -334,10 +341,15 @@ describe("模式与聚合操作", () => {
         }}
       />,
     );
+    // 默认那家的主操作位是状态文字，不是按钮
+    expect(screen.getByText("默认")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "webMode.default" }),
-    ).toBeDisabled();
-    expect(screen.getByTitle("common.delete")).toBeDisabled();
+      screen.queryByRole("button", { name: "移出聚合" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "更多" }));
+    expect(
+      await screen.findByRole("menuitem", { name: /common\.delete/ }),
+    ).toHaveAttribute("data-disabled");
   });
 });
 

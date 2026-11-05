@@ -8,6 +8,7 @@ import {
   resetProviderState,
   setProviders,
   setCurrentProviderId,
+  setSettings,
 } from "../msw/state";
 import { providersApi } from "@/lib/api/providers";
 
@@ -32,9 +33,11 @@ vi.mock("@/components/providers/ProviderList", () => ({
     onOpenWebsite,
     onRemoveFromConfig,
     onCreate,
+    searchOpen,
   }: any) => (
     <div>
       <div data-testid="provider-list">{JSON.stringify(providers)}</div>
+      <div data-testid="provider-search-open">{String(Boolean(searchOpen))}</div>
       <div data-testid="current-provider">{currentProviderId}</div>
       <button onClick={() => onSwitch(providers[currentProviderId])}>
         switch
@@ -255,6 +258,30 @@ describe("App integration with MSW", () => {
       addSpy.mockRestore();
       localStorage.removeItem("cc-switch-last-app");
     }
+  });
+
+  // 上游 c5efe0ba：供应商页头的搜索按钮开关搜索面板；设置里关掉后按钮隐藏
+  it("toggles provider search from the page header and hides the button when turned off", async () => {
+    const view = renderApp(App);
+    const button = await screen.findByRole("button", { name: "搜索供应商" });
+    expect(screen.getByTestId("provider-search-open")).toHaveTextContent(
+      "false",
+    );
+    fireEvent.click(button);
+    expect(screen.getByTestId("provider-search-open")).toHaveTextContent(
+      "true",
+    );
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    view.unmount();
+
+    setSettings({ showProviderSearch: false });
+    renderApp(App);
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list")).toHaveTextContent("claude-1"),
+    );
+    expect(
+      screen.queryByRole("button", { name: "搜索供应商" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes provider editors when navigating to another app", async () => {

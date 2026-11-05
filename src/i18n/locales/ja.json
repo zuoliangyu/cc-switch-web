@@ -183,7 +183,7 @@
     "dragHandle": "ドラッグで並べ替え",
     "searchPlaceholder": "名前・メモ・URLで検索...",
     "searchAriaLabel": "プロバイダーを検索",
-    "searchScopeHint": "名前・メモ・URL を対象に検索します。",
+    "searchScopeHint": "名前・メモ・公式サイト・API アドレスを対象に検索します。",
     "searchCloseHint": "Esc で閉じる",
     "searchCloseAriaLabel": "検索を閉じる",
     "noSearchResults": "一致するプロバイダーがありません。",
@@ -279,7 +279,9 @@
     "openTerminalIsolated": "ターミナルを開く（環境を分離）",
     "deleteBlockedInUse": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。",
     "deleteBlockedDirectDefault": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続に戻してほかのプロバイダーに切り替えてください。",
-    "backToList": "プロバイダー一覧に戻る"
+    "backToList": "プロバイダー一覧に戻る",
+    "searchButtonTip": "プロバイダーを検索（{{shortcut}}）",
+    "disable": "無効にする"
   },
   "notifications": {
     "providerAdded": "プロバイダーを追加しました",
@@ -2955,8 +2957,6 @@
     "enabled": "{{app}} フェイルオーバーが有効になりました",
     "disabled": "{{app}} フェイルオーバーが無効になりました",
     "toggleFailed": "操作に失敗しました: {{detail}}",
-    "inQueue": "キュー内",
-    "addQueue": "追加",
     "priority": {
       "tooltip": "フェイルオーバー優先度 {{priority}}"
     },
@@ -3872,9 +3872,7 @@
     "startupFailed": "モードの復元に失敗しました：{{error}}。設定を修正してから、必要なモードを再度有効にしてください。",
     "loadFailed": "動作モードを読み込めません",
     "default": "既定",
-    "member": "参加済み",
     "join": "参加",
-    "more": "集約のその他の操作",
     "setDefault": "集約の既定に設定",
     "restartDaemon": "Codex デーモンを再起動",
     "restartDaemonConfirm": "実行中のタスクの終了を待ち、管理対象の Codex デーモンを再起動して新しいモデル一覧を読み込みます。数分かかる場合があります。デスクトップ版とエディター拡張は手動で終了して開き直してください。",
@@ -3960,7 +3958,8 @@
       "routeKept": "ルーティング先、フェイルオーバーのキューと設定は保持され、次にルーティングを開始すると復元されます。",
       "leaveStackNote": "ccs- で始まる集約モデルはモデル一覧から消えます。集約リストは残り、集約に戻すと復活します。そのどれかを使用中なら、クライアントで通常のモデルに切り替えてください。",
       "confirm": "直接接続に戻す"
-    }
+    },
+    "leave": "集約から外す"
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4646,5 +4645,15 @@
     "updateAllCount": "すべて更新（{{count}} 件）",
     "updatingProgress": "更新中 {{done}}/{{total}}…",
     "copyDir": "ディレクトリのパスをコピー"
+  },
+  "providerCard": {
+    "action": {
+      "addToQueue": "キューに追加",
+      "removeFromQueue": "キューから外す"
+    },
+    "reason": {
+      "defaultCannotRemove": "既定のプロバイダーは削除できません。先にほかを既定にしてください。",
+      "inUseCannotDelete": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。"
+    }
   }
 }

@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -367,8 +368,7 @@ export function ProviderCard({
   return (
     <div
       className={cn(
-        "glass-card relative overflow-hidden rounded-[28px] border border-border-default p-5 text-card-foreground transition-all duration-300 sm:p-6",
-        "group",
+        "glass-card group relative overflow-hidden rounded-2xl border border-border-default text-card-foreground transition-[border-color,box-shadow,background-color] duration-150",
         isAutoFailoverEnabled || isProxyTakeover
           ? "hover:border-[hsl(var(--success)/0.45)]"
           : "hover:border-border-active",
@@ -382,7 +382,7 @@ export function ProviderCard({
     >
       <div
         className={cn(
-          "absolute inset-0 bg-gradient-to-r to-transparent transition-opacity duration-500 pointer-events-none",
+          "pointer-events-none absolute inset-0 bg-gradient-to-r to-transparent transition-opacity duration-500",
           shouldUseGreen && "provider-card-overlay-success",
           shouldUseBlue && "provider-card-overlay-primary",
           !(isActiveProvider || hasPersistentConfigHighlight) &&
@@ -392,118 +392,111 @@ export function ProviderCard({
             : "opacity-0",
         )}
       />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <ProviderIconBox
-            icon={provider.icon}
-            name={provider.name}
-            color={provider.iconColor}
-            size={44}
-            glyphSize={20}
-            className="rounded-2xl bg-background/80 shadow-sm transition-transform duration-300 group-hover:scale-105"
-          />
+      {/* 一行排开（上游 v7）：图标 → 名称与副标题 → 用量列 → 操作；窄屏时用量与操作换到第二行靠右 */}
+      <div className="relative flex min-h-[58px] flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
+        <ProviderIconBox
+          icon={provider.icon}
+          name={provider.name}
+          color={provider.iconColor}
+          className="bg-background/80"
+        />
 
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex min-h-7 flex-wrap items-center gap-2">
-              <h3 className="break-words text-base font-semibold leading-none tracking-tight">
-                {provider.name}
-              </h3>
+        <div className="min-w-0 flex-1 basis-40">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <h3
+              className="m-0 min-w-0 max-w-full truncate text-sm font-semibold text-foreground"
+              title={provider.name}
+            >
+              {provider.name}
+            </h3>
 
-              {isOmo && (
-                <span className="theme-chip-primary inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold">
-                  OMO
-                </span>
-              )}
+            {isOmo && <CardChip className="theme-chip-primary">OMO</CardChip>}
 
-              {isOmoSlim && (
-                <span className="theme-chip-tertiary inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold">
-                  Slim
-                </span>
-              )}
+            {isOmoSlim && (
+              <CardChip className="theme-chip-tertiary">Slim</CardChip>
+            )}
 
-              {isProxyRunning && isInFailoverQueue && health && (
-                <ProviderHealthBadge
-                  consecutiveFailures={health.consecutive_failures}
-                />
-              )}
-
-              {isAutoFailoverEnabled &&
-                isInFailoverQueue &&
-                failoverPriority && (
-                  <FailoverPriorityBadge priority={failoverPriority} />
-                )}
-
-              {needsRouting && (
-                <span
-                  className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
-                  title={routingReason ?? undefined}
-                >
-                  {t("codex.needsRouting", {
-                    defaultValue: "需要路由",
-                  })}
-                </span>
-              )}
-
-              {supportsOfficialRouting && (
-                <span className="inline-flex items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                  {isProxyTakeover
-                    ? t("codex.officialRouting", {
-                        defaultValue: "官方账号路由",
-                      })
-                    : t("codex.nativeLogin", {
-                        defaultValue: "Codex 登录",
-                      })}
-                </span>
-              )}
-
-              {isHermesReadOnly && (
-                <span
-                  className="inline-flex items-center rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-700/60 dark:text-slate-200"
-                  title={t("provider.managedByHermesHint")}
-                >
-                  {t("provider.managedByHermes")}
-                </span>
-              )}
-            </div>
-
-            {claudeBoundAccountId ? (
-              <ClaudeBoundAccountLine
-                accountId={claudeBoundAccountId}
-                providerName={provider.name}
-                showPlan={usageEnabled}
+            {isProxyRunning && isInFailoverQueue && health && (
+              <ProviderHealthBadge
+                consecutiveFailures={health.consecutive_failures}
               />
-            ) : agyModel ? (
-              <span
-                className="inline-flex max-w-[320px] items-center text-sm text-muted-foreground sm:max-w-[420px]"
-                title={agyModel}
+            )}
+
+            {isAutoFailoverEnabled && isInFailoverQueue && failoverPriority && (
+              <FailoverPriorityBadge priority={failoverPriority} />
+            )}
+
+            {needsRouting && (
+              <CardChip
+                className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                title={routingReason ?? undefined}
               >
-                <span className="truncate">{agyModel}</span>
-              </span>
-            ) : (
-              displayUrl && (
-                <button
-                  type="button"
-                  onClick={handleOpenWebsite}
-                  className={cn(
-                    "inline-flex max-w-[320px] items-center text-sm sm:max-w-[420px]",
-                    isClickableUrl
-                      ? "theme-primary-link cursor-pointer hover:underline"
-                      : "text-muted-foreground cursor-default",
-                  )}
-                  title={displayUrl}
-                  disabled={!isClickableUrl}
-                >
-                  <span className="truncate">{displayUrl}</span>
-                  {showClaudeDefaultPlan && <ClaudeDefaultPlanSuffix />}
-                </button>
-              )
+                {t("codex.needsRouting", {
+                  defaultValue: "需要路由",
+                })}
+              </CardChip>
+            )}
+
+            {supportsOfficialRouting && (
+              <CardChip className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                {isProxyTakeover
+                  ? t("codex.officialRouting", {
+                      defaultValue: "官方账号路由",
+                    })
+                  : t("codex.nativeLogin", {
+                      defaultValue: "Codex 登录",
+                    })}
+              </CardChip>
+            )}
+
+            {isHermesReadOnly && (
+              <CardChip
+                className="border border-border-default text-muted-foreground"
+                title={t("provider.managedByHermesHint")}
+              >
+                {t("provider.managedByHermes")}
+              </CardChip>
             )}
           </div>
+
+          {claudeBoundAccountId ? (
+            <ClaudeBoundAccountLine
+              accountId={claudeBoundAccountId}
+              providerName={provider.name}
+              showPlan={usageEnabled}
+            />
+          ) : agyModel ? (
+            <div
+              className="mt-0.5 flex min-w-0 items-center text-xs text-muted-foreground"
+              title={agyModel}
+            >
+              <span className="min-w-0 truncate">{agyModel}</span>
+            </div>
+          ) : (
+            displayUrl && (
+              <button
+                type="button"
+                onClick={handleOpenWebsite}
+                className={cn(
+                  "mt-0.5 inline-flex max-w-full items-center overflow-hidden text-start text-xs",
+                  isClickableUrl
+                    ? "cursor-pointer text-muted-foreground underline-offset-[3px] hover:text-foreground hover:underline"
+                    : "cursor-default text-muted-foreground",
+                )}
+                title={displayUrl}
+                disabled={!isClickableUrl}
+              >
+                <span className="min-w-0 truncate">{displayUrl}</span>
+                {showClaudeDefaultPlan && <ClaudeDefaultPlanSuffix />}
+              </button>
+            )
+          )}
         </div>
 
-        <div className="relative ml-auto flex min-w-0 flex-col gap-3 sm:min-h-[3rem] sm:items-end">
-          <div className="sm:ml-auto">
-            <div className="flex flex-wrap items-center gap-1 sm:justify-end">
+        <div className="ms-auto flex shrink-0 items-center gap-3">
+          {/* 额度列最宽 208：带重置倒计时时也不挤占操作位 */}
+          <div className="max-w-[208px] text-end">
+            <div className="flex items-center justify-end gap-1">
               {isCopilot ? (
                 <CopilotQuotaFooter
                   meta={provider.meta}
@@ -560,14 +553,12 @@ export function ProviderCard({
                   isCurrent={isCurrent}
                 />
               ) : hasMultiplePlans ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium">
-                    {t("usage.multiplePlans", {
-                      count: usage?.data?.length || 0,
-                      defaultValue: `${usage?.data?.length || 0} 个套餐`,
-                    })}
-                  </span>
-                </div>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t("usage.multiplePlans", {
+                    count: usage?.data?.length || 0,
+                    defaultValue: `${usage?.data?.length || 0} 个套餐`,
+                  })}
+                </span>
               ) : (
                 <UsageFooter
                   provider={provider}
@@ -581,16 +572,18 @@ export function ProviderCard({
               )}
               {hasMultiplePlans && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsExpanded(!isExpanded);
                   }}
-                  className="p-1 rounded hover:bg-accent/70 transition-colors text-muted-foreground flex-shrink-0"
+                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
                   title={
                     isExpanded
                       ? t("usage.collapse", { defaultValue: "收起" })
                       : t("usage.expand", { defaultValue: "展开" })
                   }
+                  aria-expanded={isExpanded}
                 >
                   {isExpanded ? (
                     <ChevronUp size={14} />
@@ -602,77 +595,80 @@ export function ProviderCard({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/50 pt-3">
-            <ProviderActions
-              aggregation={aggregation}
-              failoverUnavailable={
-                appId === "codex" &&
-                resolveCodexOfficialIdentity(appId, provider) !== null
-              }
-              deleteDisabledReason={deleteDisabledReason}
-              deleteDisabled={
-                Boolean(deleteDisabledReason) ||
-                // 仍在 Kimi 里的官方卡不能直接删：删号在授权中心（连登录一起删）
-                (appId === "kimi" && isOfficial && isInConfig)
-              }
-              appId={appId}
-              isCurrent={isCurrent}
-              isInConfig={isInConfig}
-              isTesting={isTesting}
-              isProxyTakeover={isProxyTakeover}
-              isReadOnly={isHermesReadOnly}
-              isOmo={isAnyOmo}
-              onSwitch={() => onSwitch(provider)}
-              onEdit={() => onEdit(provider)}
-              onDuplicate={
-                appId === "kimi" && isOfficial
-                  ? undefined
-                  : () => onDuplicate(provider)
-              }
-              onTest={
-                onTest &&
-                supportsConnectivityCheck(appId, provider) &&
-                !isOfficial &&
-                !isCopilot &&
-                !isCodexOauth &&
-                !isXaiOauth
-                  ? () => onTest(provider)
-                  : undefined
-              }
-              onConfigureUsage={
-                (isOfficial && !isBoundCodexOfficial) ||
-                isCopilot ||
-                (isCodexOauth && !isBoundCodexOfficial) ||
-                isXaiOauth
-                  ? undefined
-                  : () => onConfigureUsage(provider)
-              }
-              onDelete={() => onDelete(provider)}
-              onRemoveFromConfig={
-                onRemoveFromConfig
-                  ? () => onRemoveFromConfig(provider)
-                  : undefined
-              }
-              onDisableOmo={handleDisableAnyOmo}
-              onOpenTerminal={
-                onOpenTerminal && terminalAvailable(provider, appId, isCurrent)
-                  ? () => onOpenTerminal(provider)
-                  : undefined
-              }
-              openTerminalIsolated={terminalIsIsolated(provider, appId)}
-              isAutoFailoverEnabled={isAutoFailoverEnabled}
-              isInFailoverQueue={isInFailoverQueue}
-              onToggleFailover={onToggleFailover}
-              isDefaultModel={isDefaultModel}
-              onSetAsDefault={onSetAsDefault}
-              defaultModelOptions={defaultModelOptions}
-            />
-          </div>
+          <ProviderActions
+            aggregation={aggregation}
+            failoverUnavailable={
+              appId === "codex" &&
+              resolveCodexOfficialIdentity(appId, provider) !== null
+            }
+            deleteDisabledReason={
+              deleteDisabledReason ??
+              // 仍在 Kimi 里的官方卡不能直接删：删号在授权中心（连登录一起删）
+              (appId === "kimi" && isOfficial && isInConfig
+                ? t("kimi.oauth.managedHint")
+                : undefined)
+            }
+            deleteDisabled={
+              Boolean(deleteDisabledReason) ||
+              (appId === "kimi" && isOfficial && isInConfig)
+            }
+            appId={appId}
+            isCurrent={isCurrent}
+            isInConfig={isInConfig}
+            isTesting={isTesting}
+            isProxyTakeover={isProxyTakeover}
+            isReadOnly={isHermesReadOnly}
+            isOmo={isAnyOmo}
+            onSwitch={() => onSwitch(provider)}
+            onEdit={() => onEdit(provider)}
+            onDuplicate={
+              appId === "kimi" && isOfficial
+                ? undefined
+                : () => onDuplicate(provider)
+            }
+            onTest={
+              onTest &&
+              supportsConnectivityCheck(appId, provider) &&
+              !isOfficial &&
+              !isCopilot &&
+              !isCodexOauth &&
+              !isXaiOauth
+                ? () => onTest(provider)
+                : undefined
+            }
+            onConfigureUsage={
+              (isOfficial && !isBoundCodexOfficial) ||
+              isCopilot ||
+              (isCodexOauth && !isBoundCodexOfficial) ||
+              isXaiOauth
+                ? undefined
+                : () => onConfigureUsage(provider)
+            }
+            onDelete={() => onDelete(provider)}
+            onRemoveFromConfig={
+              onRemoveFromConfig
+                ? () => onRemoveFromConfig(provider)
+                : undefined
+            }
+            onDisableOmo={handleDisableAnyOmo}
+            onOpenTerminal={
+              onOpenTerminal && terminalAvailable(provider, appId, isCurrent)
+                ? () => onOpenTerminal(provider)
+                : undefined
+            }
+            openTerminalIsolated={terminalIsIsolated(provider, appId)}
+            isAutoFailoverEnabled={isAutoFailoverEnabled}
+            isInFailoverQueue={isInFailoverQueue}
+            onToggleFailover={onToggleFailover}
+            isDefaultModel={isDefaultModel}
+            onSetAsDefault={onSetAsDefault}
+            defaultModelOptions={defaultModelOptions}
+          />
         </div>
       </div>
 
       {isExpanded && hasMultiplePlans && (
-        <div className="mt-4 pt-4 border-t border-border-default">
+        <div className="relative mx-4 mb-3 border-t border-border-default pt-3">
           <UsageFooter
             provider={provider}
             providerId={provider.id}
@@ -685,5 +681,29 @@ export function ProviderCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** 名称后面的小标签（上游 v7 的胶囊样式，颜色沿用 Web 主题） */
+function CardChip({
+  className,
+  title,
+  children,
+}: {
+  className?: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        "inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full px-1.5 text-[11px] font-medium",
+        title && "cursor-help",
+        className,
+      )}
+    >
+      {children}
+    </span>
   );
 }

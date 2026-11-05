@@ -352,10 +352,13 @@ describe("ProviderList Component", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the search button when provider search is turned off but keeps the shortcut", () => {
+  // 上游 c5efe0ba：搜索面板由页头按钮控制；关掉面板就不再过滤，搜索词留着下次打开还在
+  it("only filters while the search panel is open and keeps the term", () => {
     const providerAlpha = createProvider({ id: "alpha", name: "Alpha Labs" });
+    const providerBeta = createProvider({ id: "beta", name: "Beta Works" });
+    const onSearchOpenChange = vi.fn();
     const props = {
-      providers: { alpha: providerAlpha },
+      providers: { alpha: providerAlpha, beta: providerBeta },
       currentProviderId: "",
       appId: "claude" as const,
       onSwitch: vi.fn(),
@@ -363,22 +366,80 @@ describe("ProviderList Component", () => {
       onDelete: vi.fn(),
       onDuplicate: vi.fn(),
       onOpenWebsite: vi.fn(),
+      onSearchOpenChange,
     };
-    const { unmount } = renderWithQueryClient(<ProviderList {...props} />);
-    expect(screen.getByRole("button", { name: /搜索/ })).toBeInTheDocument();
-    unmount();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ProviderList {...props} searchOpen />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText("Search name, notes, or URL..."),
+      { target: { value: "beta" } },
+    );
+    expect(screen.queryByTestId("provider-card-alpha")).not.toBeInTheDocument();
 
-    renderWithQueryClient(<ProviderList {...props} showSearchButton={false} />);
+    // 列表里没有自己的搜索按钮，⌘F / Ctrl+F 交给页头的开关
     expect(
-      screen.queryByRole("button", { name: /搜索/ }),
+      screen.queryByRole("button", { name: /^搜索/ }),
     ).not.toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "f", metaKey: true });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close provider search" }),
+    );
+    expect(onSearchOpenChange).toHaveBeenLastCalledWith(false);
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ProviderList {...props} searchOpen={false} />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.queryByPlaceholderText("Search name, notes, or URL..."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("provider-card-alpha")).toBeInTheDocument();
+    expect(screen.getByTestId("provider-card-beta")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(onSearchOpenChange).toHaveBeenLastCalledWith(true);
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ProviderList {...props} searchOpen />
+      </QueryClientProvider>,
+    );
     expect(
       screen.getByPlaceholderText("Search name, notes, or URL..."),
-    ).toBeInTheDocument();
+    ).toHaveValue("beta");
+    expect(screen.queryByTestId("provider-card-alpha")).not.toBeInTheDocument();
   });
 
-  it("matches the API address and keeps the search field out of the card area", () => {
+  it("does not take over Ctrl+F while typing in another field", () => {
+    const providerAlpha = createProvider({ id: "alpha", name: "Alpha Labs" });
+    renderWithQueryClient(
+      <>
+        <input aria-label="other field" />
+        <ProviderList
+          providers={{ alpha: providerAlpha }}
+          currentProviderId=""
+          appId="claude"
+          onSwitch={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          onDuplicate={vi.fn()}
+          onOpenWebsite={vi.fn()}
+        />
+      </>,
+    );
+    screen.getByLabelText("other field").focus();
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(
+      screen.queryByPlaceholderText("Search name, notes, or URL..."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("matches the API address and puts the search field in the first list row", () => {
     const relay = createProvider({
       id: "relay",
       name: "Relay",
@@ -401,14 +462,18 @@ describe("ProviderList Component", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /provider\.search|搜索/ }),
-    );
+    fireEvent.keyDown(window, { key: "f", metaKey: true });
     const searchInput = screen.getByPlaceholderText(
       "Search name, notes, or URL...",
     );
-    // 搜索框就在工作台那一行里，不是浮在卡片上的面板
+    // 搜索框在列表上方第一行（上游 31c6f574），不是浮在卡片上的面板，也不在卡片里
     expect(searchInput.closest(".fixed")).toBeNull();
+    const firstCard = screen.getByTestId("provider-card-relay");
+    expect(firstCard.contains(searchInput)).toBe(false);
+    expect(
+      searchInput.compareDocumentPosition(firstCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.change(searchInput, { target: { value: "relay.example" } });
     expect(screen.getByTestId("provider-card-relay")).toBeInTheDocument();

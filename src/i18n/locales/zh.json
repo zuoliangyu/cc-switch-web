@@ -183,7 +183,7 @@
     "dragHandle": "拖拽排序",
     "searchPlaceholder": "按名称/备注/网址搜索供应商...",
     "searchAriaLabel": "搜索供应商",
-    "searchScopeHint": "根据名称、备注和官网链接匹配结果。",
+    "searchScopeHint": "根据名称、备注、官网和请求地址匹配结果。",
     "searchCloseHint": "按 Esc 关闭",
     "searchCloseAriaLabel": "关闭供应商搜索",
     "noSearchResults": "没有符合搜索条件的供应商。",
@@ -279,7 +279,9 @@
     "openTerminalIsolated": "打开终端（环境隔离）",
     "deleteBlockedInUse": "正在用的这家不能删除，先切到别家。",
     "deleteBlockedDirectDefault": "退出路由后会回到这家，所以不能删除。先回到直连并切到别家，再删除。",
-    "backToList": "返回供应商列表"
+    "backToList": "返回供应商列表",
+    "searchButtonTip": "搜索供应商（{{shortcut}}）",
+    "disable": "停用"
   },
   "notifications": {
     "providerAdded": "供应商已添加",
@@ -2955,8 +2957,6 @@
     "enabled": "{{app}} 故障转移已启用",
     "disabled": "{{app}} 故障转移已关闭",
     "toggleFailed": "操作失败: {{detail}}",
-    "inQueue": "已加入",
-    "addQueue": "加入",
     "priority": {
       "tooltip": "故障转移优先级 {{priority}}"
     },
@@ -3872,9 +3872,7 @@
     "startupFailed": "启动恢复失败：{{error}}。请修正配置后重新启用所需模式。",
     "loadFailed": "无法读取运行模式",
     "default": "默认",
-    "member": "已加入",
     "join": "加入",
-    "more": "更多聚合操作",
     "setDefault": "设为聚合默认",
     "restartDaemon": "重启 Codex 守护进程",
     "restartDaemonConfirm": "将等待运行中的任务收尾，再重启 Codex 托管守护进程以读取新模型列表，最长可能需要数分钟。桌面版和编辑器插件仍需手动退出再打开。",
@@ -3960,7 +3958,8 @@
       "routeKept": "路由目标、故障转移队列和设置都会保留，下次开始路由时恢复。",
       "leaveStackNote": "以 ccs- 开头的聚合模型会从模型列表里消失；聚合名单不会删，切回聚合模式就回来。正在用其中某个的话，要在客户端里换回普通模型。",
       "confirm": "回到直连"
-    }
+    },
+    "leave": "移出聚合"
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4646,5 +4645,15 @@
     "updateAllCount": "全部更新（{{count}} 个）",
     "updatingProgress": "正在更新 {{done}}/{{total}}…",
     "copyDir": "复制目录路径"
+  },
+  "providerCard": {
+    "action": {
+      "addToQueue": "加入队列",
+      "removeFromQueue": "移出队列"
+    },
+    "reason": {
+      "defaultCannotRemove": "默认那家不能移除，先把别家设为默认。",
+      "inUseCannotDelete": "正在用的这家不能删除，先切到别家。"
+    }
   }
 }

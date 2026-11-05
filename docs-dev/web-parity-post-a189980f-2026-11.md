@@ -295,7 +295,7 @@
 | `8919d05c` | v4.0.6 | fix(ui): use the action color for the apps page visibility switches | 5a 供应商与全局 UI | 5a4a：Web 的 Switch 没有 neutral 色调，应用页的显示开关本来就用主色 | 不适用 |
 | `4629ee2f` | v4.0.6 | fix(tray): show every quota tier in the app row title | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `dc93c496` | v4.0.6 | fix(codex): keep official models visible in the aggregation catalog | 4 模式/路由 | 4b：官方列表按本机在用的最新 Codex 版本取（PATH 上的 codex 与最近线程的 cli_version）；没有 visibility = list 的列表不合格，退回自带列表并提示 officialModelsOutdated（含 4a 留下的 2e20cdcb 部分） | 已迁移 |
-| `c5efe0ba` | v4.0.6 | feat(providers): add a search button to the provider page header | 5a 供应商与全局 UI | 5a3a/5a4b：搜索按请求地址匹配随 5a3a 迁入；本批补「显示供应商搜索」设置（后端 show_provider_search 默认开，设置页应用可见性区块新增开关；关掉后隐藏搜索按钮，⌘F / Ctrl+F 仍可打开，正在筛选时按钮保留），补前后端用例；「只在面板打开时过滤」和搜索框位置随 5d2 | 部分迁移 |
+| `c5efe0ba` | v4.0.6 | feat(providers): add a search button to the provider page header | 5a 供应商与全局 UI | 5a3a/5a4b/5d2：搜索按请求地址匹配（5a3a）、「显示供应商搜索」设置（5a4b）；5d2 把搜索按钮移到供应商页头（带 ⌘F / Ctrl+F 提示），开关状态提到 App、换应用或离开供应商页即收起；只在面板打开时过滤，关掉面板列表恢复全部、搜索词保留；在别的输入框里按 Ctrl+F 不抢；搜索范围提示改为上游「名称、备注、官网和请求地址」 | 已迁移 |
 | `ee50c12b` | v4.0.6 | test(apps): expect the action color on the apps page visibility switches | 5a 供应商与全局 UI | 5a4a：对应 8919d05c 的开关色调用例，Web 无 tone 属性 | 不适用 |
 | `314968b6` | v4.0.6 | chore(release): v4.0.6 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `c2611266` | v4.0.6 | docs(release): add v4.0.6 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -428,7 +428,7 @@
 | `30fcd90a` | v4.0.12 | fix(apps): keep columns aligned when upgrade actions disappear (#8293) | 5a 供应商与全局 UI | 5a4a：应用页表头与各行（md 起）共用列宽，操作列按可见按钮的最大宽度经 ResizeObserver 收缩；安装提示截断；窄屏保留 Web 的两行排布 | 已迁移 |
 | `6a232cab` | v4.0.12 | feat(apps): choose which installation to uninstall and support current Grok layout | 1d 资源/设置/工具 | 1d：卸载时选择具体安装位置、Grok 新布局；Hermes Windows 残留提示按服务端卸载路径判断平台 | 已迁移 |
 | `ae778b4f` | v4.0.12 | feat(apps): check the Node version before updating npm tools | 1d 资源/设置/工具 | 1d：升级 npm 工具前检查 Node 版本（tool_node_requirement 子模块 + 行内提示，阻止的工具不进“全部升级”） | 已迁移 |
-| `31c6f574` | v4.0.12 | feat(providers): place provider search at the end of the first list row | 5a 供应商与全局 UI | 5a3a：打开搜索时，工作台卡片按钮行里的「搜索」按钮原地换成紧凑搜索框（范围与 Esc 提示收进说明卡），既不遮挡也不推动卡片；上游放进模式行或首个分组标题行的位置不适用：Web 的工作台卡片固定在列表上方 | 部分迁移 |
+| `31c6f574` | v4.0.12 | feat(providers): place provider search at the end of the first list row | 5a 供应商与全局 UI | 5d2：去掉供应商工作台卡片，搜索框放在列表上方第一行的最右端（不浮在卡片上、不在卡片里），带清空与关闭；有模式行时上游把搜索框放进模式行（searchSlot），随 5d3 接到 Web 模式界面 | 已迁移 |
 | `dea297ce` | v4.0.12 | fix(i18n): use English for unsupported system languages | 1d 资源/设置/工具 | 1d：浏览器语言不在 zh/en/ja 中时使用英文 | 已迁移 |
 | `d1592fb1` | v4.0.12 | feat(presets): add StreamLake for Codex and use the public KAT-Coder endpoint | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `ff443477` | v4.0.12 | feat(presets): add Ollama Cloud provider presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -768,7 +768,7 @@
 | `b3eb2ad1` | v4.0.21 | feat(claude): show each account's quota in the auth center | 5a 供应商与全局 UI | 5a3b：授权中心逐账号额度（ClaudeAccountQuota）此前已迁入，本批无改动 | 已迁移 |
 | `e29968f5` | v4.0.21 | fix(claude): don't show a stale quota when the account's login has lapsed | 3 官方账号 | 3b：登录失效时不显示过期额度 | 已迁移 |
 | `50395742` | v4.0.21 | refactor(claude): match the auth center header changes on main | 5a 供应商与全局 UI | 5a3b：ClaudeOfficialSection 去掉表头「全部删除」与空状态登录文案此前已与上游最终版本一致，本批无改动 | 已迁移 |
-| `0c07d509` | v4.0.21 | fix(providers): keep the usage column aligned when a card's status changes | 5a 供应商与全局 UI | 5a3b：Web 卡片操作区是按钮行而非上游的「主操作位 + 用量列」布局，无定宽问题；新加的「● 当前默认」状态放在按钮行左侧，不推动用量块 | 部分迁移 |
+| `0c07d509` | v4.0.21 | fix(providers): keep the usage column aligned when a card's status changes | 5a 供应商与全局 UI | 5d2：卡片改为上游的一行布局（图标 → 名称与徽标 / 副标题 → 用量列 max-w-[208px] → 操作），主操作位 min-w-20 靠右定宽，「● 使用中 / 当前默认 / 默认」状态文字与图标按钮互换时用量列不跳；窄屏时用量与操作换到第二行靠右 | 已迁移 |
 | `ee2ef72f` | v4.0.21 | fix(hermes): move set-default into the more menu like other additive apps | 5a 供应商与全局 UI | 5a3b：Hermes 的「设为默认」（原行内「启用」按钮）收进更多菜单，默认那家显示「当前默认」且不能移除；Kimi 同样改为更多菜单 | 已迁移 |
 | `03337b7e` | v4.0.21 | feat(presets): allow max reasoning effort for MiniMax Flash in OpenClaw | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `88c878ac` | v4.0.21 | feat(claude): show the subscription plan on official cards | 3 官方账号 | 3b：官方卡显示订阅套餐（GET /api/auth/claude/default-plan；默认登录在 macOS 先读钥匙串再读 .credentials.json） | 已迁移 |
@@ -1152,3 +1152,9 @@
   - 保留 Web 的做法：ZIP 为浏览器上传（可多选，失败时弹窗不关）；「打开目录」改为复制服务端路径；存储与重新同步在 Web 的服务端路径弹窗里，从「⋯」菜单打开；仓库管理仍为整页面板并加了逐仓库启停。已安装列表与上游一样不再按可视区域渲染，发现列表仍虚拟化。
   - 三语补上游 `skillsPage` 文案，删除 65 项不再使用的旧文案；`docs/web-global-resources-guide-zh.md` 同步。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 223 个文件 2350 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。
+- 2026-11-06：完成布局收敛批次 5d2（供应商卡片布局）。0c07d509、31c6f574、c5efe0ba 由部分迁移改为已迁移。
+  - 卡片改为上游的一行布局：图标、名称与徽标 / 副标题、定宽用量列、操作区；操作区只留主操作位、打开终端、编辑与「⋯」，主操作按场景显示启用、添加 / 移除、加入 / 移出队列或聚合，或「使用中 / 当前默认 / 默认」状态；复制、测试模型、用量查询配置、删除收进「⋯」，不能执行时在说明里写明原因。窄屏时用量与操作换到第二行。
+  - 去掉「供应商工作台」卡片；页头新增搜索按钮（受「显示供应商搜索」控制，⌘F / Ctrl+F 始终可用，在其他输入框里不抢），搜索框在列表首行，只在打开时过滤。
+  - 保留 Web 主题的卡片高亮与配色；上游队列上移 / 下移与拖动手柄不迁（Web 不做拖动排名）。按模式分组的列表标题、卡片模式色与按模式而定的主按钮依赖模式视图，随 5d3。
+  - `docs/claude-codex-routing-guide-zh.md` 同步聚合成员按钮的说法。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 223 个文件 2356 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。

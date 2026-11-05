@@ -1,6 +1,6 @@
 import type { AppModeView } from "@/types/proxy";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, Search, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { providersApi } from "@/lib/api/providers";
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
-import { HoverTip } from "@/components/ui/hover-tip";
+import { isTextEditableTarget } from "@/utils/domUtils";
 import { sortProvidersByName } from "@/utils/providerSort";
 import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
 import type { OpenClawProviderConfig } from "@/types";
@@ -51,8 +51,9 @@ import {
 } from "@/lib/query/pi";
 
 interface ProviderListProps {
-  /** 设置「显示供应商搜索」：关掉后隐藏搜索按钮，⌘F / Ctrl+F 仍可打开 */
-  showSearchButton?: boolean;
+  /** 搜索面板开关由页头的搜索按钮控制（上游 v7）；不传时列表自己管，⌘F / Ctrl+F 仍可打开 */
+  searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
   modeView?: AppModeView;
   modePending?: boolean;
   onAggregationMember?: (id: string, enabled: boolean) => void;
@@ -80,7 +81,8 @@ interface ProviderListProps {
 }
 
 export function ProviderList({
-  showSearchButton = true,
+  searchOpen,
+  onSearchOpenChange,
   modeView,
   modePending,
   onAggregationMember,
@@ -276,8 +278,17 @@ export function ProviderList({
   );
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [innerSearchOpen, setInnerSearchOpen] = useState(false);
+  const isSearchOpen = searchOpen ?? innerSearchOpen;
+  const setIsSearchOpen = onSearchOpenChange ?? setInnerSearchOpen;
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const focusSearch = useCallback(() => {
+    const input = searchInputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.select();
+    input.scrollIntoView?.({ block: "nearest" });
+  }, []);
   const { data: claudeDesktopStatus } = useQuery({
     queryKey: ["claudeDesktopStatus"],
     queryFn: () => claudeDesktopApi.getStatus(),
@@ -368,10 +379,20 @@ export function ProviderList({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+
       const key = event.key.toLowerCase();
       if ((event.metaKey || event.ctrlKey) && key === "f") {
+        // 正在输入框/可编辑区域中时不抢占 Ctrl+F（例如添加供应商表单里
+        // ProviderPresetSelector 的搜索框），避免与其同名快捷键冲突。
+        if (isTextEditableTarget(document.activeElement)) return;
         event.preventDefault();
-        setIsSearchOpen(true);
+        if (isSearchOpen) {
+          // 列表行里的搜索框可能已经滚出视野
+          focusSearch();
+        } else {
+          setIsSearchOpen(true);
+        }
         return;
       }
 
@@ -382,20 +403,20 @@ export function ProviderList({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [setIsSearchOpen, isSearchOpen, focusSearch]);
 
   useEffect(() => {
     if (isSearchOpen) {
-      const frame = requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      });
+      const frame = requestAnimationFrame(focusSearch);
       return () => cancelAnimationFrame(frame);
     }
-  }, [isSearchOpen]);
+  }, [isSearchOpen, focusSearch]);
+
+  // 关掉面板就不再过滤：搜索词留着，下次打开还在，但列表不会悄悄少几家
+  const searchKeyword = isSearchOpen ? searchTerm.trim().toLowerCase() : "";
 
   const filteredProviders = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
+    const keyword = searchKeyword;
     if (!keyword) return sortedProviders;
     return sortedProviders.filter((provider) => {
       // 名称、备注、网站之外也按请求地址匹配（各应用存法不同，统一由 extractProviderBaseUrl 取）
@@ -409,13 +430,12 @@ export function ProviderList({
         field?.toString().toLowerCase().includes(keyword),
       );
     });
-  }, [searchTerm, sortedProviders]);
+  }, [searchKeyword, sortedProviders]);
 
   // DSH 登录了 DeepSeek 账号时，列表最前面画一张官方账号卡（不是供应商行，见 DshAccountCard）
   const { data: dshAccount } = useDshAccountStatus(appId === "dsh");
   const dshAccountCard =
     appId === "dsh" && dshAccount?.signedIn ? dshAccount : null;
-  const searchKeyword = searchTerm.trim().toLowerCase();
   const showDshAccountCard = Boolean(
     dshAccountCard &&
       (!searchKeyword ||
@@ -491,7 +511,7 @@ export function ProviderList({
   }
 
   const renderProviderList = () => (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {appId === "dsh" && (
         // DSH 的供应商一起写进 Web 和 Desktop 两份配置，在这里说明
         <p className="m-0 text-xs text-muted-foreground">
@@ -615,153 +635,61 @@ export function ProviderList({
           </ul>
         </div>
       )}
-      <div className="glass-card rounded-[30px] border border-border-default p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              {t("provider.workspaceLabel", {
-                defaultValue: "Provider Workspace",
+      {/* 搜索框放在列表上方第一行的最右端（上游 v7）：不盖住卡片，关掉面板就不再过滤 */}
+      {isSearchOpen && (
+        <div className="flex min-h-8 items-center justify-end gap-3">
+          <div className="relative flex w-full min-w-[10rem] items-center sm:w-64">
+            <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={t("provider.searchPlaceholder", {
+                defaultValue: "Search name, notes, or URL...",
               })}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-                {t("provider.listTitle", {
-                  defaultValue: "供应商工作台",
-                })}
-              </h2>
-              <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                {t("provider.countSummary", {
-                  count: sortedProviders.length,
-                  defaultValue: "{{count}} 个配置",
-                })}
-              </span>
-              {searchTerm.trim() && (
-                <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                  {t("provider.filteredCount", {
-                    count: filteredProviders.length,
-                    defaultValue: "筛选后 {{count}} 个",
-                  })}
-                </span>
-              )}
-            </div>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              {searchTerm.trim()
-                ? t("provider.searchSummary", {
-                    defaultValue:
-                      "正在按名称、备注和 URL 过滤当前应用下的供应商配置。",
-                  })
-                : t("provider.workspaceDescription", {
-                    defaultValue:
-                      "集中查看、筛选和整理当前应用的供应商配置，常用操作可以直接在这里完成。",
-                  })}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {isSearchOpen ? (
-              // 搜索框放在工作台这一行的末尾：不浮在卡片上挡住操作，也不把卡片往下推
-              <HoverTip
-                content={`${t("provider.searchScopeHint", {
-                  defaultValue: "Matches provider name, notes, and URL.",
-                })} ${t("provider.searchCloseHint", {
-                  defaultValue: "Press Esc to close",
-                })}`}
-              >
-                <div className="relative flex w-full items-center sm:w-72">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    ref={searchInputRef}
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder={t("provider.searchPlaceholder", {
-                      defaultValue: "Search name, notes, or URL...",
-                    })}
-                    aria-label={t("provider.searchAriaLabel", {
-                      defaultValue: "Search providers",
-                    })}
-                    className="pl-9 pr-9"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2"
-                    onClick={() => setIsSearchOpen(false)}
-                    aria-label={t("provider.searchCloseAriaLabel", {
-                      defaultValue: "Close provider search",
-                    })}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </HoverTip>
-            ) : !showSearchButton && !searchTerm.trim() ? null : (
+              aria-label={t("provider.searchAriaLabel", {
+                defaultValue: "Search providers",
+              })}
+              title={`${t("provider.searchScopeHint", {
+                defaultValue:
+                  "Matches provider name, notes, website, and API address.",
+              })} ${t("provider.searchCloseHint", {
+                defaultValue: "Press Esc to close",
+              })}`}
+              className={searchTerm ? "h-8 pe-[5.5rem] ps-8" : "h-8 pe-9 ps-8"}
+            />
+            {searchTerm && (
               <Button
                 type="button"
-                variant={searchTerm.trim() ? "default" : "outline"}
-                className="min-w-[8rem]"
-                onClick={() => setIsSearchOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="absolute end-8 top-1/2 h-6 -translate-y-1/2 px-1.5"
+                onClick={() => setSearchTerm("")}
               >
-                <Search className="mr-2 h-4 w-4" />
-                {searchTerm.trim()
-                  ? t("provider.searching", {
-                      defaultValue: "筛选中",
-                    })
-                  : t("provider.search", {
-                      defaultValue: "搜索",
-                    })}
+                {t("common.clear", { defaultValue: "清空" })}
               </Button>
             )}
-            {onCreate && (
-              <Button
-                type="button"
-                className="theme-primary-solid min-w-[8rem]"
-                onClick={onCreate}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t("provider.addProvider")}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {searchTerm.trim() && (
-          <div className="mt-4 flex flex-col gap-2 rounded-[22px] border border-border-default bg-background/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              {t("provider.searchActiveHint", {
-                count: filteredProviders.length,
-                defaultValue: "当前显示 {{count}} 个匹配项。",
-              })}
-            </p>
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="justify-start sm:justify-center"
-              onClick={() => setSearchTerm("")}
+              size="icon"
+              className="absolute end-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
+              onClick={() => setIsSearchOpen(false)}
+              aria-label={t("provider.searchCloseAriaLabel", {
+                defaultValue: "Close provider search",
+              })}
             >
-              {t("common.clear", { defaultValue: "清空" })}
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {filteredProviders.length === 0 ? (
-        <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-10 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
-            <Search className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="mt-4 text-base font-semibold text-foreground">
-            {t("provider.noSearchResults", {
-              defaultValue: "No providers match your search.",
-            })}
-          </div>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            {t("provider.noSearchResultsHint", {
-              defaultValue:
-                "试试更短的关键字，或者清空筛选后重新查看全部供应商。",
-            })}
-          </p>
+      {filteredProviders.length === 0 && !showDshAccountCard ? (
+        <div className="rounded-2xl border border-dashed border-border-default px-6 py-8 text-center text-sm text-muted-foreground">
+          {t("provider.noSearchResults", {
+            defaultValue: "No providers match your search.",
+          })}
         </div>
       ) : (
         renderProviderList()

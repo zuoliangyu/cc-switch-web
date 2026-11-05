@@ -28,6 +28,7 @@ import {
   Cpu,
   LayoutDashboard,
   MoreHorizontal,
+  Search,
 } from "lucide-react";
 import type { Provider, VisibleApps } from "@/types";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
@@ -52,6 +53,8 @@ import {
   translatePiProviderMutationError,
 } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { isMac } from "@/lib/platform";
 import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { cn } from "@/lib/utils";
 import { AppSwitcher } from "@/components/AppSwitcher";
@@ -218,6 +221,11 @@ function App() {
   const [currentView, setCurrentView] = useState<View>(getInitialView);
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // 供应商搜索面板：页头按钮和 ⌘F 都能打开；换应用或离开供应商页就收起
+  const [providerSearchOpen, setProviderSearchOpen] = useState(false);
+  useEffect(() => {
+    setProviderSearchOpen(false);
+  }, [activeApp, currentView]);
 
   const handleViewChange = (nextView: View) => {
     setCurrentView(nextView);
@@ -920,9 +928,8 @@ function App() {
                       />
                     )}
                     <ProviderList
-                      showSearchButton={
-                        settingsData?.showProviderSearch ?? true
-                      }
+                      searchOpen={providerSearchOpen}
+                      onSearchOpenChange={setProviderSearchOpen}
                       modeView={appMode.data}
                       modePending={appMode.pending}
                       onAggregationMember={(id, enabled) => {
@@ -1243,6 +1250,27 @@ function App() {
                 )}
                 {currentView === "providers" && (
                   <>
+                    {(settingsData?.showProviderSearch ?? true) && (
+                      <HoverTip
+                        content={t("provider.searchButtonTip", {
+                          shortcut: isMac() ? "⌘F" : "Ctrl+F",
+                          defaultValue: "搜索供应商（{{shortcut}}）",
+                        })}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={t("provider.searchAriaLabel", {
+                            defaultValue: "搜索供应商",
+                          })}
+                          aria-pressed={providerSearchOpen}
+                          onClick={() => setProviderSearchOpen((open) => !open)}
+                        >
+                          <Search className="h-4 w-4" />
+                        </Button>
+                      </HoverTip>
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button

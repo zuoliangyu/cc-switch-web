@@ -183,7 +183,7 @@
     "dragHandle": "Drag to reorder",
     "searchPlaceholder": "Search name, notes, or URL...",
     "searchAriaLabel": "Search providers",
-    "searchScopeHint": "Matches provider name, notes, and URL.",
+    "searchScopeHint": "Matches provider name, notes, website, and API address.",
     "searchCloseHint": "Press Esc to close",
     "searchCloseAriaLabel": "Close provider search",
     "noSearchResults": "No providers match your search.",
@@ -279,7 +279,9 @@
     "openTerminalIsolated": "Open Terminal (isolated)",
     "deleteBlockedInUse": "The provider in use can't be deleted. Switch to another one first.",
     "deleteBlockedDirectDefault": "Leaving routing switches back to this provider, so it can't be deleted. Go back to direct and switch to another provider first.",
-    "backToList": "Back to providers"
+    "backToList": "Back to providers",
+    "searchButtonTip": "Search providers ({{shortcut}})",
+    "disable": "Disable"
   },
   "notifications": {
     "providerAdded": "Provider added",
@@ -2955,8 +2957,6 @@
     "enabled": "{{app}} failover enabled",
     "disabled": "{{app}} failover disabled",
     "toggleFailed": "Operation failed: {{detail}}",
-    "inQueue": "In queue",
-    "addQueue": "Add",
     "priority": {
       "tooltip": "Failover priority {{priority}}"
     },
@@ -3872,9 +3872,7 @@
     "startupFailed": "Mode restoration failed: {{error}}. Fix the configuration, then activate the desired mode again.",
     "loadFailed": "Unable to load app mode",
     "default": "Default",
-    "member": "Joined",
     "join": "Join",
-    "more": "More aggregation actions",
     "setDefault": "Use as aggregation default",
     "restartDaemon": "Restart Codex daemon",
     "restartDaemonConfirm": "Wait for running tasks to finish, then restart the managed Codex daemon to load the new model list. This can take several minutes. Desktop apps and editor extensions must still be closed and reopened manually.",
@@ -3960,7 +3958,8 @@
       "routeKept": "The routing target, failover queue and settings are kept and come back the next time you start routing.",
       "leaveStackNote": "The ccs- aggregated models disappear from the model list. The aggregation list is kept and they come back when you switch to aggregation again. If you're using one of them, pick a regular model in the client.",
       "confirm": "Back to direct"
-    }
+    },
+    "leave": "Remove from aggregation"
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4646,5 +4645,15 @@
     "updateAllCount": "Update all ({{count}})",
     "updatingProgress": "Updating {{done}}/{{total}}…",
     "copyDir": "Copy directory path"
+  },
+  "providerCard": {
+    "action": {
+      "addToQueue": "Add to queue",
+      "removeFromQueue": "Remove from queue"
+    },
+    "reason": {
+      "defaultCannotRemove": "The default can't be removed. Make another provider the default first.",
+      "inUseCannotDelete": "The provider in use can't be deleted. Switch to another one first."
+    }
   }
 }

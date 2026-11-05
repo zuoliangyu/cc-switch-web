@@ -172,8 +172,19 @@ export const skillsApi = {
   async installedSkillDir(directory: string): Promise<string> {
     return invoke("get_installed_skill_dir", { directory });
   },
-  async discoverReport(): Promise<SkillDiscoveryResult> {
-    return await invoke("discover_available_skills");
+  /**
+   * 发现可安装的 Skills，附带没读到的仓库。
+   * 后端按仓库缓存发现结果，forceRefresh 绕过缓存（手动刷新用）。
+   */
+  async discoverReport(forceRefresh = false): Promise<SkillDiscoveryResult> {
+    return await invoke("discover_available_skills", { forceRefresh });
+  },
+  /** 只发现一个已保存的仓库；仓库不存在或已停用时结果为空 */
+  async discoverRepo(
+    owner: string,
+    name: string,
+  ): Promise<SkillDiscoveryResult> {
+    return await invoke("discover_repo_skills", { owner, name });
   },
   async checkUpdatesReport(): Promise<SkillUpdateCheckResult> {
     return await invoke("check_skill_updates");

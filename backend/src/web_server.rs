@@ -1862,12 +1862,43 @@ async fn resync_skills(
     .await
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoverSkillsQuery {
+    #[serde(default)]
+    force_refresh: bool,
+}
+
 async fn discover_available_skills(
     State(state): State<WebApiState>,
+    Query(query): Query<DiscoverSkillsQuery>,
 ) -> Result<Json<crate::services::skill::SkillDiscoveryResult>, ApiError> {
-    let skills = crate::commands::discover_available_skills_internal(state.app_state.as_ref())
-        .await
-        .map_err(|e| ApiError::internal(format!("failed to discover skills: {e}")))?;
+    let skills = crate::commands::discover_available_skills_internal(
+        state.app_state.as_ref(),
+        query.force_refresh,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to discover skills: {e}")))?;
+    Ok(Json(skills))
+}
+
+#[derive(Debug, Deserialize)]
+struct DiscoverRepoSkillsRequest {
+    owner: String,
+    name: String,
+}
+
+async fn discover_repo_skills(
+    State(state): State<WebApiState>,
+    Json(body): Json<DiscoverRepoSkillsRequest>,
+) -> Result<Json<crate::services::skill::SkillDiscoveryResult>, ApiError> {
+    let skills = crate::commands::discover_repo_skills_internal(
+        state.app_state.as_ref(),
+        &body.owner,
+        &body.name,
+    )
+    .await
+    .map_err(|e| ApiError::internal(format!("failed to discover skills: {e}")))?;
     Ok(Json(skills))
 }
 
@@ -2978,6 +3009,38 @@ async fn codex_forces_multi_agent_v2() -> Result<Json<bool>, ApiError> {
     crate::commands::codex_forces_multi_agent_v2_internal()
         .map(Json)
         .map_err(ApiError::internal)
+}
+
+async fn get_codex_session_compression() -> Result<Json<bool>, ApiError> {
+    crate::commands::get_codex_session_compression_internal()
+        .map(Json)
+        .map_err(ApiError::internal)
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexSessionCompressionRequest {
+    enabled: bool,
+}
+
+async fn set_codex_session_compression(
+    State(state): State<WebApiState>,
+    Json(body): Json<CodexSessionCompressionRequest>,
+) -> Result<Json<bool>, ApiError> {
+    let db = state.app_state.db.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::commands::set_codex_session_compression_internal(&db, body.enabled)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("Codex 会话压缩开关任务失败: {e}")))?
+    .map(Json)
+    .map_err(ApiError::internal)
+}
+
+async fn get_codex_sessions_disk_usage() -> Result<Json<u64>, ApiError> {
+    tokio::task::spawn_blocking(crate::commands::get_codex_sessions_disk_usage_internal)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("统计 Codex 会话目录大小失败: {e}")))
 }
 
 async fn has_codex_unify_history_backup() -> Json<bool> {
@@ -4823,6 +4886,20 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             Ok(_) => {}
             Err(error) => log::warn!("Codex Provider 模板归桶迁移失败: {error}"),
         }
+        // 旧版官方路由桶（cc-switch-official）迁回 openai，须在统一迁移之前：
+        // 开关开着时，紧接着的统一迁移会把它们按正常流程带进 custom。
+        match crate::codex_history_migration::maybe_migrate_codex_legacy_official_history_to_openai_bucket() {
+            Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
+                "Codex 旧版官方路由桶迁回 openai 完成: files={}, rows={}",
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+            Ok(outcome) => log::debug!(
+                "Codex 旧版官方路由桶迁移跳过: {}",
+                outcome.skipped_reason.unwrap_or_default()
+            ),
+            Err(error) => log::warn!("Codex 旧版官方路由桶迁移失败: {error}"),
+        }
         match crate::codex_history_migration::maybe_migrate_codex_official_history() {
             Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
                 "Codex 官方历史迁移完成: files={}, rows={}",
@@ -4861,6 +4938,14 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/settings/codex-forces-multi-agent-v2",
             get(codex_forces_multi_agent_v2),
+        )
+        .route(
+            "/api/settings/codex-session-compression",
+            get(get_codex_session_compression).put(set_codex_session_compression),
+        )
+        .route(
+            "/api/settings/codex-sessions-disk-usage",
+            get(get_codex_sessions_disk_usage),
         )
         .route(
             "/api/settings/codex-unify-history-restore",
@@ -5159,6 +5244,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             axum::routing::delete(remove_skill_repo),
         )
         .route("/api/skills/discover", get(discover_available_skills))
+        .route("/api/skills/discover-repo", post(discover_repo_skills))
         .route("/api/skills/resync", post(resync_skills))
         .route("/api/skills/storage-paths", get(skill_storage_paths))
         .route("/api/skills/installed-dir", get(installed_skill_dir))

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/hooks/useSkills", () => ({
   useSkillRepoFailures: () => ({ data: [] }),
+  useRefreshDiscoverableSkills: () => vi.fn(),
   useDiscoverableSkills: () => ({
     data: [],
     isLoading: false,

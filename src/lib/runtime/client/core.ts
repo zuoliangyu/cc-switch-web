@@ -17,6 +17,9 @@ import {
   adoptWebCodexStackCatalog,
   acknowledgeWebCodexStaleClients,
   getWebCodexForcesMultiAgentV2,
+  getWebCodexSessionCompression,
+  setWebCodexSessionCompression,
+  getWebCodexSessionsDiskUsage,
   addWebProviderToFailoverQueue,
   addWebProvider,
   getWebClaudeEditorView,
@@ -192,6 +195,7 @@ import {
   deleteWebSkillBackup,
   addWebSkillRepo,
   discoverWebAvailableSkills,
+  discoverWebRepoSkills,
   deleteWebDailyMemoryFile,
   getWebDailyMemoryFile,
   getWebSessionMessages,
@@ -293,6 +297,12 @@ export async function invoke<T>(
       return (await hasWebCodexUnifyHistoryBackup()) as T;
     case "codex_forces_multi_agent_v2":
       return (await getWebCodexForcesMultiAgentV2()) as T;
+    case "get_codex_session_compression":
+      return (await getWebCodexSessionCompression()) as T;
+    case "set_codex_session_compression":
+      return (await setWebCodexSessionCompression(Boolean(args?.enabled))) as T;
+    case "get_codex_sessions_disk_usage":
+      return (await getWebCodexSessionsDiskUsage()) as T;
     case "restore_codex_unified_history":
       return (await restoreWebCodexUnifiedHistory()) as T;
     case "get_common_config_snippet":
@@ -880,7 +890,14 @@ export async function invoke<T>(
     case "get_skill_backups":
       return (await getWebSkillBackups()) as T;
     case "discover_available_skills":
-      return (await discoverWebAvailableSkills()) as T;
+      return (await discoverWebAvailableSkills(
+        Boolean(args?.forceRefresh),
+      )) as T;
+    case "discover_repo_skills":
+      return (await discoverWebRepoSkills(
+        args?.owner as string,
+        args?.name as string,
+      )) as T;
     case "check_skill_updates":
       return (await checkWebSkillUpdates()) as T;
     case "install_skill_unified":

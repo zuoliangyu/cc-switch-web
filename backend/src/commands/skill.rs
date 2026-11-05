@@ -99,14 +99,35 @@ pub(crate) fn install_skills_from_zip_internal(
 
 // ========== 发现功能命令 ==========
 
+/// 发现可安装的 Skills（从仓库获取），并逐仓库报告没读到的仓库
+///
+/// `force_refresh` 为 true（手动刷新）时绕过按仓库的发现缓存。
 pub(crate) async fn discover_available_skills_internal(
     app_state: &AppState,
+    force_refresh: bool,
 ) -> Result<SkillDiscoveryResult, String> {
     let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
     SkillService::new()
-        .discover_available_report(repos)
+        .discover_available_report(repos, force_refresh)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 只发现一个已保存的仓库（添加、重新启用仓库后用，不重拉其它仓库）。
+/// 仓库不存在或已停用时返回空结果。
+pub(crate) async fn discover_repo_skills_internal(
+    app_state: &AppState,
+    owner: &str,
+    name: &str,
+) -> Result<SkillDiscoveryResult, String> {
+    let repos = app_state.db.get_skill_repos().map_err(|e| e.to_string())?;
+    let Some(repo) = repos
+        .into_iter()
+        .find(|repo| repo.owner == owner && repo.name == name)
+    else {
+        return Ok(SkillDiscoveryResult::default());
+    };
+    Ok(SkillService::new().discover_repo(&repo).await)
 }
 
 pub(crate) async fn check_skill_updates_internal(

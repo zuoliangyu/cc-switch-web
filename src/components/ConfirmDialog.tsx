@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
   message: string;
+  /** 正文下方的补充内容（例如将要处理的条目列表）；正文本身渲染在 <p> 里，放不了块级元素 */
+  details?: ReactNode;
   confirmText?: string;
   cancelText?: string;
   variant?: "destructive" | "info";
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   isOpen,
   title,
   message,
+  details,
   confirmText,
   cancelText,
   variant = "destructive",
@@ -74,6 +77,7 @@ export function ConfirmDialog({
             {message}
           </DialogDescription>
         </DialogHeader>
+        {details ? <div className="px-6 pt-3">{details}</div> : null}
         {checkboxLabel ? (
           <label className="flex cursor-pointer select-none items-start gap-2 px-6 pt-3">
             <Checkbox

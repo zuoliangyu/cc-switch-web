@@ -263,6 +263,22 @@ export const handlers = [
     success(false),
   ),
 
+  http.post(`${RUNTIME_ENDPOINT}/get_codex_session_compression`, () =>
+    success(false),
+  ),
+
+  http.post(
+    `${RUNTIME_ENDPOINT}/set_codex_session_compression`,
+    async ({ request }) => {
+      const { enabled } = await withJson<{ enabled: boolean }>(request);
+      return success(enabled);
+    },
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/get_codex_sessions_disk_usage`, () =>
+    success(0),
+  ),
+
   http.post(`${RUNTIME_ENDPOINT}/save_settings`, async ({ request }) => {
     const { settings } = await withJson<{ settings: Settings }>(request);
     setSettings(settings);

@@ -23,6 +23,7 @@ import { Edit3, Trash2, ExternalLink } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { mcpPresets } from "@/config/mcpPresets";
 import { toast } from "sonner";
+import { showBulkToggleResult } from "@/lib/bulkToggleToast";
 import { MCP_APP_IDS, type McpAppId } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
@@ -160,37 +161,14 @@ const UnifiedMcpPanel = React.forwardRef<
       app,
       enabled,
     });
-    if (result.failed.length > 0) {
-      toast.error(
-        t("common.bulkToggleFailed", { count: result.failed.length }),
-      );
-    }
-    if (result.succeeded.length > 0) {
-      toast.success(t("common.saved"), {
-        action: {
-          label: t("common.undo"),
-          onClick: () => {
-            void bulkToggleAppMutation
-              .mutateAsync({
-                serverIds: result.succeeded,
-                app,
-                enabled: !enabled,
-              })
-              .then((undone) => {
-                if (undone.failed.length)
-                  toast.error(
-                    t("common.bulkToggleFailed", {
-                      count: undone.failed.length,
-                    }),
-                  );
-              })
-              .catch((error) =>
-                toast.error(t("common.error"), { description: String(error) }),
-              );
-          },
-        },
-      });
-    }
+    // 全部失败报错、部分失败警告，撤销也按实际结果提示
+    showBulkToggleResult(result, t, (undoIds) =>
+      bulkToggleAppMutation.mutateAsync({
+        serverIds: undoIds,
+        app,
+        enabled: !enabled,
+      }),
+    );
   };
 
   const handleEdit = (id: string) => {
@@ -229,7 +207,9 @@ const UnifiedMcpPanel = React.forwardRef<
     setConfirmDialog({
       isOpen: true,
       title: t("mcp.unifiedPanel.deleteServer"),
-      message: t("mcp.unifiedPanel.deleteConfirm", { id }),
+      message: t("mcp.unifiedPanel.deleteConfirm", {
+        id: serversMap?.[id]?.name?.trim() || id,
+      }),
       onConfirm: async () => {
         try {
           await deleteServerMutation.mutateAsync(id);
@@ -398,7 +378,11 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
   onTestConnection,
 }) => {
   const { t } = useTranslation();
-  const name = server.name || id;
+  const name = server.name?.trim() || id;
+  // 起了显示名时把 ID 也写在旁边：写进各应用配置的键是 ID
+  const hasCustomName = Boolean(
+    server.name?.trim() && server.name.trim() !== id,
+  );
   const description = server.description || "";
 
   const meta = mcpPresets.find((p) => p.id === id);
@@ -435,9 +419,20 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
                     : "bg-muted-foreground/30",
             )}
           />
-          <span className="font-medium text-sm text-foreground truncate">
+          <span
+            title={name}
+            className="font-medium text-sm text-foreground truncate"
+          >
             {name}
           </span>
+          {hasCustomName && (
+            <span
+              title={id}
+              className="min-w-0 shrink truncate font-mono text-xs text-muted-foreground"
+            >
+              {id}
+            </span>
+          )}
           {docsUrl && (
             <button
               type="button"

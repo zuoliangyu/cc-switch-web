@@ -50,10 +50,17 @@ export function SkillCard({
     }
   };
 
+  // 文档地址：优先 SKILL.md 所在目录，缺省回落到仓库首页（和已安装列表一致）
+  const docsUrl =
+    skill.readmeUrl ??
+    (skill.repoOwner && skill.repoName
+      ? `https://github.com/${skill.repoOwner}/${skill.repoName}`
+      : undefined);
+
   const handleOpenGithub = async () => {
-    if (skill.readmeUrl) {
+    if (docsUrl) {
       try {
-        await settingsApi.openExternal(skill.readmeUrl);
+        await settingsApi.openExternal(docsUrl);
       } catch (error) {
         console.error("Failed to open URL:", error);
       }
@@ -134,7 +141,7 @@ export function SkillCard({
         )}
       </CardContent>
       <CardFooter className="relative z-10 mt-4 flex gap-2 border-t border-border/50 pt-4">
-        {skill.readmeUrl && (
+        {docsUrl && (
           <Button
             variant="ghost"
             size="sm"

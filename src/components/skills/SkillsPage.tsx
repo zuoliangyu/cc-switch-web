@@ -31,6 +31,7 @@ import { SkillCard } from "./SkillCard";
 import { RepoManagerPanel } from "./RepoManagerPanel";
 import {
   useDiscoverableSkills,
+  useRefreshDiscoverableSkills,
   useInstalledSkills,
   useInstallSkill,
   useSkillRepos,
@@ -83,11 +84,10 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
 
     const currentApp = initialApp;
 
-    const {
-      data: discoverableSkills,
-      isLoading: loadingDiscoverable,
-      refetch: refetchDiscoverable,
-    } = useDiscoverableSkills();
+    const { data: discoverableSkills, isLoading: loadingDiscoverable } =
+      useDiscoverableSkills();
+    // 手动刷新绕过后端按仓库的发现缓存
+    const refreshDiscoverable = useRefreshDiscoverableSkills();
     const { data: installedSkills } = useInstalledSkills();
     const { data: repos = [], refetch: refetchRepos } = useSkillRepos();
     const {
@@ -173,7 +173,7 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
 
     useImperativeHandle(ref, () => ({
       refresh: () => {
-        refetchDiscoverable();
+        void refreshDiscoverable();
         refetchRepos();
       },
       openRepoManager: () => setRepoManagerOpen(true),
@@ -245,10 +245,10 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
 
     const handleAddRepo = async (repo: SkillRepo) => {
       try {
-        await addRepoMutation.mutateAsync(repo);
-        const { data: freshSkills } = await refetchDiscoverable();
+        // 只发现这一个仓库，不重拉其它仓库
+        const discovery = await addRepoMutation.mutateAsync(repo);
         const count =
-          freshSkills?.filter(
+          discovery?.skills.filter(
             (skill) =>
               skill.repoOwner === repo.owner &&
               skill.repoName === repo.name &&
@@ -403,7 +403,7 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
                       variant="outline"
                       className="min-w-[8rem]"
                       onClick={() => {
-                        refetchDiscoverable();
+                        void refreshDiscoverable();
                         refetchRepos();
                       }}
                     >

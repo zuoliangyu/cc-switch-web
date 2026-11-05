@@ -38,8 +38,9 @@ vi.mock("@/hooks/useMcp", () => ({
 }));
 
 describe("UnifiedMcpPanel", () => {
-  it("部分失败时撤销只恢复已经成功的条目", async () => {
-    const success = vi.spyOn(toast, "success");
+  it("部分失败时给警告，撤销只恢复已经成功的条目", async () => {
+    // 部分失败不再报「已保存」：警告提示里带撤销（上游 6b4c09ac）
+    const success = vi.spyOn(toast, "warning");
     bulkToggle.mockClear();
     bulkToggle.mockResolvedValueOnce({
       succeeded: ["alpha"],

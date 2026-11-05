@@ -39,7 +39,7 @@ import { hermesApi, providersApi, settingsApi, type AppId } from "@/lib/api";
 import { piApi } from "@/lib/api/pi";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
-import { APP_IDS, isPiFamilyApp } from "@/config/appConfig";
+import { APP_IDS, isPiFamilyApp, orderAppIds } from "@/config/appConfig";
 import { OpenTerminalDialog } from "@/components/providers/OpenTerminalDialog";
 import {
   hermesKeys,
@@ -264,18 +264,10 @@ function App() {
     omp: true,
   };
 
-  const getFirstVisibleApp = (): AppId => {
-    if (visibleApps.claude) return "claude";
-    if (visibleApps["claude-desktop"]) return "claude-desktop";
-    if (visibleApps.codex) return "codex";
-    if (visibleApps.gemini) return "gemini";
-    if (visibleApps.grokbuild) return "grokbuild";
-    if (visibleApps.opencode) return "opencode";
-    if (visibleApps.openclaw) return "openclaw";
-    if (visibleApps.hermes) return "hermes";
-    if (visibleApps.pi) return "pi";
-    return "claude"; // fallback
-  };
+  // 默认打开的应用跟应用页拖出来的顺序走
+  const getFirstVisibleApp = (): AppId =>
+    orderAppIds(settingsData?.appOrder).find((app) => visibleApps[app]) ??
+    "claude";
 
   useEffect(() => {
     if (!visibleApps[activeApp]) {
@@ -1627,6 +1619,7 @@ function App() {
         activeApp={activeApp}
         currentView={currentView}
         visibleApps={visibleApps}
+        appOrder={settingsData?.appOrder}
         onApp={(app) => {
           setActiveApp(app);
           setCurrentView("providers");

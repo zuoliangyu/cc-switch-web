@@ -7,6 +7,7 @@ import { HelpTip } from "@/components/ui/help-tip";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { Notice } from "@/components/ui/notice";
 import { APP_ICON_MAP } from "@/config/appConfig";
 import type { McpServer, McpServerSpec } from "@/types";
 import type { McpAppId } from "@/config/appConfig";
@@ -36,6 +37,7 @@ import {
   recognizePaste,
   secretCountOf,
   specOf,
+  transportOf,
   uniqueId,
   validateDraft,
   type JsonParseError,
@@ -48,6 +50,14 @@ import {
 } from "./mcpDraft";
 
 type AppsState = Record<McpAppId, boolean>;
+
+/**
+ * 不支持 SSE 的应用。Codex 的 `[mcp_servers.*]` 只有 stdio / Streamable HTTP，
+ * 写进去的 SSE 地址会被当成 Streamable HTTP 连接；Pi、Antigravity 的写入直接
+ * 拒绝 SSE（`mcp/pi.rs`、`mcp/agy.rs`）。
+ */
+const SSE_AS_HTTP_APPS: readonly McpAppId[] = ["codex"];
+const SSE_REJECTED_APPS: readonly McpAppId[] = ["pi", "agy"];
 
 interface MetaDraft {
   name: string;
@@ -172,6 +182,22 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
     : errors.name === "nameExists"
       ? { name: errors.name }
       : {};
+
+  // JSON 页签里的改动要到切回表单才进草稿，这里按当前文字判断
+  const isSse = useMemo(() => {
+    if (tab === "json") {
+      const parsed = parseJsonText(jsonText, conn);
+      return parsed.ok && transportOf(parsed.spec) === "sse";
+    }
+    return conn.transport === "sse";
+  }, [conn, jsonText, tab]);
+  // 隐藏的应用编辑时原样保留、照样写入，所以按全部启用状态判断
+  const sseAppsIn = (list: readonly McpAppId[]) =>
+    isSse && !batch ? list.filter((app) => apps[app]) : [];
+  const sseAsHttpApps = sseAppsIn(SSE_AS_HTTP_APPS);
+  const sseRejectedApps = sseAppsIn(SSE_REJECTED_APPS);
+  const appNames = (list: McpAppId[]) =>
+    list.map((app) => APP_ICON_MAP[app].label).join(t("mcpPage.listSeparator"));
 
   const fieldErrorText = (code?: string) => {
     if (!code) return "";
@@ -1218,6 +1244,28 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
               </label>
             ))}
           </div>
+          {sseAsHttpApps.length > 0 && (
+            <Notice
+              tone="warning"
+              title={t("mcpPage.drawer.sseAsHttpTitle", {
+                apps: appNames(sseAsHttpApps),
+              })}
+            >
+              {t("mcpPage.drawer.sseAsHttpBody", {
+                apps: appNames(sseAsHttpApps),
+              })}
+            </Notice>
+          )}
+          {sseRejectedApps.length > 0 && (
+            <Notice
+              tone="warning"
+              title={t("mcpPage.drawer.sseRejectedTitle", {
+                apps: appNames(sseRejectedApps),
+              })}
+            >
+              {t("mcpPage.drawer.sseRejectedBody")}
+            </Notice>
+          )}
         </div>
 
         {!batch && (

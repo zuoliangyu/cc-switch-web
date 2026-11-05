@@ -104,6 +104,24 @@ pub fn codex_forces_multi_agent_v2_internal() -> Result<bool, String> {
     ))
 }
 
+/// Codex 会话压缩开关（`[features] local_thread_store_compression`）当前是否开启。
+pub fn get_codex_session_compression_internal() -> Result<bool, String> {
+    crate::services::codex_session_compression::is_enabled().map_err(|e| e.to_string())
+}
+
+/// 开关 Codex 会话压缩，返回写入后的状态。
+pub fn set_codex_session_compression_internal(
+    db: &crate::database::Database,
+    enabled: bool,
+) -> Result<bool, String> {
+    crate::services::codex_session_compression::set_enabled(db, enabled).map_err(|e| e.to_string())
+}
+
+/// Codex 会话目录（sessions + archived_sessions）当前占用的字节数。
+pub fn get_codex_sessions_disk_usage_internal() -> u64 {
+    crate::services::codex_session_compression::sessions_disk_usage()
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexUnifyHistoryRestoreResult {

@@ -41,3 +41,4 @@ pub(crate) mod webdav_auto_sync;
 pub(crate) mod webdav_sync;
 
 pub mod codex_oauth_models;
+pub mod codex_session_compression;

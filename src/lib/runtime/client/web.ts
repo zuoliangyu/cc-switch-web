@@ -1534,6 +1534,24 @@ export async function getWebCodexForcesMultiAgentV2(): Promise<boolean> {
   return requestJson<boolean>("/api/settings/codex-forces-multi-agent-v2");
 }
 
+export async function getWebCodexSessionCompression(): Promise<boolean> {
+  return requestJson<boolean>("/api/settings/codex-session-compression");
+}
+
+export async function setWebCodexSessionCompression(
+  enabled: boolean,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    "/api/settings/codex-session-compression",
+    "PUT",
+    { enabled },
+  );
+}
+
+export async function getWebCodexSessionsDiskUsage(): Promise<number> {
+  return requestJson<number>("/api/settings/codex-sessions-disk-usage");
+}
+
 export async function restoreWebCodexUnifiedHistory(): Promise<
   import("@/lib/api/settings").CodexUnifyHistoryRestoreResult
 > {
@@ -2030,8 +2048,22 @@ export async function removeWebSkillRepo(
   );
 }
 
-export async function discoverWebAvailableSkills(): Promise<SkillDiscoveryResult> {
- return requestJson<SkillDiscoveryResult>("/api/skills/discover");
+export async function discoverWebAvailableSkills(
+  forceRefresh = false,
+): Promise<SkillDiscoveryResult> {
+  return requestJson<SkillDiscoveryResult>(
+    forceRefresh ? "/api/skills/discover?forceRefresh=true" : "/api/skills/discover",
+  );
+}
+export async function discoverWebRepoSkills(
+  owner: string,
+  name: string,
+): Promise<SkillDiscoveryResult> {
+  return requestWithBody<SkillDiscoveryResult>(
+    "/api/skills/discover-repo",
+    "POST",
+    { owner, name },
+  );
 }
 export async function checkWebSkillUpdates(): Promise<SkillUpdateCheckResult> {
  return requestJson<SkillUpdateCheckResult>("/api/skills/updates");

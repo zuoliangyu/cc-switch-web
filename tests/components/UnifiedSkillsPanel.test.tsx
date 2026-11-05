@@ -21,7 +21,10 @@ const installFromZipMock = vi.fn();
 const deleteSkillBackupMock = vi.fn();
 const restoreSkillBackupMock = vi.fn();
 const bulkToggleSkillAppMock = vi.fn();
+const checkUpdatesMock = vi.fn();
+const updateSkillMock = vi.fn();
 let installedSkills: any[] = [];
+let skillUpdates: any[] | undefined;
 
 vi.mock("sonner", () => ({
   toast: {
@@ -80,15 +83,14 @@ vi.mock("@/hooks/useSkills", () => ({
   useInstallSkillArchives: () => ({
     mutateAsync: installFromZipMock,
   }),
-  // skill update 检查类 hook 被组件用到但本测试不关心其行为，给最小返回值。
   useCheckSkillUpdates: () => ({
-    data: undefined,
-    refetch: vi.fn(),
+    data: skillUpdates,
+    refetch: checkUpdatesMock,
     isFetching: false,
     isLoading: false,
   }),
   useUpdateSkill: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: updateSkillMock,
     isPending: false,
   }),
 }));
@@ -115,6 +117,9 @@ describe("UnifiedSkillsPanel", () => {
     bulkToggleSkillAppMock.mockReset();
     bulkToggleSkillAppMock.mockResolvedValue({ succeeded: [], failed: [] });
     installedSkills = [];
+    skillUpdates = undefined;
+    checkUpdatesMock.mockReset();
+    updateSkillMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("opens the import dialog without crashing when app toggles render", async () => {
@@ -170,6 +175,47 @@ describe("UnifiedSkillsPanel", () => {
       app: "claude",
       enabled: true,
     });
+  });
+
+  it("检查到更新后列出将要更新的 Skill，确认后逐个更新", async () => {
+    installedSkills = [
+      {
+        id: "alpha",
+        name: "Alpha",
+        directory: "alpha",
+        repoOwner: "owner",
+        repoName: "repo",
+        apps: {},
+        installedAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    // 检查完之后卸掉的 Skill 不该再出现在「全部更新」里
+    skillUpdates = [
+      { id: "alpha", name: "Alpha" },
+      { id: "gone", name: "Gone" },
+    ];
+    checkUpdatesMock.mockResolvedValue({ data: skillUpdates });
+
+    render(
+      <UnifiedSkillsPanel onOpenDiscovery={() => {}} currentApp="claude" />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /skills\.checkUpdates/ }),
+    );
+
+    const list = await screen.findByRole("list", {
+      name: "skills.confirmUpdateAll.listAria",
+    });
+    expect(list).toHaveTextContent("Alpha");
+    expect(list).toHaveTextContent("owner/repo");
+    expect(list).not.toHaveTextContent("Gone");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "skills.confirmUpdateAll.button" }),
+    );
+    await waitFor(() => expect(updateSkillMock).toHaveBeenCalledWith("alpha"));
+    expect(updateSkillMock).toHaveBeenCalledTimes(1);
   });
 });
 

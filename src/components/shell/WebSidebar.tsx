@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
-import { APP_IDS } from "@/config/appConfig";
+import { orderAppIds } from "@/config/appConfig";
 import { APP_DISPLAY_NAME, AppGlyph } from "./AppGlyph";
 import { cn } from "@/lib/utils";
 
@@ -35,12 +35,15 @@ export const WebSidebar = memo(function WebSidebar({
   activeApp,
   currentView,
   visibleApps,
+  appOrder,
   onApp,
   onView,
 }: {
   activeApp: AppId;
   currentView: string;
   visibleApps: VisibleApps;
+  /** 应用页拖出来的顺序（`settings.appOrder`） */
+  appOrder?: readonly string[];
   onApp: (app: AppId) => void;
   onView: (view: GlobalView) => void;
 }) {
@@ -160,42 +163,44 @@ export const WebSidebar = memo(function WebSidebar({
             <KeyRound className="h-4 w-4 shrink-0" />,
           )}
           <div className="my-2 border-t border-border" />
-          {APP_IDS.filter((app) => visibleApps[app]).map((app) => (
-            <button
-              key={app}
-              type="button"
-              aria-label={APP_DISPLAY_NAME[app]}
-              title={!expanded ? APP_DISPLAY_NAME[app] : undefined}
-              aria-current={
-                activeApp === app && currentView === "providers"
-                  ? "page"
-                  : undefined
-              }
-              onClick={() => {
-                onApp(app);
-                setMobileOpen(false);
-              }}
-              className={cn(
-                "flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm hover:bg-accent",
-                activeApp === app &&
-                  currentView === "providers" &&
-                  "bg-accent font-medium",
-              )}
-            >
-              <AppGlyph
-                app={app}
-                className={activeApp !== app ? "grayscale opacity-60" : ""}
-              />
-              <span
+          {orderAppIds(appOrder)
+            .filter((app) => visibleApps[app])
+            .map((app) => (
+              <button
+                key={app}
+                type="button"
+                aria-label={APP_DISPLAY_NAME[app]}
+                title={!expanded ? APP_DISPLAY_NAME[app] : undefined}
+                aria-current={
+                  activeApp === app && currentView === "providers"
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => {
+                  onApp(app);
+                  setMobileOpen(false);
+                }}
                 className={cn(
-                  "whitespace-nowrap",
-                  !expanded && !mobileOpen && "sr-only",
+                  "flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm hover:bg-accent",
+                  activeApp === app &&
+                    currentView === "providers" &&
+                    "bg-accent font-medium",
                 )}
               >
-                {APP_DISPLAY_NAME[app]}
-              </span>
-            </button>
-          ))}
+                <AppGlyph
+                  app={app}
+                  className={activeApp !== app ? "grayscale opacity-60" : ""}
+                />
+                <span
+                  className={cn(
+                    "whitespace-nowrap",
+                    !expanded && !mobileOpen && "sr-only",
+                  )}
+                >
+                  {APP_DISPLAY_NAME[app]}
+                </span>
+              </button>
+            ))}
         </nav>
         <div className="mt-2 space-y-1 border-t border-border pt-2">
           {item(

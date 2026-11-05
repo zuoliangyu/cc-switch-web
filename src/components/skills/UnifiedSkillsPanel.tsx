@@ -46,6 +46,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
+import { showBulkToggleResult } from "@/lib/bulkToggleToast";
 import { SKILLS_APP_IDS } from "@/config/appConfig";
 import { AppCountBar } from "@/components/common/AppCountBar";
 import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
@@ -167,6 +168,12 @@ const UnifiedSkillsPanel = React.forwardRef<
   } = useCheckSkillUpdates();
   const updateSkillMutation = useUpdateSkill();
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+  // 更新进度：确认框点完就关，进度显示在「全部更新」按钮上
+  const [updateProgress, setUpdateProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [updateAllConfirmOpen, setUpdateAllConfirmOpen] = useState(false);
 
   const updatesMap = useMemo(() => {
     const map: Record<string, SkillUpdateInfo> = {};
@@ -175,6 +182,12 @@ const UnifiedSkillsPanel = React.forwardRef<
     });
     return map;
   }, [skillUpdates]);
+
+  // 只算还装着的：检查完之后卸掉的 Skill 不该再出现在「全部更新」里
+  const applicableSkillUpdates = useMemo(() => {
+    const installedIds = new Set((skills ?? []).map((skill) => skill.id));
+    return (skillUpdates ?? []).filter((update) => installedIds.has(update.id));
+  }, [skillUpdates, skills]);
 
   const filteredSkills = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -241,33 +254,14 @@ const UnifiedSkillsPanel = React.forwardRef<
       app,
       enabled,
     });
-    if (result.failed.length > 0) {
-      toast.error(
-        t("common.bulkToggleFailed", { count: result.failed.length }),
-      );
-    }
-    if (result.succeeded.length > 0) {
-      toast.success(t("common.saved"), {
-        action: {
-          label: t("common.undo"),
-          onClick: () => {
-            void bulkToggleAppMutation
-              .mutateAsync({ ids: result.succeeded, app, enabled: !enabled })
-              .then((undone) => {
-                if (undone.failed.length)
-                  toast.error(
-                    t("common.bulkToggleFailed", {
-                      count: undone.failed.length,
-                    }),
-                  );
-              })
-              .catch((error) =>
-                toast.error(t("common.error"), { description: String(error) }),
-              );
-          },
-        },
-      });
-    }
+    // 全部失败报错、部分失败警告，撤销也按实际结果提示
+    showBulkToggleResult(result, t, (undoIds) =>
+      bulkToggleAppMutation.mutateAsync({
+        ids: undoIds,
+        app,
+        enabled: !enabled,
+      }),
+    );
   };
 
   const handleUninstall = (skill: InstalledSkill) => {
@@ -333,7 +327,10 @@ const UnifiedSkillsPanel = React.forwardRef<
   const handleCheckUpdates = async () => {
     try {
       const result = await checkUpdates({ throwOnError: true });
-      const updates = result.data || [];
+      const installedIds = new Set((skills ?? []).map((skill) => skill.id));
+      const updates = (result.data || []).filter((update) =>
+        installedIds.has(update.id),
+      );
       const failures = queryClient.getQueryData<SkillRepoFailure[]>([
         "skills",
         "updates-failures",
@@ -345,9 +342,8 @@ const UnifiedSkillsPanel = React.forwardRef<
       if (updates.length === 0) {
         toast.success(t("skills.noUpdates"), { closeButton: true });
       } else {
-        toast.info(t("skills.updatesFound", { count: updates.length }), {
-          closeButton: true,
-        });
+        // 查到就直接问要不要全部更新，并列出是哪几个
+        setUpdateAllConfirmOpen(true);
       }
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
@@ -366,23 +362,32 @@ const UnifiedSkillsPanel = React.forwardRef<
   };
 
   const handleUpdateAll = async () => {
-    if (!skillUpdates || skillUpdates.length === 0) {
+    const updates = applicableSkillUpdates;
+    // 不让确认框等着整批更新跑完：点了确认就关，进度显示在按钮上
+    setUpdateAllConfirmOpen(false);
+    if (updates.length === 0) {
       return;
     }
 
     setIsUpdatingAll(true);
+    setUpdateProgress({ done: 0, total: updates.length });
     let successCount = 0;
-    for (const update of skillUpdates) {
-      try {
-        await updateSkillMutation.mutateAsync(update.id);
-        successCount++;
-      } catch (error) {
-        toast.error(t("skills.updateFailed"), {
-          description: `${update.name}: ${String(error)}`,
-        });
+    try {
+      for (const [index, update] of updates.entries()) {
+        try {
+          await updateSkillMutation.mutateAsync(update.id);
+          successCount++;
+        } catch (error) {
+          toast.error(t("skills.updateFailed"), {
+            description: `${update.name}: ${String(error)}`,
+          });
+        }
+        setUpdateProgress({ done: index + 1, total: updates.length });
       }
+    } finally {
+      setIsUpdatingAll(false);
+      setUpdateProgress(null);
     }
-    setIsUpdatingAll(false);
 
     if (successCount > 0) {
       toast.success(t("skills.updateAllSuccess", { count: successCount }), {
@@ -625,13 +630,13 @@ const UnifiedSkillsPanel = React.forwardRef<
           disabled={writePending}
         />
         <div className="flex items-center gap-1.5">
-          {skillUpdates && skillUpdates.length > 0 ? (
+          {updateProgress || applicableSkillUpdates.length > 0 ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
-              onClick={handleUpdateAll}
+              onClick={() => setUpdateAllConfirmOpen(true)}
               disabled={isUpdatingAll || updateSkillMutation.isPending}
             >
               {isUpdatingAll ? (
@@ -639,9 +644,17 @@ const UnifiedSkillsPanel = React.forwardRef<
               ) : (
                 <RefreshCw size={12} />
               )}
-              {isUpdatingAll
-                ? t("skills.updatingAll")
-                : t("skills.updateAll", { count: skillUpdates.length })}
+              {updateProgress
+                ? t("skills.updatingProgress", {
+                    done: Math.min(
+                      updateProgress.done + 1,
+                      updateProgress.total,
+                    ),
+                    total: updateProgress.total,
+                  })
+                : t("skills.updateAll", {
+                    count: applicableSkillUpdates.length,
+                  })}
             </Button>
           ) : null}
           <Button
@@ -733,6 +746,64 @@ const UnifiedSkillsPanel = React.forwardRef<
           onCancel={() => setConfirmDialog(null)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={updateAllConfirmOpen}
+        title={t("skills.confirmUpdateAll.title", {
+          count: applicableSkillUpdates.length,
+        })}
+        message={t("skills.confirmUpdateAll.body")}
+        details={
+          <ul
+            aria-label={t("skills.confirmUpdateAll.listAria")}
+            className="max-h-60 divide-y divide-border overflow-y-auto rounded-md border border-border"
+          >
+            {applicableSkillUpdates.map((update) => {
+              const skill = skills?.find((item) => item.id === update.id);
+              const repo =
+                skill?.repoOwner && skill.repoName
+                  ? `${skill.repoOwner}/${skill.repoName}`
+                  : null;
+              // 和列表行的文档链接一样：有 README 地址开 README，否则开仓库首页
+              const docsUrl =
+                skill?.readmeUrl ??
+                (repo ? `https://github.com/${repo}` : null);
+              return (
+                <li
+                  key={update.id}
+                  className="flex items-baseline gap-2 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate font-medium text-foreground">
+                    {skill?.name ?? update.name}
+                  </span>
+                  {repo && docsUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void settingsApi.openExternal(docsUrl).catch((error) =>
+                          toast.error(t("common.error"), {
+                            description: String(error),
+                          }),
+                        )
+                      }
+                      className="ms-auto shrink-0 rounded-sm font-mono text-xs text-muted-foreground underline underline-offset-[3px] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {repo}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        }
+        confirmText={t("skills.confirmUpdateAll.button", {
+          count: applicableSkillUpdates.length,
+        })}
+        variant="info"
+        zIndex="top"
+        onConfirm={() => void handleUpdateAll()}
+        onCancel={() => setUpdateAllConfirmOpen(false)}
+      />
 
       {importDialogOpen && unmanagedSkills && (
         <ImportSkillsDialog

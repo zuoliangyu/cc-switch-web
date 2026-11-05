@@ -1,6 +1,7 @@
-import { Download, Users } from "lucide-react";
+import { Download, Plus, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { HelpTip } from "@/components/ui/help-tip";
 import type { AppId } from "@/lib/api/types";
 
 interface ProviderEmptyStateProps {
@@ -9,6 +10,10 @@ interface ProviderEmptyStateProps {
   onImport?: () => void;
 }
 
+/**
+ * 供应商页空状态（上游 v7 空状态规则）：列表区居中，标题 + 操作按钮；
+ * 辅助说明收进帮助卡，只保留各应用自己的说明和「切换只替换关键字段」这一句。
+ */
 export function ProviderEmptyState({
   appId,
   onCreate,
@@ -22,47 +27,52 @@ export function ProviderEmptyState({
     appId === "mcode" || appId === "kimi" || appId === "omp" || appId === "dsh"
       ? appId
       : null;
-  const showSnippetHint =
-    appId === "claude" || appId === "codex" || appId === "gemini";
+  // 只有切换时写关键字段的应用说这句；Antigravity 没有切换，不成立
+  const showKeyFieldsHint =
+    appId === "claude" ||
+    appId === "codex" ||
+    appId === "gemini" ||
+    appId === "grokbuild";
 
   return (
-    <div className="glass-card flex flex-col items-center justify-center rounded-[30px] border border-dashed border-border-default p-10 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-background/80 shadow-sm">
-        <Users className="h-7 w-7 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-muted/40 text-muted-foreground">
+        <Server className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
       </div>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-        {t("provider.workspaceLabel", {
-          defaultValue: "Provider Workspace",
-        })}
-      </div>
-      <h3 className="mt-3 text-xl font-semibold tracking-tight">
+      <h3 className="text-base font-semibold text-foreground">
         {t(emptyCopyNs ? `${emptyCopyNs}.empty.title` : "provider.noProviders")}
       </h3>
-      <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-        {t(
-          emptyCopyNs
-            ? `${emptyCopyNs}.empty.description`
-            : "provider.noProvidersDescription",
-        )}
-      </p>
-      {showSnippetHint && (
-        <p className="mt-1 max-w-lg text-sm leading-6 text-muted-foreground">
-          {t("provider.noProvidersDescriptionSnippet")}
+      {emptyCopyNs && (
+        <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+          {t(`${emptyCopyNs}.empty.description`)}
         </p>
       )}
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        {onImport && (
-          <Button onClick={onImport} className="theme-primary-solid">
-            <Download className="mr-2 h-4 w-4" />
-            {t("provider.importCurrent")}
-          </Button>
-        )}
-        {onCreate && (
-          <Button variant={onImport ? "outline" : "default"} onClick={onCreate}>
-            {t("provider.addProvider")}
-          </Button>
-        )}
-      </div>
+      {showKeyFieldsHint && (
+        <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+          {t("provider.noProvidersDescriptionKeyFields")}
+        </p>
+      )}
+      {(onImport || onCreate) && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {onImport && (
+            <Button variant="outline" onClick={onImport}>
+              <Download className="mr-2 h-4 w-4" />
+              {t("provider.importCurrent")}
+            </Button>
+          )}
+          {onCreate && (
+            <Button variant="outline" onClick={onCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t("provider.addProvider")}
+            </Button>
+          )}
+          {!emptyCopyNs && onImport && (
+            <HelpTip title={t("provider.noProviders")}>
+              {t("provider.noProvidersDescription")}
+            </HelpTip>
+          )}
+        </div>
+      )}
     </div>
   );
 }

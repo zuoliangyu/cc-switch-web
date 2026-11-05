@@ -352,6 +352,32 @@ describe("ProviderList Component", () => {
     ).toBeInTheDocument();
   });
 
+  it("hides the search button when provider search is turned off but keeps the shortcut", () => {
+    const providerAlpha = createProvider({ id: "alpha", name: "Alpha Labs" });
+    const props = {
+      providers: { alpha: providerAlpha },
+      currentProviderId: "",
+      appId: "claude" as const,
+      onSwitch: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onDuplicate: vi.fn(),
+      onOpenWebsite: vi.fn(),
+    };
+    const { unmount } = renderWithQueryClient(<ProviderList {...props} />);
+    expect(screen.getByRole("button", { name: /搜索/ })).toBeInTheDocument();
+    unmount();
+
+    renderWithQueryClient(<ProviderList {...props} showSearchButton={false} />);
+    expect(
+      screen.queryByRole("button", { name: /搜索/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "f", metaKey: true });
+    expect(
+      screen.getByPlaceholderText("Search name, notes, or URL..."),
+    ).toBeInTheDocument();
+  });
+
   it("matches the API address and keeps the search field out of the card area", () => {
     const relay = createProvider({
       id: "relay",

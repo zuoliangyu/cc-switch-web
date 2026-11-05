@@ -1,3 +1,4 @@
+import { HelpTip } from "@/components/ui/help-tip";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -118,13 +119,7 @@ export function PricingEditModal({
       }
     >
       {isNew && (
-        <div className="mb-6 flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "usage.modelsDevHint",
-              "无需手动填写，可从 models.dev 选择模型定价",
-            )}
-          </p>
+        <div className="mb-6 flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
           <Button
             type="button"
             variant="outline"
@@ -135,6 +130,12 @@ export function PricingEditModal({
             <Globe className="mr-1.5 h-4 w-4" />
             {t("usage.importFromModelsDev", "从 models.dev 导入")}
           </Button>
+          <HelpTip title={t("usage.importFromModelsDev", "从 models.dev 导入")}>
+            {t(
+              "usage.modelsDevHint",
+              "无需手动填写，可从 models.dev 选择模型定价",
+            )}
+          </HelpTip>
         </div>
       )}
 

@@ -386,6 +386,8 @@ export interface Settings {
   enableFailoverToggle?: boolean;
   // Whether to show the project Profile switcher on the main page
   showProfileSwitcher?: boolean;
+  // 供应商页的搜索按钮（默认显示；隐藏后 ⌘F / Ctrl+F 仍可打开搜索）
+  showProviderSearch?: boolean;
   // User has confirmed the failover toggle first-run notice
   failoverConfirmed?: boolean;
   // User has confirmed the first-run welcome notice

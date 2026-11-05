@@ -7,6 +7,8 @@ import {
   Terminal,
   CheckCircle2,
   AlertCircle,
+  Star,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +24,7 @@ import { getVersion } from "@/lib/runtime/client/app";
 import { settingsApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
-import appIcon from "@/assets/icons/app-icon.png";
+import ccswitchLogo from "@/assets/icons/logo.svg";
 import { isWindows } from "@/lib/platform";
 import { useUpdate } from "@/contexts/UpdateContext";
 
@@ -84,6 +86,17 @@ const WEB_REPOSITORY_URL =
   "https://github.com/zuoliangyu/zuoliangyu-cc-switch-web";
 const AUTHOR_BILIBILI_URL = "https://space.bilibili.com/27619688";
 
+// 邀 Star 条关掉后记在本机（纯界面偏好，不进库、不随云同步）
+const STAR_PROMPT_DISMISSED_KEY = "cc-switch-web:about:starPromptDismissed";
+
+function readStarPromptDismissed(): boolean {
+  try {
+    return localStorage.getItem(STAR_PROMPT_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function AboutSection() {
   const { t } = useTranslation();
   const [version, setVersion] = useState<string | null>(null);
@@ -97,6 +110,18 @@ export function AboutSection() {
     Record<string, WslShellPreference>
   >({});
   const [loadingTools, setLoadingTools] = useState<Record<string, boolean>>({});
+  const [starPromptDismissed, setStarPromptDismissed] = useState(
+    readStarPromptDismissed,
+  );
+
+  const handleDismissStarPrompt = useCallback(() => {
+    setStarPromptDismissed(true);
+    try {
+      localStorage.setItem(STAR_PROMPT_DISMISSED_KEY, "1");
+    } catch {
+      // 存不下就只在本次会话里隐藏
+    }
+  }, []);
 
   const refreshToolVersions = useCallback(
     async (
@@ -307,7 +332,12 @@ export function AboutSection() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <img src={appIcon} alt="CC Switch Web" className="h-5 w-5" />
+              <img
+                src={ccswitchLogo}
+                alt=""
+                draggable={false}
+                className="h-5 w-5 shrink-0"
+              />
               <h4 className="text-lg font-semibold text-foreground">
                 CC Switch Web
               </h4>
@@ -338,40 +368,20 @@ export function AboutSection() {
             </div>
           </div>
 
-          {/* 上游 f8821c03：引导用户为 Web 仓库点 Star */}
-          <p className="min-w-0 flex-1 text-xs leading-relaxed sm:text-right">
-            <a
-              href={WEB_REPOSITORY_URL}
-              onClick={(event) => {
-                event.preventDefault();
-                handleOpenRepository();
-              }}
-              className="font-medium text-primary hover:underline"
-            >
-              {t("settings.starPrompt")}
-            </a>
-            <span aria-hidden="true" className="ml-1.5">
-              👉
-            </span>
-          </p>
-
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleOpenRepository}
-              className="h-8 gap-1.5 border-primary/30 bg-primary/10 text-xs text-primary hover:bg-primary/20 hover:text-primary"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t("settings.projectRepo")}
-              <span
-                aria-hidden="true"
-                className="inline-block animate-[spin_4s_linear_infinite] motion-reduce:animate-none"
+            {/* 邀 Star 条显示时它的按钮就是仓库入口；关掉后这里补回仓库按钮 */}
+            {starPromptDismissed && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenRepository}
+                className="h-8 gap-1.5 text-xs"
               >
-                ⭐
-              </span>
-            </Button>
+                <ExternalLink className="h-3.5 w-3.5" />
+                {t("settings.projectRepo")}
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -411,6 +421,44 @@ export function AboutSection() {
             </Button>
           </div>
         </div>
+
+        {/* 邀 Star 单独占一行，按钮即仓库入口；关掉后链接行补回仓库按钮（上游 e09fdf04） */}
+        {!starPromptDismissed && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-primary/10 py-3 ps-4 pe-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Star
+                aria-hidden="true"
+                className="h-5 w-5 shrink-0 animate-[spin_6s_linear_infinite] fill-amber-500 text-amber-500 motion-reduce:animate-none"
+              />
+              <p className="min-w-0 text-sm text-foreground">
+                {t("settings.starPrompt")}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenRepository}
+                className="h-8 gap-1.5 text-xs"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {t("settings.starOnGithub")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleDismissStarPrompt}
+                aria-label={t("common.close")}
+                title={t("common.close")}
+                className="h-8 w-8"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {hasUpdate && updateInfo && (
           <motion.div

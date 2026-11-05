@@ -58,3 +58,32 @@ describe("AboutSection tool detection", () => {
     );
   });
 });
+
+describe("AboutSection star prompt", () => {
+  it("shows the star strip until dismissed, then restores the repository button", async () => {
+    localStorage.removeItem("cc-switch-web:about:starPromptDismissed");
+    const { unmount } = render(<AboutSection />);
+    expect(screen.getByText("settings.starPrompt")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /settings\.starOnGithub/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /settings\.projectRepo/ }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+    expect(screen.queryByText("settings.starPrompt")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /settings\.projectRepo/ }),
+    ).toBeInTheDocument();
+    expect(
+      localStorage.getItem("cc-switch-web:about:starPromptDismissed"),
+    ).toBe("1");
+
+    // 关掉是本机偏好，重新打开仍保持关闭
+    unmount();
+    render(<AboutSection />);
+    expect(screen.queryByText("settings.starPrompt")).not.toBeInTheDocument();
+    localStorage.removeItem("cc-switch-web:about:starPromptDismissed");
+  });
+});

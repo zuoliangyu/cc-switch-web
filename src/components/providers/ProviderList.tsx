@@ -51,6 +51,8 @@ import {
 } from "@/lib/query/pi";
 
 interface ProviderListProps {
+  /** 设置「显示供应商搜索」：关掉后隐藏搜索按钮，⌘F / Ctrl+F 仍可打开 */
+  showSearchButton?: boolean;
   modeView?: AppModeView;
   modePending?: boolean;
   onAggregationMember?: (id: string, enabled: boolean) => void;
@@ -78,6 +80,7 @@ interface ProviderListProps {
 }
 
 export function ProviderList({
+  showSearchButton = true,
   modeView,
   modePending,
   onAggregationMember,
@@ -692,7 +695,7 @@ export function ProviderList({
                   </Button>
                 </div>
               </HoverTip>
-            ) : (
+            ) : !showSearchButton && !searchTerm.trim() ? null : (
               <Button
                 type="button"
                 variant={searchTerm.trim() ? "default" : "outline"}

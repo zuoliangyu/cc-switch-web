@@ -36,6 +36,7 @@ export const WebSidebar = memo(function WebSidebar({
   currentView,
   visibleApps,
   appOrder,
+  settingsHasUpdate = false,
   onApp,
   onView,
 }: {
@@ -44,6 +45,8 @@ export const WebSidebar = memo(function WebSidebar({
   visibleApps: VisibleApps;
   /** 应用页拖出来的顺序（`settings.appOrder`） */
   appOrder?: readonly string[];
+  /** CC Switch Web 有新版本：「设置」上挂绿点，点进去直达「关于」 */
+  settingsHasUpdate?: boolean;
   onApp: (app: AppId) => void;
   onView: (view: GlobalView) => void;
 }) {
@@ -61,12 +64,17 @@ export const WebSidebar = memo(function WebSidebar({
     onView(view);
     setMobileOpen(false);
   };
-  const item = (id: GlobalView, label: string, icon: ReactNode) => (
+  const item = (
+    id: GlobalView,
+    label: string,
+    icon: ReactNode,
+    options: { dot?: boolean; title?: string } = {},
+  ) => (
     <button
       key={id}
       type="button"
-      aria-label={label}
-      title={!expanded ? label : undefined}
+      aria-label={options.title ?? label}
+      title={!expanded ? (options.title ?? label) : undefined}
       aria-current={currentView === id ? "page" : undefined}
       onClick={() => selectView(id)}
       className={cn(
@@ -74,7 +82,16 @@ export const WebSidebar = memo(function WebSidebar({
         currentView === id && "bg-accent font-medium",
       )}
     >
-      {icon}
+      <span className="relative inline-flex shrink-0">
+        {icon}
+        {options.dot && (
+          <span
+            aria-hidden="true"
+            data-testid={`sidebar-dot-${id}`}
+            className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card"
+          />
+        )}
+      </span>
       <span
         className={cn(
           "whitespace-nowrap",
@@ -212,6 +229,10 @@ export const WebSidebar = memo(function WebSidebar({
             "settings",
             t("settings.title"),
             <Settings className="h-4 w-4 shrink-0" />,
+            {
+              dot: settingsHasUpdate,
+              title: settingsHasUpdate ? t("nav.settingsHasUpdate") : undefined,
+            },
           )}
         </div>
       </aside>

@@ -152,9 +152,6 @@ const WorkspaceFilesPanel: React.FC = () => {
             <span className="font-medium text-sm text-foreground">
               {t("workspace.dailyMemory.cardTitle")}
             </span>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t("workspace.dailyMemory.cardDescription")}
-            </p>
           </div>
           <div className="mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors">
             <ChevronRight className="w-4 h-4" />

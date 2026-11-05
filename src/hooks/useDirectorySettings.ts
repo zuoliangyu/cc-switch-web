@@ -29,6 +29,27 @@ export interface ResolvedDirectories {
   omp: string;
 }
 
+type AppDirectoryKey = Exclude<DirectoryKey, "appConfig">;
+
+const DIRECTORY_KEY_TO_SETTINGS_FIELD: Record<
+  AppDirectoryKey,
+  keyof SettingsFormState
+> = {
+  claude: "claudeConfigDir",
+  codex: "codexConfigDir",
+  gemini: "geminiConfigDir",
+  grokbuild: "grokConfigDir",
+  opencode: "opencodeConfigDir",
+  openclaw: "openclawConfigDir",
+  hermes: "hermesConfigDir",
+  pi: "piConfigDir",
+  omp: "ompConfigDir",
+};
+
+const APP_DIRECTORY_KEYS = Object.keys(
+  DIRECTORY_KEY_TO_SETTINGS_FIELD,
+) as AppDirectoryKey[];
+
 const sanitizeDir = (value?: string | null): string | undefined => {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -75,7 +96,7 @@ export interface UseDirectorySettingsResult {
  * - 默认值加载（由本地 Rust 服务提供）
  */
 export function useDirectorySettings({
-  settings: _settings,
+  settings,
   onUpdateSettings,
 }: UseDirectorySettingsProps): UseDirectorySettingsResult {
   const { t } = useTranslation();
@@ -217,31 +238,86 @@ export function useDirectorySettings({
     };
   }, []);
 
+  // 设置被重新读取时（例如别的设置项自动保存后），表单里的目录草稿会回到已保存的值；
+  // 显示的目录跟着回去，本地刚改的那次不算（上游 99277921）。
+  const previousSettingsRef = useRef(settings);
+  const localDirectoryUpdatesRef = useRef<
+    Partial<Record<AppDirectoryKey, string | undefined>>
+  >({});
+  // 每个目录的显示版本号：较新的编辑 / 重置之后，晚到的后端解析结果不再覆盖
+  const directoryRevisionsRef = useRef<
+    Partial<Record<AppDirectoryKey, number>>
+  >({});
+  const bumpRevision = (key: AppDirectoryKey) => {
+    const revision = (directoryRevisionsRef.current[key] ?? 0) + 1;
+    directoryRevisionsRef.current[key] = revision;
+    return revision;
+  };
+  useEffect(() => {
+    const previousSettings = previousSettingsRef.current;
+    previousSettingsRef.current = settings;
+    if (!previousSettings || !settings) return;
+
+    for (const key of APP_DIRECTORY_KEYS) {
+      const field = DIRECTORY_KEY_TO_SETTINGS_FIELD[key];
+      const value = sanitizeDir(settings[field] as string | undefined);
+      if (
+        value === sanitizeDir(previousSettings[field] as string | undefined)
+      ) {
+        continue;
+      }
+      if (
+        key in localDirectoryUpdatesRef.current &&
+        localDirectoryUpdatesRef.current[key] === value
+      ) {
+        delete localDirectoryUpdatesRef.current[key];
+        continue;
+      }
+      delete localDirectoryUpdatesRef.current[key];
+      const revision = bumpRevision(key);
+      setResolvedDirs((prev) => ({
+        ...prev,
+        [key]: value ?? defaultsRef.current[key],
+      }));
+      if (value !== undefined) continue;
+
+      // 清掉的覆盖交给后端解析：默认目录可能随平台或环境变量变化
+      void settingsApi.getConfigDir(key as AppId).then(
+        (resolved) => {
+          setResolvedDirs((prev) =>
+            directoryRevisionsRef.current[key] === revision
+              ? { ...prev, [key]: resolved }
+              : prev,
+          );
+        },
+        (error) => {
+          console.error(
+            "[useDirectorySettings] Failed to resolve config dir",
+            error,
+          );
+        },
+      );
+    }
+  }, [settings]);
+
+  useEffect(
+    () => () => {
+      for (const key of APP_DIRECTORY_KEYS) bumpRevision(key);
+    },
+    [],
+  );
+
   const updateDirectoryState = useCallback(
     (key: DirectoryKey, value?: string) => {
       const sanitized = sanitizeDir(value);
       if (key === "appConfig") {
         setAppConfigDir(sanitized);
       } else {
-        onUpdateSettings(
-          key === "claude"
-            ? { claudeConfigDir: sanitized }
-            : key === "codex"
-              ? { codexConfigDir: sanitized }
-              : key === "gemini"
-                ? { geminiConfigDir: sanitized }
-                : key === "grokbuild"
-                  ? { grokConfigDir: sanitized }
-                  : key === "opencode"
-                    ? { opencodeConfigDir: sanitized }
-                    : key === "openclaw"
-                      ? { openclawConfigDir: sanitized }
-                      : key === "hermes"
-                        ? { hermesConfigDir: sanitized }
-                        : key === "pi"
-                          ? { piConfigDir: sanitized }
-                          : { ompConfigDir: sanitized },
-        );
+        // 本地编辑已在下面更新显示，等这次改动回到 settings 时不再重复处理；
+        // 也不让更早发出的后端解析盖掉它
+        bumpRevision(key);
+        localDirectoryUpdatesRef.current[key] = sanitized;
+        onUpdateSettings({ [DIRECTORY_KEY_TO_SETTINGS_FIELD[key]]: sanitized });
       }
 
       setResolvedDirs((prev) => ({
@@ -373,6 +449,7 @@ export function useDirectorySettings({
       piDir?: string,
       ompDir?: string,
     ) => {
+      for (const key of APP_DIRECTORY_KEYS) bumpRevision(key);
       setAppConfigDir(initialAppConfigDirRef.current);
       setResolvedDirs({
         appConfig:

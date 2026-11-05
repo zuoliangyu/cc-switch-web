@@ -592,9 +592,6 @@ export function WebdavSyncSection({
         <h3 className="text-base font-semibold text-foreground">
           {t("settings.webdavSync.title")}
         </h3>
-        <p className="text-sm text-muted-foreground">
-          {t("settings.webdavSync.description")}
-        </p>
       </header>
 
       <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-6">
@@ -680,9 +677,6 @@ export function WebdavSyncSection({
           <div className="flex items-center gap-4">
             <label className="w-40 text-xs font-medium text-foreground shrink-0">
               {t("settings.webdavSync.remoteRoot")}
-              <span className="block text-[10px] font-normal text-muted-foreground">
-                {t("settings.webdavSync.remoteRootDefault")}
-              </span>
             </label>
             <Input
               value={form.remoteRoot}
@@ -697,9 +691,6 @@ export function WebdavSyncSection({
           <div className="flex items-center gap-4">
             <label className="w-40 text-xs font-medium text-foreground shrink-0">
               {t("settings.webdavSync.profile")}
-              <span className="block text-[10px] font-normal text-muted-foreground">
-                {t("settings.webdavSync.profileDefault")}
-              </span>
             </label>
             <Input
               value={form.profile}

@@ -124,10 +124,6 @@ const ToolsPanel: React.FC = () => {
 
   return (
     <div className="px-6 pt-4 pb-8">
-      <p className="text-sm text-muted-foreground mb-6">
-        {t("openclaw.tools.description")}
-      </p>
-
       {unsupportedProfile && (
         <Alert className="mb-6 border-amber-500/30 bg-amber-500/5">
           <TriangleAlert className="h-4 w-4" />

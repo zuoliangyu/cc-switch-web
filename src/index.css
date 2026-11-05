@@ -213,11 +213,12 @@
 
   .dark {
     --background: 281 18% 12%;
-    --foreground: 34 34% 94%;
+    /* 主文字比近白压低一截（上游 3784fd9e）：近白文字铺满整屏时刺眼 */
+    --foreground: 34 30% 89%;
     --card: 280 15% 15%;
-    --card-foreground: 34 34% 94%;
+    --card-foreground: 34 30% 89%;
     --popover: 280 15% 16%;
-    --popover-foreground: 34 34% 94%;
+    --popover-foreground: 34 30% 89%;
 
     --primary: var(--palette-primary);
     --primary-hover: var(--palette-primary-hover);
@@ -253,7 +254,8 @@
     --neutral-soft-foreground: 34 18% 82%;
 
     --muted: 280 10% 22%;
-    --muted-foreground: 30 14% 68%;
+    /* 次级文字同步压低并和主文字拉开明度差；对卡片底仍 ≥ 4.5:1 */
+    --muted-foreground: 30 12% 65%;
     --accent: var(--palette-primary-soft);
     --accent-foreground: var(--palette-primary-soft-foreground);
 

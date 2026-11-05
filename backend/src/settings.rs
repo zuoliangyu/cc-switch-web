@@ -341,6 +341,10 @@ pub struct AppSettings {
     /// Whether to show the project Profile switcher on the main page (hidden by default)
     #[serde(default)]
     pub show_profile_switcher: bool,
+    /// Show the provider search button on the provider page (on by default;
+    /// Cmd/Ctrl+F still opens the search when it is hidden)
+    #[serde(default = "default_true")]
+    pub show_provider_search: bool,
     /// User has confirmed the failover toggle first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failover_confirmed: Option<bool>,
@@ -471,6 +475,7 @@ impl Default for AppSettings {
             stream_check_confirmed: None,
             enable_failover_toggle: false,
             show_profile_switcher: false,
+            show_provider_search: true,
             failover_confirmed: None,
             first_run_notice_confirmed: None,
             common_config_confirmed: None,
@@ -1305,6 +1310,17 @@ mod tests {
         let saved = serde_json::to_value(&off).expect("serialize");
         assert_eq!(saved["codexStackClassicTools"], false);
         assert!(saved.get("codexStackClassicSubagents").is_none());
+    }
+
+    #[test]
+    fn provider_search_is_shown_by_default() {
+        let settings: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(settings.show_provider_search);
+        assert!(AppSettings::default().show_provider_search);
+        let hidden: AppSettings =
+            serde_json::from_value(serde_json::json!({ "showProviderSearch": false }))
+                .expect("parse settings");
+        assert!(!hidden.show_provider_search);
     }
 
     #[test]

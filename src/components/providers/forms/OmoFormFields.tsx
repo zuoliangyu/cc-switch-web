@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HelpTip } from "@/components/ui/help-tip";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -34,7 +35,6 @@ import {
   Settings,
   FolderInput,
   Loader2,
-  HelpCircle,
   Check,
   ChevronsUpDown,
   X,
@@ -876,12 +876,7 @@ export function OmoFormFields({
           <div className="w-32 shrink-0">
             <div className="flex items-center gap-1 text-sm font-medium">
               {def.display}
-              <span className="relative inline-flex group/tip">
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help shrink-0" />
-                <span className="invisible opacity-0 group-hover/tip:visible group-hover/tip:opacity-100 transition-opacity duration-150 absolute left-0 top-full mt-1 z-50 w-[260px] rounded-md bg-popover text-popover-foreground border border-border shadow-md px-3 py-2 text-xs leading-relaxed font-normal pointer-events-none">
-                  {t(def.tooltipKey)}
-                </span>
-              </span>
+              <HelpTip title={def.display}>{t(def.tooltipKey)}</HelpTip>
             </div>
             <div className="text-xs text-muted-foreground truncate">
               {t(def.descKey)}

@@ -152,7 +152,7 @@
     "tabUniversal": "統一プロバイダー",
     "noProviders": "まだプロバイダーがありません",
     "noProvidersDescription": "既存の設定がある場合は「現在の設定をインポート」をクリックしてください。すべてのデータが default プロバイダーに安全に保存されます",
-    "noProvidersDescriptionSnippet": "API キーとリクエスト URL 以外のデータ（プラグインなど）は共通設定スニペットに保存され、プロバイダー間で共有できます",
+    "noProvidersDescriptionKeyFields": "プロバイダーを切り替えても置き換わるのはキー、リクエスト URL、モデルだけです。プラグインなどのその他の設定は設定ファイルに残り、すべてのプロバイダーに適用されます",
     "importCurrent": "現在の設定をインポート",
     "importCurrentDescription": "現在使用中の設定をデフォルトプロバイダーとしてインポート",
     "currentlyUsing": "現在使用中",
@@ -371,13 +371,13 @@
     },
     "unifyCodexHistory": {
       "title": "Codex セッション履歴を統合",
-      "message": "公式アカウントとサードパーティ Provider が同じセッション履歴を共有します。Provider をまたいで再開すると、別のバックエンドが encrypted_content を復号できず失敗する場合があります。\n\n既存の公式セッションも移行できます。変更前に必ずバックアップします。",
+      "message": "Codex CLI の resume 一覧に公式アカウントとサードパーティ Provider のセッションがまとめて表示されます（Codex デスクトップ版はアップデートで全セッションを表示できるようになったため影響しません）。Provider をまたいで再開すると、別のバックエンドが encrypted_content を復号できず失敗する場合があります。\n\n既存の公式セッションも移行できます。変更前に必ずバックアップします。",
       "migrateExisting": "既存の公式セッション履歴も移行する",
       "confirm": "理解しました、有効にする"
     },
     "unifyCodexHistoryOff": {
       "title": "セッション履歴の統合を無効にする",
-      "message": "公式アカウントとサードパーティ Provider は別々の履歴に戻ります。統合中に作成されたセッションは提供元を確実に判別できないため、統合履歴に残ります。",
+      "message": "Codex CLI では公式アカウントとサードパーティ Provider のセッション一覧が再び別々になります（デスクトップ版は引き続き全セッションを表示）。統合中に作成されたセッションは提供元を確実に判別できないため、統合履歴に残ります。",
       "restoreBackup": "移行バックアップから既存の公式セッションを正確に復元する",
       "confirm": "無効にする"
     }
@@ -390,7 +390,7 @@
     "tabProxy": "プロキシ",
     "tabAuth": "認証",
     "unifyCodexSessionHistory": "Codex セッション履歴を統合",
-    "unifyCodexSessionHistoryDescription": "公式アカウントとサードパーティ Provider の再開履歴を共有し、既存の公式セッションもバックアップ付きで移行できます。",
+    "unifyCodexSessionHistoryDescription": "Codex CLI にのみ影響します：CLI の resume 一覧には現在のプロバイダーのセッションしか表示されず、オンにすると公式アカウントとサードパーティ Provider のセッションが同じ一覧に表示されます。Codex デスクトップ版はアップデートで全セッションを表示できるようになったため、デスクトップ版だけなら不要です。既存の公式セッションもバックアップ付きで移行できます。",
     "codexSessionCompression": "Codex の古いセッションを圧縮",
     "codexSessionCompressionDescription": "オンにすると、Codex は起動するたびに 7 日以上更新のないセッションファイルをバックグラウンドで圧縮し、ディスク使用量を大きく減らします。圧縮したセッションで会話を続けると Codex が自動的に展開します。CC Switch は圧縮されたセッションも通常どおり表示・集計しますが、一覧には最後の返信のプレビューが表示されません。Codex でまだ開発中の機能のため、オンの間は Codex の起動時に毎回通知が表示されます。新しめの Codex が必要で、Codex を再起動すると有効になります。オフにすると圧縮は止まりますが、圧縮済みのセッションはそのまま残ります。",
     "codexSessionCompressionUsage": "セッションの現在の使用量: {{size}}",
@@ -459,7 +459,7 @@
     "enableClaudePluginIntegration": "Claude Code 拡張に適用",
     "enableClaudePluginIntegrationDescription": "有効にすると Claude プロバイダー切替時に VS Code の Claude Code 拡張も同期します",
     "skipClaudeOnboarding": "Claude Code の初回確認をスキップ",
-    "skipClaudeOnboardingDescription": "有効にすると ~/.claude.json に hasCompletedOnboarding=true を書き込みます",
+    "skipClaudeOnboardingDescription": "Claude Code は初回起動時にオンボーディングを行い、テーマの選択と Anthropic アカウントへのログインを求めます。サードパーティのプロバイダーを使う場合は公式アカウントへのログインが不要なため、オンにするとこの手順を飛ばしてすぐに使えます。仕組みとしては ~/.claude.json に hasCompletedOnboarding: true を書き込みます。オフにするとこのフィールドを削除し、次回起動時に再びオンボーディングが表示されます。",
     "advanced": {
       "configDir": {
         "title": "設定ディレクトリ",
@@ -507,7 +507,6 @@
         "title": "整流器",
         "description": "API リクエストの互換性問題を自動修正",
         "enabled": "整流器を有効化",
-        "enabledDescription": "マスタースイッチ、オフにするとすべての整流機能が無効になります",
         "requestGroup": "リクエスト整流",
         "responseGroup": "レスポンス整流",
         "thinkingSignature": "Thinking 署名整流",
@@ -541,7 +540,6 @@
           "debug": "デバッグ",
           "trace": "トレース"
         },
-        "levelHint": "ログレベルの説明：",
         "levelDesc": {
           "error": "重大なエラーのみ",
           "warn": "エラー + 警告",
@@ -719,7 +717,6 @@
     },
     "webdavSync": {
       "title": "WebDAV クラウド同期",
-      "description": "WebDAV を使ってデバイス間でデータベースとスキル設定を同期します。",
       "baseUrl": "WebDAV サーバー URL",
       "baseUrlPlaceholder": "https://example.com/remote.php/dav/files/user",
       "username": "ユーザー名",
@@ -760,8 +757,6 @@
         "synologyHint": "Synology の「パッケージセンター」で WebDAV Server パッケージをインストール・有効化してください。",
         "custom": "カスタム"
       },
-      "remoteRootDefault": "デフォルト: cc-switch-sync",
-      "profileDefault": "デフォルト: default",
       "saveAndTestSuccess": "設定を保存しました。接続正常です",
       "saveAndTestFailed": "設定を保存しましたが、接続テストに失敗しました：{{error}}",
       "noRemoteData": "クラウドに同期データが見つかりません",
@@ -820,7 +815,9 @@
       "geminiDesc": "Google Gemini CLI",
       "opencodeDesc": "OpenCode CLI",
       "showProfileSwitcher": "プロジェクト切り替えを表示",
-      "showProfileSwitcherDescription": "メイン画面上部にプロジェクト切り替えを表示します"
+      "showProfileSwitcherDescription": "メイン画面上部にプロジェクト切り替えを表示します",
+      "showProviderSearch": "プロバイダー検索を表示",
+      "showProviderSearchDescription": "プロバイダー画面の上部に検索ボタンを表示し、名前・メモ・公式サイト・API アドレスで検索できます。非表示にしても ⌘F / Ctrl+F で検索を開けます"
     },
     "skillSync": {
       "title": "スキル同期方式",
@@ -880,6 +877,7 @@
     "viewReleaseNotes": "このバージョンのリリースノートを見る",
     "viewCurrentReleaseNotes": "現在のバージョンのリリースノートを見る",
     "starPrompt": "CC Switch Web がお役に立てたなら、GitHub でスターをお願いします。私たちにとって大きな励みになります",
+    "starOnGithub": "GitHub でスター",
     "oneClickInstall": "ワンクリックインストール",
     "oneClickInstallHint": "Claude Code / Codex / Gemini CLI / Grok Build / OpenCode / OpenClaw / Hermes / Pi / MiniMax Code をインストールまたは更新",
     "localEnvCheck": "ローカル環境チェック",
@@ -1544,7 +1542,7 @@
     "modelHelper": "任意: 既定で使いたい Claude モデルを指定。空欄ならシステム既定を使用します。",
     "modelMappingLabel": "モデルマッピング",
     "modelMappingHint": "表示名は /model メニューだけに影響します。1M は Claude Code へのコンテキスト能力宣言です。",
-    "advancedOptionsToggle": "高級オプション",
+    "advancedOptionsToggle": "詳細オプション",
     "categoryOfficial": "公式",
     "categoryCnOfficial": "オープンソース公式",
     "categoryAggregation": "アグリゲーター",
@@ -2532,7 +2530,6 @@
       "title": "デイリーメモリー",
       "sectionTitle": "デイリーメモリー",
       "cardTitle": "デイリーメモリーファイル",
-      "cardDescription": "デイリーメモリーの閲覧・管理",
       "createToday": "メモリーを追加",
       "empty": "デイリーメモリーファイルはまだありません",
       "loadFailed": "デイリーメモリーファイルの読み込みに失敗しました",
@@ -2591,7 +2588,6 @@
     "userAgentHint": "一部のプロバイダーはブラウザの User-Agent ヘッダーが必要です。",
     "env": {
       "title": "環境変数",
-      "description": "openclaw.json の環境変数設定を管理（APIキー、カスタム変数など）",
       "editorHint": "env セクション全体を JSON として編集します。env.vars や env.shellEnv などのネストしたオブジェクトにも対応しています。",
       "objectRequired": "OpenClaw の env は JSON オブジェクトである必要があります。",
       "invalidJson": "OpenClaw の env は有効な JSON である必要があります。",
@@ -2606,7 +2602,6 @@
     },
     "tools": {
       "title": "ツール権限",
-      "description": "openclaw.json のツール権限設定を管理（許可/拒否リスト）",
       "profile": "権限プロファイル",
       "profileMinimal": "最小",
       "profileCoding": "コーディング",
@@ -3894,9 +3889,9 @@
     "restartDaemon": "Codex デーモンを再起動",
     "restartDaemonConfirm": "実行中のタスクの終了を待ち、管理対象の Codex デーモンを再起動して新しいモデル一覧を読み込みます。数分かかる場合があります。デスクトップ版とエディター拡張は手動で終了して開き直してください。",
     "help": {
-      "direct": "クライアントが選択したプロバイダーに直接接続します。",
-      "routing": "ローカルサービス経由で接続し、フェイルオーバーを利用できます。",
-      "aggregation": "複数のプロバイダーのモデルをクライアントに集約します。カードで参加・解除し、その他のメニューで既定を設定します。"
+      "direct": "CC Switch はリクエストに一切関与せず、クライアントが選択したプロバイダーに直接つながる、最もネイティブな使い方です。",
+      "routing": "リクエストはこのマシンの CC Switch を経由し、プロバイダーのホットスイッチ、フェイルオーバー、フォーマット変換などの高度な機能が使えます。",
+      "aggregation": "複数のプロバイダーのモデルがクライアントのモデル一覧に並び、クライアント内でシームレスに切り替えられます。カードで参加・解除し、その他のメニューで既定を設定します。"
     },
     "notice": {
       "routeOwnsCatalog": "既定のプロバイダーが独自のモデル一覧を管理しているため、他のメンバーは公開されません。",

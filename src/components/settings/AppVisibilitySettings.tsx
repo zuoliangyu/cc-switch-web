@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import { cn } from "@/lib/utils";
@@ -109,6 +109,13 @@ export function AppVisibilitySettings({
         description={t("settings.appVisibility.showProfileSwitcherDescription")}
         checked={settings.showProfileSwitcher ?? false}
         onCheckedChange={(value) => onChange({ showProfileSwitcher: value })}
+      />
+      <ToggleRow
+        icon={<Search className="h-4 w-4 text-sky-500" />}
+        title={t("settings.appVisibility.showProviderSearch")}
+        description={t("settings.appVisibility.showProviderSearchDescription")}
+        checked={settings.showProviderSearch ?? true}
+        onCheckedChange={(value) => onChange({ showProviderSearch: value })}
       />
     </section>
   );

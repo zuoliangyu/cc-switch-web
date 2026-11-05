@@ -310,4 +310,42 @@ describe("useSettings hook", () => {
     expect(setAppConfigDirOverrideMock).not.toHaveBeenCalled();
     expect(metadataMock.setRequiresRestart).not.toHaveBeenCalledWith(true);
   });
+
+  it("keeps directory drafts out of unrelated autosaves", async () => {
+    settingsFormMock = createSettingsFormMock({
+      settings: {
+        ...serverSettings,
+        claudeConfigDir: "/unsaved/claude",
+        codexConfigDir: undefined,
+        language: "zh",
+      },
+    });
+
+    const { result } = renderHook(() => useSettings());
+
+    await act(async () => {
+      await result.current.autoSaveSettings({ skipClaudeOnboarding: true });
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    const payload = mutateAsyncMock.mock.calls[0][0] as Record<string, unknown>;
+    // 草稿只由显式「保存」写入，自动保存沿用已确认的目录
+    expect(payload.claudeConfigDir).toBe("/server/claude");
+    expect(payload.codexConfigDir).toBe("/server/codex");
+    expect(payload.skipClaudeOnboarding).toBe(true);
+  });
+
+  it("autosaves a directory when the update names it explicitly", async () => {
+    const { result } = renderHook(() => useSettings());
+
+    await act(async () => {
+      await result.current.autoSaveSettings({
+        claudeConfigDir: "/explicit/claude",
+      });
+    });
+
+    const payload = mutateAsyncMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.claudeConfigDir).toBe("/explicit/claude");
+    expect(payload.codexConfigDir).toBe("/server/codex");
+  });
 });

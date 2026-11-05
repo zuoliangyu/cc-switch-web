@@ -1,9 +1,12 @@
 import { Switch } from "@/components/ui/switch";
+import { HelpTip } from "@/components/ui/help-tip";
 
 export interface ToggleRowProps {
   icon: React.ReactNode;
   title: string;
   description?: string;
+  /** 标题旁的「?」：规则和原理放这里，不占行内位置 */
+  help?: string;
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
   disabled?: boolean;
@@ -13,6 +16,7 @@ export function ToggleRow({
   icon,
   title,
   description,
+  help,
   checked,
   onCheckedChange,
   disabled,
@@ -24,7 +28,10 @@ export function ToggleRow({
           {icon}
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium leading-none">{title}</p>
+          <div className="flex items-center gap-1">
+            <p className="text-sm font-medium leading-none">{title}</p>
+            {help ? <HelpTip title={title}>{help}</HelpTip> : null}
+          </div>
           {description ? (
             <p className="text-xs text-muted-foreground">{description}</p>
           ) : null}

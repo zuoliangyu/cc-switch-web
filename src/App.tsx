@@ -77,6 +77,7 @@ import {
 import OpenClawHealthBanner from "@/components/openclaw/OpenClawHealthBanner";
 import HermesHealthBanner from "@/components/hermes/HermesHealthBanner";
 import { UpdateBadge } from "@/components/UpdateBadge";
+import { useUpdate } from "@/contexts/UpdateContext";
 import {
   hasOpencodeDefinition,
   isNativeOpencodeConfig,
@@ -217,6 +218,7 @@ const getInitialView = (): View => {
 };
 
 function App() {
+  const { hasUpdate } = useUpdate();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
@@ -932,6 +934,9 @@ function App() {
                       />
                     )}
                     <ProviderList
+                      showSearchButton={
+                        settingsData?.showProviderSearch ?? true
+                      }
                       modeView={appMode.data}
                       modePending={appMode.pending}
                       onAggregationMember={(id, enabled) => {
@@ -1620,11 +1625,16 @@ function App() {
         currentView={currentView}
         visibleApps={visibleApps}
         appOrder={settingsData?.appOrder}
+        settingsHasUpdate={hasUpdate}
         onApp={(app) => {
           setActiveApp(app);
           setCurrentView("providers");
         }}
-        onView={handleViewChange}
+        onView={(view) => {
+          // 「设置」上的绿点说的是 CC Switch Web 有新版本，点进去直接到「关于」
+          if (view === "settings" && hasUpdate) setSettingsDefaultTab("about");
+          handleViewChange(view);
+        }}
       />
 
       <main

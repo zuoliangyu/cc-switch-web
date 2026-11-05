@@ -40,7 +40,7 @@ export function ClaudeCodeSettings({
       <ToggleRow
         icon={<ShieldCheck className="h-4 w-4 text-emerald-500" />}
         title={t("settings.skipClaudeOnboarding")}
-        description={t("settings.skipClaudeOnboardingDescription")}
+        help={t("settings.skipClaudeOnboardingDescription")}
         checked={skipOnboarding}
         onCheckedChange={onSkipOnboardingChange}
       />

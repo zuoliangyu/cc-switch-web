@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UNKNOWN_PROJECT_DIR_KEY } from "@/components/sessions/utils";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
@@ -80,6 +80,10 @@ const openAppMenu = async () =>
 const EXPANDED_KEY = "cc-switch.sessionManager.expandedProjects";
 
 describe("SessionManagerPage", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     vi.spyOn(sessionsApi, "streamMessages").mockImplementation(async (providerId, sourcePath, onChunk) => {
       const messages = await sessionsApi.getMessages(providerId, sourcePath);
@@ -100,6 +104,8 @@ describe("SessionManagerPage", () => {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
 
+    // 固定在本地正午：会话按「今天 / 更早」分组，凌晨跑时 now - 2h 会落进昨天
+    vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0));
     const now = Date.now();
     const sessions: SessionMeta[] = [
       {

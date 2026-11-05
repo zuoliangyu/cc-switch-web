@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { Settings } from "@/types";
 import type { AppModeSubagentModel } from "@/types/proxy";
 import { settingsApi } from "@/lib/api/settings";
-import { Switch } from "@/components/ui/switch";
-import { HelpTip } from "@/components/ui/help-tip";
+import { SettingsSwitchRow } from "@/components/settings/SettingsLayout";
 
 // 原生 select 的空值代表「不写这个键」：子代理跟随主模型 / 用模型默认档。
 const UNSET = "";
@@ -198,37 +197,24 @@ export function StackSubagentFields({
         </p>
       )}
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-0.5">
-            <label
-              htmlFor="codex-stack-classic-tools"
-              className="text-sm font-medium text-foreground"
-            >
-              {classicLabel}
-            </label>
-            <HelpTip title={classicLabel}>
-              {t("settings.codexStackClassicSubagentsDescription")}
-            </HelpTip>
-          </div>
-          {/* 开关刚关掉的那一帧检测结果还没清掉；按当前开关判断，不闪旧提示 */}
-          {classic && forcesMultiAgentV2 && (
-            <p
-              role="status"
-              className="text-xs text-amber-700 dark:text-amber-400"
-            >
+      <SettingsSwitchRow
+        label={classicLabel}
+        help={{
+          title: classicLabel,
+          body: t("settings.codexStackClassicSubagentsDescription"),
+        }}
+        description={
+          // 开关刚关掉的那一帧检测结果还没清掉；按当前开关判断，不闪旧提示
+          classic && forcesMultiAgentV2 ? (
+            <span role="status" className="text-amber-700 dark:text-amber-400">
               {t("settings.codexStackClassicSubagentsForcedV2")}
-            </p>
-          )}
-        </div>
-        <Switch
-          id="codex-stack-classic-tools"
-          checked={classic}
-          disabled={disabled}
-          aria-label={classicLabel}
-          onCheckedChange={(next) => onChange({ ...value, classic: next })}
-        />
-      </div>
+            </span>
+          ) : undefined
+        }
+        checked={classic}
+        disabled={disabled}
+        onCheckedChange={(next) => onChange({ ...value, classic: next })}
+      />
     </div>
   );
 }

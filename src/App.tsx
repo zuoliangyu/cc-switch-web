@@ -1,4 +1,5 @@
 import { WebSidebar } from "@/components/shell/WebSidebar";
+import type { SettingsSection } from "@/components/settings/settingsSections";
 import type { ProviderEditorSave } from "@/lib/api/providers";
 import {
   lazy,
@@ -149,9 +150,9 @@ const AuthCenterPanel = lazy(() =>
     default: m.AuthCenterPanel,
   })),
 );
-const UsageDashboard = lazy(() =>
-  import("@/components/usage/UsageDashboard").then((m) => ({
-    default: m.UsageDashboard,
+const UsagePage = lazy(() =>
+  import("@/components/usage/UsagePage").then((m) => ({
+    default: m.UsagePage,
   })),
 );
 
@@ -219,7 +220,18 @@ function App() {
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);
-  const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("general");
+  // 从应用页的「配置目录」进入设置时，定位并闪烁该应用的配置区域（上游 eda410e5）
+  const [appConfigScrollTarget, setAppConfigScrollTarget] = useState<AppId>();
+  const openSettings = useCallback(
+    (section: SettingsSection, appConfigTarget?: AppId) => {
+      setSettingsSection(section);
+      setAppConfigScrollTarget(appConfigTarget);
+      setCurrentView("settings");
+    },
+    [],
+  );
   const [isAddOpen, setIsAddOpen] = useState(false);
   // 供应商页顶部正在看的那格（直连 / 路由 / 聚合），由 SwitchModePanel 报上来。打开新增、
   // 编辑时记下当时那格，表单按它选布局：在聚合那格打开就是聚合的简化表单（上游 fe831f0a）。
@@ -857,18 +869,30 @@ function App() {
         case "usage":
           return (
             <div className="px-3 md:px-6 py-4">
-              <UsageDashboard />
+              <UsagePage />
             </div>
           );
         case "apps":
-          return <AppsPage />;
+          return (
+            <AppsPage
+              onOpenAppConfig={(app) => openSettings("appConfig", app)}
+            />
+          );
         case "settings":
           return (
             <SettingsPage
-              open={true}
-              onOpenChange={() => setCurrentView("providers")}
+              section={settingsSection}
+              onSectionChange={(section) => {
+                setSettingsSection(section);
+                setAppConfigScrollTarget(undefined);
+              }}
+              appConfigScrollTarget={appConfigScrollTarget}
               onImportSuccess={handleImportSuccess}
-              defaultTab={settingsDefaultTab}
+              onOpenApps={() => setCurrentView("apps")}
+              onOpenApp={(app) => {
+                setActiveApp(app);
+                setCurrentView("providers");
+              }}
             />
           );
         case "prompts":
@@ -970,8 +994,7 @@ function App() {
                             onSwitch={switchProvider}
                             onViewChange={handleProviderModeViewChange}
                             onOpenRoutingSettings={() => {
-                              setSettingsDefaultTab("proxy");
-                              handleViewChange("settings");
+                              openSettings("routing");
                             }}
                             {...listProps}
                           />
@@ -1163,29 +1186,18 @@ function App() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => {
-                    setSettingsDefaultTab("general");
-                    setCurrentView("settings");
-                  }}
+                  onClick={() => openSettings("general")}
                   title={t("common.settings")}
                   className="hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   <Settings className="w-4 h-4" />
                 </Button>
-                <UpdateBadge
-                  onClick={() => {
-                    setSettingsDefaultTab("about");
-                    setCurrentView("settings");
-                  }}
-                />
+                <UpdateBadge onClick={() => openSettings("about")} />
                 {isCurrentAppTakeoverActive && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      setSettingsDefaultTab("usage");
-                      setCurrentView("settings");
-                    }}
+                    onClick={() => handleViewChange("usage")}
                     title={t("usage.title", {
                       defaultValue: "使用统计",
                     })}
@@ -1584,7 +1596,10 @@ function App() {
         }}
         onView={(view) => {
           // 「设置」上的绿点说的是 CC Switch Web 有新版本，点进去直接到「关于」
-          if (view === "settings" && hasUpdate) setSettingsDefaultTab("about");
+          if (view === "settings") {
+            openSettings(hasUpdate ? "about" : settingsSection);
+            return;
+          }
           handleViewChange(view);
         }}
       />

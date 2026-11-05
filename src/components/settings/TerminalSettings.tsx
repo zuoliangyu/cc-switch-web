@@ -74,37 +74,31 @@ export interface TerminalSettingsProps {
   onChange: (value: string) => void;
 }
 
-export function TerminalSettings({
+/** 设置 → 通用 → 终端：只是下拉框，说明进行首的「?」 */
+export function TerminalSelect({
   value,
   onChange,
-}: TerminalSettingsProps) {
+  className,
+}: TerminalSettingsProps & { className?: string }) {
   const { t } = useTranslation();
   const terminals = getTerminalOptions();
   const currentValue = value || getDefaultTerminal();
 
   return (
-    <section className="space-y-2">
-      <header className="space-y-1">
-        <h3 className="text-sm font-medium">{t("settings.terminal.title")}</h3>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.terminal.description")}
-        </p>
-      </header>
-      <Select value={currentValue} onValueChange={onChange}>
-        <SelectTrigger className="w-full sm:w-[220px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {terminals.map((terminal) => (
-            <SelectItem key={terminal.value} value={terminal.value}>
-              {t(terminal.labelKey)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        {t("settings.terminal.fallbackHint")}
-      </p>
-    </section>
+    <Select value={currentValue} onValueChange={onChange}>
+      <SelectTrigger
+        className={className ?? "w-[200px]"}
+        aria-label={t("settings.terminal.title")}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {terminals.map((terminal) => (
+          <SelectItem key={terminal.value} value={terminal.value}>
+            {t(terminal.labelKey)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

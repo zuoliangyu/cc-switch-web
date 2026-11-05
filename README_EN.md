@@ -238,7 +238,7 @@ Script entry layout:
    ~/.cc-switch-web
    ```
 
-   This includes files such as `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist, data is migrated read-only from `~/.cc-switch`. Settings also provides a manual re-migration action that backs up Web data first. Web never modifies the CC Switch source database. Legacy `config.json` is not part of the active Web runtime data path.
+   This includes files such as `settings.json`, `cc-switch.db`, backup data, and unified Skills storage. On first startup, if this directory does not exist, data is migrated read-only from `~/.cc-switch`. Settings → Data also provides a manual re-migration action that backs up Web data first. Web never modifies the CC Switch source database. Legacy `config.json` is not part of the active Web runtime data path.
 
 ### Access Key (Optional)
 

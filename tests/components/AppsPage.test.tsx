@@ -177,21 +177,27 @@ function updateButton(name: string) {
   return card(name).getByRole("button", { name: "settings.toolUpdate" });
 }
 
-function mountApps(AppsPage: () => JSX.Element) {
+type AppsPageComponent =
+  (typeof import("@/components/apps/AppsPage"))["AppsPage"];
+
+function mountApps(
+  AppsPage: AppsPageComponent,
+  props: Parameters<AppsPageComponent>[0] = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <AppsPage />
+      <AppsPage {...props} />
     </QueryClientProvider>,
   );
 }
 
-async function renderApps() {
+async function renderApps(props: Parameters<AppsPageComponent>[0] = {}) {
   // 安装 / 升级的状态放在模块级 store 里，跨挂载保留。
   const { AppsPage } = await import("@/components/apps/AppsPage");
-  const view = mountApps(AppsPage);
+  const view = mountApps(AppsPage, props);
   await waitFor(() =>
     expect(
       within(view.container).getByText("appsPage.checkUpdates"),
@@ -723,6 +729,24 @@ describe("AppsPage concurrent CLI upgrades", () => {
     expect(
       card("Codex").getByRole("button", { name: "settings.toolInstall" }),
     ).toBeEnabled();
+  });
+
+  // 上游 eda410e5：从应用的「配置目录」进设置 → 应用配置并定位到它；Web 的入口在行尾「⋯」里
+  it("opens the app's configuration directory from the row menu", async () => {
+    missing.add("codex");
+    const onOpenAppConfig = vi.fn();
+    await renderApps({ onOpenAppConfig });
+    const user = userEvent.setup();
+
+    // 没装的应用也能去改配置目录
+    await user.click(rowMenu("Codex"));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "appPage.configDirectory" }),
+    );
+    expect(onOpenAppConfig).toHaveBeenCalledWith("codex");
+    expect(
+      screen.queryByRole("menuitem", { name: "settings.toolUninstall" }),
+    ).toBeNull();
   });
 
   it("shows the selected path and command while retaining the resolved target for uninstall validation", async () => {

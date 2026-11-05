@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ComponentType, MouseEvent, ReactNode } from "react";
-import { ChevronRight, Monitor, Moon, Palette, Sun } from "lucide-react";
+import { ChevronRight, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/components/theme-provider";
@@ -13,9 +12,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export function ThemeSettings() {
+/**
+ * 设置 → 通用 → 外观里的「配色」：当前配色的色块 + 「更换」，点开选配色的弹窗。
+ * 明暗模式在同一节的分段控件里，这里只管配色（Web 自有的主题配色）。
+ */
+export function ThemePaletteControl() {
   const { t } = useTranslation();
-  const { theme, setTheme, scheme, setScheme } = useTheme();
+  const { scheme, setScheme } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const currentScheme = useMemo(
     () => THEME_SCHEMES.find((item) => item.id === scheme) ?? THEME_SCHEMES[0],
@@ -23,89 +26,27 @@ export function ThemeSettings() {
   );
 
   return (
-    <section className="space-y-4">
-      <header className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Palette className="h-4 w-4 theme-primary-text" />
-          <h3 className="text-sm font-medium">{t("settings.theme")}</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">{t("settings.themeHint")}</p>
-      </header>
-
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            {t("settings.themeMode")}
-          </h4>
-          <div className="inline-flex gap-1 rounded-2xl border border-border-default bg-background/80 p-1 shadow-sm">
-            <ThemeModeButton
-              active={theme === "light"}
-              onClick={(e) => setTheme("light", e)}
-              icon={Sun}
-            >
-              {t("settings.themeLight")}
-            </ThemeModeButton>
-            <ThemeModeButton
-              active={theme === "dark"}
-              onClick={(e) => setTheme("dark", e)}
-              icon={Moon}
-            >
-              {t("settings.themeDark")}
-            </ThemeModeButton>
-            <ThemeModeButton
-              active={theme === "system"}
-              onClick={(e) => setTheme("system", e)}
-              icon={Monitor}
-            >
-              {t("settings.themeSystem")}
-            </ThemeModeButton>
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            {t("settings.themePalette")}
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.themePaletteHint")}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setPaletteOpen(true)}
-          className="glass-card flex w-full items-center justify-between gap-4 rounded-[28px] border border-border-default p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl"
-        >
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex items-center gap-2">
-              {currentScheme.swatches.map((color) => (
-                <span
-                  key={`${currentScheme.id}-${color}`}
-                  className="h-8 w-8 rounded-full border border-black/5 shadow-sm dark:border-white/10"
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-base font-semibold text-foreground">
-                  {t(currentScheme.labelKey)}
-                </span>
-                <span className="rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-semibold theme-primary-text shadow-sm">
-                  {t("settings.themeCurrent")}
-                </span>
-              </div>
-              <p className="truncate text-sm text-muted-foreground">
-                {t(currentScheme.descriptionKey)}
-              </p>
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-2 text-sm font-medium theme-primary-text">
-            <span>{t("settings.themePaletteAction")}</span>
-            <ChevronRight className="h-4 w-4" />
-          </div>
-        </button>
-      </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        aria-label={t("settings.themePaletteAction")}
+        className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-2.5 text-sm hover:bg-muted"
+      >
+        <span className="flex items-center gap-1">
+          {currentScheme.swatches.map((color) => (
+            <span
+              key={`${currentScheme.id}-${color}`}
+              className="h-3.5 w-3.5 rounded-full border border-black/5 dark:border-white/10"
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </span>
+        <span className="max-w-[9rem] truncate">
+          {t(currentScheme.labelKey)}
+        </span>
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
 
       <Dialog open={paletteOpen} onOpenChange={setPaletteOpen}>
         <DialogContent className="max-w-5xl border-border-default bg-background/95 p-0">
@@ -181,36 +122,6 @@ export function ThemeSettings() {
           </div>
         </DialogContent>
       </Dialog>
-    </section>
-  );
-}
-
-interface ThemeModeButtonProps {
-  active: boolean;
-  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
-  icon: ComponentType<{ className?: string }>;
-  children: ReactNode;
-}
-
-function ThemeModeButton({
-  active,
-  onClick,
-  icon: Icon,
-  children,
-}: ThemeModeButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex min-w-[112px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
-        active
-          ? "theme-primary-solid shadow-sm"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {children}
-    </button>
+    </>
   );
 }

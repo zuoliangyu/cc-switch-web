@@ -70,7 +70,6 @@
     "actions": "操作",
     "deleting": "删除中...",
     "auto": "自动",
-    "enabled": "已开启",
     "notSet": "未设置",
     "collapse": "收起",
     "resync": "立即重新同步",
@@ -156,7 +155,6 @@
     "importCurrent": "导入当前配置",
     "importCurrentDescription": "将当前正在使用的配置导入为默认供应商",
     "currentlyUsing": "当前使用",
-    "inUse": "使用中",
     "editProvider": "编辑供应商",
     "editProviderHint": "更新配置后将立即应用到当前供应商。",
     "deleteProvider": "删除供应商",
@@ -337,11 +335,6 @@
     "deleteProviderMessage": "确定要删除供应商 \"{{name}}\" 吗？此操作无法撤销。",
     "removeProvider": "移除供应商",
     "removeProviderMessage": "确定要从配置中移除供应商 \"{{name}}\" 吗？\n\n移除后该供应商将不再生效，但配置数据会保留在 CC Switch 中，您可以随时重新添加。",
-    "proxy": {
-      "title": "启用本地代理服务",
-      "message": "本地代理是一项高级功能，启用前请确保您已了解其工作原理。\n\n建议先查阅相关文档或咨询您的供应商，以获取正确的配置方式。",
-      "confirm": "我已了解，继续启用"
-    },
     "failover": {
       "title": "启用故障转移功能",
       "message": "故障转移是一项高级功能，启用前请确保您已了解其工作原理。\n\n建议先在故障转移队列中配置好供应商优先级。",
@@ -384,11 +377,6 @@
   },
   "settings": {
     "title": "设置",
-    "general": "通用",
-    "tabGeneral": "通用",
-    "tabAdvanced": "高级",
-    "tabProxy": "代理",
-    "tabAuth": "认证",
     "unifyCodexSessionHistory": "统一 Codex 会话历史",
     "unifyCodexSessionHistoryDescription": "只影响 Codex CLI：CLI 的 resume 列表只显示当前供应商的会话，开启后官方账号与第三方 Provider 的会话出现在同一列表中；Codex 桌面版更新后已经可以显示全部会话，只用桌面版无需开启。可选择迁入已有官方会话，并在关闭时按备份恢复。",
     "codexSessionCompression": "压缩 Codex 历史会话",
@@ -421,8 +409,6 @@
     },
     "terminal": {
       "title": "首选终端",
-      "description": "选择点击终端按钮时使用的终端应用",
-      "fallbackHint": "如果选择的终端不可用，将自动使用系统默认终端",
       "options": {
         "macos": {
           "terminal": "Terminal.app",
@@ -449,37 +435,20 @@
         }
       }
     },
-    "localService": "本地服务",
-    "localServiceHint": "管理 CC Switch Web 本地 Rust 服务的启动行为",
     "launchOnStartup": "开机自启",
     "launchOnStartupDescription": "随系统启动自动运行 CC Switch Web 本地服务",
     "autoLaunchFailed": "设置开机自启失败",
-    "claudeCode": "Claude Code",
-    "claudeCodeHint": "管理 Claude Code 插件同步与首次安装确认相关行为",
     "enableClaudePluginIntegration": "应用到 Claude Code 插件",
     "enableClaudePluginIntegrationDescription": "开启后切换 Claude 供应商时会同步 VS Code Claude Code 插件",
     "skipClaudeOnboarding": "跳过 Claude Code 初次安装确认",
     "skipClaudeOnboardingDescription": "Claude Code 第一次启动时会先走一遍引导流程，要求选主题并登录 Anthropic 账号。如果你用的是第三方供应商，不需要登录官方账号，开启后就能跳过这一步直接使用。原理是在 ~/.claude.json 里写入 hasCompletedOnboarding: true；关闭时删除该字段，下次启动会重新出现引导。",
     "advanced": {
-      "configDir": {
-        "title": "配置文件目录",
-        "description": "管理 Claude、Codex 和 Gemini 的配置存储路径"
-      },
-      "proxy": {
-        "title": "本地代理",
-        "description": "控制代理服务开关、查看状态与端口信息",
-        "enableFeature": "在主页面显示本地代理开关",
-        "enableFeatureDescription": "开启后，主页面顶部将显示代理和故障转移开关",
-        "running": "运行中",
-        "stopped": "已停止"
-      },
       "modelTest": {
         "title": "模型测试配置",
         "description": "配置模型测试使用的默认模型和提示词"
       },
       "failover": {
-        "title": "自动故障转移",
-        "description": "配置故障转移队列和熔断策略"
+        "title": "自动故障转移"
       },
       "pricing": {
         "title": "成本定价",
@@ -548,10 +517,7 @@
       }
     },
     "language": "界面语言",
-    "languageHint": "切换后立即预览界面语言，保存后永久生效。",
     "theme": "外观与主题",
-    "themeHint": "选择外观模式和 Material Monet 风格主题方案，立即生效。",
-    "themeMode": "外观模式",
     "themeLight": "浅色",
     "themeDark": "深色",
     "themeSystem": "跟随系统",
@@ -806,8 +772,6 @@
     "languageOptionEnglish": "English",
     "languageOptionJapanese": "日本語",
     "appVisibility": {
-      "title": "主页面显示",
-      "description": "选择在主页面显示的应用",
       "claudeDesc": "Anthropic Claude Code CLI",
       "codexDesc": "OpenAI Codex CLI",
       "geminiDesc": "Google Gemini CLI",
@@ -826,25 +790,15 @@
       "auto": "自动",
       "autoHint": "优先使用符号链接；不可用时回退到复制。"
     },
-    "configDirectoryOverride": "配置目录覆盖（高级）",
     "configDirectoryDescription": "在 WSL 等环境使用 Claude Code 或 Codex 的时候，可手动指定为 WSL 里的配置目录，供应商数据与主环境保持一致。",
     "appConfigDir": "CC Switch 配置目录",
     "appConfigDirDescription": "自定义 CC Switch 的配置存储位置（指定到云同步文件夹即可云同步配置）",
     "browsePlaceholderApp": "例如：C:\\Users\\Administrator\\.cc-switch",
-    "claudeConfigDir": "Claude Code 配置目录",
     "claudeConfigDirDescription": "覆盖 Claude 配置目录 (settings.json)，同时会在同级存放 Claude MCP 的 claude.json。",
-    "codexConfigDir": "Codex 配置目录",
     "codexConfigDirDescription": "覆盖 Codex 配置目录。",
-    "geminiConfigDir": "Gemini 配置目录",
     "geminiConfigDirDescription": "覆盖 Gemini 配置目录 (.env)。",
-    "grokConfigDir": "Grok Build 配置目录",
     "grokConfigDirDescription": "覆盖 Grok Build 配置目录 (config.toml)。",
-    "opencodeConfigDir": "OpenCode 配置目录",
     "opencodeConfigDirDescription": "覆盖 OpenCode 配置目录 (opencode.jsonc / opencode.json)。",
-    "openclawConfigDir": "OpenClaw 配置目录",
-    "hermesConfigDir": "Hermes 配置目录",
-    "piConfigDir": "Pi 配置目录",
-    "ompConfigDir": "Oh My Pi 配置目录",
     "browsePlaceholderClaude": "例如：/home/<你的用户名>/.claude",
     "browsePlaceholderCodex": "例如：/home/<你的用户名>/.codex",
     "browsePlaceholderGemini": "例如：/home/<你的用户名>/.gemini",
@@ -892,13 +846,10 @@
     "importFailedError": "导入配置失败：{{message}}",
     "exportFailedError": "导出配置失败:",
     "restartRequired": "需要重启应用",
-    "restartRequiredMessage": "修改 CC Switch 配置目录后需要重启应用才能生效，是否立即重启？",
-    "restartNow": "立即重启",
     "restartLater": "稍后重启",
     "webServiceRestartMessage": "部分改动需要重新启动本地服务后才能完全生效。你可以稍后手动重启本地 Rust 服务。",
     "webServiceRestartAcknowledge": "我稍后手动重启",
     "webServiceRestartHint": "请手动重启本地 Rust 服务以使配置变更生效",
-    "saving": "正在保存...",
     "globalProxy": {
       "label": "全局代理",
       "hint": "代理所有请求（API、Skills 下载等）。留空表示直连。",
@@ -993,7 +944,29 @@
     },
     "codexStackClassicSubagents": "聚合模式下子 agent 用经典工具",
     "codexStackClassicSubagentsDescription": "主、子 agent 不在同一家供应商时必须打开，否则子 agent 收不到任务。",
-    "codexStackClassicSubagentsForcedV2": "Codex 的 config.toml 里打开了 [features] multi_agent_v2，它比这个开关优先，开关不会生效"
+    "codexStackClassicSubagentsForcedV2": "Codex 的 config.toml 里打开了 [features] multi_agent_v2，它比这个开关优先，开关不会生效",
+    "general": {
+      "appearance": "外观",
+      "sidebarAndHeader": "侧栏与页头",
+      "visibleApps": "在侧栏显示哪些应用",
+      "goToApps": "前往「应用」",
+      "startupAndTerminal": "启动与终端",
+      "terminalHelp": "点供应商卡片上的「打开终端」时用哪个终端。选的终端不可用时，改用系统默认终端。"
+    },
+    "sections": {
+      "general": "通用",
+      "appConfig": "应用配置",
+      "routing": "本地路由",
+      "network": "网络",
+      "data": "数据",
+      "about": "关于"
+    },
+    "appConfig": {
+      "configDir": "配置目录"
+    },
+    "data": {
+      "location": "存储位置"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2973,27 +2946,13 @@
     "panel": {
       "serviceAddress": "服务地址",
       "addressCopied": "地址已复制",
-      "currentProvider": "当前 Provider：",
-      "waitingFirstRequest": "当前 Provider：等待首次请求…",
-      "stoppedTitle": "代理服务已停止",
-      "stoppedDescription": "使用上方开关即可启动服务",
-      "openSettings": "配置代理服务",
-      "stats": {
-        "activeConnections": "活跃连接",
-        "totalRequests": "总请求数",
-        "successRate": "成功率",
-        "uptime": "运行时间"
-      }
+      "openSettings": "配置代理服务"
     },
     "settings": {
       "title": "代理服务设置",
       "description": "配置本地代理服务器的监听地址、端口和运行参数，保存后立即生效。",
       "alert": {
         "autoApply": "保存后将自动同步到正在运行的代理服务，无需手动重启。"
-      },
-      "basic": {
-        "title": "基础设置",
-        "description": "配置代理服务监听的地址与端口。"
       },
       "advanced": {
         "title": "高级参数",
@@ -3004,16 +2963,6 @@
         "description": "配置流式和非流式请求的超时时间。"
       },
       "fields": {
-        "listenAddress": {
-          "label": "监听地址",
-          "placeholder": "127.0.0.1",
-          "description": "代理服务器监听的 IP 地址（推荐 127.0.0.1）"
-        },
-        "listenPort": {
-          "label": "监听端口",
-          "placeholder": "15721",
-          "description": "代理服务器监听的端口号（1024 ~ 65535）"
-        },
         "maxRetries": {
           "label": "最大重试次数",
           "placeholder": "3",
@@ -3023,10 +2972,6 @@
           "label": "请求超时（秒）",
           "placeholder": "0（不限）或 300",
           "description": "单个请求的最大等待时间（0 表示不限制，或设置 10 ~ 600 秒）"
-        },
-        "enableLogging": {
-          "label": "启用日志记录",
-          "description": "记录所有代理请求，便于排查问题"
         },
         "streamingFirstByteTimeout": {
           "label": "流式首字超时（秒）",
@@ -3064,13 +3009,7 @@
       "invalidAddress": "地址无效，请输入有效的 IP 地址（如 127.0.0.1）或 localhost",
       "configSaved": "代理配置已保存",
       "configSaveFailed": "保存配置失败",
-      "restartRequired": "修改地址或端口后需要重启代理服务才能生效",
-      "clientHost": {
-        "label": "连接地址",
-        "hint": "客户端连路由用的地址；留空按监听地址",
-        "invalid": "请输入客户端能访问到的 IP 地址或主机名",
-        "help": "CC Switch 写进客户端配置的代理主机（含 Claude Desktop 的网关地址），只存在本机、不随同步。客户端无法通过本机回环访问时填写，例如 WSL2（NAT 模式）里的会话：把监听地址设为 0.0.0.0，在这里填 WSL 能访问到的 Windows IP（如 vEthernet (WSL) 网卡的地址），并在防火墙中放行端口。保存后会按新地址重写已接上路由的客户端。"
-      }
+      "restartRequired": "修改地址或端口后需要重启代理服务才能生效"
     },
     "switchFailed": "切换失败: {{error}}",
     "takeover": {
@@ -3085,28 +3024,9 @@
         "inactive": "将 {{appLabel}} 的 Live 配置路由到本地代理"
       }
     },
-    "failover": {
-      "proxyRequired": "需要先启动代理服务才能配置故障转移",
-      "autoSwitch": "自动故障转移",
-      "autoSwitchDescription": "开启后将立即切换到队列 P1，并在请求失败时自动切换到队列中的下一个供应商"
-    },
-    "webMode": {
-      "partialSupport": "当前 Web 模式已覆盖本地代理、Provider、代理配置、故障转移、整流器与全局出站代理等主流程能力。部分系统级能力仍受浏览器权限限制。"
-    },
     "failoverQueue": {
-      "title": "故障转移队列",
-      "description": "管理各应用的供应商故障转移顺序",
-      "info": "启用自动故障转移后，将按队列优先级选择供应商（P1 优先）。当请求失败时，系统会按队列顺序依次尝试下一个供应商。",
-      "selectProvider": "选择供应商添加到队列",
-      "noAvailableProviders": "没有可添加的供应商",
-      "empty": "故障转移队列为空。添加供应商以启用自动故障转移。",
-      "orderHint": "队列顺序与首页供应商列表顺序一致，可在首页拖拽调整顺序。",
       "dragHint": "拖拽供应商可调整故障转移顺序，序号越小优先级越高。",
       "toggleEnabled": "启用/禁用",
-      "addSuccess": "已添加到故障转移队列",
-      "addFailed": "添加失败",
-      "removeSuccess": "已从故障转移队列移除",
-      "removeFailed": "移除失败",
       "reorderSuccess": "队列顺序已更新",
       "reorderFailed": "更新顺序失败",
       "toggleFailed": "状态更新失败"
@@ -3148,8 +3068,6 @@
       "nonStreamingHint": "非流式请求的总超时时间，范围 60-1200 秒，默认 600 秒（10 分钟）"
     },
     "logging": {
-      "enabled": "日志记录已启用",
-      "disabled": "日志记录已关闭",
       "failed": "切换日志状态失败"
     },
     "server": {
@@ -3397,7 +3315,6 @@
     }
   },
   "proxyConfig": {
-    "proxyEnabled": "代理总开关",
     "appTakeover": "应用路由",
     "perAppConfig": "应用配置",
     "circuitBreaker": "熔断器配置",
@@ -3882,7 +3799,6 @@
       "cliFailed": "Codex 自带列表：Codex 命令行没能输出模型列表（详情见日志）",
       "nothingUsable": "Codex 自带列表：里面没有能用的模型，请把 Codex 升级到最新版"
     },
-    "saveRestart": "保存并重启服务",
     "rebindHint": "保存监听地址会重启服务；绑定失败时恢复原地址。",
     "officialDefaultAdvice": "建议将官方账号设为聚合默认供应商，以便处理不带聚合模型标识的请求。",
     "desktopRouteNote": "Claude Desktop 只在启动时读取配置：切换模式、路由那家或聚合模型变化后请重启 Claude Desktop。路由模式下请保持 CC Switch 运行；退出 CC Switch 时不会把 Desktop 改回直连。",
@@ -4759,5 +4675,44 @@
     "routeSettings": "路由设置",
     "routeSettingsTitle": "路由设置",
     "moreRouteSettings": "更多路由设置"
+  },
+  "routingSettings": {
+    "service": "服务",
+    "serviceName": "路由服务",
+    "serviceHelp": "路由模式和聚合模式下，请求先经过本机的路由服务再转给供应商。进入这两种模式时会自动启动。",
+    "runningFor": "运行中 · 已运行 {{uptime}}",
+    "uptimeHours": "{{hours}} 小时 {{minutes}} 分",
+    "uptimeMinutes": "{{minutes}} 分钟",
+    "stopped": "已停止",
+    "totalRequests": "总请求数",
+    "successRate": "成功率",
+    "activeConnections": "活跃连接",
+    "start": "启动",
+    "stop": "停止",
+    "stopBlocked": "还有应用在用路由服务，先让它们回到直连。",
+    "listen": "监听地址与端口",
+    "address": "监听地址",
+    "addressHint": "推荐 127.0.0.1",
+    "port": "监听端口",
+    "saveAndRestart": "保存并重启服务",
+    "clientHost": "连接地址",
+    "clientHostHint": "客户端连路由用的地址；留空按监听地址",
+    "clientHostInvalid": "请输入客户端能访问到的 IP 地址或主机名",
+    "clientHostHelp": "CC Switch 写进客户端配置的代理主机（含 Claude Desktop 的网关地址）。留空时按监听地址推导。客户端无法通过本机回环访问时填写，例如 WSL2（NAT 模式）里的 Claude Desktop 会话：把监听地址设为 0.0.0.0，在这里填 WSL 能访问到的 Windows IP（如 vEthernet (WSL) 网卡的地址），并在防火墙中放行端口。",
+    "logging": "记录请求用量",
+    "loggingHelp": "关闭后，用量统计里没有经路由的请求明细。",
+    "usingApps": "正在使用路由的应用 · {{count}}",
+    "noApps": "没有应用在用路由。在应用页的「路由」或「聚合」页签里进入。",
+    "routeDetail": "路由到 {{name}}",
+    "stackDetail": "默认 {{name}}",
+    "goTo": "前往",
+    "exitAll": "全部回到直连",
+    "exitAllTitle": "让所有应用回到直连？",
+    "exitAllMessage": "在路由和聚合模式下的应用都会写回直连配置，然后停止路由服务。路由目标、队列和聚合名单会保留。",
+    "exitAllConfirm": "全部回到直连",
+    "failoverHelp": "这里调各应用的超时、重试和熔断。队列在各应用页的「路由」页签里管理。"
+  },
+  "appPage": {
+    "configDirectory": "配置目录"
   }
 }

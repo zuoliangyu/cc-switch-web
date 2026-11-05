@@ -70,7 +70,6 @@
     "actions": "Actions",
     "deleting": "Deleting...",
     "auto": "Auto",
-    "enabled": "Enabled",
     "notSet": "Not Set",
     "collapse": "Collapse",
     "resync": "Resync now",
@@ -156,7 +155,6 @@
     "importCurrent": "Import Current Config",
     "importCurrentDescription": "Import current live config as default provider",
     "currentlyUsing": "Currently Using",
-    "inUse": "In Use",
     "editProvider": "Edit Provider",
     "editProviderHint": "Configuration will be applied to the current provider immediately after update.",
     "deleteProvider": "Delete Provider",
@@ -337,11 +335,6 @@
     "deleteProviderMessage": "Are you sure you want to delete provider \"{{name}}\"? This action cannot be undone.",
     "removeProvider": "Remove Provider",
     "removeProviderMessage": "Are you sure you want to remove provider \"{{name}}\" from the configuration?\n\nAfter removal, this provider will no longer be active, but the configuration data will be retained in CC Switch. You can re-add it at any time.",
-    "proxy": {
-      "title": "Enable Local Proxy",
-      "message": "Local proxy is an advanced feature. Please make sure you understand how it works before enabling.\n\nWe recommend consulting the relevant documentation or your provider for proper configuration.",
-      "confirm": "I understand, enable"
-    },
     "failover": {
       "title": "Enable Failover",
       "message": "Failover is an advanced feature. Please make sure you understand how it works before enabling.\n\nWe recommend configuring provider priorities in the failover queue first.",
@@ -384,11 +377,6 @@
   },
   "settings": {
     "title": "Settings",
-    "general": "General",
-    "tabGeneral": "General",
-    "tabAdvanced": "Advanced",
-    "tabProxy": "Proxy",
-    "tabAuth": "Auth",
     "unifyCodexSessionHistory": "Unify Codex session history",
     "unifyCodexSessionHistoryDescription": "Affects the Codex CLI only: its resume list shows only the current provider's sessions; when enabled, official-account and third-party Provider sessions appear in one list. The Codex desktop app can show all sessions since a recent update, so desktop-only users don't need this. Existing official sessions can optionally be migrated, with backup-based restore when turning it off.",
     "codexSessionCompression": "Compress old Codex sessions",
@@ -421,8 +409,6 @@
     },
     "terminal": {
       "title": "Preferred Terminal",
-      "description": "Choose which terminal app to use when clicking the terminal button",
-      "fallbackHint": "If the selected terminal is unavailable, the system default will be used",
       "options": {
         "macos": {
           "terminal": "Terminal.app",
@@ -449,37 +435,20 @@
         }
       }
     },
-    "localService": "Local Service",
-    "localServiceHint": "Manage how the CC Switch Web local Rust service starts",
     "launchOnStartup": "Launch on Startup",
     "launchOnStartupDescription": "Automatically run the CC Switch Web local service when the system starts",
     "autoLaunchFailed": "Failed to set auto-launch",
-    "claudeCode": "Claude Code",
-    "claudeCodeHint": "Manage Claude Code extension sync and local first-run confirmation behavior",
     "enableClaudePluginIntegration": "Apply to Claude Code extension",
     "enableClaudePluginIntegrationDescription": "When enabled, switching Claude providers also syncs the VS Code Claude Code extension",
     "skipClaudeOnboarding": "Skip Claude Code first-run confirmation",
     "skipClaudeOnboardingDescription": "On first launch, Claude Code runs an onboarding flow that asks you to pick a theme and sign in to an Anthropic account. If you use a third-party provider you don't need that sign-in, so turning this on skips straight past it. It works by writing hasCompletedOnboarding: true to ~/.claude.json; turning it off removes that field, and the onboarding appears again on the next launch.",
     "advanced": {
-      "configDir": {
-        "title": "Configuration Directory",
-        "description": "Manage storage paths for Claude, Codex and Gemini configurations"
-      },
-      "proxy": {
-        "title": "Local Proxy",
-        "description": "Control proxy service toggle, view status and port info",
-        "enableFeature": "Show Proxy Toggle on Main Page",
-        "enableFeatureDescription": "When enabled, the proxy and failover toggles will appear at the top of the main page",
-        "running": "Running",
-        "stopped": "Stopped"
-      },
       "modelTest": {
         "title": "Model Test Config",
         "description": "Configure default models and prompts for model testing"
       },
       "failover": {
-        "title": "Auto Failover",
-        "description": "Configure failover queue and circuit breaker strategy"
+        "title": "Auto Failover"
       },
       "pricing": {
         "title": "Cost Pricing",
@@ -548,10 +517,7 @@
       }
     },
     "language": "Language",
-    "languageHint": "Preview interface language immediately after switching, takes effect permanently after saving.",
     "theme": "Appearance & Theme",
-    "themeHint": "Choose the appearance mode and a Material Monet style palette, takes effect immediately.",
-    "themeMode": "Appearance Mode",
     "themeLight": "Light",
     "themeDark": "Dark",
     "themeSystem": "System",
@@ -806,8 +772,6 @@
     "languageOptionEnglish": "English",
     "languageOptionJapanese": "日本語",
     "appVisibility": {
-      "title": "Homepage Display",
-      "description": "Choose which apps to show on the homepage",
       "claudeDesc": "Anthropic Claude Code CLI",
       "codexDesc": "OpenAI Codex CLI",
       "geminiDesc": "Google Gemini CLI",
@@ -826,25 +790,15 @@
       "auto": "Auto",
       "autoHint": "Prefer symlinks; fall back to copying when unavailable."
     },
-    "configDirectoryOverride": "Configuration Directory Override (Advanced)",
     "configDirectoryDescription": "When using Claude Code or Codex in environments like WSL, you can manually specify the configuration directory to the one in WSL to keep provider data consistent with the main environment.",
     "appConfigDir": "CC Switch Configuration Directory",
     "appConfigDirDescription": "Customize the storage location for CC Switch configuration (point to cloud sync folder to enable config sync)",
     "browsePlaceholderApp": "e.g., C:\\Users\\Administrator\\.cc-switch",
-    "claudeConfigDir": "Claude Code Configuration Directory",
     "claudeConfigDirDescription": "Override Claude configuration directory (settings.json) and keep claude.json (MCP) alongside it.",
-    "codexConfigDir": "Codex Configuration Directory",
     "codexConfigDirDescription": "Override Codex configuration directory.",
-    "geminiConfigDir": "Gemini Configuration Directory",
     "geminiConfigDirDescription": "Override Gemini configuration directory (.env).",
-    "grokConfigDir": "Grok Build Configuration Directory",
     "grokConfigDirDescription": "Override Grok Build configuration directory (config.toml).",
-    "opencodeConfigDir": "OpenCode Configuration Directory",
     "opencodeConfigDirDescription": "Override OpenCode configuration directory (opencode.jsonc / opencode.json).",
-    "openclawConfigDir": "OpenClaw Configuration Directory",
-    "hermesConfigDir": "Hermes Configuration Directory",
-    "piConfigDir": "Pi Configuration Directory",
-    "ompConfigDir": "Oh My Pi Configuration Directory",
     "browsePlaceholderClaude": "e.g., /home/<your-username>/.claude",
     "browsePlaceholderCodex": "e.g., /home/<your-username>/.codex",
     "browsePlaceholderGemini": "e.g., /home/<your-username>/.gemini",
@@ -892,13 +846,10 @@
     "importFailedError": "Import config failed: {{message}}",
     "exportFailedError": "Export config failed:",
     "restartRequired": "Restart Required",
-    "restartRequiredMessage": "Modifying the CC Switch configuration directory requires restarting the application to take effect. Restart now?",
-    "restartNow": "Restart Now",
     "restartLater": "Restart Later",
     "webServiceRestartMessage": "Some changes require the local service to be restarted before they fully take effect. You can restart the local Rust service manually later.",
     "webServiceRestartAcknowledge": "I'll restart it manually later",
     "webServiceRestartHint": "Please restart the local Rust service manually for the changes to take effect",
-    "saving": "Saving...",
     "globalProxy": {
       "label": "Global Proxy",
       "hint": "Proxy all requests (API, Skills download, etc.). Leave empty for direct connection.",
@@ -993,7 +944,29 @@
     },
     "codexStackClassicSubagents": "Classic sub-agent tools in aggregation",
     "codexStackClassicSubagentsDescription": "Must be on when the main agent and a sub-agent use different providers, or the sub-agent cannot receive its task.",
-    "codexStackClassicSubagentsForcedV2": "Codex config.toml turns on [features] multi_agent_v2, which takes precedence over this setting, so it has no effect."
+    "codexStackClassicSubagentsForcedV2": "Codex config.toml turns on [features] multi_agent_v2, which takes precedence over this setting, so it has no effect.",
+    "general": {
+      "appearance": "Appearance",
+      "sidebarAndHeader": "Sidebar and header",
+      "visibleApps": "Apps shown in the sidebar",
+      "goToApps": "Open Apps",
+      "startupAndTerminal": "Startup & terminal",
+      "terminalHelp": "The terminal used by “Open terminal” on provider cards. If it isn't available, the system default terminal is used."
+    },
+    "sections": {
+      "general": "General",
+      "appConfig": "App config",
+      "routing": "Local routing",
+      "network": "Network",
+      "data": "Data",
+      "about": "About"
+    },
+    "appConfig": {
+      "configDir": "Config directory"
+    },
+    "data": {
+      "location": "Location"
+    }
   },
   "apps": {
     "claude": "Claude",
@@ -2973,27 +2946,13 @@
     "panel": {
       "serviceAddress": "Service Address",
       "addressCopied": "Address copied",
-      "currentProvider": "Current Provider:",
-      "waitingFirstRequest": "Current Provider: Waiting for first request...",
-      "stoppedTitle": "Proxy Service Stopped",
-      "stoppedDescription": "Use the toggle above to start the service",
-      "openSettings": "Configure Proxy Service",
-      "stats": {
-        "activeConnections": "Active Connections",
-        "totalRequests": "Total Requests",
-        "successRate": "Success Rate",
-        "uptime": "Uptime"
-      }
+      "openSettings": "Configure Proxy Service"
     },
     "settings": {
       "title": "Proxy Service Settings",
       "description": "Configure local proxy server listening address, port and runtime parameters. Changes take effect immediately after saving.",
       "alert": {
         "autoApply": "Changes will be automatically synced to the running proxy service without manual restart."
-      },
-      "basic": {
-        "title": "Basic Settings",
-        "description": "Configure proxy service listening address and port."
       },
       "advanced": {
         "title": "Advanced Parameters",
@@ -3004,16 +2963,6 @@
         "description": "Configure timeout for streaming and non-streaming requests."
       },
       "fields": {
-        "listenAddress": {
-          "label": "Listen Address",
-          "placeholder": "127.0.0.1",
-          "description": "IP address the proxy server listens on (recommended: 127.0.0.1)"
-        },
-        "listenPort": {
-          "label": "Listen Port",
-          "placeholder": "15721",
-          "description": "Port number the proxy server listens on (1024 ~ 65535)"
-        },
         "maxRetries": {
           "label": "Max Retries",
           "placeholder": "3",
@@ -3023,10 +2972,6 @@
           "label": "Request Timeout (sec)",
           "placeholder": "0 (unlimited) or 300",
           "description": "Maximum wait time for a single request (0 = unlimited, or 10 ~ 600 seconds)"
-        },
-        "enableLogging": {
-          "label": "Enable Logging",
-          "description": "Log all proxy requests for troubleshooting"
         },
         "streamingFirstByteTimeout": {
           "label": "Streaming First Byte Timeout (sec)",
@@ -3064,13 +3009,7 @@
       "invalidAddress": "Invalid address, please enter a valid IP address (e.g. 127.0.0.1) or localhost",
       "configSaved": "Proxy configuration saved",
       "configSaveFailed": "Failed to save configuration",
-      "restartRequired": "Restart proxy service for address or port changes to take effect",
-      "clientHost": {
-        "label": "Connection address",
-        "hint": "Where clients connect. Empty: the listen address",
-        "invalid": "Enter an IP address or hostname that clients can reach",
-        "help": "The host CC Switch writes into client configs (including Claude Desktop's gateway URL). Stored on this machine only and never synced. Set it when clients can't reach this machine through loopback, e.g. sessions inside WSL2 (NAT mode): set the listen address to 0.0.0.0, enter a Windows IP that WSL can reach (such as the vEthernet (WSL) adapter address), and allow the port through the firewall. Saving rewrites routed clients with the new address."
-      }
+      "restartRequired": "Restart proxy service for address or port changes to take effect"
     },
     "switchFailed": "Switch failed: {{error}}",
     "takeover": {
@@ -3085,28 +3024,9 @@
         "inactive": "Route {{appLabel}} live config through the local proxy"
       }
     },
-    "failover": {
-      "proxyRequired": "Proxy service must be started to configure failover",
-      "autoSwitch": "Auto Failover",
-      "autoSwitchDescription": "When enabled, switches to queue P1 immediately and automatically tries the next provider in the queue on failures"
-    },
-    "webMode": {
-      "partialSupport": "The Web runtime now covers the main local-service workflow, including local proxy, providers, proxy configuration, failover, rectifier, and global outbound proxy. Some system-level capabilities are still limited by browser permissions."
-    },
     "failoverQueue": {
-      "title": "Failover Queue",
-      "description": "Manage failover order for each app's providers",
-      "info": "When auto failover is enabled, requests follow the queue priority order (P1 first). On failures, the system will try the next provider in the queue.",
-      "selectProvider": "Select a provider to add to queue",
-      "noAvailableProviders": "No providers available to add",
-      "empty": "Failover queue is empty. Add providers to enable automatic failover.",
-      "orderHint": "Queue order matches the provider list order on the Home page. Reorder providers on the Home page to change priority.",
       "dragHint": "Drag providers to adjust failover order. Lower numbers have higher priority.",
       "toggleEnabled": "Enable/Disable",
-      "addSuccess": "Added to failover queue",
-      "addFailed": "Failed to add",
-      "removeSuccess": "Removed from failover queue",
-      "removeFailed": "Failed to remove",
       "reorderSuccess": "Queue order updated",
       "reorderFailed": "Failed to update order",
       "toggleFailed": "Failed to update status"
@@ -3148,8 +3068,6 @@
       "nonStreamingHint": "Total timeout for non-streaming requests, range 60-1200s, default 600s (10 min)"
     },
     "logging": {
-      "enabled": "Logging enabled",
-      "disabled": "Logging disabled",
       "failed": "Failed to toggle logging"
     },
     "server": {
@@ -3397,7 +3315,6 @@
     }
   },
   "proxyConfig": {
-    "proxyEnabled": "Proxy Enabled",
     "appTakeover": "App Routing",
     "perAppConfig": "Per-App Config",
     "circuitBreaker": "Circuit Breaker",
@@ -3882,7 +3799,6 @@
       "cliFailed": "Codex built-in list: the Codex CLI didn't output a model list (see the log for details)",
       "nothingUsable": "Codex built-in list: it has no usable models. Update Codex to the latest version"
     },
-    "saveRestart": "Save and restart service",
     "rebindHint": "Saving the listen address restarts the service. If binding fails, the previous address is restored.",
     "officialDefaultAdvice": "Consider using an official account as the aggregation default for requests without an aggregated model ID.",
     "desktopRouteNote": "Claude Desktop reads its configuration only at launch: restart Claude Desktop after switching modes or changing the route provider or aggregated models. Keep CC Switch running in routing mode; quitting CC Switch does not switch Desktop back to direct.",
@@ -4759,5 +4675,44 @@
     "routeSettings": "Routing settings",
     "routeSettingsTitle": "Routing settings",
     "moreRouteSettings": "More routing settings"
+  },
+  "routingSettings": {
+    "service": "Service",
+    "serviceName": "Routing service",
+    "serviceHelp": "In routing and Aggregation modes, requests go through the routing service on this machine before reaching the provider. It starts automatically when an app enters either mode.",
+    "runningFor": "Running · up {{uptime}}",
+    "uptimeHours": "{{hours}} h {{minutes}} min",
+    "uptimeMinutes": "{{minutes}} min",
+    "stopped": "Stopped",
+    "totalRequests": "Requests",
+    "successRate": "Success rate",
+    "activeConnections": "Active connections",
+    "start": "Start",
+    "stop": "Stop",
+    "stopBlocked": "Some apps still use the routing service. Switch them back to direct first.",
+    "listen": "Listen address and port",
+    "address": "Listen address",
+    "addressHint": "Recommended: 127.0.0.1",
+    "port": "Listen port",
+    "saveAndRestart": "Save and restart service",
+    "clientHost": "Connection address",
+    "clientHostHint": "Where clients connect. Empty: the listen address",
+    "clientHostInvalid": "Enter an IP address or hostname that clients can reach",
+    "clientHostHelp": "The host CC Switch writes into client configs (including Claude Desktop's gateway URL). Leave it empty to derive it from the listen address. Set it when clients can't reach this machine through loopback, e.g. Claude Desktop sessions inside WSL2 (NAT mode): set the listen address to 0.0.0.0 and enter a Windows IP that WSL can reach (such as the vEthernet (WSL) adapter address), and allow the port through the firewall.",
+    "logging": "Record request usage",
+    "loggingHelp": "When off, Usage has no per-request details for routed requests.",
+    "usingApps": "Apps using routing · {{count}}",
+    "noApps": "No app is using routing. Enter it from the Routing or Aggregation tab on an app's page.",
+    "routeDetail": "Routing to {{name}}",
+    "stackDetail": "Default {{name}}",
+    "goTo": "Open",
+    "exitAll": "Switch all back to direct",
+    "exitAllTitle": "Switch every app back to direct?",
+    "exitAllMessage": "Apps in routing or Aggregation mode get their direct config written back, then the routing service stops. Route targets, queues and aggregation lists are kept.",
+    "exitAllConfirm": "Switch all back to direct",
+    "failoverHelp": "Tune each app's timeouts, retries and circuit breaker here. Queues are managed on each app's Routing tab."
+  },
+  "appPage": {
+    "configDirectory": "Config directory"
   }
 }

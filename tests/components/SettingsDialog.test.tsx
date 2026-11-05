@@ -1,10 +1,9 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom";
-import { createContext, useContext, type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsPage } from "@/components/settings/SettingsPage";
-import { settingsApi } from "@/lib/api";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -23,20 +22,12 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: tMock }),
 }));
 
-vi.mock("@/hooks/useProxyStatus", () => ({
-  useProxyStatus: () => ({
-    status: null,
-    isLoading: false,
-    isRunning: false,
-    isTakeoverActive: false,
-    startWithTakeover: vi.fn(),
-    stopWithRestore: vi.fn(),
-    switchProxyProvider: vi.fn(),
-    checkRunning: vi.fn(),
-    checkTakeoverActive: vi.fn(),
-    isStarting: false,
-    isStopping: false,
-    isPending: false,
+vi.mock("@/components/theme-provider", () => ({
+  useTheme: () => ({
+    theme: "system",
+    setTheme: vi.fn(),
+    scheme: "default",
+    setScheme: vi.fn(),
   }),
 }));
 
@@ -45,6 +36,7 @@ interface SettingsMock {
   isLoading: boolean;
   isSaving: boolean;
   appConfigDir?: string;
+  initialAppConfigDir?: string;
   resolvedDirs: Record<string, string>;
   requiresRestart: boolean;
   updateSettings: ReturnType<typeof vi.fn>;
@@ -60,17 +52,24 @@ interface SettingsMock {
   acknowledgeRestart: ReturnType<typeof vi.fn>;
 }
 
+const savedSettings = {
+  showProviderSearch: true,
+  launchOnStartup: false,
+  enableClaudePluginIntegration: false,
+  language: "zh",
+  claudeConfigDir: "/claude",
+  codexConfigDir: "/codex",
+};
+
 const createSettingsMock = (overrides: Partial<SettingsMock> = {}) => {
   const base: SettingsMock = {
-    settings: {
-      language: "zh",
-      claudeConfigDir: "/claude",
-      codexConfigDir: "/codex",
-    },
+    settings: { ...savedSettings },
     isLoading: false,
     isSaving: false,
     appConfigDir: "/app-config",
+    initialAppConfigDir: "/app-config",
     resolvedDirs: {
+      appConfig: "/app-config",
       claude: "/claude",
       codex: "/codex",
     },
@@ -91,42 +90,23 @@ const createSettingsMock = (overrides: Partial<SettingsMock> = {}) => {
   return { ...base, ...overrides };
 };
 
-interface ImportExportMock {
-  selectedFile: string;
-  status: string;
-  errorMessage: string | null;
-  backupId: string | null;
-  isImporting: boolean;
-  selectImportUpload: ReturnType<typeof vi.fn>;
-  selectImportFile: ReturnType<typeof vi.fn>;
-  importConfig: ReturnType<typeof vi.fn>;
-  exportConfig: ReturnType<typeof vi.fn>;
-  clearSelection: ReturnType<typeof vi.fn>;
-  resetStatus: ReturnType<typeof vi.fn>;
-}
-
-const createImportExportMock = (overrides: Partial<ImportExportMock> = {}) => {
-  const base: ImportExportMock = {
-    selectedFile: "",
-    status: "idle",
-    errorMessage: null,
-    backupId: null,
-    isImporting: false,
-    selectImportUpload: vi.fn(),
-    selectImportFile: vi.fn(),
-    importConfig: vi.fn(),
-    exportConfig: vi.fn(),
-    clearSelection: vi.fn(),
-    resetStatus: vi.fn(),
-  };
-
-  return { ...base, ...overrides };
-};
+const createImportExportMock = () => ({
+  selectedFile: "/tmp/config.sql",
+  status: "idle",
+  errorMessage: null,
+  backupId: null,
+  isImporting: false,
+  selectImportUpload: vi.fn(),
+  selectImportFile: vi.fn(),
+  importConfig: vi.fn(),
+  exportConfig: vi.fn(),
+  clearSelection: vi.fn(),
+  resetStatus: vi.fn(),
+});
 
 let settingsMock = createSettingsMock();
 let importExportMock = createImportExportMock();
 const useImportExportSpy = vi.fn();
-let lastUseImportExportOptions: Record<string, unknown> | undefined;
 
 vi.mock("@/hooks/useSettings", () => ({
   useSettings: () => settingsMock,
@@ -137,12 +117,9 @@ vi.mock("@/hooks/useImportExport", () => ({
     useImportExportSpy(options),
 }));
 
-const TabsContext = createContext<{
-  value: string;
-  onValueChange?: (value: string) => void;
-}>({
-  value: "general",
-});
+vi.mock("@/lib/query", () => ({
+  useSettingsQuery: () => ({ data: savedSettings }),
+}));
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: any) =>
@@ -154,83 +131,29 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogDescription: ({ children }: any) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/ui/tabs", () => {
-  return {
-    Tabs: ({ value, onValueChange, children }: any) => (
-      <TabsContext.Provider value={{ value, onValueChange }}>
-        <div data-testid="tabs">{children}</div>
-      </TabsContext.Provider>
-    ),
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ value, children }: any) => {
-      const ctx = useContext(TabsContext);
-      return (
-        <button type="button" onClick={() => ctx.onValueChange?.(value)}>
-          {children}
-        </button>
-      );
-    },
-    TabsContent: ({ value, children }: any) => {
-      const ctx = useContext(TabsContext);
-      if (ctx.value !== value) return null;
-      return <div data-testid={`tab-${value}`}>{children}</div>;
-    },
-  };
-});
-
-vi.mock("@/components/settings/LanguageSettings", () => ({
-  LanguageSettings: ({ value, onChange }: any) => (
-    <div>
-      <span>language:{value}</span>
-      <button onClick={() => onChange("en")}>change-language</button>
-    </div>
-  ),
-}));
-
-vi.mock("@/components/settings/ThemeSettings", () => ({
-  ThemeSettings: () => <div>theme-settings</div>,
-}));
-
-vi.mock("@/components/settings/DirectorySettings", () => ({
-  DirectorySettings: ({
-    onBrowseDirectory,
-    onResetDirectory,
-    onDirectoryChange,
-    onBrowseAppConfig,
-    onResetAppConfig,
-    onAppConfigChange,
-  }: any) => (
-    <div>
-      <button onClick={() => onBrowseDirectory("claude")}>
-        browse-directory
-      </button>
-      <button onClick={() => onResetDirectory("claude")}>
-        reset-directory
-      </button>
-      <button onClick={() => onDirectoryChange("codex", "/new/path")}>
-        change-directory
-      </button>
-      <button onClick={() => onBrowseAppConfig()}>browse-app-config</button>
-      <button onClick={() => onResetAppConfig()}>reset-app-config</button>
-      <button onClick={() => onAppConfigChange("/app/new")}>
-        change-app-config
-      </button>
-    </div>
-  ),
-}));
-
 vi.mock("@/components/settings/AboutSection", () => ({
-  AboutSection: () => <div>about</div>,
+  AboutSection: () => <div>about-section</div>,
 }));
-
-vi.mock("@/components/settings/AuthCenterPanel", () => ({
-  AuthCenterPanel: () => <div>auth-center</div>,
-}));
-
 vi.mock("@/components/settings/WebdavSyncSection", () => ({
-  WebdavSyncSection: ({ config }: any) => (
-    <div>webdav-sync-section:{config?.baseUrl ?? "none"}</div>
-  ),
+  WebdavSyncSection: () => <div>webdav-sync-section</div>,
+}));
+vi.mock("@/components/settings/BackupListSection", () => ({
+  BackupListSection: () => <div>backup-list-section</div>,
+}));
+vi.mock("@/components/settings/LogConfigPanel", () => ({
+  LogConfigPanel: () => <div>log-config-panel</div>,
+}));
+vi.mock("@/components/settings/sections/RoutingSection", () => ({
+  RoutingSection: () => <div>routing-section</div>,
+}));
+vi.mock("@/components/usage/ModelTestConfigPanel", () => ({
+  ModelTestConfigPanel: () => <div>model-test-config-panel</div>,
+}));
+vi.mock("@/components/settings/GlobalProxySettings", () => ({
+  GlobalProxySettings: () => <div>global-proxy-settings</div>,
+}));
+vi.mock("@/components/settings/CodexAuthSettings", () => ({
+  CodexAuthSettings: () => <div>codex-auth-settings</div>,
 }));
 
 const renderSettingsPage = (
@@ -241,106 +164,139 @@ const renderSettingsPage = (
       queries: { retry: false },
     },
   });
-  return render(
+  const allProps = {
+    section: "general" as const,
+    onSectionChange: vi.fn(),
+    onOpenApps: vi.fn(),
+    onOpenApp: vi.fn(),
+    ...props,
+  };
+  const view = render(
     <QueryClientProvider client={client}>
-      <SettingsPage open={true} onOpenChange={vi.fn()} {...props} />
+      <SettingsPage {...allProps} />
     </QueryClientProvider>,
   );
+  return {
+    ...view,
+    props: allProps,
+    rerenderWith: (next: Partial<ComponentProps<typeof SettingsPage>>) =>
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <SettingsPage {...allProps} {...next} />
+        </QueryClientProvider>,
+      ),
+  };
 };
 
-describe("SettingsPage Component", () => {
+describe("SettingsPage", () => {
   beforeEach(() => {
     tMock.mockImplementation((key: string) => key);
     settingsMock = createSettingsMock();
     importExportMock = createImportExportMock();
     useImportExportSpy.mockReset();
-    useImportExportSpy.mockImplementation(
-      (options?: Record<string, unknown>) => {
-        lastUseImportExportOptions = options;
-        return importExportMock;
-      },
-    );
-    lastUseImportExportOptions = undefined;
+    useImportExportSpy.mockImplementation(() => importExportMock);
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
     toastInfoMock.mockReset();
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  it("should not render form content when loading", () => {
+  it("shows a spinner instead of the form while loading", () => {
     settingsMock = createSettingsMock({ settings: null, isLoading: true });
 
     renderSettingsPage();
 
-    expect(screen.queryByText("language:zh")).not.toBeInTheDocument();
-    // 加载状态下显示 spinner 而不是表单内容
+    expect(
+      screen.queryByText("settings.general.appearance"),
+    ).not.toBeInTheDocument();
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
-  it("should reset import/export status when dialog transitions to open", () => {
-    const client = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-      },
-    });
-    const { rerender } = render(
-      <QueryClientProvider client={client}>
-        <SettingsPage open={false} onOpenChange={vi.fn()} />
-      </QueryClientProvider>,
+  // Web 的设置目录在页内左栏（上游放在侧栏）：当前分组高亮，点别的分组交给上层切换
+  it("marks the current section in the directory and switches on click", () => {
+    const { props } = renderSettingsPage({ section: "network" });
+
+    expect(
+      screen.getByRole("button", { name: /settings\.sections\.network/ }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("global-proxy-settings")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings\.sections\.routing/ }),
     );
-
-    importExportMock.resetStatus.mockClear();
-
-    rerender(
-      <QueryClientProvider client={client}>
-        <SettingsPage open={true} onOpenChange={vi.fn()} />
-      </QueryClientProvider>,
-    );
-
-    expect(importExportMock.resetStatus).toHaveBeenCalledTimes(1);
+    expect(props.onSectionChange).toHaveBeenCalledWith("routing");
   });
 
-  it("should render general and advanced tabs and trigger child callbacks", () => {
-    importExportMock = createImportExportMock({
-      selectedFile: "/tmp/config.json",
+  it("saves general switches immediately and links to the Apps page", async () => {
+    const { props } = renderSettingsPage();
+
+    fireEvent.click(
+      screen.getByRole("switch", {
+        name: "settings.appVisibility.showProviderSearch",
+      }),
+    );
+    expect(settingsMock.updateSettings).toHaveBeenCalledWith({
+      showProviderSearch: false,
+    });
+    await waitFor(() =>
+      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
+        showProviderSearch: false,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: "settings.launchOnStartup" }),
+    );
+    await waitFor(() =>
+      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
+        launchOnStartup: true,
+      }),
+    );
+    expect(screen.getByText("model-test-config-panel")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings\.general\.goToApps/ }),
+    );
+    expect(props.onOpenApps).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls a failed autosave back and reports it", async () => {
+    settingsMock = createSettingsMock({
+      autoSaveSettings: vi.fn().mockRejectedValue(new Error("disk full")),
     });
 
     renderSettingsPage();
-
-    expect(screen.getByText("language:zh")).toBeInTheDocument();
-    expect(screen.getByText("theme-settings")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("change-language"));
-    expect(settingsMock.updateSettings).toHaveBeenCalledWith({
-      language: "en",
-    });
-
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.cloudSync.title"));
-    expect(screen.getByText("webdav-sync-section:none")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("settings.advanced.data.title"));
-
-    // 有文件时，点击导入按钮执行 importConfig
     fireEvent.click(
-      screen.getByRole("button", { name: /settings\.import/ }),
+      screen.getByRole("switch", {
+        name: "settings.appVisibility.showProviderSearch",
+      }),
     );
-    expect(importExportMock.importConfig).toHaveBeenCalled();
 
+    await waitFor(() =>
+      expect(settingsMock.updateSettings).toHaveBeenLastCalledWith({
+        showProviderSearch: true,
+      }),
+    );
+    expect(toastErrorMock).toHaveBeenCalledWith("settings.saveFailedGeneric");
+  });
+
+  it("wires import, export and sync into the data section", () => {
+    renderSettingsPage({ section: "data" });
+
+    fireEvent.click(screen.getByRole("button", { name: /settings\.import/ }));
+    expect(importExportMock.importConfig).toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "settings.exportConfig" }),
     );
     expect(importExportMock.exportConfig).toHaveBeenCalled();
-
-    // 清除选择按钮
     fireEvent.click(screen.getByRole("button", { name: "common.clear" }));
     expect(importExportMock.clearSelection).toHaveBeenCalled();
+
+    expect(screen.getByText("webdav-sync-section")).toBeInTheDocument();
+    expect(screen.getByText("backup-list-section")).toBeInTheDocument();
+    expect(screen.getByText("log-config-panel")).toBeInTheDocument();
   });
 
-  it("should pass onImportSuccess callback to useImportExport hook", async () => {
+  it("passes onImportSuccess through to the import hook", () => {
     const onImportSuccess = vi.fn();
 
     renderSettingsPage({ onImportSuccess });
@@ -348,104 +304,50 @@ describe("SettingsPage Component", () => {
     expect(useImportExportSpy).toHaveBeenCalledWith(
       expect.objectContaining({ onImportSuccess }),
     );
-    expect(lastUseImportExportOptions?.onImportSuccess).toBe(onImportSuccess);
-
-    if (typeof lastUseImportExportOptions?.onImportSuccess === "function") {
-      await lastUseImportExportOptions.onImportSuccess();
-    }
-    expect(onImportSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it("should autosave the unified Codex session history toggle", async () => {
-    renderSettingsPage();
+  it("drives per-app directories and saves only after a change", async () => {
+    const { rerenderWith } = renderSettingsPage({ section: "appConfig" });
 
-    fireEvent.click(screen.getByText("settings.tabAuth"));
+    expect(screen.getByText("codex-auth-settings")).toBeInTheDocument();
+    // 没改过目录：没有保存按钮
+    expect(
+      screen.queryByRole("button", { name: "common.save" }),
+    ).not.toBeInTheDocument();
+
+    // Web 的目录在服务所在电脑上，浏览器选不了文件夹：只有手填与恢复默认
+    expect(
+      screen.queryByRole("button", { name: "settings.browseDirectory" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("switch", {
-        name: "settings.unifyCodexSessionHistory",
-      }),
+      screen.getAllByRole("button", { name: "settings.resetDefault" })[1],
     );
-    fireEvent.click(screen.getByText("confirm.unifyCodexHistory.confirm"));
+    expect(settingsMock.resetDirectory).toHaveBeenCalledWith("codex");
 
-    await waitFor(() => {
-      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
-        unifyCodexSessionHistory: true,
-        unifyCodexMigrateExisting: false,
-      });
-      expect(settingsMock.updateSettings).toHaveBeenCalledWith({
-        unifyCodexSessionHistory: true,
-        unifyCodexMigrateExisting: false,
-      });
-    });
-  });
-
-  it("should restore migrated Codex history only after disabling succeeds", async () => {
     settingsMock = createSettingsMock({
-      settings: {
-        language: "zh",
-        unifyCodexSessionHistory: true,
-        unifyCodexMigrateExisting: true,
-      },
+      settings: { ...savedSettings, codexConfigDir: "/new/codex" },
     });
-    vi.spyOn(settingsApi, "hasCodexUnifyHistoryBackup").mockResolvedValue(true);
-    const restoreSpy = vi
-      .spyOn(settingsApi, "restoreCodexUnifiedHistory")
-      .mockResolvedValue({ restoredJsonlFiles: 2, restoredStateRows: 3 });
-
-    renderSettingsPage();
-    fireEvent.click(screen.getByText("settings.tabAuth"));
-    fireEvent.click(
-      screen.getByRole("switch", {
-        name: "settings.unifyCodexSessionHistory",
-      }),
+    rerenderWith({ section: "appConfig" });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+    await waitFor(() =>
+      expect(settingsMock.saveSettings).toHaveBeenCalledTimes(1),
     );
-    fireEvent.click(
-      await screen.findByText("confirm.unifyCodexHistoryOff.confirm"),
-    );
-
-    await waitFor(() => {
-      expect(settingsMock.autoSaveSettings).toHaveBeenCalledWith({
-        unifyCodexSessionHistory: false,
-        unifyCodexMigrateExisting: false,
-      });
-      expect(restoreSpy).toHaveBeenCalledTimes(1);
-      expect(toastSuccessMock).toHaveBeenCalledWith(
-        "settings.unifyCodexHistoryRestoreCompleted",
-      );
-    });
+    expect(settingsMock.acknowledgeRestart).toHaveBeenCalledTimes(1);
   });
 
-  it("should call saveSettings and close dialog when clicking save", async () => {
-    const onOpenChange = vi.fn();
-    importExportMock = createImportExportMock();
-
-    renderSettingsPage({ onOpenChange });
-
-    // 保存按钮在 advanced tab 中
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByRole("button", { name: /common\.save/ }));
-
-    await waitFor(() => {
-      expect(settingsMock.saveSettings).toHaveBeenCalledTimes(1);
-      expect(importExportMock.clearSelection).toHaveBeenCalledTimes(1);
-      expect(importExportMock.resetStatus).toHaveBeenCalledTimes(2);
-      expect(settingsMock.acknowledgeRestart).toHaveBeenCalledTimes(1);
-      expect(onOpenChange).toHaveBeenCalledWith(false);
-    });
-  });
-
-  it("should show restart prompt and allow immediate restart after save", async () => {
+  it("asks to restart after moving the data directory", async () => {
     settingsMock = createSettingsMock({
-      requiresRestart: true,
+      appConfigDir: "/moved",
       saveSettings: vi.fn().mockResolvedValue({ requiresRestart: true }),
     });
 
-    renderSettingsPage();
+    renderSettingsPage({ section: "data" });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
     expect(
       await screen.findByText("settings.restartRequired"),
     ).toBeInTheDocument();
-
+    // Web 不能替用户重启本地服务：只提示手动重启
     fireEvent.click(screen.getByText("settings.webServiceRestartAcknowledge"));
 
     await waitFor(() => {
@@ -454,54 +356,150 @@ describe("SettingsPage Component", () => {
         expect.objectContaining({ closeButton: true }),
       );
     });
+    expect(settingsMock.acknowledgeRestart).toHaveBeenCalledTimes(1);
   });
 
-  it("should allow postponing restart and close dialog without restarting", async () => {
-    const onOpenChange = vi.fn();
+  it("lets the restart wait", async () => {
     settingsMock = createSettingsMock({ requiresRestart: true });
 
-    renderSettingsPage({ onOpenChange });
+    renderSettingsPage();
 
     expect(
       await screen.findByText("settings.restartRequired"),
     ).toBeInTheDocument();
-
     fireEvent.click(screen.getByText("settings.restartLater"));
 
-    await waitFor(() => {
-      expect(onOpenChange).toHaveBeenCalledWith(false);
-      expect(settingsMock.acknowledgeRestart).toHaveBeenCalledTimes(1);
-    });
-
-    expect(toastSuccessMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(settingsMock.acknowledgeRestart).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.queryByText("settings.restartRequired")).toBeNull();
   });
 
-  it("should trigger directory management callbacks inside advanced tab", () => {
-    renderSettingsPage();
+  it("scrolls back to the top when the section changes", () => {
+    const { container, rerenderWith } = renderSettingsPage();
+    const scrollContainer = container.querySelector(
+      '[data-testid="settings-scroll"]',
+    ) as HTMLDivElement;
 
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.configDir.title"));
+    scrollContainer.scrollTop = 640;
+    rerenderWith({ section: "about" });
 
-    fireEvent.click(screen.getByText("browse-directory"));
-    expect(settingsMock.browseDirectory).toHaveBeenCalledWith("claude");
+    expect(scrollContainer.scrollTop).toBe(0);
+    expect(screen.getByText("about-section")).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByText("reset-directory"));
-    expect(settingsMock.resetDirectory).toHaveBeenCalledWith("claude");
+  describe("app configuration navigation", () => {
+    let frames: Map<number, FrameRequestCallback>;
+    let now: number;
 
-    fireEvent.click(screen.getByText("change-directory"));
-    expect(settingsMock.updateDirectory).toHaveBeenCalledWith(
-      "codex",
-      "/new/path",
+    beforeEach(() => {
+      frames = new Map();
+      now = 0;
+      let frameId = 0;
+      vi.stubGlobal(
+        "requestAnimationFrame",
+        (callback: FrameRequestCallback) => {
+          frames.set(++frameId, callback);
+          return frameId;
+        },
+      );
+      vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+      vi.stubGlobal("matchMedia", () => ({ matches: false }));
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    const advanceFrames = (count: number) => {
+      for (let i = 0; i < count; i++) {
+        now += 50;
+        const callbacks = [...frames.values()];
+        frames.clear();
+        callbacks.forEach((callback) => callback(now));
+      }
+    };
+
+    const startNavigation = () => {
+      const view = renderSettingsPage({
+        section: "appConfig",
+        appConfigScrollTarget: "pi",
+      });
+      const container = view.container.querySelector<HTMLDivElement>(
+        '[data-testid="settings-scroll"]',
+      )!;
+      const target =
+        view.container.querySelector<HTMLElement>("#app-config-pi")!;
+      Object.defineProperties(container, {
+        clientHeight: { value: 500 },
+        scrollHeight: { value: 1500 },
+      });
+      vi.spyOn(container, "getBoundingClientRect").mockReturnValue(
+        new DOMRect(0, 0, 700, 500),
+      );
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(
+        new DOMRect(0, 1000, 700, 100),
+      );
+      const highlight = { cancel: vi.fn(), onfinish: null };
+      const animate = vi.fn().mockReturnValue(highlight);
+      target.animate = animate;
+      advanceFrames(2);
+      expect(container.scrollTop).toBeGreaterThan(0);
+      expect(container.scrollTop).toBeLessThan(608);
+      expect(animate).not.toHaveBeenCalled();
+      return { ...view, scrollContainer: container, animate, highlight };
+    };
+
+    it.each(["wheel", "touchstart", "pointerdown", "keyboard", "scrollbar"])(
+      "preserves user scrolling and skips highlighting after %s takes over",
+      (input) => {
+        const { scrollContainer, animate } = startNavigation();
+        if (input === "keyboard") {
+          expect(fireEvent.keyDown(window, { key: "PageUp" })).toBe(true);
+        } else if (input !== "scrollbar") {
+          expect(
+            fireEvent(
+              scrollContainer,
+              new Event(input, { bubbles: true, cancelable: true }),
+            ),
+          ).toBe(true);
+        }
+        // 浏览器处理用户输入后的位置，后续动画帧不得把它拉回定位轨迹。
+        scrollContainer.scrollTop = 27;
+        advanceFrames(12);
+        expect(scrollContainer.scrollTop).toBe(27);
+        expect(animate).not.toHaveBeenCalled();
+      },
     );
 
-    fireEvent.click(screen.getByText("browse-app-config"));
-    expect(settingsMock.browseAppConfigDir).toHaveBeenCalledTimes(1);
+    it("finishes normal navigation and flashes twice after reaching the target", () => {
+      const { scrollContainer, animate } = startNavigation();
+      advanceFrames(12);
+      expect(scrollContainer.scrollTop).toBe(608);
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(animate).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({ iterations: 2 }),
+      );
+    });
 
-    fireEvent.click(screen.getByText("reset-app-config"));
-    expect(settingsMock.resetAppConfigDir).toHaveBeenCalledTimes(1);
+    it("does not treat cursor movement in a directory input as page scrolling", () => {
+      const { scrollContainer, animate } = startNavigation();
+      fireEvent.keyDown(scrollContainer.querySelector("input")!, {
+        key: "ArrowUp",
+      });
+      advanceFrames(12);
+      expect(scrollContainer.scrollTop).toBe(608);
+      expect(animate).toHaveBeenCalledTimes(1);
+    });
 
-    fireEvent.click(screen.getByText("change-app-config"));
-    expect(settingsMock.updateAppConfigDir).toHaveBeenCalledWith("/app/new");
+    it("cancels an active highlight when the user starts scrolling", () => {
+      const { scrollContainer, highlight } = startNavigation();
+      advanceFrames(12);
+      fireEvent.wheel(scrollContainer);
+      expect(highlight.cancel).toHaveBeenCalledTimes(1);
+    });
   });
 });

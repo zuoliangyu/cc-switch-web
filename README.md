@@ -238,7 +238,7 @@ MCP 编辑器支持结构化字段、密文掩码和多服务器粘贴；MCP/Ski
    ~/.cc-switch-web
    ```
 
-   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。首次启动且该目录不存在时，会从 `~/.cc-switch` 只读迁移；设置页也可手动重新迁移并先备份 Web 数据。CC Switch 源数据库不会被 Web 修改。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
+   其中包括 `settings.json`、`cc-switch.db`、备份目录以及统一 Skills 存储等内容。首次启动且该目录不存在时，会从 `~/.cc-switch` 只读迁移；也可在「设置 → 数据」手动重新迁移，迁移前先备份 Web 数据。CC Switch 源数据库不会被 Web 修改。旧的 `config.json` 不再属于当前 Web 运行时的主数据路径。
 
 ### 访问密钥（可选）
 

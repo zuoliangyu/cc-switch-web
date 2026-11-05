@@ -311,7 +311,7 @@
 | `2625bcf1` | v4.0.7 | fix(opencode): preserve untouched extra-option value types on edit (#7841) | 5a 供应商与全局 UI | 5a2：OpenCode / MiniMax Code 额外选项按行合并进已存选项（mergeOpencodeExtraOptionRows）：没改的行保留原值与类型（"123"、"false"、"null" 不再被改成数字 / 布尔 / null），改名继承旧值，改名撞上已有键时拒绝；补上游 useOpencodeFormState 用例 | 已迁移 |
 | `00db3eef` | v4.0.7 | fix(openclaw): preserve custom headers when toggling User-Agent (#7847) | 5a 供应商与全局 UI | 5a2：OpenClaw 开关 User-Agent 时保留自定义请求头（含导入的大小写变体，关时移除所有 UA 变体、开时只写一个规范 UA）；上游用例的 msw 改用 Web 的全局 server 与 runtime.local | 已迁移 |
 | `5667b287` | v4.0.7 | fix(usage): treat explicit-zero OpenAI cache fields as unreported (#8045) | 1c 会话/用量导入 | 1c：OpenAI 缓存字段显式 0 视为未上报，继续读低顺位字段（解析、转换、流式） | 已迁移 |
-| `eda410e5` | v4.0.7 | feat(settings): scroll to and highlight app configuration entries (#7934) | 5a 供应商与全局 UI | 5a4b：Web 的应用页没有「配置目录」菜单入口，目录设置在设置页「高级 → 目录」手风琴里，无可滚动高亮的入口；随设置页版式收敛（5d4）一起复核 | 不适用 |
+| `eda410e5` | v4.0.7 | feat(settings): scroll to and highlight app configuration entries (#7934) | 5a 供应商与全局 UI | 5a4b/5d4：从应用跳到设置 → 应用配置并定位：缓出滚动到 #app-config-<app>，到位后描边闪两次；用户滚轮、触摸、点按、翻页键接管时立即停止（输入框里的方向键不算）。Web 的入口是应用页每行「⋯」→「配置目录」（只给有配置目录设置的 9 个应用）；上游供应商页页头「⋯」菜单 Web 没有。迁入上游定位与闪烁用例 | 已迁移 |
 | `84457b51` | v4.0.7 | fix(codex): keep a top-level base_url when saving a provider | 4 模式/路由 | 4a：顶层 base_url（没有 model_provider）的 Codex 行在投影时归一成 [model_providers.custom]，编辑器显示地址、保存不丢；前端 setCodexBaseUrl 在没有选路时写进选中的 custom 表，核对不过退回顶层写法 | 已迁移 |
 | `69dbb307` | v4.0.7 | fix(i18n): scope unified Codex session history copy to the CLI | 5a 供应商与全局 UI | 5a4b：统一 Codex 会话历史的开启 / 关闭确认与开关说明写明只影响 Codex CLI 的 resume 列表、桌面版已能显示全部会话（按 Web 原文措辞改写，不写桌面版备份路径） | 已迁移 |
 | `e06ba573` | v4.0.7 | fix(windows): keep non-ASCII paths out of generated batch files | 1d 资源/设置/工具 | 1d：工具安装/升级批处理先 chcp 65001；Claude 与会话启动器的非 ASCII 目录经环境变量传入、配置文件以 %%~dp0 引用（Web 的会话启动器同样适配） | 已迁移 |
@@ -371,7 +371,7 @@
 | `28dc5198` | v4.0.10 | fix(providers): disable fade for add and edit pages (#8159) | 5a 供应商与全局 UI | 5a3a：整页面板默认不做淡入淡出（开关时不会露出下面的页面），保留 slide-from-right 选项 | 已迁移 |
 | `68122bc4` | v4.0.10 | fix(usage): honor Codex thread model settings (#8176) | 1c 会话/用量导入 | 1c：Codex 用量导入遵循线程级模型设置 | 已迁移 |
 | `96d636ca` | v4.0.10 | fix(usage): stop treating empty OpenRouter credits as expired (#8175) | 1c 会话/用量导入 | 1c：OpenRouter 余额为空不再判为过期；解析拆为 parse_openrouter_balance 并校验金额 | 已迁移 |
-| `99277921` | v4.0.10 | fix(settings): use confirmed directories for unrelated autosaves (#8023) | 5a 供应商与全局 UI | 5a4b：别的设置项自动保存时只写已确认的目录，不写目录草稿；设置重新读取丢弃草稿后，显示的目录跟着回到已保存值，清掉的覆盖交给后端解析；版本号防止晚到的解析盖掉较新的编辑或全部重置；补 hook 用例（上游集成用例依赖 v7 设置页版式，随 5d4） | 已迁移 |
+| `99277921` | v4.0.10 | fix(settings): use confirmed directories for unrelated autosaves (#8023) | 5a 供应商与全局 UI | 5a4b/5d4：其他设置自动保存只写已确认的目录、重新读取后丢弃草稿（5a4b）；5d4 修正 useSettings 漏传 settings 给 useDirectorySettings 导致显示的目录不回到已保存值，并迁入上游设置页集成用例（丢弃草稿 ×2、按后端解析恢复 Hermes / Pi 默认目录） | 已迁移 |
 | `fac8bfd8` | v4.0.10 | fix(installer): don't recreate a deleted desktop shortcut on MSI upgrade | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `98222d19` | v4.0.10 | fix(deeplink): stop losing links on cold start and tighten import checks | 1d 资源/设置/工具 | 1d：深链导入检查收紧（解析阶段拒绝 configUrl，Web 不再拉取远程配置；提示词接受 mcode；MCP apps 接受 grokbuild/hermes/mcode，Web 的 McpApps 无 pi 未加；立即切换时提示供应商启用；按解析序号丢弃过期合并结果）；冷启动暂存、系统协议投递、托盘刷新不适用 | 部分迁移 |
 | `450bc039` | v4.0.10 | feat(deeplink): enable imported usage scripts by default | 1d 资源/设置/工具 | 1d：深链带用量脚本时默认启用用量查询，usageEnabled=false 仍生效 | 已迁移 |
@@ -637,7 +637,7 @@
 | `c776fd0e` | v4.0.18 | feat(agy): trim the form hint and require a key on custom cards | 2c Antigravity | 2c：表单提示精简，自定义卡要求 Key（EndpointField 增加 required/help） | 已迁移 |
 | `1ef08d5e` | v4.0.18 | fix(windows): stop in-app updates from rebooting the machine (#8628) | — | MSI 应用内更新重启；Web 无安装器 | 不适用 |
 | `c1fd26bd` | v4.0.18 | fix(ui): show compact mode-colored connection badge in header (#8634) | 5a 供应商与全局 UI | 5a3a/5d3a：紧凑徽标随 5a3a；5d3a 由模式面板经 portal 画进页头（md 起），写「模式 · 实际生效的那家」并带 HoverTip 全称；窄屏页头放不下，徽标改画在模式行下面 | 已迁移 |
-| `ab5d4a12` | v4.0.18 | fix(ui): trim redundant provider and settings helper copy (#8633) | 5a 供应商与全局 UI | 5a3a/5a4b：表单部分随 5a3a 迁入；本批去掉 OpenClaw 环境 / 工具面板、工作区每日记忆卡、整流器开关、WebDAV 的冗余说明与「默认值」小字；日志开关与级别说明收进帮助卡；配置目录说明、定价 models.dev 提示收进帮助卡；供应商空状态按上游最终结构（图标框、只留各应用自己的说明、导入说明收进帮助卡），过时的「通用配置片段」文案换成 noProvidersDescriptionKeyFields；删除不再使用的三语文案。S3 部分不适用：Web 没有 S3 同步；设置页整体版式随 5d4 | 部分迁移 |
+| `ab5d4a12` | v4.0.18 | fix(ui): trim redundant provider and settings helper copy (#8633) | 5a 供应商与全局 UI | 5a3a/5a4b/5d4：表单与各面板文案精简随 5a3a / 5a4b；设置页整体版式随 5d4 收敛为上游分组目录与 SettingsBlock / SettingsCard / SettingsRow。S3 同步部分不适用：Web 没有 S3 同步 | 已迁移 |
 | `cdfdff5e` | v4.0.18 | fix(installer): make Windows desktop shortcut optional (#8601) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `92ec18d7` | v4.0.18 | docs(aggregation): correct the workaround for the exhausted-quota lock | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `711a4127` | v4.0.18 | fix(usage): only list apps shown on the Apps page in the app filter | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
@@ -1171,3 +1171,11 @@
   - 照上游删除页头 FailoverToggle 与设置里的「在主页面显示故障转移开关」，`enableFailoverToggle` 字段保留读取但不再起作用；首次在模式行开启故障转移时先确认。进入路由 / 聚合、回到直连成功后弹提示。
   - 三语补上游文案约 135 项，删除不再引用的约 31 项；`docs/claude-codex-routing-guide-zh.md` 同步表单布局、模型列表与模式行设置的说法。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 227 个文件 2394 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。
+- 2026-11-06：完成布局收敛批次 5d4（设置页版式），四处布局收敛全部完成。eda410e5 由不适用改为已迁移，99277921、ab5d4a12 补齐为已迁移。
+  - 设置页从页签 + 手风琴改为上游的分组目录：通用、应用配置、本地路由、网络、数据、关于；左侧目录在窄屏变为页顶横向滚动的一排；每项一行，说明收进「?」，开关即时保存，目录改动后本节出现「保存」。
+  - Web 专有设置：本地服务开机自启在「通用 → 启动与终端」，配色在「通用 → 外观」，服务地址复制与连接地址（client-host）在「本地路由」，数据目录、迁移与手动重启提示、WebDAV 在「数据」。原「认证」页签的 Codex 设置移进「应用配置 → Codex」，会话自动同步开关移到用量页，故障转移队列只在路由页签管理（同上游），「启用本地路由功能」开关照上游删除（字段保留读取）。
+  - 应用页每行「⋯」新增「配置目录」，跳到「应用配置」对应一节并滚动、闪烁定位（eda410e5）；模式行「更多路由设置」直达「本地路由」。
+  - 修正 5a4b 遗留：`useSettings` 没把 `settings` 传给 `useDirectorySettings`，其他设置自动保存后显示的目录不会回到已保存值；迁入上游设置页集成用例后发现并修复。
+  - 桌面专属与 Web 没有的设置不迁：额度显示方式、启动时检查各应用新版本、托盘与窗口、静默启动、切换时保留 Codex 官方登录、打开日志文件、浏览选择文件夹。
+  - 三语补上游设置页文案，删除不再引用的约 96 项；三语 README 与 `docs/claude-codex-routing-guide-zh.md` 同步设置项位置。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 227 个文件 2412 项通过（原 2 项跳过的桌面文件选择器用例随改写去掉）。未做浏览器视觉验收，下一步统一进行。

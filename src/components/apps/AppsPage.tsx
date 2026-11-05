@@ -41,8 +41,10 @@ import {
   MoreHorizontal,
   RefreshCw,
   Trash2,
+  FolderCog,
 } from "lucide-react";
 import type { AppId } from "@/lib/api";
+import { isDirectoryApp } from "@/components/settings/sections/AppConfigSection";
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
 import type { ToolInstallationReport } from "@/lib/api/settings";
 import type { VisibleApps } from "@/types";
@@ -174,7 +176,12 @@ function formatCheckedAt(timestamp: number, locale: string): string {
  * 按已安装 / 未安装分两组，已安装的可以拖动排序（侧栏跟着这份顺序）。
  * 隐藏一个应用只影响界面（侧栏、MCP / Skills 的列、提示词和会话的下拉），配置照常同步。
  */
-export function AppsPage() {
+interface AppsPageProps {
+  /** 行内「⋯」→「配置目录」：打开设置 → 应用配置并定位到这个应用（只给有配置目录设置的应用） */
+  onOpenAppConfig?: (app: AppId) => void;
+}
+
+export function AppsPage({ onOpenAppConfig }: AppsPageProps = {}) {
   const { t, i18n } = useTranslation();
   const tools = useToolManagement();
   const { settings, updateSettings, autoSaveSettings } = useSettings();
@@ -357,6 +364,11 @@ export function AppsPage() {
         tool={row.tool}
         tools={tools}
         onUninstall={() => setPendingUninstall(row.tool)}
+        onOpenConfig={
+          onOpenAppConfig && isDirectoryApp(TOOL_APP_IDS[row.tool])
+            ? () => onOpenAppConfig(TOOL_APP_IDS[row.tool])
+            : undefined
+        }
         expanded={expanded[row.tool] ?? false}
         onToggleExpanded={() =>
           setExpanded((prev) => ({
@@ -717,6 +729,7 @@ function ToolRow({
   tool,
   tools,
   onUninstall,
+  onOpenConfig,
   expanded,
   onToggleExpanded,
   visibility,
@@ -724,6 +737,7 @@ function ToolRow({
   tool: ToolName;
   tools: ReturnType<typeof useToolManagement>;
   onUninstall: () => void;
+  onOpenConfig?: () => void;
   expanded: boolean;
   onToggleExpanded: () => void;
   visibility: React.ReactNode;
@@ -947,7 +961,7 @@ function ToolRow({
       action={actionButton}
       visibility={visibility}
       menu={
-        (canUninstall || busyAction === "uninstall") && (
+        (canUninstall || busyAction === "uninstall" || onOpenConfig) && (
           <DropdownMenu>
             <HoverTip content={t("common.more")}>
               <DropdownMenuTrigger asChild>
@@ -970,13 +984,21 @@ function ToolRow({
               </DropdownMenuTrigger>
             </HoverTip>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              <DropdownMenuItem
-                onSelect={onUninstall}
-                className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {t("settings.toolUninstall")}
-              </DropdownMenuItem>
+              {onOpenConfig && (
+                <DropdownMenuItem onSelect={onOpenConfig}>
+                  <FolderCog className="h-3.5 w-3.5" />
+                  {t("appPage.configDirectory")}
+                </DropdownMenuItem>
+              )}
+              {(canUninstall || busyAction === "uninstall") && (
+                <DropdownMenuItem
+                  onSelect={onUninstall}
+                  className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t("settings.toolUninstall")}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )

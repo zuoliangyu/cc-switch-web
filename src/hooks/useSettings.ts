@@ -23,6 +23,8 @@ export interface UseSettingsResult {
   isLoading: boolean;
   isSaving: boolean;
   appConfigDir?: string;
+  /** 已保存的 CC Switch 数据目录：「数据」节据此判断要不要显示「保存」 */
+  initialAppConfigDir?: string;
   resolvedDirs: ResolvedDirectories;
   requiresRestart: boolean;
   updateSettings: (updates: Partial<SettingsFormState>) => void;
@@ -101,6 +103,8 @@ export function useSettings(): UseSettingsResult {
     resetAppConfigDir,
     resetAllDirectories,
   } = useDirectorySettings({
+    // 设置重新读取丢弃目录草稿时，显示的目录据此回到已保存值（上游 99277921）
+    settings,
     onUpdateSettings: updateSettings,
   });
 
@@ -482,6 +486,7 @@ export function useSettings(): UseSettingsResult {
     isLoading,
     isSaving: saveMutation.isPending,
     appConfigDir,
+    initialAppConfigDir,
     resolvedDirs,
     requiresRestart,
     updateSettings,

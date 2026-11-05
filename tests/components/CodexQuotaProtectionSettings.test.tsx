@@ -63,7 +63,8 @@ describe("Codex 官方额度保护设置", () => {
     fireEvent.click(submit);
     await waitFor(() => expect(fiveHour).toBeDisabled());
     await act(async () => complete(false));
-    expect(toastError).toHaveBeenCalledWith("settings.saveFailedGeneric");
+    // 返回 false 时设置页的自动保存已经提示过（同上游），这里不再重复提示
+    expect(toastError).not.toHaveBeenCalled();
     expect(fiveHour).toHaveValue(89);
     expect(weekly).toHaveValue(92);
     expect(submit).toBeEnabled();

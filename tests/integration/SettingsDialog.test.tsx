@@ -2,12 +2,18 @@ import React, { Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { http, HttpResponse } from "msw";
+import type { Settings } from "@/types";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import {
   resetProviderState,
   getSettings,
+  setSettings,
   getAppConfigDirOverride,
 } from "../msw/state";
+import { server } from "../msw/server";
+
+const RUNTIME = "http://runtime.local";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -16,6 +22,7 @@ vi.mock("sonner", () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccessMock(...args),
     error: (...args: unknown[]) => toastErrorMock(...args),
+    info: vi.fn(),
   },
 }));
 
@@ -29,79 +36,24 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogDescription: ({ children }: any) => <div>{children}</div>,
 }));
 
-const TabsContext = React.createContext<{
-  value: string;
-  onValueChange?: (value: string) => void;
-}>({
-  value: "general",
-});
-
-vi.mock("@/components/ui/tabs", () => {
-  return {
-    Tabs: ({ value, onValueChange, children }: any) => (
-      <TabsContext.Provider value={{ value, onValueChange }}>
-        {children}
-      </TabsContext.Provider>
-    ),
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ value, children }: any) => {
-      const ctx = React.useContext(TabsContext);
-      return (
-        <button type="button" onClick={() => ctx.onValueChange?.(value)}>
-          {children}
-        </button>
-      );
-    },
-    TabsContent: ({ value, children }: any) => {
-      const ctx = React.useContext(TabsContext);
-      return ctx.value === value ? (
-        <div data-testid={`tab-${value}`}>{children}</div>
-      ) : null;
-    },
-  };
-});
-
-vi.mock("@/components/settings/LanguageSettings", () => ({
-  LanguageSettings: ({ value, onChange }: any) => (
-    <div>
-      <span>language:{value}</span>
-      <button onClick={() => onChange("en")}>change-language</button>
-    </div>
-  ),
+// 「数据」一节的其他卡片有自己的接口，这里只测目录和导入导出
+vi.mock("@/components/settings/BackupListSection", () => ({
+  BackupListSection: () => <div>backup-list-section</div>,
 }));
-
-vi.mock("@/components/settings/ThemeSettings", () => ({
-  ThemeSettings: () => <div data-testid="theme-settings">theme</div>,
+vi.mock("@/components/settings/WebdavSyncSection", () => ({
+  WebdavSyncSection: () => <div>webdav-sync-section</div>,
 }));
-
-vi.mock("@/components/settings/DirectorySettings", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/components/settings/DirectorySettings")
-  >("@/components/settings/DirectorySettings");
-  return actual;
-});
+vi.mock("@/components/settings/LogConfigPanel", () => ({
+  LogConfigPanel: () => <div>log-config-panel</div>,
+}));
+vi.mock("@/components/settings/CodexAuthSettings", () => ({
+  CodexAuthSettings: () => <div>codex-auth-settings</div>,
+}));
 
 vi.mock("@/components/settings/ImportExportSection", () => ({
-  ImportExportSection: ({
-    status,
-    selectedFile,
-    errorMessage,
-    isImporting,
-    onSelectFile,
-    onImport,
-    onExport,
-    onClear,
-  }: any) => (
+  ImportExportSection: ({ onExport }: any) => (
     <div>
-      <div data-testid="import-status">{status}</div>
-      <div data-testid="selected-file">{selectedFile || "none"}</div>
-      <button onClick={onSelectFile}>settings.selectConfigFile</button>
-      <button onClick={onImport} disabled={!selectedFile || isImporting}>
-        {isImporting ? "settings.importing" : "settings.import"}
-      </button>
       <button onClick={onExport}>settings.exportConfig</button>
-      <button onClick={onClear}>common.clear</button>
-      {errorMessage ? <span>{errorMessage}</span> : null}
     </div>
   ),
 }));
@@ -117,7 +69,13 @@ const renderDialog = (
   return render(
     <QueryClientProvider client={client}>
       <Suspense fallback={<div data-testid="loading">loading</div>}>
-        <SettingsPage open onOpenChange={() => {}} {...props} />
+        <SettingsPage
+          section="data"
+          onSectionChange={() => {}}
+          onOpenApps={() => {}}
+          onOpenApp={() => {}}
+          {...props}
+        />
       </Suspense>
     </QueryClientProvider>,
   );
@@ -137,56 +95,18 @@ describe("SettingsPage integration", () => {
   it("loads default settings from MSW", async () => {
     renderDialog();
 
-    await waitFor(() =>
-      expect(screen.getByText("language:zh")).toBeInTheDocument(),
-    );
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.configDir.title"));
     const appInput = await screen.findByPlaceholderText(
       "settings.browsePlaceholderApp",
     );
-    // MSW handler get_app_config_dir 返回 `/default/app`（无 override 时），
-    // 不再是早期 Tauri 测试假定的 `/home/mock/.cc-switch`。
-    expect((appInput as HTMLInputElement).value).toBe("/default/app");
-  });
-
-  // Web 模式下 selectImportFile 只是给 toast 提示（没有原生文件选择器对话框），
-  // 真实流程必须通过 selectImportUpload(File) 注入文件。这条端到端 import 流测试
-  // 基于旧 Tauri 行为，已不适用 Web。useImportExport hook 里有等价的单元覆盖。
-  it.skip("imports configuration and triggers success callback", async () => {
-    const onImportSuccess = vi.fn();
-    renderDialog({ onImportSuccess });
-
+    // MSW handler get_app_config_dir 无 override 时返回 `/default/app`
     await waitFor(() =>
-      expect(screen.getByText("language:zh")).toBeInTheDocument(),
+      expect((appInput as HTMLInputElement).value).toBe("/default/app"),
     );
-
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.data.title"));
-    fireEvent.click(screen.getByText("settings.selectConfigFile"));
-    await waitFor(() =>
-      expect(screen.getByTestId("selected-file").textContent).toContain(
-        "/mock/import-settings.json",
-      ),
-    );
-
-    fireEvent.click(screen.getByText("settings.import"));
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
-    await waitFor(() => expect(onImportSuccess).toHaveBeenCalled(), {
-      timeout: 4000,
-    });
-    expect(getSettings().language).toBe("en");
   });
 
   it("saves settings and handles restart prompt", async () => {
     renderDialog();
 
-    await waitFor(() =>
-      expect(screen.getByText("language:zh")).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.configDir.title"));
     const appInput = await screen.findByPlaceholderText(
       "settings.browsePlaceholderApp",
     );
@@ -205,34 +125,28 @@ describe("SettingsPage integration", () => {
     expect(getAppConfigDirOverride()).toBe("/custom/app");
   });
 
-  // Web 模式下 DirectorySettings 的「浏览目录」按钮被 allowBrowse 守卫隐藏
-  // （没有原生目录选择器），目录改动只能通过手输实现。这条原生 browse 流程
-  // 测试已不适用 Web。reset 行为有 useDirectorySettings 的单元测试覆盖。
-  it.skip("allows browsing and resetting directories", async () => {
+  // Web 的目录在服务所在电脑上，浏览器选不了文件夹：没有「浏览」，只能手填和恢复默认
+  it("resets the data directory without a folder picker", async () => {
     renderDialog();
-
-    await waitFor(() =>
-      expect(screen.getByText("language:zh")).toBeInTheDocument(),
-    );
-
-    fireEvent.click(screen.getByText("settings.tabAdvanced"));
-    fireEvent.click(screen.getByText("settings.advanced.configDir.title"));
-
-    const browseButtons = screen.getAllByTitle("settings.browseDirectory");
-    const resetButtons = screen.getAllByTitle("settings.resetDefault");
 
     const appInput = (await screen.findByPlaceholderText(
       "settings.browsePlaceholderApp",
     )) as HTMLInputElement;
-    expect(appInput.value).toBe("/home/mock/.cc-switch");
+    await waitFor(() => expect(appInput.value).toBe("/default/app"));
+    expect(
+      screen.queryByRole("button", { name: "settings.browseDirectory" }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(browseButtons[0]);
-    await waitFor(() =>
-      expect(appInput.value).toBe("/home/mock/.cc-switch/picked"),
+    fireEvent.change(appInput, { target: { value: "/draft/app" } });
+    expect(appInput.value).toBe("/draft/app");
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings.resetDefault" }),
     );
+    await waitFor(() => expect(appInput.value).toBe("/default/app"));
+  });
 
-    fireEvent.click(resetButtons[0]);
-    await waitFor(() => expect(appInput.value).toBe("/home/mock/.cc-switch"));
+  it("edits and resets an app's config directory", async () => {
+    renderDialog({ section: "appConfig" });
 
     const claudeInput = (await screen.findByPlaceholderText(
       "settings.browsePlaceholderClaude",
@@ -240,13 +154,120 @@ describe("SettingsPage integration", () => {
     fireEvent.change(claudeInput, { target: { value: "/custom/claude" } });
     await waitFor(() => expect(claudeInput.value).toBe("/custom/claude"));
 
-    fireEvent.click(browseButtons[1]);
-    await waitFor(() =>
-      expect(claudeInput.value).toBe("/custom/claude/picked"),
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "settings.resetDefault" })[0],
     );
-
-    fireEvent.click(resetButtons[1]);
-    await waitFor(() => expect(claudeInput.value).toBe("/home/mock/.claude"));
+    await waitFor(() => expect(claudeInput.value).toBe("/default/claude"));
   });
 
+  // 上游 99277921：别的设置项自动保存时只写已确认的目录，丢掉目录草稿
+  it.each([undefined, "/saved/claude"])(
+    "discards directory drafts after unrelated autosave with saved directory %s",
+    async (savedDirectory) => {
+      setSettings({ claudeConfigDir: savedDirectory });
+      const resolvedDirectory = savedDirectory ?? "/home/mock/.claude";
+      const saves: Settings[] = [];
+      const syncLive = vi.fn();
+      server.use(
+        http.post(`${RUNTIME}/get_config_dir`, async ({ request }) => {
+          const { app } = (await request.json()) as { app: string };
+          return HttpResponse.json(
+            app === "claude" ? resolvedDirectory : `/default/${app}`,
+          );
+        }),
+        http.post(`${RUNTIME}/save_settings`, async ({ request }) => {
+          const { settings } = (await request.json()) as { settings: Settings };
+          saves.push(settings);
+          setSettings(settings);
+          return HttpResponse.json(true);
+        }),
+        http.post(`${RUNTIME}/sync_current_providers_live`, () => {
+          syncLive();
+          return HttpResponse.json(true);
+        }),
+      );
+      renderDialog({ section: "appConfig" });
+
+      const directory = await screen.findByPlaceholderText(
+        "settings.browsePlaceholderClaude",
+      );
+      await waitFor(() => expect(directory).toHaveValue(resolvedDirectory));
+      fireEvent.change(directory, { target: { value: "/unsaved/claude" } });
+      expect(directory).toHaveValue("/unsaved/claude");
+      expect(screen.getByRole("button", { name: "common.save" })).toBeEnabled();
+      expect(saves).toHaveLength(0);
+
+      const toggle = screen.getByRole("switch", {
+        name: "settings.skipClaudeOnboarding",
+      });
+      fireEvent.click(toggle);
+      await waitFor(() =>
+        expect(getSettings().skipClaudeOnboarding).toBe(true),
+      );
+      expect(saves[0].claudeConfigDir).toBe(savedDirectory);
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("button", { name: "common.save" }),
+        ).toBeNull(),
+      );
+      await waitFor(() => expect(directory).toHaveValue(resolvedDirectory));
+
+      fireEvent.click(toggle);
+      await waitFor(() =>
+        expect(getSettings().skipClaudeOnboarding).toBe(false),
+      );
+      expect(saves).toHaveLength(2);
+      expect(saves[1].claudeConfigDir).toBe(savedDirectory);
+      expect(directory).toHaveValue(resolvedDirectory);
+      expect(syncLive).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      "hermes",
+      "hermesConfigDir",
+      "settings.browsePlaceholderHermes",
+      "/env/hermes-home",
+    ],
+    ["pi", "piConfigDir", "settings.browsePlaceholderPi", "/env/pi-agent"],
+  ] as const)(
+    "restores backend-resolved %s default after draft discard",
+    async (targetApp, field, placeholder, backendDefault) => {
+      setSettings({ [field]: undefined });
+      const saves: Settings[] = [];
+      server.use(
+        http.post(`${RUNTIME}/get_config_dir`, async ({ request }) => {
+          const { app } = (await request.json()) as { app: string };
+          return HttpResponse.json(
+            app === targetApp ? backendDefault : `/default/${app}`,
+          );
+        }),
+        http.post(`${RUNTIME}/save_settings`, async ({ request }) => {
+          const { settings } = (await request.json()) as { settings: Settings };
+          saves.push(settings);
+          setSettings({ ...settings, [field]: settings[field] });
+          return HttpResponse.json(true);
+        }),
+      );
+      renderDialog({ section: "appConfig" });
+      const directory = await screen.findByPlaceholderText(placeholder);
+      await waitFor(() => expect(directory).toHaveValue(backendDefault));
+      fireEvent.change(directory, { target: { value: `/draft/${targetApp}` } });
+      expect(directory).toHaveValue(`/draft/${targetApp}`);
+      fireEvent.click(
+        screen.getByRole("switch", { name: "settings.skipClaudeOnboarding" }),
+      );
+      await waitFor(() =>
+        expect(getSettings().skipClaudeOnboarding).toBe(true),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("button", { name: "common.save" }),
+        ).toBeNull(),
+      );
+      expect(saves[0][field]).toBeUndefined();
+      await waitFor(() => expect(directory).toHaveValue(backendDefault));
+    },
+  );
 });

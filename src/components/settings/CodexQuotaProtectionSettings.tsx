@@ -1,11 +1,10 @@
 import { useId, useState } from "react";
-import { ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ToggleRow } from "@/components/ui/toggle-row";
 import type { SettingsFormState } from "@/hooks/useSettings";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { SettingsRow, SettingsSwitchRow } from "./SettingsLayout";
 
 export const DEFAULT_CODEX_QUOTA_PROTECTION = {
   enabled: false,
@@ -19,13 +18,15 @@ export function CodexQuotaProtectionSettings({
   onChange,
 }: {
   settings: SettingsFormState;
-  onChange: (updates: Partial<SettingsFormState>) => Promise<boolean>;
+  onChange: (
+    updates: Partial<SettingsFormState>,
+  ) => void | boolean | Promise<void | boolean>;
 }) {
   const { t } = useTranslation();
   const id = useId();
   const config =
     settings.codexQuotaProtection ?? DEFAULT_CODEX_QUOTA_PROTECTION;
-  // 输入框的草稿和设置分开：保存失败回滚设置时不丢正在改的值
+  // Keep edits separate from optimistic settings and their possible rollback.
   const [fiveHourDraft, setFiveHourDraft] = useState<string>();
   const [weeklyDraft, setWeeklyDraft] = useState<string>();
   const fiveHour = fiveHourDraft ?? String(config.fiveHourThreshold);
@@ -42,32 +43,31 @@ export function CodexQuotaProtectionSettings({
     setSaving(true);
     try {
       const saved = await onChange({ codexQuotaProtection: next });
-      if (saved) {
+      if (saved !== false) {
         setFiveHourDraft(undefined);
         setWeeklyDraft(undefined);
-      } else {
-        toast.error(t("settings.saveFailedGeneric"));
       }
+    } catch {
+      toast.error(t("settings.saveFailedGeneric"));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="space-y-3">
-      <ToggleRow
-        icon={<ShieldAlert className="h-4 w-4 text-amber-500" />}
-        title={t("settings.codexQuotaProtection.title")}
-        description={t("settings.codexQuotaProtection.help")}
+    <>
+      <SettingsSwitchRow
+        label={t("settings.codexQuotaProtection.title")}
+        help={{
+          title: t("settings.codexQuotaProtection.title"),
+          body: t("settings.codexQuotaProtection.help"),
+        }}
         checked={config.enabled}
         disabled={saving}
         onCheckedChange={(enabled) => void save({ ...config, enabled })}
       />
       {config.enabled && (
-        <div className="space-y-2 rounded-xl border border-border bg-card/50 p-4">
-          <p className="text-sm font-medium">
-            {t("settings.codexQuotaProtection.thresholds")}
-          </p>
+        <SettingsRow label={t("settings.codexQuotaProtection.thresholds")}>
           <div className="flex flex-wrap items-end gap-3">
             <label
               htmlFor={`${id}-5h`}
@@ -121,26 +121,22 @@ export function CodexQuotaProtectionSettings({
               {t("settings.codexQuotaProtection.save")}
             </Button>
             <Button
-              size="sm"
               variant="outline"
+              size="sm"
               disabled={saving}
-              onClick={() =>
+              onClick={() => {
                 void save({
                   ...DEFAULT_CODEX_QUOTA_PROTECTION,
                   enabled: config.enabled,
-                })
-              }
+                });
+              }}
             >
               {t("settings.codexQuotaProtection.reset")}
             </Button>
           </div>
           <p
             id={`${id}-hint`}
-            className={
-              invalid
-                ? "text-xs text-destructive"
-                : "text-xs text-muted-foreground"
-            }
+            className="mt-2 text-xs text-muted-foreground"
             role={invalid ? "alert" : undefined}
           >
             {t(
@@ -149,8 +145,8 @@ export function CodexQuotaProtectionSettings({
                 : "settings.codexQuotaProtection.hint",
             )}
           </p>
-        </div>
+        </SettingsRow>
       )}
-    </div>
+    </>
   );
 }

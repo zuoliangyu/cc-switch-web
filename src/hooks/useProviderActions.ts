@@ -150,7 +150,8 @@ export function useProviderActions(
 
   // 切换供应商
   const switchProvider = useCallback(
-    async (provider: Provider) => {
+    /** `acknowledgedRouting`：「需要路由」确认框里选了「仍然直连切换」，不再拦 */
+    async (provider: Provider, options?: { acknowledgedRouting?: boolean }) => {
       const isCopilotProvider =
         activeApp === "claude" &&
         provider.meta?.providerType === "github_copilot";
@@ -160,9 +161,10 @@ export function useProviderActions(
           : isProxyTakeover === true;
 
       // 路由没就绪时，要经路由的卡不能直连切换（原因和卡片上「需要路由」徽标的说明同一份）
-      const proxyRequiredReason = routingReady
-        ? null
-        : getRoutingReason(activeApp, provider, t);
+      const proxyRequiredReason =
+        routingReady || options?.acknowledgedRouting
+          ? null
+          : getRoutingReason(activeApp, provider, t);
 
       if (proxyRequiredReason) {
         toast.warning(

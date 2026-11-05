@@ -55,7 +55,6 @@ import {
 import { isTextEditableTarget } from "@/utils/domUtils";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { isMac } from "@/lib/platform";
-import { routeSwitchNotification } from "@/utils/routeSwitchNotification";
 import { cn } from "@/lib/utils";
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
@@ -64,7 +63,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { discardUnsavedChanges, hasUnsavedChanges } from "@/lib/unsavedChanges";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
-import { AppModePanel } from "@/components/proxy/AppModePanel";
+import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { useAppMode, supportsAppMode } from "@/hooks/useAppMode";
 import { RoutingActivationBrand } from "@/components/proxy/RoutingActivationBrand";
 import { FailoverToggle } from "@/components/proxy/FailoverToggle";
@@ -223,6 +222,10 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   // 供应商搜索面板：页头按钮和 ⌘F 都能打开；换应用或离开供应商页就收起
   const [providerSearchOpen, setProviderSearchOpen] = useState(false);
+  // 页头里给模式连接徽标留的位置（SwitchModePanel 通过 portal 画进来）
+  const [modeStatusSlot, setModeStatusSlot] = useState<HTMLDivElement | null>(
+    null,
+  );
   useEffect(() => {
     setProviderSearchOpen(false);
   }, [activeApp, currentView]);
@@ -402,12 +405,6 @@ function App() {
     activeApp !== "agy" &&
     activeApp !== "omp" &&
     (takeoverStatus?.[activeApp] || false);
-  const activeProviderId = useMemo(() => {
-    const target = proxyStatus?.active_targets?.find(
-      (t) => t.app_type === activeApp,
-    );
-    return target?.provider_id;
-  }, [proxyStatus?.active_targets, activeApp]);
 
   const { data, isLoading, refetch } = useProvidersQuery(activeApp, {
     isProxyRunning,
@@ -919,100 +916,91 @@ function App() {
                     transition={{ duration: 0.15 }}
                     className="space-y-4"
                   >
-                    {supportsAppMode(activeApp) && (
-                      <AppModePanel
-                        key={activeApp}
-                        app={activeApp}
-                        providers={providers}
-                        state={appMode}
-                      />
-                    )}
-                    <ProviderList
-                      searchOpen={providerSearchOpen}
-                      onSearchOpenChange={setProviderSearchOpen}
-                      modeView={appMode.data}
-                      modePending={appMode.pending}
-                      onAggregationMember={(id, enabled) => {
-                        void appMode
-                          .change({ kind: "member", id, enabled })
-                          .catch(() => {});
-                      }}
-                      onAggregationDefault={(id) => {
-                        void appMode
-                          .setRoute(id)
-                          .then((result) =>
-                            toast.success(
-                              routeSwitchNotification(
-                                result,
-                                activeApp,
-                                providers[id]?.name ?? id,
-                                t,
-                              ),
-                              { closeButton: true },
-                            ),
-                          )
-                          .catch(() => {});
-                      }}
-                      providers={providers}
-                      currentProviderId={currentProviderId}
-                      appId={activeApp}
-                      isLoading={isLoading}
-                      isProxyRunning={isProxyRunning}
-                      isProxyTakeover={
-                        isProxyRunning && isCurrentAppTakeoverActive
+                    {(() => {
+                      const listProps = {
+                        searchOpen: providerSearchOpen,
+                        onSearchOpenChange: setProviderSearchOpen,
+                        onEdit: (provider: Provider) => {
+                          setEditingProvider(provider);
+                        },
+                        onDelete: (provider: Provider) =>
+                          setConfirmAction({ provider, action: "delete" }),
+                        onDuplicate: handleDuplicateProvider,
+                        onConfigureUsage: setUsageProvider,
+                        onOpenWebsite: handleOpenWebsite,
+                        onOpenTerminal:
+                          activeApp === "claude" ||
+                          activeApp === "codex" ||
+                          activeApp === "agy"
+                            ? handleOpenTerminal
+                            : undefined,
+                        onCreate: () => setIsAddOpen(true),
+                      };
+                      if (supportsAppMode(activeApp)) {
+                        return (
+                          <SwitchModePanel
+                            key={activeApp}
+                            app={activeApp}
+                            statusSlot={modeStatusSlot}
+                            providers={providers}
+                            currentProviderId={currentProviderId}
+                            isLoading={isLoading}
+                            state={appMode}
+                            serviceRunning={isProxyRunning}
+                            onSwitch={switchProvider}
+                            {...listProps}
+                          />
+                        );
                       }
-                      activeProviderId={activeProviderId}
-                      onSwitch={
-                        activeApp === "kimi"
-                          ? addKimiProviderToConfig
-                          : switchProvider
-                      }
-                      onEdit={(provider) => {
-                        setEditingProvider(provider);
-                      }}
-                      onDelete={(provider) =>
-                        setConfirmAction({ provider, action: "delete" })
-                      }
-                      onRemoveFromConfig={
-                        activeApp === "opencode" ||
-                        activeApp === "openclaw" ||
-                        activeApp === "hermes" ||
-                        activeApp === "pi" ||
-                        activeApp === "omp" ||
-                        activeApp === "mcode" ||
-                        activeApp === "kimi" ||
-                        activeApp === "dsh"
-                          ? (provider) =>
-                              setConfirmAction({ provider, action: "remove" })
-                          : undefined
-                      }
-                      onDisableOmo={
-                        activeApp === "opencode" ? handleDisableOmo : undefined
-                      }
-                      onDisableOmoSlim={
-                        activeApp === "opencode"
-                          ? handleDisableOmoSlim
-                          : undefined
-                      }
-                      onDuplicate={handleDuplicateProvider}
-                      onConfigureUsage={setUsageProvider}
-                      onOpenWebsite={handleOpenWebsite}
-                      onOpenTerminal={
-                        activeApp === "claude" ||
-                        activeApp === "codex" ||
-                        activeApp === "agy"
-                          ? handleOpenTerminal
-                          : undefined
-                      }
-                      onCreate={() => setIsAddOpen(true)}
-                      onSetAsDefault={
-                        activeApp === "openclaw" || activeApp === "opencode"
-                          ? setAsDefaultModel
-                          : activeApp === "hermes" || activeApp === "kimi"
-                            ? switchProvider
-                            : undefined
-                      }
-                    />
+                      return (
+                        <ProviderList
+                          {...listProps}
+                          providers={providers}
+                          currentProviderId={currentProviderId}
+                          appId={activeApp}
+                          isLoading={isLoading}
+                          onSwitch={
+                            activeApp === "kimi"
+                              ? addKimiProviderToConfig
+                              : switchProvider
+                          }
+                          onRemoveFromConfig={
+                            activeApp === "opencode" ||
+                            activeApp === "openclaw" ||
+                            activeApp === "hermes" ||
+                            activeApp === "pi" ||
+                            activeApp === "omp" ||
+                            activeApp === "mcode" ||
+                            activeApp === "kimi" ||
+                            activeApp === "dsh"
+                              ? (provider) =>
+                                  setConfirmAction({
+                                    provider,
+                                    action: "remove",
+                                  })
+                              : undefined
+                          }
+                          onDisableOmo={
+                            activeApp === "opencode"
+                              ? handleDisableOmo
+                              : undefined
+                          }
+                          onDisableOmoSlim={
+                            activeApp === "opencode"
+                              ? handleDisableOmoSlim
+                              : undefined
+                          }
+                          onSetAsDefault={
+                            activeApp === "openclaw" || activeApp === "opencode"
+                              ? setAsDefaultModel
+                              : activeApp === "hermes" || activeApp === "kimi"
+                                ? (provider: Provider) =>
+                                    switchProvider(provider)
+                                : undefined
+                          }
+                        />
+                      );
+                    })()}
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -1138,6 +1126,13 @@ function App() {
                     ready={
                       proxyStatus !== undefined && takeoverStatus !== undefined
                     }
+                  />
+                )}
+                {/* 模式连接徽标（上游 v7）：实际生效的模式与那家，不跟随正在查看的页签；窄屏改画在模式行下 */}
+                {supportsAppMode(activeApp) && (
+                  <div
+                    ref={setModeStatusSlot}
+                    className="hidden min-w-0 max-w-[16rem] md:flex"
                   />
                 )}
                 <Button

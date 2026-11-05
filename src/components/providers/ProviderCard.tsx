@@ -5,8 +5,12 @@ import { useTranslation } from "react-i18next";
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { AggregationActions } from "@/components/providers/ProviderActions";
-import { ProviderActions } from "@/components/providers/ProviderActions";
+import { ProviderCardActions } from "@/components/providers/ProviderCardActions";
+import type {
+  CardChip as CardChipSpec,
+  CardPresentation,
+  CardTone,
+} from "@/components/providers/presentation";
 import { ProviderIconBox } from "@/components/ProviderIconBox";
 import UsageFooter from "@/components/UsageFooter";
 import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
@@ -22,59 +26,68 @@ import { useAgyAccountSupported } from "@/components/providers/forms/AgyOAuthSec
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
-import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
 import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
-import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
-import { getRoutingReason } from "@/utils/routingReason";
 import {
   terminalAvailable,
   terminalIsIsolated,
 } from "@/components/providers/OpenTerminalDialog";
 import {
   isKimiOfficialAccount,
-  providerNeedsRouting,
   resolveCodexOfficialIdentity,
   supportsConnectivityCheck,
-  supportsOfficialProxyTakeover,
 } from "@/utils/providerCapabilities";
 import { useProviderHealth } from "@/lib/query/failover";
 import { useUsageQuery } from "@/lib/query/queries";
 
 interface ProviderCardProps {
-  aggregation?: AggregationActions;
-  /** 删不掉时的原因（直连指针 / 正在路由的那家） */
-  deleteDisabledReason?: string;
   provider: Provider;
-  isCurrent: boolean;
   appId: AppId;
-  isInConfig?: boolean; // OpenCode: 是否已添加到 opencode.json
-  isOmo?: boolean;
-  isOmoSlim?: boolean;
-  onSwitch: (provider: Provider) => void;
+  /** 卡片怎么画：模式色、状态 / 按钮、徽标、禁用原因（由列表按应用和正在查看的模式算好） */
+  presentation: CardPresentation;
+  /** 用来决定官方订阅 / OAuth 额度是否自动查询 */
+  isCurrent: boolean;
+  /** 累加应用：已写进应用配置的那几家才自动查用量 */
+  isInConfig?: boolean;
   onEdit: (provider: Provider) => void;
   onDelete: (provider: Provider) => void;
-  onRemoveFromConfig?: (provider: Provider) => void;
-  onDisableOmo?: () => void;
-  onDisableOmoSlim?: () => void;
   onConfigureUsage: (provider: Provider) => void;
   onOpenWebsite: (url: string) => void;
-  onDuplicate: (provider: Provider) => void;
+  onDuplicate?: (provider: Provider) => void;
   onTest?: (provider: Provider) => void;
   onOpenTerminal?: (provider: Provider) => void;
   isTesting?: boolean;
-  isProxyRunning: boolean;
-  isProxyTakeover?: boolean; // 代理接管模式（Live配置已被接管，切换为热切换）
-  isAutoFailoverEnabled?: boolean; // 是否开启自动故障转移
-  failoverPriority?: number; // 故障转移优先级（1 = P1, 2 = P2, ...）
-  isInFailoverQueue?: boolean; // 是否在故障转移队列中
-  onToggleFailover?: (enabled: boolean) => void; // 切换故障转移队列
-  activeProviderId?: string; // 代理当前实际使用的供应商 ID（用于故障转移模式下标注绿色边框）
-  // OpenClaw: default model
-  isDefaultModel?: boolean;
-  onSetAsDefault?: (modelId?: string) => void;
-  defaultModelOptions?: { id: string; name?: string }[];
 }
+
+/** 当前那张：模式色边框 + 淡底（沿用 Web 主题的卡片高亮）；累加应用的默认那家同直连色。 */
+const TONE_CARD: Record<CardTone, { card: string; overlay?: string }> = {
+  direct: {
+    card: "provider-card-active-primary",
+    overlay: "provider-card-overlay-primary",
+  },
+  route: {
+    card: "provider-card-active-success",
+    overlay: "provider-card-overlay-success",
+  },
+  stack: {
+    card: "border-violet-400/60 bg-violet-50/40 dark:border-violet-500/50 dark:bg-violet-950/20",
+  },
+};
+
+/** 徽标的配色：映射到 Web 主题的胶囊类名，不引入上游的模式令牌 */
+const CHIP_TONE: Record<CardChipSpec["tone"], string> = {
+  outline: "border border-border-default text-muted-foreground",
+  direct: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  route:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  stack:
+    "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  success:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  warning:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  danger: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+};
 
 const extractApiUrl = (provider: Provider, fallbackText: string) => {
   if (provider.notes?.trim()) {
@@ -164,55 +177,26 @@ function extractAgyModel(provider: Provider): string | null {
 }
 
 export function ProviderCard({
-  aggregation,
-  deleteDisabledReason,
   provider,
-  isCurrent,
   appId,
+  presentation,
+  isCurrent,
   isInConfig = true,
-  isOmo = false,
-  isOmoSlim = false,
-  onSwitch,
   onEdit,
   onDelete,
-  onRemoveFromConfig,
-  onDisableOmo,
-  onDisableOmoSlim,
   onConfigureUsage,
   onOpenWebsite,
   onDuplicate,
   onTest,
   onOpenTerminal,
   isTesting,
-  isProxyRunning,
-  isProxyTakeover = false,
-  isAutoFailoverEnabled = false,
-  failoverPriority,
-  isInFailoverQueue = false,
-  onToggleFailover,
-  activeProviderId,
-  // OpenClaw: default model
-  isDefaultModel,
-  onSetAsDefault,
-  defaultModelOptions,
 }: ProviderCardProps) {
   const { t } = useTranslation();
-
-  // OMO and OMO Slim share the same card behavior
-  const isAnyOmo = isOmo || isOmoSlim;
-  const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
-  const isAdditiveMode =
-    (appId === "opencode" && !isAnyOmo) ||
-    appId === "pi" ||
-    appId === "omp" ||
-    appId === "mcode" ||
-    appId === "kimi" ||
-    appId === "dsh";
 
   const { data: health } = useProviderHealth(
     provider.id,
     appId,
-    appId !== "pi" && appId !== "omp",
+    Boolean(presentation.showHealth),
   );
 
   const fallbackUrlText = t("provider.notConfigured", {
@@ -262,22 +246,10 @@ export function ProviderCard({
   const isCopilot =
     provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT ||
     provider.meta?.usage_script?.templateType === "github_copilot";
-  const isHermesReadOnly =
-    appId === "hermes" && isHermesReadOnlyProvider(provider.settingsConfig);
   const isCodexOauth =
     provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH ||
     isBoundCodexOfficial;
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
-
-  const needsRouting = providerNeedsRouting(appId, provider);
-  // 徽标的说明：这家为什么需要路由（和直连切换时的提示同一份）
-  const routingReason = needsRouting
-    ? getRoutingReason(appId, provider, t)
-    : null;
-  const supportsOfficialRouting = supportsOfficialProxyTakeover(
-    appId,
-    provider,
-  );
 
   // 获取用量数据以判断是否有多套餐
   // 累加模式应用（OpenCode/OpenClaw/Hermes）：使用 isInConfig 代替 isCurrent
@@ -334,62 +306,20 @@ export function ProviderCard({
     onOpenWebsite(displayUrl);
   };
 
-  // 判断是否是"当前使用中"的供应商
-  // - OMO/OMO Slim 供应商：使用 isCurrent
-  // - OpenClaw：使用默认模型归属的 provider 作为当前项（蓝色边框）
-  // - OpenCode（非 OMO）：不存在"当前"概念，返回 false
-  // - 故障转移模式：代理实际使用的供应商（activeProviderId）
-  // - 普通模式：isCurrent
-  const isActiveProvider = isAnyOmo
-    ? isCurrent
-    : appId === "openclaw"
-      ? Boolean(isDefaultModel)
-      : appId === "opencode"
-        ? Boolean(isDefaultModel)
-        : appId === "mcode" || appId === "dsh"
-          ? false
-          : appId === "pi" || appId === "omp"
-            ? false
-            : isAutoFailoverEnabled
-              ? activeProviderId === provider.id
-              : isCurrent;
-
-  const shouldUseViolet = Boolean(aggregation?.member);
-  const shouldUseGreen =
-    !aggregation && !isAnyOmo && isProxyTakeover && isActiveProvider;
-  const hasPersistentConfigHighlight = isAdditiveMode && isInConfig;
-  const shouldUseBlue =
-    !aggregation &&
-    ((isAnyOmo && isActiveProvider) ||
-      (!isAnyOmo &&
-        !isProxyTakeover &&
-        (isActiveProvider || hasPersistentConfigHighlight)));
+  const tone = presentation.tone ? TONE_CARD[presentation.tone] : null;
 
   return (
     <div
       className={cn(
         "glass-card group relative overflow-hidden rounded-2xl border border-border-default text-card-foreground transition-[border-color,box-shadow,background-color] duration-150",
-        isAutoFailoverEnabled || isProxyTakeover
-          ? "hover:border-[hsl(var(--success)/0.45)]"
-          : "hover:border-border-active",
-        shouldUseViolet &&
-          "border-violet-400/60 bg-violet-50/40 dark:border-violet-500/50 dark:bg-violet-950/20",
-        shouldUseGreen && "provider-card-active-success",
-        shouldUseBlue && "provider-card-active-primary",
-        !(isActiveProvider || hasPersistentConfigHighlight) &&
-          "hover:shadow-sm",
+        tone ? tone.card : "hover:border-border-active hover:shadow-sm",
       )}
     >
       <div
         className={cn(
           "pointer-events-none absolute inset-0 bg-gradient-to-r to-transparent transition-opacity duration-500",
-          shouldUseGreen && "provider-card-overlay-success",
-          shouldUseBlue && "provider-card-overlay-primary",
-          !(isActiveProvider || hasPersistentConfigHighlight) &&
-            "from-primary/10",
-          isActiveProvider || hasPersistentConfigHighlight
-            ? "opacity-100"
-            : "opacity-0",
+          tone?.overlay ?? "from-primary/10",
+          tone?.overlay ? "opacity-100" : "opacity-0",
         )}
       />
       {/* 一行排开（上游 v7）：图标 → 名称与副标题 → 用量列 → 操作；窄屏时用量与操作换到第二行靠右 */}
@@ -398,64 +328,35 @@ export function ProviderCard({
           icon={provider.icon}
           name={provider.name}
           color={provider.iconColor}
-          className="bg-background/80"
+          className={cn("bg-background/80", presentation.dim && "opacity-60")}
         />
 
         <div className="min-w-0 flex-1 basis-40">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <h3
-              className="m-0 min-w-0 max-w-full truncate text-sm font-semibold text-foreground"
+              className={cn(
+                "m-0 min-w-0 max-w-full truncate text-sm font-semibold",
+                presentation.dim ? "text-muted-foreground" : "text-foreground",
+              )}
               title={provider.name}
             >
               {provider.name}
             </h3>
 
-            {isOmo && <CardChip className="theme-chip-primary">OMO</CardChip>}
+            {presentation.chips.map((chip) => (
+              <CardChip
+                key={chip.key}
+                className={CHIP_TONE[chip.tone]}
+                title={chip.title}
+              >
+                {chip.label}
+              </CardChip>
+            ))}
 
-            {isOmoSlim && (
-              <CardChip className="theme-chip-tertiary">Slim</CardChip>
-            )}
-
-            {isProxyRunning && isInFailoverQueue && health && (
+            {presentation.showHealth && health && (
               <ProviderHealthBadge
                 consecutiveFailures={health.consecutive_failures}
               />
-            )}
-
-            {isAutoFailoverEnabled && isInFailoverQueue && failoverPriority && (
-              <FailoverPriorityBadge priority={failoverPriority} />
-            )}
-
-            {needsRouting && (
-              <CardChip
-                className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
-                title={routingReason ?? undefined}
-              >
-                {t("codex.needsRouting", {
-                  defaultValue: "需要路由",
-                })}
-              </CardChip>
-            )}
-
-            {supportsOfficialRouting && (
-              <CardChip className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                {isProxyTakeover
-                  ? t("codex.officialRouting", {
-                      defaultValue: "官方账号路由",
-                    })
-                  : t("codex.nativeLogin", {
-                      defaultValue: "Codex 登录",
-                    })}
-              </CardChip>
-            )}
-
-            {isHermesReadOnly && (
-              <CardChip
-                className="border border-border-default text-muted-foreground"
-                title={t("provider.managedByHermesHint")}
-              >
-                {t("provider.managedByHermes")}
-              </CardChip>
             )}
           </div>
 
@@ -595,36 +496,15 @@ export function ProviderCard({
             </div>
           </div>
 
-          <ProviderActions
-            aggregation={aggregation}
-            failoverUnavailable={
-              appId === "codex" &&
-              resolveCodexOfficialIdentity(appId, provider) !== null
-            }
-            deleteDisabledReason={
-              deleteDisabledReason ??
-              // 仍在 Kimi 里的官方卡不能直接删：删号在授权中心（连登录一起删）
-              (appId === "kimi" && isOfficial && isInConfig
-                ? t("kimi.oauth.managedHint")
-                : undefined)
-            }
-            deleteDisabled={
-              Boolean(deleteDisabledReason) ||
-              (appId === "kimi" && isOfficial && isInConfig)
-            }
-            appId={appId}
-            isCurrent={isCurrent}
-            isInConfig={isInConfig}
-            isTesting={isTesting}
-            isProxyTakeover={isProxyTakeover}
-            isReadOnly={isHermesReadOnly}
-            isOmo={isAnyOmo}
-            onSwitch={() => onSwitch(provider)}
+          <ProviderCardActions
+            providerName={provider.name}
+            presentation={presentation}
             onEdit={() => onEdit(provider)}
+            onDelete={() => onDelete(provider)}
             onDuplicate={
-              appId === "kimi" && isOfficial
-                ? undefined
-                : () => onDuplicate(provider)
+              onDuplicate && !(appId === "kimi" && isOfficial)
+                ? () => onDuplicate(provider)
+                : undefined
             }
             onTest={
               onTest &&
@@ -636,6 +516,7 @@ export function ProviderCard({
                 ? () => onTest(provider)
                 : undefined
             }
+            isTesting={isTesting}
             onConfigureUsage={
               (isOfficial && !isBoundCodexOfficial) ||
               isCopilot ||
@@ -644,25 +525,12 @@ export function ProviderCard({
                 ? undefined
                 : () => onConfigureUsage(provider)
             }
-            onDelete={() => onDelete(provider)}
-            onRemoveFromConfig={
-              onRemoveFromConfig
-                ? () => onRemoveFromConfig(provider)
-                : undefined
-            }
-            onDisableOmo={handleDisableAnyOmo}
             onOpenTerminal={
               onOpenTerminal && terminalAvailable(provider, appId, isCurrent)
                 ? () => onOpenTerminal(provider)
                 : undefined
             }
             openTerminalIsolated={terminalIsIsolated(provider, appId)}
-            isAutoFailoverEnabled={isAutoFailoverEnabled}
-            isInFailoverQueue={isInFailoverQueue}
-            onToggleFailover={onToggleFailover}
-            isDefaultModel={isDefaultModel}
-            onSetAsDefault={onSetAsDefault}
-            defaultModelOptions={defaultModelOptions}
           />
         </div>
       </div>

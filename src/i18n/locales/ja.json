@@ -156,7 +156,6 @@
     "importCurrent": "現在の設定をインポート",
     "importCurrentDescription": "現在使用中の設定をデフォルトプロバイダーとしてインポート",
     "currentlyUsing": "現在使用中",
-    "enable": "有効化",
     "inUse": "使用中",
     "editProvider": "プロバイダーを編集",
     "editProviderHint": "保存すると現在のプロバイダーにすぐ反映されます。",
@@ -167,9 +166,6 @@
     "addCodexProvider": "Codex プロバイダーを追加",
     "addGeminiProvider": "Gemini プロバイダーを追加",
     "addOpenCodeProvider": "OpenCode プロバイダーを追加",
-    "addToConfig": "追加",
-    "removeFromConfig": "削除",
-    "setAsDefault": "デフォルトに設定",
     "isDefault": "現在のデフォルト",
     "inConfig": "追加済み",
     "addProviderHint": "一覧にすばやく切り替えられるよう、ここに情報を入力してください。",
@@ -193,7 +189,6 @@
     "terminalOpenFailed": "ターミナルを開けませんでした",
     "sortUpdateFailed": "並び順の更新に失敗しました",
     "configureUsage": "利用状況を設定",
-    "managedByHermes": "Hermes 管理",
     "managedByHermesHint": "Hermes の providers: dict で定義されています。Hermes Web UI で編集または削除してください。",
     "name": "プロバイダー名",
     "namePlaceholder": "例: Claude Official",
@@ -277,11 +272,12 @@
       "agySwitchRunning": "agy が実行中です。開いている agy は元のアカウントのままで、元のアカウントを書き戻す可能性があります。できれば先に終了してください。"
     },
     "openTerminalIsolated": "ターミナルを開く（環境を分離）",
-    "deleteBlockedInUse": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。",
-    "deleteBlockedDirectDefault": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続に戻してほかのプロバイダーに切り替えてください。",
     "backToList": "プロバイダー一覧に戻る",
     "searchButtonTip": "プロバイダーを検索（{{shortcut}}）",
-    "disable": "無効にする"
+    "disable": "無効にする",
+    "directProviderHint": "ルーティングを終了するとこのプロバイダに戻ります",
+    "openTerminalWithProvider": "このプロバイダーでターミナルを開く",
+    "stackBadgeNoModels": "モデルが設定されていないため、モデル選択には表示されません"
   },
   "notifications": {
     "providerAdded": "プロバイダーを追加しました",
@@ -1580,11 +1576,9 @@
   },
   "codex": {
     "needsRouting": "ルーティング必須",
-    "nativeLogin": "Codex ログイン",
     "accountStatusUnavailable": "アカウント情報を読み込めません",
     "boundAccountUnavailable": "連携済みアカウントを利用できません",
-    "accountLoading": "アカウントを読み込み中…",
-    "officialRouting": "公式アカウントルーティング"
+    "accountLoading": "アカウントを読み込み中…"
   },
   "copilot": {
     "authSection": "GitHub Copilot 認証",
@@ -3860,27 +3854,10 @@
     }
   },
   "webMode": {
-    "title": "動作モード",
-    "direct": "直結",
-    "routing": "ルーティング",
-    "aggregation": "集約",
-    "active": "現在のモード",
-    "noProvider": "プロバイダー未選択",
-    "activate": "{{mode}}を有効にする",
-    "defaultProvider": "既定のプロバイダー",
-    "confirm": "クライアントをローカルルーティングサービスに接続します。ルーティングや集約を終了すると直結のプロバイダーに戻ります。Codex、Gemini、Grok は再起動して新しい設定を読み込んでください。",
     "startupFailed": "モードの復元に失敗しました：{{error}}。設定を修正してから、必要なモードを再度有効にしてください。",
     "loadFailed": "動作モードを読み込めません",
-    "default": "既定",
-    "join": "参加",
-    "setDefault": "集約の既定に設定",
     "restartDaemon": "Codex デーモンを再起動",
     "restartDaemonConfirm": "実行中のタスクの終了を待ち、管理対象の Codex デーモンを再起動して新しいモデル一覧を読み込みます。数分かかる場合があります。デスクトップ版とエディター拡張は手動で終了して開き直してください。",
-    "help": {
-      "direct": "CC Switch はリクエストに一切関与せず、クライアントが選択したプロバイダーに直接つながる、最もネイティブな使い方です。",
-      "routing": "リクエストはこのマシンの CC Switch を経由し、プロバイダーのホットスイッチ、フェイルオーバー、フォーマット変換などの高度な機能が使えます。",
-      "aggregation": "複数のプロバイダーのモデルがクライアントのモデル一覧に並び、クライアント内でシームレスに切り替えられます。カードで参加・解除し、その他のメニューで既定を設定します。"
-    },
     "notice": {
       "routeOwnsCatalog": "既定のプロバイダーが独自のモデル一覧を管理しているため、他のメンバーは公開されません。",
       "officialModelsBundled": "Codex 同梱のモデル一覧を使用中です。アカウント専用モデルが含まれない場合があります。",
@@ -3949,17 +3926,7 @@
       "routeSwitched": "ルーティング先を {{provider}} に切り替えました。以降の新しいリクエストはこのプロバイダーを使用します。",
       "stackDefaultChanged": "集約の既定プロバイダーを {{provider}} に設定しました。選択済みの集約モデルはそれぞれのプロバイダーを使用します。",
       "clientConfigChanged": "クライアント設定も更新されました。{{app}} を再起動して更新後の設定を読み込んでください。"
-    },
-    "exit": {
-      "title": "{{app}} を「{{from}}」から直接接続に戻しますか？",
-      "lead": "{{app}} は {{provider}} に直接接続し、リクエストは CC Switch を経由しなくなります。",
-      "noteFile": "{{file}} のアドレスとキーを {{provider}} のものに書き戻します。ほかの設定は変わりません。",
-      "noteDesktop": "Claude Desktop のゲートウェイ設定を {{provider}} に書き戻します。Claude Desktop を再起動すると反映されます。",
-      "routeKept": "ルーティング先、フェイルオーバーのキューと設定は保持され、次にルーティングを開始すると復元されます。",
-      "leaveStackNote": "ccs- で始まる集約モデルはモデル一覧から消えます。集約リストは残り、集約に戻すと復活します。そのどれかを使用中なら、クライアントで通常のモデルに切り替えてください。",
-      "confirm": "直接接続に戻す"
-    },
-    "leave": "集約から外す"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4649,11 +4616,134 @@
   "providerCard": {
     "action": {
       "addToQueue": "キューに追加",
-      "removeFromQueue": "キューから外す"
+      "removeFromQueue": "キューから外す",
+      "switch": "切り替え",
+      "routeHere": "ここへ転送",
+      "backToDirectAndUse": "直接接続に戻して使う",
+      "setDefault": "既定にする",
+      "add": "追加",
+      "remove": "削除",
+      "enable": "有効にする",
+      "disable": "無効にする",
+      "edit": "{{name}} を編集",
+      "more": "{{name}} のその他の操作",
+      "openTerminal": "{{name}} でターミナルを開く"
     },
     "reason": {
       "defaultCannotRemove": "既定のプロバイダーは削除できません。先にほかを既定にしてください。",
-      "inUseCannotDelete": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。"
+      "inUseCannotDelete": "使用中のプロバイダーは削除できません。先にほかへ切り替えてください。",
+      "noRoute": "公式サブスクリプションはルーティングを通りません。直接接続に戻すと使えます。",
+      "noStack": "公式サブスクリプションは集約では使えません。",
+      "officialStack": "公式アカウントは既定にだけでき、集約には追加できません。",
+      "defaultWhileRouting": "ルーティング中は、転送先のプロバイダーがそのまま既定になります。集約に切り替えるときに別のプロバイダーを選べます。",
+      "needsRoute": "ルーティングが必要：{{reason}}。直接接続はできません。",
+      "directDefaultCannotDelete": "ルーティングを終了するとこのプロバイダーに戻るため、削除できません。先に直接接続ページでほかのプロバイダーの「直接接続に戻して使う」を選んでください。",
+      "noFailover": "公式アカウントはフェイルオーバーキューに入れられません。クライアント自身のログインを使うため、ほかと交代できません。"
+    },
+    "status": {
+      "inUse": "使用中",
+      "routing": "転送中",
+      "currentDefault": "現在の既定",
+      "defaultAfterSwitch": "切り替え後の既定",
+      "default": "既定"
+    },
+    "chip": {
+      "official": "公式",
+      "needsRoute": "ルーティングが必要",
+      "directWhenDirect": "直接接続時に使用",
+      "default": "既定",
+      "models": "{{count}} モデル",
+      "noModels": "モデルなし",
+      "hermesManaged": "Hermes 管理",
+      "defaultModel": "既定モデル {{model}}"
+    },
+    "section": {
+      "queue": "キュー · 優先順（{{count}}）",
+      "queueHelpTitle": "フェイルオーバーキュー",
+      "queueHelp": "リクエストは先頭に送られ、連続して失敗すると次に切り替わります。",
+      "queueEmpty": "キューは空です。下から追加してください。",
+      "notInQueue": "キュー外（{{count}}）",
+      "stackDefault": "既定のプロバイダー",
+      "stackDefaultAfterSwitch": "集約に切り替えた後の既定のプロバイダー",
+      "stackDefaultHelp": "プレフィックスなしのリクエストはここに送られます。ほかの追加済みプロバイダーは ccs- プレフィックス付きで /model に表示されます。",
+      "stackDefaultHelpDesktop": "デフォルトのモデルとマッピングしたモデルへのリクエストはここに送られます。追加したほかのプロバイダーは「プロバイダー / モデル」としてモデル一覧に表示されます。",
+      "stackEmpty": "ほかのプロバイダーはまだ追加されていません。",
+      "added": "追加済み · {{count}}",
+      "addedHelpTitle": "追加済み",
+      "addedHelp": "追加したプロバイダーはすべて {{app}} の設定に書き込まれます。モデルは {{app}} の中で選びます。",
+      "addedEmpty": "まだプロバイダーを追加していません。",
+      "available": "追加できるもの · {{count}}",
+      "stackNoDefault": "既定のプロバイダーはまだありません。集約に切り替えるときに選びます。"
+    }
+  },
+  "mode": {
+    "tabsLabel": "接続モード",
+    "names": {
+      "direct": "直接接続",
+      "route": "ルーティング",
+      "stack": "集約"
+    },
+    "active": "有効",
+    "noProvider": "未選択",
+    "failover": "フェイルオーバー",
+    "status": {
+      "directLead": "直接接続が有効 · 接続先",
+      "routeLead": "ルーティングが有効",
+      "byQueue": "キュー順",
+      "stackLead": "集約が有効 · 既定",
+      "stackValue": "{{name}} · ほか {{count}} 社、{{models}} モデル"
+    },
+    "activate": {
+      "viewing": "「{{view}}」を表示中です。{{app}} は現在{{active}}です。",
+      "route": "ルーティングを開始",
+      "stack": "集約に切り替え",
+      "direct": "直接接続に戻す"
+    },
+    "notice": {
+      "serviceDown": "{{app}} は{{mode}}モードですが、ルーティングサービスが動いていないためリクエストは失敗します。",
+      "backToDirect": "直接接続に戻す"
+    },
+    "dialog": {
+      "routeTitle": "{{app}} でルーティングを使いますか？",
+      "stackTitle": "{{app}} で集約を使いますか？",
+      "switchTitle": "{{app}} を「{{from}}」から「{{to}}」に切り替えますか？",
+      "routeLead": "リクエストはまずこのマシンの CC Switch を経由し、選んだプロバイダーに転送されます。",
+      "stackLead": "既定のプロバイダーがプレフィックスなしのリクエストを受けます。",
+      "routeTo": "転送先",
+      "stackDefault": "既定のプロバイダー",
+      "officialOption": "{{name}}（公式）",
+      "stackOfficialNote": "公式サブスクリプションを使っている場合は、公式アカウントを既定のプロバイダーにしてください。",
+      "routeNoteFile": "{{file}} のアドレスとキーを書き換えます。本物のキーは CC Switch に残り、ほかの設定は変わりません。",
+      "routeNoteSwitch": "以後「ルーティング」タブでプロバイダーを変えても設定ファイルは書き換えません。",
+      "routeNoteKeepRunning": "CC Switch を起動したままにしてください。終了時に直接接続へ書き戻し、次回起動時に再接続します。",
+      "desktopRouteNoteModels": "Claude Desktop のモデル一覧がルーティング先のモデルに変わります。あとでルーティング先を変えると設定ファイルを書き換えます。",
+      "desktopRouteNoteRestart": "{{app}} は起動時にしか設定を読みません。確認後に {{app}} を再起動してください。",
+      "desktopRouteNoteKeepRunning": "{{app}} のリクエストを転送するため、CC Switch を起動したままにしてください。",
+      "stackNoteMembers": "ほかに {{names}} の計 {{count}} モデルが、ccs- プレフィックス付きで /model に表示されます。",
+      "desktopStackNoteMembers": "ほかに {{names}} の計 {{count}} モデルが、「プロバイダー / モデル」として Claude Desktop のモデル一覧に表示されます。",
+      "stackNoteEmpty": "ほかのプロバイダーはまだ追加されていないため、切り替え後は既定のプロバイダーだけです。あとで「集約」タブで追加できます。",
+      "stackNoteNoFailover": "集約ではフェイルオーバーしません。キューと設定は保持され、ルーティングに戻すと復元されます。",
+      "stackNoteRestartCodex": "{{app}} を再起動すると集約したモデルが表示されます。デスクトップ版は完全に終了してから開き直してください。",
+      "leaveStackNote": "ccs- で始まる集約モデルは /model から消えます。集約リストは残り、集約に戻すと復活します。そのどれかを使用中なら、/model で通常のモデルに切り替えてください。",
+      "desktopLeaveStackNote": "集約モデルは再起動後に Claude Desktop のモデル一覧から外れます。集約リストは残り、集約に戻すと復活します。そのどれかを使用中なら、通常のモデルに切り替えてください。",
+      "exitTitle": "{{app}} を「{{from}}」から直接接続に戻しますか？",
+      "exitLead": "{{app}} は {{provider}} に直接接続し、リクエストは CC Switch を経由しなくなります。",
+      "exitNoteFile": "{{file}} のアドレスとキーを {{provider}} のものに書き戻します。ほかの設定は変わりません。",
+      "exitNoteRouteKept": "ルーティング先、フェイルオーバーのキューと設定は保持され、次にルーティングを開始すると復元されます。",
+      "desktopExitNoteRouteKept": "ルーティング先は保持され、次にルーティングを開始すると復元されます。",
+      "confirmDirect": "直接接続に戻す",
+      "confirmRoute": "ルーティングを開始",
+      "confirmStack": "集約に切り替え",
+      "needsRouteTitle": "{{provider}} にはルーティングが必要です",
+      "needsRouteLead": "{{provider}}：{{reason}}。直接接続で切り替えると {{app}} では使えません。",
+      "switchAnyway": "それでも直接切り替える",
+      "routeAndUse": "ルーティングを開始して使う"
+    },
+    "help": {
+      "title": "接続モードの違い",
+      "direct": "直接接続：CC Switch はリクエストに一切関与せず、クライアントが選んだプロバイダーに直接つながる、最もネイティブな使い方です。",
+      "route": "ルーティング：リクエストはこのマシンの CC Switch を経由し、プロバイダーのホットスイッチ、フェイルオーバー、フォーマット変換などの高度な機能が使えます。",
+      "stack": "集約：複数のプロバイダーのモデルが /model に並び、クライアント内でシームレスに切り替えられます。"
     }
   }
 }

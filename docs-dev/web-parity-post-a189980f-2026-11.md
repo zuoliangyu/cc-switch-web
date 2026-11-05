@@ -428,7 +428,7 @@
 | `30fcd90a` | v4.0.12 | fix(apps): keep columns aligned when upgrade actions disappear (#8293) | 5a 供应商与全局 UI | 5a4a：应用页表头与各行（md 起）共用列宽，操作列按可见按钮的最大宽度经 ResizeObserver 收缩；安装提示截断；窄屏保留 Web 的两行排布 | 已迁移 |
 | `6a232cab` | v4.0.12 | feat(apps): choose which installation to uninstall and support current Grok layout | 1d 资源/设置/工具 | 1d：卸载时选择具体安装位置、Grok 新布局；Hermes Windows 残留提示按服务端卸载路径判断平台 | 已迁移 |
 | `ae778b4f` | v4.0.12 | feat(apps): check the Node version before updating npm tools | 1d 资源/设置/工具 | 1d：升级 npm 工具前检查 Node 版本（tool_node_requirement 子模块 + 行内提示，阻止的工具不进“全部升级”） | 已迁移 |
-| `31c6f574` | v4.0.12 | feat(providers): place provider search at the end of the first list row | 5a 供应商与全局 UI | 5d2：去掉供应商工作台卡片，搜索框放在列表上方第一行的最右端（不浮在卡片上、不在卡片里），带清空与关闭；有模式行时上游把搜索框放进模式行（searchSlot），随 5d3 接到 Web 模式界面 | 已迁移 |
+| `31c6f574` | v4.0.12 | feat(providers): place provider search at the end of the first list row | 5a 供应商与全局 UI | 5a3a/5d2/5d3a：搜索框不遮挡卡片；切换式应用的搜索框放进模式行右端（上游 searchSlot），其他应用仍在列表首行与第一个分组标题同行 | 已迁移 |
 | `dea297ce` | v4.0.12 | fix(i18n): use English for unsupported system languages | 1d 资源/设置/工具 | 1d：浏览器语言不在 zh/en/ja 中时使用英文 | 已迁移 |
 | `d1592fb1` | v4.0.12 | feat(presets): add StreamLake for Codex and use the public KAT-Coder endpoint | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `ff443477` | v4.0.12 | feat(presets): add Ollama Cloud provider presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -475,7 +475,7 @@
 | `16537fd3` | v4.0.13 | fix(codex): preserve compaction preferences in proxy config (#8339) | 4 模式/路由 | 4b：代理路由表保留路由那家的 remote_compaction 能力与「OpenAI」名字开关 | 已迁移 |
 | `09237ebd` | v4.0.13 | fix(windows): avoid native CSS drag regions (#8327) | — | 桌面窗口拖拽区域；浏览器页面无窗口拖拽 | 不适用 |
 | `be0a9cf0` | v4.0.13 | fix(presets): cap GPT context windows at the 272K subscription window | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b：设备级聚合设置：子代理模型与推理强度（按合并目录校验后写 [agents]）、codexStackClassicTools 默认开；Stack 视图给出 subagentModels；设置变了立即重写、失败回滚。Web 在模式面板的聚合设置区编辑；上游「切换到聚合」确认框里的子代理选择与 ModeTabs / StackSettingsSheet 外壳不迁移；docs/ 用户手册不适用 | 部分迁移 |
+| `6aeaeb17` | v4.0.13 | feat(codex): pick the aggregation sub-agent model and default classic tools on | 4 模式/路由 | 4b/5d3a：设备级聚合设置、子代理模型与强度、codexStackClassicTools 默认开（4b）；聚合设置仍在模式面板的聚合页里编辑，上游「切换到聚合」确认框里的子代理选择与 StackSettingsSheet 外壳随 5d3b | 部分迁移 |
 | `e70e844c` | v4.0.13 | feat(codex): let Auto Review use another model | 4 模式/路由 | 4b：自动审批模型：卡上 modelCatalog.autoReviewModel（只能选映射里的，写进目录行 auto_review_model_override，读回时还原）；聚合下用设备级 codexStackAutoReviewModel（按合并目录校验） | 已迁移 |
 | `f9e0d537` | v4.0.13 | feat(mode): confirm before going back to direct | 4 模式/路由 | 4d：回到直连先确认：模式面板确认框写明直连那家、改写的客户端文件（Claude Desktop 为网关配置）、路由目标与队列保留 / 聚合模型消失；错误在确认框里就地显示；聚合切到路由也提示聚合模型会撤下 | 已迁移 |
 | `3e9eede4` | v4.0.13 | feat(claude-desktop): move Desktop into the device-level direct/route mode | 4 模式/路由 | 4c：Claude Desktop 并入设备级直连 / 路由模式：路由模式写指向本地路由 /claude-desktop 的网关 profile，直连模式写直连那家，要经路由的卡（模型映射、托管 OAuth）在直连下拒绝（switch.desktop_needs_routing），退出路由写不进去时退回官方；退出 CC Switch 不分离 Desktop；去掉按卡片启停映射服务；接管状态带 claude-desktop；Web 模式面板对 Desktop 开放。托盘、项目 Profile 命令（Web 无 commands/profile.rs）不适用 | 部分迁移 |
@@ -484,7 +484,7 @@
 | `e5508224` | v4.0.13 | feat(claude-desktop): offer aggregation mode in the Desktop panel | 5a 供应商与全局 UI | 5a3a：Desktop 模式面板提供聚合模式已随 4c 迁入（AppModePanel 对 claude-desktop 开放 aggregation），本批无改动 | 已迁移 |
 | `e4367db5` | v4.0.13 | fix(claude-desktop): resolve colliding aggregation ids to the listed provider | 4 模式/路由 | 4c：Desktop 聚合 id 撞号时解析到名单里列出的那一家 | 已迁移 |
 | `58354f91` | v4.0.13 | fix(claude-desktop): split a legacy mapping card into route and official direct | 4 模式/路由 | 4c：启动时旧版映射卡拆成路由模式（路由到这张卡）＋直连指针改官方卡，先落定模式再改指针；Web 不预置官方卡，迁移时没有就补一行 claude-desktop-official | 已迁移 |
-| `78d2517a` | v4.0.13 | fix(mode): preview the old default's models and fill in Desktop's app name | 4 模式/路由 | 4c：Stack 成员视图带 memberModels（换默认预览用）；上游 ModeDialog 的换默认预览与 {{app}} 文案修正不适用（Web 确认框只选默认供应商） | 部分迁移 |
+| `78d2517a` | v4.0.13 | fix(mode): preview the old default's models and fill in Desktop's app name | 4 模式/路由 | 4c/5d3a：Stack 成员视图带 memberModels（4c）；5d3a 迁入上游 ModeDialog：进入聚合时按框里选中的默认那家预览「另有 X 家共 Y 个模型」（Desktop 用自己的说明），标题与说明里的 {{app}} 用 APP_DISPLAY_NAME（含 Claude Desktop） | 已迁移 |
 | `7c763cf3` | v4.0.13 | fix(claude-desktop): give the back-to-direct confirmation Desktop's own notes | 5a 供应商与全局 UI | 5a3a：回到直连的确认框里 Desktop 用自己的说明（webMode.exit.noteDesktop）已随 4c 迁入，本批无改动 | 已迁移 |
 | `35423712` | v4.0.13 | test(uninstall): borrow single paths as slices for clippy | 1d 资源/设置/工具 | 1d：卸载测试 clippy 修正（随测试最终版本） | 已迁移 |
 | `eb2b0d36` | v4.0.13 | test(apps): wait for re-probed rows before Update all after a remount | 1d 资源/设置/工具 | 1d：应用页测试等待重新探测后再全部更新 | 已迁移 |
@@ -636,7 +636,7 @@
 | `9a10e4f7` | v4.0.18 | feat(agy): replace the enable button with Open Terminal | 2c Antigravity | 2c：卡片主按钮由「启用」改为「打开终端」；上游的 OpenTerminalDialog（选终端/目录）随 5a 处理，Web 直接调用服务端打开终端 | 部分迁移 |
 | `c776fd0e` | v4.0.18 | feat(agy): trim the form hint and require a key on custom cards | 2c Antigravity | 2c：表单提示精简，自定义卡要求 Key（EndpointField 增加 required/help） | 已迁移 |
 | `1ef08d5e` | v4.0.18 | fix(windows): stop in-app updates from rebooting the machine (#8628) | — | MSI 应用内更新重启；Web 无安装器 | 不适用 |
-| `c1fd26bd` | v4.0.18 | fix(ui): show compact mode-colored connection badge in header (#8634) | 5a 供应商与全局 UI | 5a3a：模式面板的状态改为紧凑徽标：模式色圆点（已接上为模式色，未接上为灰点）+ 模式名 · 实际生效的那家，不跟随正在查看的页签；补用例。Web 页头没有应用标题栏，徽标留在模式行，不移进页头 | 部分迁移 |
+| `c1fd26bd` | v4.0.18 | fix(ui): show compact mode-colored connection badge in header (#8634) | 5a 供应商与全局 UI | 5a3a/5d3a：紧凑徽标随 5a3a；5d3a 由模式面板经 portal 画进页头（md 起），写「模式 · 实际生效的那家」并带 HoverTip 全称；窄屏页头放不下，徽标改画在模式行下面 | 已迁移 |
 | `ab5d4a12` | v4.0.18 | fix(ui): trim redundant provider and settings helper copy (#8633) | 5a 供应商与全局 UI | 5a3a/5a4b：表单部分随 5a3a 迁入；本批去掉 OpenClaw 环境 / 工具面板、工作区每日记忆卡、整流器开关、WebDAV 的冗余说明与「默认值」小字；日志开关与级别说明收进帮助卡；配置目录说明、定价 models.dev 提示收进帮助卡；供应商空状态按上游最终结构（图标框、只留各应用自己的说明、导入说明收进帮助卡），过时的「通用配置片段」文案换成 noProvidersDescriptionKeyFields；删除不再使用的三语文案。S3 部分不适用：Web 没有 S3 同步；设置页整体版式随 5d4 | 部分迁移 |
 | `cdfdff5e` | v4.0.18 | fix(installer): make Windows desktop shortcut optional (#8601) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `92ec18d7` | v4.0.18 | docs(aggregation): correct the workaround for the exhausted-quota lock | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
@@ -1158,3 +1158,9 @@
   - 保留 Web 主题的卡片高亮与配色；上游队列上移 / 下移与拖动手柄不迁（Web 不做拖动排名）。按模式分组的列表标题、卡片模式色与按模式而定的主按钮依赖模式视图，随 5d3。
   - `docs/claude-codex-routing-guide-zh.md` 同步聚合成员按钮的说法。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 223 个文件 2356 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。
+- 2026-11-06：完成布局收敛批次 5d3a（模式界面与列表分组）。78d2517a、c1fd26bd 由部分迁移改为已迁移，31c6f574 补上模式行搜索位置；6aeaeb17 仍为部分迁移（Stack 设置面板随 5d3b）。
+  - 用上游的模式页签 + 模式面板替换 Web 的 `AppModePanel`：页签只用来查看，查看的不是生效模式时由通知条进入确认框（选路由目标或默认供应商、列出改写的文件与聚合成员，进入聚合时预览默认那家之外的模型数）；没接上、启动恢复失败、聚合目录、Codex 旧客户端提示统一为通知条。连接徽标画进页头（窄屏在模式行下方），搜索框放进模式行。
+  - 迁入上游 `presentation.ts`：列表按查看的模式分组（队列 / 不在队列、默认 / 已添加 / 可添加、累加应用的已添加 / 可添加），组内按显示名称 A–Z；卡片按模式着色、徽标与主操作（切换、回到直连并使用、路由到此、加入 / 移出队列或聚合），不能用于当前模式的官方订阅整卡变淡。直连页点需要路由的卡先弹「需要路由」确认，可开始路由或仍然直连切换。
+  - 与上游不同：故障转移队列不做上移 / 下移与拖动（删除 `queueMoveSortUpdates` 与相关文案）；模式行暂不放故障转移开关与路由设置面板（Web 页头已有 FailoverToggle，随 5d3b / 5d4 决定）；进入 / 退出模式成功不弹 toast；回到直连并改用另一家分两步完成。
+  - 三语补上游 `providerCard.*`、`mode.*` 等文案，删除 73 项不再引用的旧文案；`docs/claude-codex-routing-guide-zh.md` 同步模式操作、分组与 Desktop 聚合支持的说法。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 225 个文件 2382 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。

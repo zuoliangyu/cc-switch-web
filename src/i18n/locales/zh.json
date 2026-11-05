@@ -156,7 +156,6 @@
     "importCurrent": "导入当前配置",
     "importCurrentDescription": "将当前正在使用的配置导入为默认供应商",
     "currentlyUsing": "当前使用",
-    "enable": "启用",
     "inUse": "使用中",
     "editProvider": "编辑供应商",
     "editProviderHint": "更新配置后将立即应用到当前供应商。",
@@ -167,9 +166,6 @@
     "addCodexProvider": "添加 Codex 供应商",
     "addGeminiProvider": "添加 Gemini 供应商",
     "addOpenCodeProvider": "添加 OpenCode 供应商",
-    "addToConfig": "添加",
-    "removeFromConfig": "移除",
-    "setAsDefault": "设为默认",
     "isDefault": "当前默认",
     "inConfig": "已添加",
     "addProviderHint": "填写信息后即可在列表中快速切换供应商。",
@@ -193,7 +189,6 @@
     "terminalOpenFailed": "打开终端失败",
     "sortUpdateFailed": "排序更新失败",
     "configureUsage": "配置用量查询",
-    "managedByHermes": "Hermes 托管",
     "managedByHermesHint": "该条目定义在 Hermes 的 providers: dict，请在 Hermes Web UI 中编辑或删除。",
     "name": "供应商名称",
     "namePlaceholder": "例如：Claude 官方",
@@ -277,11 +272,12 @@
       "agySwitchRunning": "检测到 agy 正在运行：已打开的 agy 仍用原账号，还可能把原账号写回去，最好先退出它们。"
     },
     "openTerminalIsolated": "打开终端（环境隔离）",
-    "deleteBlockedInUse": "正在用的这家不能删除，先切到别家。",
-    "deleteBlockedDirectDefault": "退出路由后会回到这家，所以不能删除。先回到直连并切到别家，再删除。",
     "backToList": "返回供应商列表",
     "searchButtonTip": "搜索供应商（{{shortcut}}）",
-    "disable": "停用"
+    "disable": "停用",
+    "directProviderHint": "退出路由后恢复为这个供应商",
+    "openTerminalWithProvider": "使用此供应商打开终端",
+    "stackBadgeNoModels": "这家没有配置模型，不会出现在模型选择器里"
   },
   "notifications": {
     "providerAdded": "供应商已添加",
@@ -1580,11 +1576,9 @@
   },
   "codex": {
     "needsRouting": "需要路由",
-    "nativeLogin": "Codex 登录",
     "accountStatusUnavailable": "无法读取账号信息",
     "boundAccountUnavailable": "绑定的账号不可用",
-    "accountLoading": "正在加载账号…",
-    "officialRouting": "官方账号路由"
+    "accountLoading": "正在加载账号…"
   },
   "copilot": {
     "authSection": "GitHub Copilot 认证",
@@ -3860,27 +3854,10 @@
     }
   },
   "webMode": {
-    "title": "运行模式",
-    "direct": "直连",
-    "routing": "路由",
-    "aggregation": "聚合",
-    "active": "当前模式",
-    "noProvider": "未选择供应商",
-    "activate": "启用{{mode}}",
-    "defaultProvider": "默认供应商",
-    "confirm": "将客户端连接到本地路由服务。退出路由或聚合时恢复直连供应商；Codex、Gemini 和 Grok 客户端需重启以读取新配置。",
     "startupFailed": "启动恢复失败：{{error}}。请修正配置后重新启用所需模式。",
     "loadFailed": "无法读取运行模式",
-    "default": "默认",
-    "join": "加入",
-    "setDefault": "设为聚合默认",
     "restartDaemon": "重启 Codex 守护进程",
     "restartDaemonConfirm": "将等待运行中的任务收尾，再重启 Codex 托管守护进程以读取新模型列表，最长可能需要数分钟。桌面版和编辑器插件仍需手动退出再打开。",
-    "help": {
-      "direct": "CC Switch 不经手任何请求，客户端直接连接选中的供应商，体验最原生。",
-      "routing": "请求经本机 CC Switch 转发，可热切换供应商，并支持故障转移、格式转换等高级功能。",
-      "aggregation": "多家供应商的模型同列在客户端模型列表，在客户端内即可无感切换；从卡片加入或移除成员，在更多菜单中设置默认供应商。"
-    },
     "notice": {
       "routeOwnsCatalog": "默认供应商使用自己的模型目录，暂不发布其他成员的模型。",
       "officialModelsBundled": "暂用 Codex 自带的官方模型列表，可能缺少账号专属模型。",
@@ -3949,17 +3926,7 @@
       "routeSwitched": "路由已切换至 {{provider}}，后续新请求将使用该供应商。",
       "stackDefaultChanged": "聚合默认供应商已设为 {{provider}}；已选聚合模型仍使用各自的供应商。",
       "clientConfigChanged": "客户端配置也已更新；重启 {{app}} 以加载更新后的配置。"
-    },
-    "exit": {
-      "title": "把 {{app}} 从「{{from}}」切回直连？",
-      "lead": "{{app}} 会直接连接 {{provider}}，请求不再经过 CC Switch。",
-      "noteFile": "会把 {{file}} 里的地址和密钥改回 {{provider}} 的，其他设置不动。",
-      "noteDesktop": "会把 Claude Desktop 的网关配置改回 {{provider}}，重启 Claude Desktop 后生效。",
-      "routeKept": "路由目标、故障转移队列和设置都会保留，下次开始路由时恢复。",
-      "leaveStackNote": "以 ccs- 开头的聚合模型会从模型列表里消失；聚合名单不会删，切回聚合模式就回来。正在用其中某个的话，要在客户端里换回普通模型。",
-      "confirm": "回到直连"
-    },
-    "leave": "移出聚合"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4649,11 +4616,134 @@
   "providerCard": {
     "action": {
       "addToQueue": "加入队列",
-      "removeFromQueue": "移出队列"
+      "removeFromQueue": "移出队列",
+      "switch": "切换",
+      "routeHere": "路由到此",
+      "backToDirectAndUse": "回到直连并使用",
+      "setDefault": "设为默认",
+      "add": "添加",
+      "remove": "移除",
+      "enable": "启用",
+      "disable": "停用",
+      "edit": "编辑 {{name}}",
+      "more": "{{name}} 的更多操作",
+      "openTerminal": "用 {{name}} 打开终端"
     },
     "reason": {
       "defaultCannotRemove": "默认那家不能移除，先把别家设为默认。",
-      "inUseCannotDelete": "正在用的这家不能删除，先切到别家。"
+      "inUseCannotDelete": "正在用的这家不能删除，先切到别家。",
+      "noRoute": "官方订阅不经过路由，回到直连后可用。",
+      "noStack": "官方订阅不能用于聚合模式。",
+      "officialStack": "官方账号只能做默认，不能加入聚合。",
+      "defaultWhileRouting": "正在路由时，默认就是路由到的那家；切换到聚合模式时可以另选。",
+      "needsRoute": "需要路由：{{reason}}，不能直连。",
+      "directDefaultCannotDelete": "退出路由后会回到这家，所以不能删除。先在直连页对别家点「回到直连并使用」，再删除。",
+      "noFailover": "官方账号不进故障转移队列：它用客户端自己的登录，不能和别家轮换。"
+    },
+    "status": {
+      "inUse": "使用中",
+      "routing": "路由中",
+      "currentDefault": "当前默认",
+      "defaultAfterSwitch": "切换后默认",
+      "default": "默认"
+    },
+    "chip": {
+      "official": "官方",
+      "needsRoute": "需要路由",
+      "directWhenDirect": "直连时使用",
+      "default": "默认",
+      "models": "{{count}} 个模型",
+      "noModels": "没有模型",
+      "hermesManaged": "Hermes 托管",
+      "defaultModel": "默认模型 {{model}}"
+    },
+    "section": {
+      "queue": "队列 · 按优先级（{{count}}）",
+      "queueHelpTitle": "故障转移队列",
+      "queueHelp": "请求先发给第一位；它连续失败时自动换到下一位。",
+      "queueEmpty": "队列是空的，从下面加入供应商。",
+      "notInQueue": "不在队列（{{count}}）",
+      "stackDefault": "默认供应商",
+      "stackDefaultAfterSwitch": "切换到聚合模式后的默认供应商",
+      "stackDefaultHelp": "不带前缀的请求都发给它；其他已添加的供应商以 ccs- 前缀出现在 /model 里。",
+      "stackDefaultHelpDesktop": "Claude Desktop 的默认模型和映射表里的模型都发给它；其他已添加的供应商以「供应商 / 模型」出现在模型列表里。",
+      "stackEmpty": "还没有添加其他供应商。",
+      "added": "已添加 · {{count}}",
+      "addedHelpTitle": "已添加",
+      "addedHelp": "已添加的供应商会同时写进 {{app}} 的配置，在 {{app}} 里选模型即可。",
+      "addedEmpty": "还没有添加供应商。",
+      "available": "可添加 · {{count}}",
+      "stackNoDefault": "还没有默认供应商；切换到聚合模式时选一家。"
+    }
+  },
+  "mode": {
+    "tabsLabel": "连接模式",
+    "names": {
+      "direct": "直连",
+      "route": "路由",
+      "stack": "聚合"
+    },
+    "active": "生效中",
+    "noProvider": "未选择",
+    "failover": "故障转移",
+    "status": {
+      "directLead": "直连生效中 · 直接连接",
+      "routeLead": "路由生效中",
+      "byQueue": "按队列",
+      "stackLead": "聚合生效中 · 默认",
+      "stackValue": "{{name}} · 另有 {{count}} 家共 {{models}} 个模型"
+    },
+    "activate": {
+      "viewing": "你在查看「{{view}}」，{{app}} 目前是{{active}}。",
+      "route": "开始路由",
+      "stack": "切换到聚合模式",
+      "direct": "回到直连"
+    },
+    "notice": {
+      "serviceDown": "{{app}} 处于{{mode}}模式，但路由服务没有运行，请求会失败。",
+      "backToDirect": "回到直连"
+    },
+    "dialog": {
+      "routeTitle": "让 {{app}} 使用路由模式？",
+      "stackTitle": "让 {{app}} 使用聚合模式？",
+      "switchTitle": "把 {{app}} 从「{{from}}」切换到「{{to}}」？",
+      "routeLead": "请求会先经过本机的 CC Switch，再转给你选的供应商。",
+      "stackLead": "默认供应商承接不带前缀的请求。",
+      "routeTo": "路由到",
+      "stackDefault": "默认供应商",
+      "officialOption": "{{name}}（官方）",
+      "stackOfficialNote": "如果你在用官方订阅，请把官方账号设为默认供应商。",
+      "routeNoteFile": "会改写 {{file}} 里的地址和密钥；真实密钥留在 CC Switch 里，其他设置不动。",
+      "routeNoteSwitch": "之后在「路由」页签里换供应商，不再改写配置文件。",
+      "routeNoteKeepRunning": "CC Switch 需要保持运行；退出时自动写回直连，下次启动再接上。",
+      "desktopRouteNoteModels": "Claude Desktop 的模型列表换成路由那家的模型；之后换路由那家会改写配置文件。",
+      "desktopRouteNoteRestart": "{{app}} 只在启动时读配置，确认后要重启 {{app}} 才生效。",
+      "desktopRouteNoteKeepRunning": "CC Switch 需要保持运行，{{app}} 的请求才能转出去。",
+      "stackNoteMembers": "另有 {{names}} 共 {{count}} 个模型，会以 ccs- 前缀出现在 /model 里。",
+      "desktopStackNoteMembers": "另有 {{names}} 共 {{count}} 个模型，会加进 Claude Desktop 的模型列表，显示为「供应商 / 模型」。",
+      "stackNoteEmpty": "还没有添加其他供应商，切换后只有默认供应商；可以之后在「聚合」页签里添加。",
+      "stackNoteNoFailover": "聚合模式不做故障转移；队列和设置会保留，回到路由模式后恢复。",
+      "stackNoteRestartCodex": "需要重启 {{app}} 才能看到聚合的模型；桌面版要彻底退出后重新打开。",
+      "leaveStackNote": "以 ccs- 开头的聚合模型会从 /model 里消失；聚合名单不会删，切回聚合模式就回来。正在用其中某个的话，要在 /model 里换回普通模型。",
+      "desktopLeaveStackNote": "聚合的模型会从 Claude Desktop 的模型列表撤下，重启后生效；聚合名单不会删，切回聚合模式就回来。正在用其中某个的话，要换回普通模型。",
+      "exitTitle": "把 {{app}} 从「{{from}}」切回直连？",
+      "exitLead": "{{app}} 会直接连接 {{provider}}，请求不再经过 CC Switch。",
+      "exitNoteFile": "会把 {{file}} 里的地址和密钥改回 {{provider}} 的，其他设置不动。",
+      "exitNoteRouteKept": "路由目标、故障转移队列和设置都会保留，下次开始路由时恢复。",
+      "desktopExitNoteRouteKept": "路由目标会保留，下次开始路由时恢复。",
+      "confirmDirect": "回到直连",
+      "confirmRoute": "开始路由",
+      "confirmStack": "切换到聚合模式",
+      "needsRouteTitle": "{{provider}} 需要路由",
+      "needsRouteLead": "{{provider}}：{{reason}}。直连切换过去，{{app}} 会无法使用它。",
+      "switchAnyway": "仍然直连切换",
+      "routeAndUse": "开始路由并使用它"
+    },
+    "help": {
+      "title": "连接模式的区别",
+      "direct": "直连：CC Switch 不经手任何请求，客户端直接连所选供应商，体验最原生。",
+      "route": "路由：请求经本机 CC Switch 转发，可热切换供应商，并支持故障转移、格式转换等高级功能。",
+      "stack": "聚合：多家供应商的模型同列在 /model，在客户端内即可无感切换。"
     }
   }
 }

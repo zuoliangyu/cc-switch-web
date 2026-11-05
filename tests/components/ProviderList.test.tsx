@@ -3,7 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
 import type { Provider } from "@/types";
-import { ProviderList } from "@/components/providers/ProviderList";
+import {
+  ProviderList,
+  type SwitchModeProps,
+} from "@/components/providers/ProviderList";
 
 const providerCardRenderSpy = vi.fn();
 const getClaudeDesktopStatusMock = vi.hoisted(() => vi.fn());
@@ -32,7 +35,7 @@ vi.mock("@/components/providers/ProviderCard", () => ({
     providerCardRenderSpy(props);
     const {
       provider,
-      onSwitch,
+      presentation,
       onEdit,
       onDelete,
       onDuplicate,
@@ -43,7 +46,8 @@ vi.mock("@/components/providers/ProviderCard", () => ({
       <div data-testid={`provider-card-${provider.id}`}>
         <button
           data-testid={`switch-${provider.id}`}
-          onClick={() => onSwitch(provider)}
+          // 主操作由 presentation 算好（切换 / 添加 / 移除…），点第一个按钮
+          onClick={() => presentation.buttons[0]?.onClick()}
         >
           switch
         </button>
@@ -156,6 +160,36 @@ beforeEach(() => {
     gatewayTokenConfigured: false,
   });
 });
+
+/** 直连生效、正在看直连页：除了直连那家，每张卡的主操作都是「切换」 */
+function directSwitchMode(
+  directId: string,
+  switchDirect: (provider: Provider) => void,
+): SwitchModeProps {
+  const noop = () => undefined;
+  return {
+    active: "direct",
+    view: "direct",
+    directId,
+    routeId: null,
+    failoverOn: false,
+    queue: [],
+    stackMembers: new Map(),
+    serviceRunning: false,
+    routingReason: () => "",
+    actions: {
+      switchDirect,
+      needsRouteDialog: noop,
+      exitAndUse: noop,
+      routeTo: noop,
+      queueAdd: noop,
+      queueRemove: noop,
+      stackAdd: noop,
+      stackRemove: noop,
+      stackSetDefault: noop,
+    },
+  };
+}
 
 describe("ProviderList Component", () => {
   it("MiniMax 空列表说明自动读取原生配置，不提示不存在的导入按钮", async () => {
@@ -285,6 +319,7 @@ describe("ProviderList Component", () => {
         currentProviderId="b"
         appId="claude"
         onSwitch={handleSwitch}
+        switchMode={directSwitchMode("a", handleSwitch)}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onDuplicate={handleDuplicate}
@@ -353,7 +388,7 @@ describe("ProviderList Component", () => {
   });
 
   // 上游 c5efe0ba：搜索面板由页头按钮控制；关掉面板就不再过滤，搜索词留着下次打开还在
-  it("only filters while the search panel is open and keeps the term", () => {
+  it("only filters while the search panel is open and keeps the term", async () => {
     const providerAlpha = createProvider({ id: "alpha", name: "Alpha Labs" });
     const providerBeta = createProvider({ id: "beta", name: "Beta Works" });
     const onSearchOpenChange = vi.fn();
@@ -396,9 +431,12 @@ describe("ProviderList Component", () => {
         <ProviderList {...props} searchOpen={false} />
       </QueryClientProvider>,
     );
-    expect(
-      screen.queryByPlaceholderText("Search name, notes, or URL..."),
-    ).not.toBeInTheDocument();
+    // 搜索框收起有一段退出动画
+    await waitFor(() =>
+      expect(
+        screen.queryByPlaceholderText("Search name, notes, or URL..."),
+      ).not.toBeInTheDocument(),
+    );
     expect(screen.getByTestId("provider-card-alpha")).toBeInTheDocument();
     expect(screen.getByTestId("provider-card-beta")).toBeInTheDocument();
 

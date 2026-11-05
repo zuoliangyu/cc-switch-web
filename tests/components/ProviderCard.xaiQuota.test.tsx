@@ -28,8 +28,8 @@ vi.mock("@/utils/providerCapabilities", () => ({
       ? "managed_account"
       : null,
 }));
-vi.mock("@/components/providers/ProviderActions", () => ({
-  ProviderActions: (props: { onConfigureUsage?: () => void }) =>
+vi.mock("@/components/providers/ProviderCardActions", () => ({
+  ProviderCardActions: (props: { onConfigureUsage?: () => void }) =>
     props.onConfigureUsage ? (
       <button onClick={props.onConfigureUsage}>configure-usage</button>
     ) : null,
@@ -54,9 +54,6 @@ vi.mock("@/components/SubscriptionQuotaFooter", () => ({
 vi.mock("@/components/providers/ProviderHealthBadge", () => ({
   ProviderHealthBadge: () => null,
 }));
-vi.mock("@/components/providers/FailoverPriorityBadge", () => ({
-  FailoverPriorityBadge: () => null,
-}));
 
 function renderCard(
   provider: Provider,
@@ -68,13 +65,12 @@ function renderCard(
       provider={provider}
       isCurrent
       appId={appId}
-      onSwitch={vi.fn()}
+      presentation={{ chips: [], buttons: [] }}
       onEdit={vi.fn()}
       onDelete={vi.fn()}
       onConfigureUsage={onConfigureUsage}
       onOpenWebsite={vi.fn()}
       onDuplicate={vi.fn()}
-      isProxyRunning={false}
     />,
   );
 }

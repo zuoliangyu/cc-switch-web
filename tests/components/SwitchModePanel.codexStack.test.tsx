@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "../msw/server";
-import { AppModePanel } from "@/components/proxy/AppModePanel";
+import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { useAppMode } from "@/hooks/useAppMode";
 import type { Provider, Settings } from "@/types";
 import type { AppModeView } from "@/types/proxy";
@@ -17,7 +17,21 @@ const providers: Record<string, Provider> = Object.fromEntries(
 
 function ModePanel() {
   const state = useAppMode("codex");
-  return <AppModePanel app="codex" providers={providers} state={state} />;
+  return (
+    <SwitchModePanel
+      app="codex"
+      providers={providers}
+      currentProviderId="a"
+      isLoading={false}
+      state={state}
+      serviceRunning
+      onSwitch={vi.fn()}
+      onEdit={vi.fn()}
+      onDelete={vi.fn()}
+      onDuplicate={vi.fn()}
+      onOpenWebsite={vi.fn()}
+    />
+  );
 }
 
 function renderPanel() {

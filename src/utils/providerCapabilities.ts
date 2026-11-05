@@ -112,6 +112,32 @@ export function supportsOfficialProxyTakeover(
   return Boolean(identity && identity !== "api_key");
 }
 
+/**
+ * 官方账号卡（对应后端 `codex_direct::is_official`）：Codex 早期绑定托管账号的官方卡
+ * 没有 category，按身份认；Kimi 按 config.toml 里的 OAuth 引用认。
+ */
+export function isOfficialAccount(
+  appId: AppId,
+  provider: Pick<Provider, "id" | "category" | "meta" | "settingsConfig">,
+): boolean {
+  if (appId === "kimi") return isKimiOfficialAccount(provider);
+  return (
+    provider.category === "official" ||
+    resolveCodexOfficialIdentity(appId, provider) !== null
+  );
+}
+
+/**
+ * 能进故障转移队列（对应后端 `provider_router::provider_supports_failover`）：
+ * Codex 官方账号卡靠客户端自己的登录走路由，不能和别家轮换。
+ */
+export function supportsFailover(
+  appId: AppId,
+  provider: Pick<Provider, "id" | "category" | "meta" | "settingsConfig">,
+): boolean {
+  return !supportsOfficialProxyTakeover(appId, provider);
+}
+
 /** 供应商是否必须由当前应用的本地路由接管。 */
 export function providerNeedsRouting(
   appId: AppId,

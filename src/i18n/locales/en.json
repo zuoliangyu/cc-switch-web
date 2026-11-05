@@ -156,7 +156,6 @@
     "importCurrent": "Import Current Config",
     "importCurrentDescription": "Import current live config as default provider",
     "currentlyUsing": "Currently Using",
-    "enable": "Enable",
     "inUse": "In Use",
     "editProvider": "Edit Provider",
     "editProviderHint": "Configuration will be applied to the current provider immediately after update.",
@@ -167,9 +166,6 @@
     "addCodexProvider": "Add Codex Provider",
     "addGeminiProvider": "Add Gemini Provider",
     "addOpenCodeProvider": "Add OpenCode Provider",
-    "addToConfig": "Add",
-    "removeFromConfig": "Remove",
-    "setAsDefault": "Set Default",
     "isDefault": "Current Default",
     "inConfig": "Added",
     "addProviderHint": "Fill in the information to quickly switch providers in the list.",
@@ -193,7 +189,6 @@
     "terminalOpenFailed": "Failed to open terminal",
     "sortUpdateFailed": "Failed to update sort order",
     "configureUsage": "Configure usage query",
-    "managedByHermes": "Hermes Managed",
     "managedByHermesHint": "Defined in Hermes' providers: dict. Edit or remove it via Hermes Web UI.",
     "name": "Provider Name",
     "namePlaceholder": "e.g., Claude Official",
@@ -277,11 +272,12 @@
       "agySwitchRunning": "agy is running: open agy sessions keep the previous account and may write it back. Quit them first if you can."
     },
     "openTerminalIsolated": "Open Terminal (isolated)",
-    "deleteBlockedInUse": "The provider in use can't be deleted. Switch to another one first.",
-    "deleteBlockedDirectDefault": "Leaving routing switches back to this provider, so it can't be deleted. Go back to direct and switch to another provider first.",
     "backToList": "Back to providers",
     "searchButtonTip": "Search providers ({{shortcut}})",
-    "disable": "Disable"
+    "disable": "Disable",
+    "directProviderHint": "Leaving routing mode switches back to this provider",
+    "openTerminalWithProvider": "Open Terminal with This Provider",
+    "stackBadgeNoModels": "This provider has no models configured, so nothing shows up in the model picker"
   },
   "notifications": {
     "providerAdded": "Provider added",
@@ -1580,11 +1576,9 @@
   },
   "codex": {
     "needsRouting": "Needs routing",
-    "nativeLogin": "Codex login",
     "accountStatusUnavailable": "Unable to load account details",
     "boundAccountUnavailable": "The linked account is unavailable",
-    "accountLoading": "Loading account…",
-    "officialRouting": "Official account routing"
+    "accountLoading": "Loading account…"
   },
   "copilot": {
     "authSection": "GitHub Copilot Authentication",
@@ -3860,27 +3854,10 @@
     }
   },
   "webMode": {
-    "title": "App mode",
-    "direct": "Direct",
-    "routing": "Routing",
-    "aggregation": "Aggregation",
-    "active": "Active mode",
-    "noProvider": "No provider selected",
-    "activate": "Enable {{mode}}",
-    "defaultProvider": "Default provider",
-    "confirm": "Connect the client to the local routing service. Leaving routing or aggregation restores the direct provider. Restart Codex, Gemini and Grok clients to load the new configuration.",
     "startupFailed": "Mode restoration failed: {{error}}. Fix the configuration, then activate the desired mode again.",
     "loadFailed": "Unable to load app mode",
-    "default": "Default",
-    "join": "Join",
-    "setDefault": "Use as aggregation default",
     "restartDaemon": "Restart Codex daemon",
     "restartDaemonConfirm": "Wait for running tasks to finish, then restart the managed Codex daemon to load the new model list. This can take several minutes. Desktop apps and editor extensions must still be closed and reopened manually.",
-    "help": {
-      "direct": "CC Switch never touches your requests; the client talks to the selected provider itself for the most native experience.",
-      "routing": "Requests go through CC Switch on this machine, unlocking hot-switching providers, failover, format conversion, and other advanced features.",
-      "aggregation": "Models from several providers sit together in the client model list, so you can switch between them seamlessly inside the client. Join or remove members on cards; choose the default provider from the more menu."
-    },
     "notice": {
       "routeOwnsCatalog": "The default provider manages its own catalog; other members are not published.",
       "officialModelsBundled": "Using the models bundled with Codex; account-specific models may be missing.",
@@ -3949,17 +3926,7 @@
       "routeSwitched": "Route switched to {{provider}}. New requests will use this provider.",
       "stackDefaultChanged": "Aggregation default set to {{provider}}. Selected aggregated models still use their respective providers.",
       "clientConfigChanged": " Client configuration also changed. Restart {{app}} to load the updated configuration."
-    },
-    "exit": {
-      "title": "Switch {{app}} from “{{from}}” back to direct?",
-      "lead": "{{app}} will connect to {{provider}} directly; requests no longer go through CC Switch.",
-      "noteFile": "Rewrites the address and key in {{file}} back to {{provider}}'s; other settings are untouched.",
-      "noteDesktop": "Rewrites Claude Desktop's gateway configuration back to {{provider}}; restart Claude Desktop to apply.",
-      "routeKept": "The routing target, failover queue and settings are kept and come back the next time you start routing.",
-      "leaveStackNote": "The ccs- aggregated models disappear from the model list. The aggregation list is kept and they come back when you switch to aggregation again. If you're using one of them, pick a regular model in the client.",
-      "confirm": "Back to direct"
-    },
-    "leave": "Remove from aggregation"
+    }
   },
   "quota": {
     "tierShort": "{{label}} {{value}}%",
@@ -4649,11 +4616,134 @@
   "providerCard": {
     "action": {
       "addToQueue": "Add to queue",
-      "removeFromQueue": "Remove from queue"
+      "removeFromQueue": "Remove from queue",
+      "switch": "Switch",
+      "routeHere": "Route here",
+      "backToDirectAndUse": "Back to direct and use",
+      "setDefault": "Set as default",
+      "add": "Add",
+      "remove": "Remove",
+      "enable": "Enable",
+      "disable": "Disable",
+      "edit": "Edit {{name}}",
+      "more": "More actions for {{name}}",
+      "openTerminal": "Open a terminal with {{name}}"
     },
     "reason": {
       "defaultCannotRemove": "The default can't be removed. Make another provider the default first.",
-      "inUseCannotDelete": "The provider in use can't be deleted. Switch to another one first."
+      "inUseCannotDelete": "The provider in use can't be deleted. Switch to another one first.",
+      "noRoute": "Official subscriptions don't go through routing; available again in direct mode.",
+      "noStack": "Official subscriptions can't be used in Aggregation.",
+      "officialStack": "Official accounts can only be the default; they can't join the aggregation.",
+      "defaultWhileRouting": "While routing, the default is the provider you route to. You can pick another one when switching to Aggregation.",
+      "needsRoute": "Needs routing: {{reason}}; can't connect directly.",
+      "directDefaultCannotDelete": "Leaving routing switches back to this provider, so it can't be deleted. On the direct page, choose \"Back to direct and use\" on another provider first.",
+      "noFailover": "Official accounts can't join the failover queue: they use the client's own login and can't rotate with other providers."
+    },
+    "status": {
+      "inUse": "In use",
+      "routing": "Routing",
+      "currentDefault": "Current default",
+      "defaultAfterSwitch": "Default after switching",
+      "default": "Default"
+    },
+    "chip": {
+      "official": "Official",
+      "needsRoute": "Needs routing",
+      "directWhenDirect": "Used when direct",
+      "default": "Default",
+      "models": "{{count}} models",
+      "noModels": "No models",
+      "hermesManaged": "Managed by Hermes",
+      "defaultModel": "Default model {{model}}"
+    },
+    "section": {
+      "queue": "Queue · by priority ({{count}})",
+      "queueHelpTitle": "Failover queue",
+      "queueHelp": "Requests go to the first provider; after repeated failures they move to the next.",
+      "queueEmpty": "The queue is empty. Add providers from below.",
+      "notInQueue": "Not in queue ({{count}})",
+      "stackDefault": "Default provider",
+      "stackDefaultAfterSwitch": "Default provider after switching to Aggregation",
+      "stackDefaultHelp": "Requests without a prefix go to it; other added providers appear in /model with the ccs- prefix.",
+      "stackDefaultHelpDesktop": "Requests for the default model and the mapped models go to it; other added providers appear in the model list as \"Provider / model\".",
+      "stackEmpty": "No other providers added yet.",
+      "added": "Added · {{count}}",
+      "addedHelpTitle": "Added",
+      "addedHelp": "Added providers are all written into {{app}}'s config; pick the model inside {{app}}.",
+      "addedEmpty": "No providers added yet.",
+      "available": "Available · {{count}}",
+      "stackNoDefault": "No default provider yet. You pick one when switching to Aggregation."
+    }
+  },
+  "mode": {
+    "tabsLabel": "Connection mode",
+    "names": {
+      "direct": "Direct",
+      "route": "Routing",
+      "stack": "Aggregation"
+    },
+    "active": "active",
+    "noProvider": "none",
+    "failover": "Failover",
+    "status": {
+      "directLead": "Direct is active · connected to",
+      "routeLead": "Routing is active",
+      "byQueue": "by queue",
+      "stackLead": "Aggregation is active · default",
+      "stackValue": "{{name}} · {{count}} more with {{models}} models"
+    },
+    "activate": {
+      "viewing": "You're viewing “{{view}}”. {{app}} is currently on {{active}}.",
+      "route": "Start routing",
+      "stack": "Switch to Aggregation",
+      "direct": "Back to direct"
+    },
+    "notice": {
+      "serviceDown": "{{app}} is in {{mode}} mode but the routing service isn't running, so requests will fail.",
+      "backToDirect": "Back to direct"
+    },
+    "dialog": {
+      "routeTitle": "Use routing for {{app}}?",
+      "stackTitle": "Use Aggregation for {{app}}?",
+      "switchTitle": "Switch {{app}} from “{{from}}” to “{{to}}”?",
+      "routeLead": "Requests go through CC Switch on this machine first, then to the provider you pick.",
+      "stackLead": "The default provider takes requests without a prefix.",
+      "routeTo": "Route to",
+      "stackDefault": "Default provider",
+      "officialOption": "{{name}} (official)",
+      "stackOfficialNote": "If you use an official subscription, set the official account as the default provider.",
+      "routeNoteFile": "Rewrites the address and key in {{file}}. The real key stays in CC Switch; other settings are untouched.",
+      "routeNoteSwitch": "Changing providers later on the Routing tab won't rewrite the config file.",
+      "routeNoteKeepRunning": "Keep CC Switch running. Quitting writes the direct config back; it reconnects on the next start.",
+      "desktopRouteNoteModels": "Claude Desktop's model list becomes the routed provider's models; switching the routed provider later rewrites the config file.",
+      "desktopRouteNoteRestart": "{{app}} only reads its config at launch: restart {{app}} after confirming.",
+      "desktopRouteNoteKeepRunning": "Keep CC Switch running so {{app}}'s requests can go out.",
+      "stackNoteMembers": "{{names}} add {{count}} models, shown in /model with the ccs- prefix.",
+      "desktopStackNoteMembers": "{{names}} add {{count}} models to the Claude Desktop model list, shown as \"Provider / model\".",
+      "stackNoteEmpty": "No other providers added yet, so only the default is available. You can add more on the Aggregation tab later.",
+      "stackNoteNoFailover": "Aggregation has no failover. The queue and its settings are kept and come back with routing.",
+      "stackNoteRestartCodex": "Restart {{app}} to see the aggregated models; quit the desktop app completely and reopen it.",
+      "leaveStackNote": "The ccs- aggregated models disappear from /model. The aggregation list is kept and they come back when you switch to aggregation again. If you're using one of them, pick a regular model in /model.",
+      "desktopLeaveStackNote": "Aggregated models are withdrawn from the Claude Desktop model list after a restart. The aggregation list is kept and they come back when you switch to aggregation again. If you're using one of them, pick a regular model.",
+      "exitTitle": "Switch {{app}} from “{{from}}” back to direct?",
+      "exitLead": "{{app}} will connect to {{provider}} directly; requests no longer go through CC Switch.",
+      "exitNoteFile": "Rewrites the address and key in {{file}} back to {{provider}}'s; other settings are untouched.",
+      "exitNoteRouteKept": "The routing target, failover queue and settings are kept and come back the next time you start routing.",
+      "desktopExitNoteRouteKept": "The routing target is kept and comes back the next time you start routing.",
+      "confirmDirect": "Back to direct",
+      "confirmRoute": "Start routing",
+      "confirmStack": "Switch to Aggregation",
+      "needsRouteTitle": "{{provider}} needs routing",
+      "needsRouteLead": "{{provider}}: {{reason}}. If you switch to it directly, {{app}} won't be able to use it.",
+      "switchAnyway": "Switch directly anyway",
+      "routeAndUse": "Start routing and use it"
+    },
+    "help": {
+      "title": "How the connection modes differ",
+      "direct": "Direct: CC Switch never touches your requests; the client talks to the chosen provider itself for the most native experience.",
+      "route": "Routing: requests go through CC Switch on this machine, unlocking hot-switching providers, failover, format conversion, and other advanced features.",
+      "stack": "Aggregation: models from several providers sit together in /model, so you can switch between them seamlessly inside the client."
     }
   }
 }

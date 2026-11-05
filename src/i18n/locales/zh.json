@@ -2746,23 +2746,13 @@
     "manage": "Skills",
     "title": "Skills 管理",
     "description": "从流行的仓库发现并安装技能，扩展 Claude Code/Codex/Gemini 的能力",
-    "refresh": "刷新",
     "refreshing": "刷新中...",
-    "repoManager": "仓库管理",
     "count": "共 {{count}} 个技能",
-    "empty": "暂无可用技能",
-    "emptyDescription": "添加技能仓库以发现可用的技能",
     "addRepo": "添加技能仓库",
     "loading": "加载中...",
-    "installed": "已安装",
     "install": "安装",
-    "installing": "安装中...",
     "uninstall": "卸载",
-    "uninstalling": "卸载中...",
-    "view": "查看",
-    "noDescription": "暂无描述",
     "loadFailed": "加载失败",
-    "installSuccess": "技能 {{name}} 已安装",
     "installFailed": "安装失败",
     "uninstallSuccess": "技能 {{name}} 已卸载",
     "uninstallFailed": "卸载失败",
@@ -2821,45 +2811,17 @@
       "removeFailed": "删除失败",
       "skillCount": "识别到 {{count}} 个技能"
     },
-    "search": "搜索技能",
-    "searchSource": {
-      "repos": "仓库",
-      "skillssh": "skills.sh"
-    },
-    "searchPlaceholder": "搜索技能名称或仓库名称...",
     "skillssh": {
-      "searchPlaceholder": "搜索 skills.sh（至少 2 个字符）...",
-      "noResults": "未找到与“{{query}}”相关的技能",
       "loadMore": "加载更多",
       "loading": "正在搜索 skills.sh...",
       "error": "搜索 skills.sh 失败",
-      "poweredBy": "由 skills.sh 提供"
+      "poweredBy": "由 skills.sh 提供",
+      "installs": "{{count}} 次安装"
     },
-    "filter": {
-      "placeholder": "状态筛选",
-      "all": "全部",
-      "installed": "已安装",
-      "uninstalled": "未安装",
-      "repo": "仓库筛选",
-      "allRepos": "全部仓库"
-    },
-    "noResults": "未找到匹配的技能",
-    "noInstalled": "暂无已安装的技能",
-    "noInstalledDescription": "从仓库发现并安装技能，或导入已有的技能",
-    "installedSearchPlaceholder": "搜索已安装技能的名称、描述或仓库...",
     "installedSearchAriaLabel": "搜索已安装技能",
-    "noInstalledSearchResults": "未找到匹配的已安装技能",
-    "discover": "发现技能",
-    "import": "导入已有",
-    "importDescription": "选择要导入到 CC Switch 统一管理的技能",
     "importSuccess": "成功导入 {{count}} 个技能",
-    "importSelected": "导入已选 ({{count}})",
     "noUnmanagedFound": "未发现需要导入的技能。所有技能已在 CC Switch 统一管理中。",
     "foundIn": "发现于",
-    "local": "本地",
-    "uninstallConfirm": "确定要卸载技能 \"{{name}}\" 吗？这将从所有应用中移除该技能，并在删除前自动创建本地备份。",
-    "uninstallInMainPanel": "请在主面板中卸载技能",
-    "notFound": "未找到技能",
     "backup": {
       "location": "备份位置: {{path}}"
     },
@@ -2870,22 +2832,11 @@
     "updateAvailable": "可更新",
     "updateSuccess": "技能 {{name}} 更新成功",
     "updateFailed": "更新技能失败",
-    "updateAll": "全部更新（{{count}}）",
     "updateAllSuccess": "成功更新 {{count}} 个技能",
-    "updatingProgress": "正在更新 {{done}}/{{total}}…",
-    "confirmUpdateAll": {
-      "title": "更新 {{count}} 个 Skill？",
-      "body": "更新会用仓库里的内容替换本地目录，本地改过的地方只保留在 Skill 备份里，可从备份中恢复。",
-      "button": "更新 {{count}} 个",
-      "listAria": "将要更新的 Skill"
-    },
     "restoreFromBackup": {
-      "button": "从备份中恢复",
       "title": "从备份中恢复",
-      "description": "选择一个 Skills 备份，将文件恢复到本地并重新加入当前列表。",
       "empty": "暂无可恢复的 Skills 备份",
       "createdAt": "备份时间",
-      "path": "备份路径",
       "restore": "恢复",
       "restoring": "恢复中...",
       "delete": "删除",
@@ -2905,7 +2856,6 @@
       "openclaw": "OpenClaw"
     },
     "installFromZip": {
-      "button": "从 ZIP 安装",
       "installing": "安装中...",
       "dialogTitle": "批量安装 Skills",
       "dialogDescription": "将本地 ZIP 文件上传到当前机器上的 Rust 服务进行安装，支持批量选择和拖拽上传。",
@@ -2921,26 +2871,20 @@
       "emptySelection": "请先选择至少一个 ZIP 文件",
       "invalidFilesTitle": "包含不支持的文件",
       "invalidFilesDescription": "已忽略 {{count}} 个非 ZIP 文件",
-      "successSingle": "技能 {{name}} 已安装",
-      "successMultiple": "成功安装 {{count}} 个技能",
-      "partialSuccess": "成功安装 {{count}} 个技能",
-      "partialSuccessDescription": "{{count}} 个 ZIP 安装失败：{{files}}",
       "failed": "{{count}} 个 ZIP 安装失败",
       "failedDescription": "失败文件：{{files}}",
-      "skippedDescription": "另有 {{count}} 个 ZIP 未安装出新技能",
       "noSkillsFound": "ZIP 文件中未找到技能（需包含 SKILL.md 文件）",
-      "noNewSkills": "没有安装出新的技能",
-      "noNewSkillsDescription": "{{count}} 个 ZIP 已处理，但没有新增 skill"
+      "allSkipped": "没有安装：ZIP 里的 {{count}} 个 Skill 目录名都已被占用",
+      "skippedBody": "{{list}}。要换成 ZIP 里的版本，先卸载同名的 Skill 再安装。",
+      "skippedItem": "{{directory}}（已被 {{name}} 使用）",
+      "skippedTitle": "跳过了 {{count}} 个 Skill：目录名已被占用"
     },
-    "repoFailures": "{{count}} 个仓库读取失败（点击查看）",
-    "zipSkipped": "已跳过 {{count}} 个重名技能",
-    "searchFailed": "搜索失败，请重试",
     "resyncAfterSettings": "修改同步方式后，可点击“立即重新同步”应用到现有技能。",
-    "copyName": "复制名称",
-    "copiedName": "已复制 {{name}}",
-    "copyDirPath": "复制目录路径",
-    "copiedDirPath": "已复制目录路径",
-    "copyDirPathFailed": "没能复制目录路径"
+    "moreActions": "Skills 的更多操作",
+    "storageSheet": {
+      "open": "存储与同步"
+    },
+    "updatesIncomplete": "没有发现更新，但有 {{count}} 个仓库没有读到"
   },
   "iconPicker": {
     "search": "搜索图标",
@@ -4508,6 +4452,199 @@
       "title": "Oh My Pi 的实际加载范围",
       "help": "Oh My Pi 除了 ~/.omp/agent 自己的配置，还会从其他 Agent 的目录发现 MCP 服务器、技能、命令、钩子、规则和设置（如 Claude 的 ~/.claude、Codex 的 ~/.codex 等）。要让 Oh My Pi 的实际生效内容与 CC Switch 界面一致，请在 ~/.omp/agent/config.yml 用 disabledProviders 关闭不需要的发现来源（id 与文档一致，如 claude、codex、gemini、opencode、github、agents）。",
       "docsLink": "怎样让 Oh My Pi 不读取其他 Agent 的配置"
+    },
+    "clearSearch": "清空搜索",
+    "found": "找到 {{count}} 个",
+    "columnAria": "{{app}}：已在 {{on}} / {{total}} 个 {{noun}} 上启用，批量操作",
+    "pop": {
+      "count": "已在 {{on}} / {{total}} 个 {{noun}} 上启用",
+      "failCount": "其中 {{count}} 个写入失败",
+      "enableRest": "启用其余 {{count}} 个",
+      "enableAll": "全部启用",
+      "disableAll": "全部关闭",
+      "scopeAll": "只作用于当前列表里的 {{count}} 个",
+      "scopeSearch": "只作用于搜索出的 {{count}} 个",
+      "scopeFilter": "只作用于筛选出的 {{count}} 个"
+    },
+    "toast": {
+      "enabled": "已在 {{app}} 启用 {{count}} 个 {{noun}}",
+      "disabled": "已在 {{app}} 关闭 {{count}} 个 {{noun}}",
+      "partialFail": "，其中 {{count}} 个没有写入，已在列表里标出",
+      "undone": "已撤销"
+    },
+    "undo": "撤销",
+    "cell": {
+      "on": "{{name}} · {{app}}：已启用",
+      "off": "{{name}} · {{app}}：未启用",
+      "fail": "{{name}} · {{app}}：写入失败，点按重试"
     }
+  },
+  "skillsPage": {
+    "noun": "Skill",
+    "helpTitle": "Skills 怎么同步",
+    "help": "主副本放在 CC Switch 的目录里，再同步到你勾选的应用。Claude Desktop、OpenClaw 不支持 Skills，所以表格里没有这两列。",
+    "add": "添加 Skill",
+    "addMenu": {
+      "discover": "在发现里浏览",
+      "zip": "从 ZIP 安装",
+      "import": "导入本机已有"
+    },
+    "moreMenu": {
+      "restore": "从备份恢复",
+      "repos": "仓库管理"
+    },
+    "viewAria": "Skills 视图",
+    "viewInstalled": "已安装",
+    "viewInstalledCount": "已安装 {{count}}",
+    "viewDiscover": "发现",
+    "searchPlaceholder": "搜索名称、目录、描述或仓库",
+    "lastChecked": "上次检查：{{when}}",
+    "justNow": "刚刚",
+    "banner": {
+      "unmanaged": "本机有 {{count}} 个 Skill 不在 CC Switch 管理中。",
+      "reviewImport": "查看并导入",
+      "ignore": "忽略",
+      "close": "关闭提示"
+    },
+    "filter": {
+      "all": "全部",
+      "updates": "可更新",
+      "none": "未在任何应用启用",
+      "inApp": "在 {{app}} 启用",
+      "sourceButton": "来源：{{source}}"
+    },
+    "source": {
+      "local": "本地"
+    },
+    "bulk": {
+      "selected": "已选 {{count}}",
+      "enableTo": "启用到",
+      "enableToAria": "把选中的 {{count}} 个 Skill 启用到",
+      "disable": "停用",
+      "disableAria": "在这个应用里停用选中的 {{count}} 个 Skill",
+      "uninstall": "卸载"
+    },
+    "piColumnTitle": "Pi 按 ~/.pi/agent/skills 里有没有这个目录来判断",
+    "piHelpTitle": "Pi 怎么算启用",
+    "piHelp": "看 ~/.pi/agent/skills 里有没有这个目录。",
+    "pop": {
+      "onlyApp": "只看在 {{app}} 启用的",
+      "showAll": "显示全部 Skill"
+    },
+    "selectAria": "选择 {{name}}",
+    "selectAllAria": "全选当前列表",
+    "rowFail": "在 {{app}} 启用失败：{{error}}",
+    "fixSync": "改同步方式",
+    "rowMoreAria": "{{name}} 的更多操作",
+    "uninstallEllipsis": "卸载",
+    "listLabel": "已安装的 Skill",
+    "noMatch": "没有匹配“{{query}}”的 Skill",
+    "noFilterMatch": "没有符合筛选条件的 Skill",
+    "searchInDiscover": "在发现里搜索“{{query}}”",
+    "clearFilters": "清除筛选",
+    "loadFailed": "读取已安装的 Skill 失败",
+    "emptyTitle": "还没有 Skill",
+    "emptyBody": "从发现里安装，或者导入本机已有的 Skill。",
+    "goDiscover": "去发现",
+    "importCount": "导入本机已有（{{count}}）",
+    "confirm": {
+      "uninstallOne": "卸载 {{name}}？",
+      "uninstallMany": "卸载 {{count}} 个 Skill？",
+      "uninstallBody": "会从所有应用中移除，并删除 CC Switch 里的主副本。卸载前会自动备份到 {{path}}。",
+      "uninstallManyButton": "卸载 {{count}} 个",
+      "updateAll": "更新 {{count}} 个 Skill？",
+      "updateBody": "更新会用仓库里的内容替换本地目录。本地改过的地方只保留在备份里（{{path}}）。",
+      "updateAllButton": "更新 {{count}} 个",
+      "updateListAria": "将要更新的 Skill"
+    },
+    "toast": {
+      "installed": "已安装 {{name}}，并在 {{apps}} 启用",
+      "installedMany": "已安装 {{count}} 个 Skill，并在 {{apps}} 启用",
+      "enableFailed": "没能在 {{apps}} 启用，已在列表里标出",
+      "uninstalledMany": "已卸载 {{count}} 个 Skill",
+      "backupAt": "备份在 {{path}}",
+      "copiedName": "已复制 {{name}}",
+      "noUpdatesInSelection": "选中的 Skill 没有可用的更新",
+      "selectionAlreadyOn": "选中的 {{count}} 个 Skill 已经在 {{app}} 启用",
+      "selectionAlreadyOff": "选中的 {{count}} 个 Skill 都没有在 {{app}} 启用",
+      "disabledSelection": "已在 {{app}} 停用 {{count}} 个 {{noun}}",
+      "copiedDir": "已复制目录路径：{{path}}",
+      "copyDirFailed": "复制目录路径失败"
+    },
+    "installTo": {
+      "prefix": "安装到：",
+      "button": "安装到：{{apps}}",
+      "many": "{{first}} 等 {{count}} 个",
+      "title": "安装后在这些应用里启用",
+      "helpTitle": "选好的应用会记住吗",
+      "help": "会，默认用你上次的选择。装好后也能在「已安装」里随时调整。从 ZIP 安装和从备份恢复也用这里的选择。"
+    },
+    "discover": {
+      "searchPlaceholder": "搜索名称、描述或仓库",
+      "searchAria": "搜索发现里的 Skill",
+      "skillsShPlaceholder": "至少 2 个字，回车搜索",
+      "skillsShAria": "在 skills.sh 搜索",
+      "skillsShHint": "在上面输入至少 2 个字，按回车搜索 skills.sh。",
+      "skillsShNone": "skills.sh 上没有找到“{{query}}”",
+      "sourceAria": "发现来源",
+      "sourceRepos": "仓库 · {{count}}",
+      "reload": "刷新仓库",
+      "listLabel": "可安装的 Skill",
+      "installed": "已安装",
+      "installedAria": "{{name}} 已安装在 {{count}} 个应用，在「已安装」里查看",
+      "dirTaken": "目录名已被 {{name}}（{{source}}）使用",
+      "installing": "安装中",
+      "installingAria": "正在安装 {{name}}",
+      "installAria": "安装 {{name}}",
+      "retryAria": "重新安装 {{name}}",
+      "installFailed": "安装失败：{{reason}}",
+      "loadFailed": "仓库读取失败",
+      "noneRead": "这些仓库里没有读到 Skill",
+      "noneReadBody": "{{count}} 个仓库都没有读到 Skill，可能是网络问题或 GitHub 限制了访问。",
+      "manageRepos": "管理仓库",
+      "allInstalled": "这些仓库里的 Skill 都已安装",
+      "showAll": "显示全部",
+      "onlyUninstalled": "只看未安装"
+    },
+    "repos": {
+      "buttonAll": "来源：全部",
+      "buttonSome": "来源：{{count}} / {{total}}",
+      "popoverAria": "参与发现的仓库",
+      "enableAria": "在发现里使用 {{repo}}",
+      "disabledShort": "停用",
+      "manage": "添加或管理仓库",
+      "readFailed": "读取失败"
+    },
+    "import": {
+      "title": "导入本机已有的 Skill",
+      "helpTitle": "哪些算本机已有",
+      "help": "有 SKILL.md、但还不归 CC Switch 管理的目录。",
+      "lead": "导入会复制一份到 CC Switch 的目录，原来的文件不动。",
+      "searchPlaceholder": "搜索名称或位置",
+      "searchAria": "搜索要导入的 Skill",
+      "selectAll": "全选",
+      "selectNone": "全不选",
+      "foundIn": "发现于：{{places}}",
+      "foundCcSwitch": "CC Switch 目录",
+      "appsTitle": "导入后在这些应用里启用",
+      "appsHelpTitle": "默认勾选哪些应用",
+      "appsHelp": "默认勾选「发现于」里的应用，只在发现它的应用里启用；另外勾选的应用，所有导入的 Skill 都会启用。Pi 按目录判断，不在这里选。",
+      "submit": "导入 {{count}} 个"
+    },
+    "restore": {
+      "lead": "选一个备份，把文件恢复到本地并重新加入列表，并在 {{apps}} 启用（「发现」里的「安装到」决定）。"
+    },
+    "repoFail": {
+      "title": "{{count}} 个仓库没有读到：{{repos}}",
+      "item": "{{repo}}（{{reason}}）",
+      "discoverBody": "列表可能不完整。",
+      "updatesBody": "这些仓库里的 Skill 没有检查，更新结果可能不完整。"
+    },
+    "headerUpdates": "{{count}} 个可更新",
+    "headerUpdatesShow": "只看可更新的 Skill",
+    "headerUpdatesClear": "显示全部 Skill",
+    "updateAllCount": "全部更新（{{count}} 个）",
+    "updatingProgress": "正在更新 {{done}}/{{total}}…",
+    "copyDir": "复制目录路径"
   }
 }

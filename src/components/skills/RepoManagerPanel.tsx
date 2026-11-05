@@ -19,7 +19,19 @@ interface RepoManagerPanelProps {
   skills: DiscoverableSkill[];
   onAdd: (repo: SkillRepo) => Promise<void>;
   onRemove: (owner: string, name: string) => Promise<void>;
+  /** 勾掉 = 停用（不参与发现），不删除 */
+  onToggle?: (repo: SkillRepo, enabled: boolean) => Promise<void>;
   onClose: () => void;
+}
+
+/** 这个仓库（含分支）在发现结果里有几个 Skill */
+export function countRepoSkills(skills: DiscoverableSkill[], repo: SkillRepo) {
+  return skills.filter(
+    (skill) =>
+      skill.repoOwner === repo.owner &&
+      skill.repoName === repo.name &&
+      (skill.repoBranch || "main") === (repo.branch || "main"),
+  ).length;
 }
 
 export function RepoManagerPanel({
@@ -27,6 +39,7 @@ export function RepoManagerPanel({
   skills,
   onAdd,
   onRemove,
+  onToggle,
   onClose,
 }: RepoManagerPanelProps) {
   const { t } = useTranslation();
@@ -34,13 +47,7 @@ export function RepoManagerPanel({
   const [branch, setBranch] = useState("");
   const [error, setError] = useState("");
 
-  const getSkillCount = (repo: SkillRepo) =>
-    skills.filter(
-      (skill) =>
-        skill.repoOwner === repo.owner &&
-        skill.repoName === repo.name &&
-        (skill.repoBranch || "main") === (repo.branch || "main"),
-    ).length;
+  const getSkillCount = (repo: SkillRepo) => countRepoSkills(skills, repo);
 
   const parseRepoUrl = (
     url: string,
@@ -215,7 +222,20 @@ export function RepoManagerPanel({
                     key={`${repo.owner}/${repo.name}`}
                     className="glass-card flex items-center justify-between gap-4 rounded-[24px] border border-border-default px-5 py-4"
                   >
-                    <div className="min-w-0">
+                    {onToggle && (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 accent-primary"
+                        checked={repo.enabled}
+                        aria-label={t("skillsPage.repos.enableAria", {
+                          repo: `${repo.owner}/${repo.name}`,
+                        })}
+                        onChange={(event) =>
+                          void onToggle(repo, event.target.checked)
+                        }
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
                       <div className="text-base font-semibold text-foreground">
                         {repo.owner}/{repo.name}
                       </div>

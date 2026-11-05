@@ -19,12 +19,9 @@ import {
   ArrowLeft,
   Book,
   Wrench,
-  RefreshCw,
   History,
   BarChart2,
   Download,
-  FolderArchive,
-  Search,
   FolderOpen,
   KeyRound,
   Shield,
@@ -115,11 +112,6 @@ const DeepLinkImportDialog = lazy(() =>
 const UsageScriptModal = lazy(() => import("@/components/UsageScriptModal"));
 const UnifiedMcpPanel = lazy(() => import("@/components/mcp/UnifiedMcpPanel"));
 const PromptPanel = lazy(() => import("@/components/prompts/PromptPanel"));
-const SkillsPage = lazy(() =>
-  import("@/components/skills/SkillsPage").then((m) => ({
-    default: m.SkillsPage,
-  })),
-);
 const UnifiedSkillsPanel = lazy(
   () => import("@/components/skills/UnifiedSkillsPanel"),
 );
@@ -387,8 +379,6 @@ function App() {
 
   const promptPanelRef = useRef<any>(null);
   const mcpPanelRef = useRef<any>(null);
-  const skillsPageRef = useRef<any>(null);
-  const unifiedSkillsPanelRef = useRef<any>(null);
   const addActionButtonClass = "theme-floating-action rounded-full w-8 h-8";
 
   const {
@@ -868,18 +858,14 @@ function App() {
             />
           );
         case "skills":
+        case "skillsDiscovery":
+          // 「已安装 / 发现」合成一页；旧的 skillsDiscovery 视图直接打开「发现」段
           return (
             <UnifiedSkillsPanel
-              ref={unifiedSkillsPanelRef}
-              onOpenDiscovery={() => setCurrentView("skillsDiscovery")}
-              currentApp={activeApp === "openclaw" ? "claude" : activeApp}
-            />
-          );
-        case "skillsDiscovery":
-          return (
-            <SkillsPage
-              ref={skillsPageRef}
-              initialApp={activeApp === "openclaw" ? "claude" : activeApp}
+              key={currentView}
+              initialView={
+                currentView === "skillsDiscovery" ? "discover" : "installed"
+              }
             />
           );
         case "mcp":
@@ -1252,74 +1238,6 @@ function App() {
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       {t("mcp.addMcp")}
-                    </Button>
-                  </>
-                )}
-                {currentView === "skills" && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openRestoreFromBackup()
-                      }
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <History className="w-4 h-4 mr-2" />
-                      {t("skills.restoreFromBackup.button")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openInstallFromZip()
-                      }
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <FolderArchive className="w-4 h-4 mr-2" />
-                      {t("skills.installFromZip.button")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openImport()
-                      }
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      {t("skills.import")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCurrentView("skillsDiscovery")}
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <Search className="w-4 h-4 mr-2" />
-                      {t("skills.discover")}
-                    </Button>
-                  </>
-                )}
-                {currentView === "skillsDiscovery" && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => skillsPageRef.current?.refresh()}
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      {t("skills.refresh")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => skillsPageRef.current?.openRepoManager()}
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      {t("skills.repoManager")}
                     </Button>
                   </>
                 )}

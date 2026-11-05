@@ -17,6 +17,7 @@ import {
   type SkillDiscoveryResult,
   type SkillRepo,
   type SkillsShSearchResult,
+  type SkillUpdateCheckResult,
   type SkillUpdateInfo,
 } from "@/lib/api/skills";
 import type { AppId } from "@/lib/api/types";
@@ -321,12 +322,17 @@ export function useBulkToggleSkillApp() {
 
 /**
  * 扫描未管理的 Skills
+ *
+ * - 传 { enabled: true }（Skill 面板挂载时）会在进入页面时自动静默扫描一次，
+ *   30s 内复用结果，避免来回切页时重复磁盘 IO。
+ * - 默认 enabled: false：只订阅共享缓存，不主动触发扫描。
  */
-export function useScanUnmanagedSkills() {
+export function useScanUnmanagedSkills(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["skills", "unmanaged"],
     queryFn: () => skillsApi.scanUnmanaged(),
-    enabled: false, // 手动触发
+    enabled: options?.enabled ?? false,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -439,14 +445,10 @@ export function useInstallSkillArchives() {
  * 检查 Skills 更新（手动触发）
  */
 export function useCheckSkillUpdates() {
-  const queryClient = useQueryClient();
+  // 可更新的 Skill 和没读到的仓库一起返回（同上游）
   return useQuery({
     queryKey: ["skills", "updates"],
-    queryFn: async () => {
-      const report = await skillsApi.checkUpdatesReport();
-      queryClient.setQueryData(["skills", "updates-failures"], report.failures);
-      return report.updates;
-    },
+    queryFn: () => skillsApi.checkUpdatesReport(),
     enabled: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -469,12 +471,15 @@ export function useUpdateSkill() {
           );
         },
       );
-      queryClient.setQueryData<SkillUpdateInfo[]>(
+      queryClient.setQueryData<SkillUpdateCheckResult>(
         ["skills", "updates"],
-        (oldData) => {
-          if (!oldData) return oldData;
-          return oldData.filter((update) => update.id !== updatedSkill.id);
-        },
+        (oldData) =>
+          oldData && {
+            ...oldData,
+            updates: oldData.updates.filter(
+              (update) => update.id !== updatedSkill.id,
+            ),
+          },
       );
     },
   });
@@ -509,6 +514,13 @@ export type {
   SkillsShSearchResult,
   AppId,
 };
+
+/**
+ * 发现时没读到的仓库（发现请求写进缓存，这里只订阅）
+ */
+export function useDiscoverableSkillsFailures() {
+  return useSkillRepoFailures("discoverable");
+}
 
 export function useSkillRepoFailures(kind: "discoverable" | "updates") {
   return useQuery<SkillRepoFailure[]>({

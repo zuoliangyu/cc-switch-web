@@ -1,152 +1,180 @@
-import { WindowedRows } from "@/components/common/WindowedRows";
-import { useQueryClient } from "@tanstack/react-query";
-import type { SkillRepoFailure } from "@/lib/api/skills";
-import { SkillsStorageDialog } from "./SkillsStorageDialog";
-import { SkillRepoFailures } from "./SkillRepoFailures";
-import { ResyncButton } from "@/components/common/ResyncButton";
-import { skillsApi } from "@/lib/api/skills";
-import { useSkillRepoFailures } from "@/hooks/useSkills";
-import React, { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useTranslation } from "react-i18next";
 import {
-  ExternalLink,
-  FileArchive,
+  ArrowUpCircle,
+  Check,
+  ChevronDown,
   Loader2,
+  MoreHorizontal,
+  Plus,
   RefreshCw,
-  Search,
-  Sparkles,
-  Trash2,
-  Upload,
-  X,
-  FolderOpen,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { HelpTip } from "@/components/ui/help-tip";
+import { Notice, NoticeSlot } from "@/components/ui/notice";
+import { PageTabs } from "@/components/ui/page-tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AppPageHeader } from "@/components/shell/AppPageHeader";
+import { AppGlyph, APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
+import { SkillsIcon } from "@/components/BrandIcons";
 import {
   type ImportSkillSelection,
-  type SkillArchiveInstallResult,
+  type InstalledSkill,
   type SkillBackupEntry,
   type SkillUpdateInfo,
-  useCheckSkillUpdates,
-  useInstallSkillArchives,
-  useDeleteSkillBackup,
-  useInstalledSkills,
-  useSkillBackups,
-  useRestoreSkillBackup,
   useBulkToggleSkillApp,
+  useCheckSkillUpdates,
+  useDeleteSkillBackup,
+  useDiscoverableSkills,
+  useImportSkillsFromApps,
+  useInstallSkillArchives,
+  useInstalledSkills,
+  useRestoreSkillBackup,
+  useScanUnmanagedSkills,
+  useSkillBackups,
+  useSkillRepos,
   useToggleSkillApp,
   useUninstallSkill,
   useUpdateSkill,
-  useScanUnmanagedSkills,
-  useImportSkillsFromApps,
-  type InstalledSkill,
 } from "@/hooks/useSkills";
 import type { AppId } from "@/lib/api/types";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { settingsApi } from "@/lib/api";
-import { toast } from "sonner";
-import { copyText } from "@/lib/clipboard";
-import { showBulkToggleResult } from "@/lib/bulkToggleToast";
 import { SKILLS_APP_IDS } from "@/config/appConfig";
-import { AppCountBar } from "@/components/common/AppCountBar";
-import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
-import { AppToggleGroup } from "@/components/common/AppToggleGroup";
-import { ListItemRow } from "@/components/common/ListItemRow";
-import { ManagementListSearch } from "@/components/common/ManagementListSearch";
+import { settingsApi, skillsApi } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
+import { extractErrorMessage } from "@/utils/errorUtils";
+import { cn } from "@/lib/utils";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  MatrixCell,
+  MatrixColumnHeader,
+  MatrixColumnHighlight,
+  MatrixSearch,
+  NeutralBadge,
+  ompDiscoveryColumnNote,
+  resolveBulkScope,
+  showUndoToast,
+} from "@/components/mcp/AppMatrix";
+import { V7ConfirmDialog } from "@/components/mcp/formBits";
+import { useVisibleAppIds } from "@/components/mcp/useVisibleAppIds";
+import { SkillsPage, useSkillRepoActions } from "./SkillsPage";
+import { RepoManagerPanel } from "./RepoManagerPanel";
+import { SkillImportDialog } from "./SkillImportDialog";
+import { SkillRestoreDialog } from "./SkillRestoreDialog";
+import { SkillsStorageDialog } from "./SkillsStorageDialog";
+import {
+  SkillArchiveInstallDialog,
+  summarizeArchiveFailures,
+} from "./SkillArchiveInstallDialog";
+import { useSkillInstallTargets } from "./useSkillInstallTargets";
+import { describeRepoFailures } from "./repoFailures";
+import type { SkillArchiveInstallResult } from "@/lib/api/skills";
 
-/** Oh My Pi 的启用状态由它原生 skills 目录里有没有这个目录决定，导入时不提供勾选 */
-const IMPORT_APP_IDS = SKILLS_APP_IDS.filter((app) => app !== "omp");
+const BACKUP_DIR = "~/.cc-switch-web/skill-backups";
+
+type SkillsView = "installed" | "discover";
+type StatusFilter = "all" | "updates" | "none" | `app:${AppId}`;
+
+interface WriteFailure {
+  desired: boolean;
+  error: string;
+}
+const failKey = (id: string, app: AppId) => `${id}\u0000${app}`;
+
+type ConfirmState =
+  | { kind: "uninstall"; ids: string[] }
+  | { kind: "updateAll" }
+  | { kind: "deleteBackup"; backup: SkillBackupEntry };
 
 interface UnifiedSkillsPanelProps {
-  onOpenDiscovery: () => void;
-  currentApp: AppId;
+  /** 从旧的 skillsDiscovery 视图进来时直接打开「发现」段 */
+  initialView?: SkillsView;
+  onInteractionBlockedChange?: (blocked: boolean) => void;
+  onNavigationBlockedChange?: (blocked: boolean) => void;
 }
 
-export interface UnifiedSkillsPanelHandle {
-  openDiscovery: () => void;
-  openImport: () => void;
-  openInstallFromZip: () => void;
-  openRestoreFromBackup: () => void;
-  checkUpdates: () => void;
-}
-
-function formatSkillBackupDate(unixSeconds: number): string {
-  const date = new Date(unixSeconds * 1000);
-  return Number.isNaN(date.getTime())
-    ? String(unixSeconds)
-    : date.toLocaleString();
-}
-
-function buildArchiveFileKey(file: File): string {
-  return `${file.name}:${file.size}:${file.lastModified}`;
-}
-
-function isZipArchiveFile(file: File): boolean {
-  return file.name.toLowerCase().endsWith(".zip");
-}
-
-function mergeArchiveFiles(current: File[], incoming: File[]): File[] {
-  const merged = new Map<string, File>();
-  current.forEach((file) => {
-    merged.set(buildArchiveFileKey(file), file);
-  });
-  incoming.forEach((file) => {
-    merged.set(buildArchiveFileKey(file), file);
-  });
-  return Array.from(merged.values());
-}
-
-function formatArchiveFileSize(size: number): string {
-  if (size >= 1024 * 1024) {
-    return `${(size / 1024 / 1024).toFixed(1)} MB`;
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLInputElement) {
+    return (
+      target.type !== "checkbox" &&
+      target.type !== "radio" &&
+      target.value !== ""
+    );
   }
-  if (size >= 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${size} B`;
+  return false;
 }
 
-function summarizeArchiveFailures(
-  results: SkillArchiveInstallResult[],
-): string {
-  return results
-    .slice(0, 3)
-    .map((result) => result.fileName)
-    .join(", ");
-}
+/**
+ * Skills 全局页（v7）：「已安装」矩阵 +「发现」合成一页。
+ * Pi 列常驻（应用页里隐藏 Pi 时才不显示）；Pi 的状态来自后端对 ~/.pi/agent/skills 的目录检查，
+ * get_installed_skills 返回前会用这个检查结果覆盖 apps.pi，所以这里显示的不是数据库里的开关。
+ */
+const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
+  initialView = "installed",
+  onInteractionBlockedChange,
+  onNavigationBlockedChange,
+}) => {
+  const { t, i18n } = useTranslation();
+  const appIds = useVisibleAppIds(SKILLS_APP_IDS);
+  const { targets, setTargets, installTo } = useSkillInstallTargets(appIds);
 
-const UnifiedSkillsPanel = React.forwardRef<
-  UnifiedSkillsPanelHandle,
-  UnifiedSkillsPanelProps
->(({ onOpenDiscovery, currentApp }, ref) => {
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const { data: updateFailures } = useSkillRepoFailures("updates");
-  const [confirmDialog, setConfirmDialog] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    confirmText?: string;
-    variant?: "destructive" | "info";
-    onConfirm: () => void;
-  } | null>(null);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
-  const [archiveFiles, setArchiveFiles] = useState<File[]>([]);
-  const [isArchiveDragActive, setIsArchiveDragActive] = useState(false);
+  const [view, setView] = useState<SkillsView>(initialView);
+  // 「发现」段第一次打开后就一直挂着（隐藏而不卸载），来回切不再重新加载仓库列表
+  const [discoverMounted, setDiscoverMounted] = useState(
+    initialView === "discover",
+  );
+  useEffect(() => {
+    if (view === "discover") setDiscoverMounted(true);
+  }, [view]);
+  const [discoverQuery, setDiscoverQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const archiveInputRef = useRef<HTMLInputElement | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [fails, setFails] = useState<Record<string, WriteFailure>>({});
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [storageOpen, setStorageOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [repoManagerOpen, setRepoManagerOpen] = useState(false);
+  const [dismissedUnmanaged, setDismissedUnmanaged] = useState<number | null>(
+    null,
+  );
+  /** 关掉的是哪一次检查的「仓库没读到」横幅（按检查时间记） */
+  const [dismissedRepoFailAt, setDismissedRepoFailAt] = useState<number | null>(
+    null,
+  );
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [writePending, setWritePending] = useState(false);
+  const [isUpdatingMany, setIsUpdatingMany] = useState(false);
+  // 更新进度：确认框点完就关，进度显示在搜索框旁的按钮上
+  const [updateProgress, setUpdateProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const writeLockRef = useRef(false);
+  const checkUpdatesLockRef = useRef(false);
 
-  const { data: skills, isLoading } = useInstalledSkills();
+  const {
+    data: skills,
+    isLoading,
+    isError,
+    error: loadError,
+    refetch,
+  } = useInstalledSkills();
   const {
     data: skillBackups = [],
     refetch: refetchSkillBackups,
@@ -157,617 +185,1540 @@ const UnifiedSkillsPanel = React.forwardRef<
   const bulkToggleAppMutation = useBulkToggleSkillApp();
   const uninstallMutation = useUninstallSkill();
   const restoreBackupMutation = useRestoreSkillBackup();
+  // 进入页面时静默扫描一次「本机已有但未管理」的 Skill
   const { data: unmanagedSkills, refetch: scanUnmanaged } =
-    useScanUnmanagedSkills();
+    useScanUnmanagedSkills({ enabled: true });
   const importMutation = useImportSkillsFromApps();
   const installArchiveMutation = useInstallSkillArchives();
   const {
-    data: skillUpdates,
+    data: updateCheck,
     refetch: checkUpdates,
     isFetching: isCheckingUpdates,
+    dataUpdatedAt: updatesCheckedAt,
   } = useCheckSkillUpdates();
+  const skillUpdates = updateCheck?.updates;
+  const updateRepoFailures = updateCheck?.failures ?? [];
   const updateSkillMutation = useUpdateSkill();
-  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
-  // 更新进度：确认框点完就关，进度显示在「全部更新」按钮上
-  const [updateProgress, setUpdateProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
-  const [updateAllConfirmOpen, setUpdateAllConfirmOpen] = useState(false);
+
+  const mutationPending =
+    deleteBackupMutation.isPending ||
+    toggleAppMutation.isPending ||
+    bulkToggleAppMutation.isPending ||
+    uninstallMutation.isPending ||
+    restoreBackupMutation.isPending ||
+    importMutation.isPending ||
+    installArchiveMutation.isPending ||
+    updateSkillMutation.isPending ||
+    isUpdatingMany;
+  const dialogOpen =
+    importOpen ||
+    restoreOpen ||
+    archiveOpen ||
+    confirm !== null ||
+    repoManagerOpen;
+  const navigationBlocked = writePending || mutationPending || dialogOpen;
+  const interactionBlocked = navigationBlocked || isCheckingUpdates;
+  // 外观上的禁用晚 300ms 才出现：点一个格子写得很快时不让整页按钮闪一下变灰。
+  // 写入本身仍由写锁（writeLockRef / interactionBlocked）拦着。
+  const controlsDisabled = useDelayedFlag(interactionBlocked);
+
+  useEffect(() => {
+    onInteractionBlockedChange?.(interactionBlocked);
+  }, [interactionBlocked, onInteractionBlockedChange]);
+
+  useEffect(() => {
+    onNavigationBlockedChange?.(navigationBlocked);
+  }, [navigationBlocked, onNavigationBlockedChange]);
+
+  useEffect(
+    () => () => {
+      onInteractionBlockedChange?.(false);
+      onNavigationBlockedChange?.(false);
+    },
+    [onInteractionBlockedChange, onNavigationBlockedChange],
+  );
+
+  const beginWrite = (allowOpenDialog = false) => {
+    if (
+      checkUpdatesLockRef.current ||
+      isCheckingUpdates ||
+      writeLockRef.current ||
+      mutationPending ||
+      (!allowOpenDialog && dialogOpen)
+    ) {
+      return false;
+    }
+    writeLockRef.current = true;
+    setWritePending(true);
+    return true;
+  };
+
+  const endWrite = () => {
+    writeLockRef.current = false;
+    setWritePending(false);
+  };
+
+  const listSeparator = t("mcpPage.listSeparator");
+  const names = (apps: AppId[]) =>
+    apps.map((app) => APP_DISPLAY_NAME[app]).join(listSeparator);
+  const noun = t("skillsPage.noun");
+  const installedSkills = skills ?? [];
+
+  // ─── 更新 ───────────────────────────────────────────────────────────
+  const applicableSkillUpdates = useMemo(() => {
+    const installedIds = new Set(installedSkills.map((skill) => skill.id));
+    return (skillUpdates ?? []).filter((update) => installedIds.has(update.id));
+  }, [skillUpdates, installedSkills]);
 
   const updatesMap = useMemo(() => {
     const map: Record<string, SkillUpdateInfo> = {};
-    skillUpdates?.forEach((update) => {
-      map[update.id] = update;
-    });
+    for (const update of applicableSkillUpdates) map[update.id] = update;
     return map;
-  }, [skillUpdates]);
+  }, [applicableSkillUpdates]);
 
-  // 只算还装着的：检查完之后卸掉的 Skill 不该再出现在「全部更新」里
-  const applicableSkillUpdates = useMemo(() => {
-    const installedIds = new Set((skills ?? []).map((skill) => skill.id));
-    return (skillUpdates ?? []).filter((update) => installedIds.has(update.id));
-  }, [skillUpdates, skills]);
+  const lastCheckedText = useMemo(() => {
+    if (!updatesCheckedAt) return "";
+    const minutes = Math.floor((Date.now() - updatesCheckedAt) / 60_000);
+    if (minutes < 1) return t("skillsPage.justNow");
+    try {
+      const rtf = new Intl.RelativeTimeFormat(i18n.language, {
+        numeric: "auto",
+      });
+      return minutes < 60
+        ? rtf.format(-minutes, "minute")
+        : rtf.format(-Math.floor(minutes / 60), "hour");
+    } catch {
+      return "";
+    }
+  }, [updatesCheckedAt, i18n.language, t]);
 
+  // ─── 来源 / 筛选 ────────────────────────────────────────────────────
+  const sourceKey = (skill: InstalledSkill) =>
+    skill.repoOwner && skill.repoName
+      ? `repo:${skill.repoOwner}/${skill.repoName}`
+      : "local";
+
+  const sourceLabel = (key: string) =>
+    key === "local" ? t("skillsPage.source.local") : key.slice(5);
+
+  const sourceOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of installedSkills) {
+      const key = sourceKey(skill);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort(([a], [b]) => {
+      if (a === "local") return 1;
+      if (b === "local") return -1;
+      return a.localeCompare(b);
+    });
+  }, [installedSkills]);
+
+  const enabledCount = (skill: InstalledSkill) =>
+    SKILLS_APP_IDS.filter((app) => skill.apps[app]).length;
+
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
   const filteredSkills = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return skills ?? [];
-    return (skills ?? []).filter((skill) =>
-      [
-        skill.id,
+    return installedSkills.filter((skill) => {
+      if (statusFilter === "updates" && !updatesMap[skill.id]) return false;
+      if (statusFilter === "none" && enabledCount(skill) > 0) return false;
+      if (statusFilter.startsWith("app:")) {
+        const app = statusFilter.slice(4) as AppId;
+        if (!skill.apps[app]) return false;
+      }
+      if (sourceFilter !== "all" && sourceKey(skill) !== sourceFilter) {
+        return false;
+      }
+      if (!normalizedQuery) return true;
+      return [
         skill.name,
+        skill.id,
         skill.description,
+        skill.directory,
         skill.repoOwner,
         skill.repoName,
-        skill.directory,
-      ].some((value) => value?.toLowerCase().includes(query)),
-    );
-  }, [searchQuery, skills]);
-
-  const enabledCounts = useMemo(() => {
-    const counts = {
-      claude: 0,
-      "claude-desktop": 0,
-      codex: 0,
-      gemini: 0,
-      grokbuild: 0,
-      opencode: 0,
-      openclaw: 0,
-      hermes: 0,
-      pi: 0,
-      mcode: 0,
-      kimi: 0,
-      dsh: 0,
-      agy: 0,
-      omp: 0,
-    };
-
-    filteredSkills.forEach((skill) => {
-      for (const app of SKILLS_APP_IDS) {
-        if (skill.apps[app]) counts[app]++;
-      }
+        skill.repoOwner && skill.repoName
+          ? `${skill.repoOwner}/${skill.repoName}`
+          : undefined,
+      ].some((value) => value?.toLocaleLowerCase().includes(normalizedQuery));
     });
-    return counts;
-  }, [filteredSkills]);
+  }, [
+    installedSkills,
+    statusFilter,
+    sourceFilter,
+    normalizedQuery,
+    updatesMap,
+  ]);
 
-  const writePending =
-    toggleAppMutation.isPending || bulkToggleAppMutation.isPending;
+  // 「可更新」筛选下把最后一个也更新完：回到全部，免得停在空表上
+  const nApplicableUpdates = applicableSkillUpdates.length;
+  const prevUpdatesRef = useRef(nApplicableUpdates);
+  useEffect(() => {
+    if (
+      prevUpdatesRef.current > 0 &&
+      nApplicableUpdates === 0 &&
+      statusFilter === "updates"
+    ) {
+      setStatusFilter("all");
+    }
+    prevUpdatesRef.current = nApplicableUpdates;
+  }, [nApplicableUpdates, statusFilter]);
 
-  const handleToggleApp = async (id: string, app: AppId, enabled: boolean) => {
-    if (writePending) return;
-    try {
-      await toggleAppMutation.mutateAsync({ id, app, enabled });
-    } catch (error) {
-      toast.error(t("common.error"), { description: String(error) });
+  const filtersActive = statusFilter !== "all" || sourceFilter !== "all";
+  const scope = resolveBulkScope(
+    installedSkills,
+    filteredSkills,
+    normalizedQuery ? "search" : filtersActive ? "filter" : null,
+  );
+
+  // 已经不在列表里的勾选自动丢掉
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const ids = new Set(installedSkills.map((skill) => skill.id));
+    const next = new Set([...selected].filter((id) => ids.has(id)));
+    if (next.size !== selected.size) setSelected(next);
+  }, [installedSkills, selected]);
+
+  // 从「发现」跳回来时定位到那一行
+  useEffect(() => {
+    if (!highlightId || view !== "installed") return;
+    const row = document.getElementById(`sk-row-${highlightId}`);
+    row?.scrollIntoView?.({ block: "center" });
+    row?.focus?.({ preventScroll: true });
+  }, [highlightId, view]);
+
+  // 在「发现」段按 Escape 回到「已安装」
+  useEffect(() => {
+    if (view !== "discover") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.body.style.overflow === "hidden") return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      setView("installed");
+    };
+    // 捕获阶段先处理：App 的 Escape（回到供应商页）看到 defaultPrevented 就不再处理
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [view]);
+
+  // ─── 写入与失败记录 ────────────────────────────────────────────────
+  const recordResult = (
+    id: string,
+    app: AppId,
+    desired: boolean,
+    error?: unknown,
+  ) =>
+    setFails((prev) => {
+      const next = { ...prev };
+      const key = failKey(id, app);
+      if (error === undefined) delete next[key];
+      else next[key] = { desired, error: extractErrorMessage(error) };
+      return next;
+    });
+
+  const recordEnableFailures = (
+    failures: Array<{ id: string; app: AppId; error: unknown }>,
+  ) => {
+    for (const failure of failures) {
+      recordResult(failure.id, failure.app, true, failure.error);
     }
   };
 
-  const handleToggleAll = async (app: AppId, enabled: boolean) => {
-    if (writePending) return;
-    const ids = filteredSkills
+  const writeOne = async (id: string, app: AppId, enabled: boolean) => {
+    if (!beginWrite()) return;
+    try {
+      await toggleAppMutation.mutateAsync({ id, app, enabled });
+      recordResult(id, app, enabled);
+    } catch (error) {
+      recordResult(id, app, enabled, error);
+    } finally {
+      endWrite();
+    }
+  };
+
+  const writeMany = async (ids: string[], app: AppId, enabled: boolean) => {
+    if (ids.length === 0) return { succeeded: [] as string[], failed: 0 };
+    try {
+      const result = await bulkToggleAppMutation.mutateAsync({
+        ids,
+        app,
+        enabled,
+      });
+      for (const id of result.succeeded) recordResult(id, app, enabled);
+      for (const failure of result.failed) {
+        recordResult(failure.item, app, enabled, failure.error);
+      }
+      return { succeeded: result.succeeded, failed: result.failed.length };
+    } catch (error) {
+      for (const id of ids) recordResult(id, app, enabled, error);
+      return { succeeded: [] as string[], failed: ids.length };
+    }
+  };
+
+  const bulkToggle = async (
+    ids: string[],
+    app: AppId,
+    enabled: boolean,
+    toastKey: { on: string; off: string },
+  ) => {
+    if (!beginWrite()) return;
+    try {
+      const { succeeded, failed } = await writeMany(ids, app, enabled);
+      let text = t(enabled ? toastKey.on : toastKey.off, {
+        app: APP_DISPLAY_NAME[app],
+        count: succeeded.length,
+        noun,
+      });
+      if (failed) text += t("appMatrix.toast.partialFail", { count: failed });
+      showUndoToast(
+        text,
+        t("appMatrix.undo"),
+        succeeded.length
+          ? () => {
+              void (async () => {
+                if (!beginWrite()) return;
+                try {
+                  const result = await writeMany(succeeded, app, !enabled);
+                  if (result.failed) {
+                    toast[result.succeeded.length ? "warning" : "error"](
+                      t("common.bulkToggleFailed", { count: result.failed }),
+                      { closeButton: true },
+                    );
+                  } else {
+                    toast.success(t("appMatrix.toast.undone"), {
+                      closeButton: true,
+                    });
+                  }
+                } finally {
+                  endWrite();
+                }
+              })();
+            }
+          : undefined,
+        failed ? (succeeded.length ? "warning" : "error") : "success",
+      );
+    } finally {
+      endWrite();
+    }
+  };
+
+  const handleColumnBulk = (app: AppId, enabled: boolean) => {
+    const ids = scope.rows
       .filter((skill) => Boolean(skill.apps[app]) !== enabled)
       .map((skill) => skill.id);
     if (ids.length === 0) return;
-
-    const result = await bulkToggleAppMutation.mutateAsync({
-      ids,
-      app,
-      enabled,
+    void bulkToggle(ids, app, enabled, {
+      on: "appMatrix.toast.enabled",
+      off: "appMatrix.toast.disabled",
     });
-    // 全部失败报错、部分失败警告，撤销也按实际结果提示
-    showBulkToggleResult(result, t, (undoIds) =>
-      bulkToggleAppMutation.mutateAsync({
-        ids: undoIds,
-        app,
-        enabled: !enabled,
-      }),
-    );
   };
 
-  const handleUninstall = (skill: InstalledSkill) => {
-    setConfirmDialog({
-      isOpen: true,
-      title: t("skills.uninstall"),
-      message: t("skills.uninstallConfirm", { name: skill.name }),
-      onConfirm: async () => {
+  const handleSelectionToggle = (app: AppId, enabled: boolean) => {
+    const chosen = installedSkills.filter((skill) => selected.has(skill.id));
+    const ids = chosen
+      .filter((skill) => Boolean(skill.apps[app]) !== enabled)
+      .map((skill) => skill.id);
+    if (ids.length === 0) {
+      toast.info(
+        enabled
+          ? t("skillsPage.toast.selectionAlreadyOn", {
+              count: chosen.length,
+              app: APP_DISPLAY_NAME[app],
+            })
+          : t("skillsPage.toast.selectionAlreadyOff", {
+              count: chosen.length,
+              app: APP_DISPLAY_NAME[app],
+            }),
+        { closeButton: true },
+      );
+      return;
+    }
+    void bulkToggle(ids, app, enabled, {
+      on: "appMatrix.toast.enabled",
+      off: "skillsPage.toast.disabledSelection",
+    });
+  };
+
+  // ─── 卸载 / 更新 ────────────────────────────────────────────────────
+  const uninstallIds = async (ids: string[]) => {
+    if (!beginWrite(true)) return;
+    const done: InstalledSkill[] = [];
+    let backupPath: string | undefined;
+    try {
+      for (const id of ids) {
+        const skill = installedSkills.find((item) => item.id === id);
         try {
-          // 构建 skillKey 用于更新 discoverable 缓存
-          const installName =
-            skill.directory.split(/[/\\]/).pop()?.toLowerCase() ||
-            skill.directory.toLowerCase();
-          const skillKey = `${installName}:${skill.repoOwner?.toLowerCase() || ""}:${skill.repoName?.toLowerCase() || ""}`;
-
-          const result = await uninstallMutation.mutateAsync({
-            id: skill.id,
-            skillKey,
-          });
-          setConfirmDialog(null);
-          toast.success(t("skills.uninstallSuccess", { name: skill.name }), {
-            description: result.backupPath
-              ? t("skills.backup.location", { path: result.backupPath })
-              : undefined,
-            closeButton: true,
-          });
+          // skillKey 用于同步「发现」缓存里的已安装标记
+          const installName = skill
+            ? skill.directory.split(/[/\\]/).pop()?.toLowerCase() ||
+              skill.directory.toLowerCase()
+            : "";
+          const skillKey = `${installName}:${skill?.repoOwner?.toLowerCase() || ""}:${skill?.repoName?.toLowerCase() || ""}`;
+          const result = await uninstallMutation.mutateAsync({ id, skillKey });
+          if (skill) done.push(skill);
+          if (result.backupPath) backupPath = result.backupPath;
         } catch (error) {
-          toast.error(t("common.error"), { description: String(error) });
+          toast.error(t("common.error"), {
+            description: `${skill?.name ?? id}: ${String(error)}`,
+          });
         }
-      },
+      }
+      setConfirm(null);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+    } finally {
+      endWrite();
+    }
+    if (done.length === 0) return;
+    const text =
+      done.length === 1
+        ? t("skills.uninstallSuccess", { name: done[0].name })
+        : t("skillsPage.toast.uninstalledMany", { count: done.length });
+    toast.success(text, {
+      description:
+        done.length === 1 && backupPath
+          ? t("skills.backup.location", { path: backupPath })
+          : t("skillsPage.toast.backupAt", { path: BACKUP_DIR }),
+      closeButton: true,
     });
   };
 
+  const updateIds = async (ids: string[], allowOpenDialog = false) => {
+    if (ids.length === 0 || !beginWrite(allowOpenDialog)) return;
+    // 不让确认框等着整批更新跑完：点了确认就关，每行的 ⋯ 和页头按钮显示进度
+    setConfirm(null);
+    setIsUpdatingMany(ids.length > 1);
+    setUpdateProgress({ done: 0, total: ids.length });
+    const updated: string[] = [];
+    try {
+      for (const [index, id] of ids.entries()) {
+        try {
+          const result = await updateSkillMutation.mutateAsync(id);
+          updated.push(result.name);
+        } catch (error) {
+          const name = installedSkills.find((skill) => skill.id === id)?.name;
+          toast.error(t("skills.updateFailed"), {
+            description: `${name ?? id}: ${String(error)}`,
+          });
+        }
+        setUpdateProgress({ done: index + 1, total: ids.length });
+      }
+    } finally {
+      setIsUpdatingMany(false);
+      setUpdateProgress(null);
+      endWrite();
+    }
+    if (updated.length === 1) {
+      toast.success(t("skills.updateSuccess", { name: updated[0] }), {
+        closeButton: true,
+      });
+    } else if (updated.length > 1) {
+      toast.success(t("skills.updateAllSuccess", { count: updated.length }), {
+        closeButton: true,
+      });
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    if (
+      checkUpdatesLockRef.current ||
+      writeLockRef.current ||
+      interactionBlocked
+    ) {
+      return;
+    }
+    checkUpdatesLockRef.current = true;
+    try {
+      const result = await checkUpdates();
+      const installedIds = new Set(installedSkills.map((skill) => skill.id));
+      const updates = (result.data?.updates ?? []).filter((update) =>
+        installedIds.has(update.id),
+      );
+      const failures = result.data?.failures ?? [];
+      setDismissedRepoFailAt(null);
+      if (updates.length === 0 && failures.length > 0) {
+        // 有仓库没读到时不能说「全部最新」；哪些仓库、为什么写在横幅里
+        toast.warning(
+          t("skills.updatesIncomplete", { count: failures.length }),
+          { closeButton: true },
+        );
+      } else if (updates.length === 0) {
+        toast.success(t("skills.noUpdates"), { closeButton: true });
+      } else {
+        // 查到就直接问要不要全部更新，不用再去筛选里找「全部更新」
+        setConfirm({ kind: "updateAll" });
+      }
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    } finally {
+      checkUpdatesLockRef.current = false;
+    }
+  };
+
+  // ─── 导入 / ZIP / 备份 ───────────────────────────────────────────────
   const handleOpenImport = async () => {
+    if (!beginWrite()) return;
     try {
       const result = await scanUnmanaged();
       if (!result.data || result.data.length === 0) {
         toast.success(t("skills.noUnmanagedFound"), { closeButton: true });
         return;
       }
-      setImportDialogOpen(true);
+      setImportOpen(true);
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
+    } finally {
+      endWrite();
     }
   };
 
   const handleImport = async (imports: ImportSkillSelection[]) => {
+    if (!beginWrite(true)) return;
     try {
       const imported = await importMutation.mutateAsync(imports);
-      setImportDialogOpen(false);
+      setImportOpen(false);
       toast.success(t("skills.importSuccess", { count: imported.length }), {
         closeButton: true,
       });
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
-    }
-  };
-
-  const handleInstallFromZip = async () => {
-    setArchiveDialogOpen(true);
-  };
-
-  const handleCheckUpdates = async () => {
-    try {
-      const result = await checkUpdates({ throwOnError: true });
-      const installedIds = new Set((skills ?? []).map((skill) => skill.id));
-      const updates = (result.data || []).filter((update) =>
-        installedIds.has(update.id),
-      );
-      const failures = queryClient.getQueryData<SkillRepoFailure[]>([
-        "skills",
-        "updates-failures",
-      ]);
-      if (failures?.length) {
-        toast.warning(t("skills.repoFailures", { count: failures.length }));
-        return;
-      }
-      if (updates.length === 0) {
-        toast.success(t("skills.noUpdates"), { closeButton: true });
-      } else {
-        // 查到就直接问要不要全部更新，并列出是哪几个
-        setUpdateAllConfirmOpen(true);
-      }
-    } catch (error) {
-      toast.error(t("common.error"), { description: String(error) });
-    }
-  };
-
-  const handleUpdateSkill = async (skill: InstalledSkill) => {
-    try {
-      const updated = await updateSkillMutation.mutateAsync(skill.id);
-      toast.success(t("skills.updateSuccess", { name: updated.name }), {
-        closeButton: true,
-      });
-    } catch (error) {
-      toast.error(t("skills.updateFailed"), { description: String(error) });
-    }
-  };
-
-  const handleUpdateAll = async () => {
-    const updates = applicableSkillUpdates;
-    // 不让确认框等着整批更新跑完：点了确认就关，进度显示在按钮上
-    setUpdateAllConfirmOpen(false);
-    if (updates.length === 0) {
-      return;
-    }
-
-    setIsUpdatingAll(true);
-    setUpdateProgress({ done: 0, total: updates.length });
-    let successCount = 0;
-    try {
-      for (const [index, update] of updates.entries()) {
-        try {
-          await updateSkillMutation.mutateAsync(update.id);
-          successCount++;
-        } catch (error) {
-          toast.error(t("skills.updateFailed"), {
-            description: `${update.name}: ${String(error)}`,
-          });
-        }
-        setUpdateProgress({ done: index + 1, total: updates.length });
-      }
     } finally {
-      setIsUpdatingAll(false);
-      setUpdateProgress(null);
-    }
-
-    if (successCount > 0) {
-      toast.success(t("skills.updateAllSuccess", { count: successCount }), {
-        closeButton: true,
-      });
+      endWrite();
     }
   };
 
-  const appendArchiveFiles = (files: File[]) => {
-    const validArchives = files.filter(isZipArchiveFile);
-    const invalidCount = files.length - validArchives.length;
-
-    if (invalidCount > 0) {
-      toast.error(t("skills.installFromZip.invalidFilesTitle"), {
-        description: t("skills.installFromZip.invalidFilesDescription", {
-          count: invalidCount,
-        }),
-        closeButton: true,
-      });
-    }
-
-    if (validArchives.length === 0) {
-      return;
-    }
-
-    setArchiveFiles((current) => mergeArchiveFiles(current, validArchives));
-  };
-
-  const handleArchiveInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
+  const reportEnableFailures = (
+    failures: Array<{ id: string; app: AppId; error: unknown }>,
   ) => {
-    appendArchiveFiles(Array.from(event.target.files ?? []));
-    event.target.value = "";
+    if (failures.length === 0) return;
+    recordEnableFailures(failures);
+    toast.warning(
+      t("skillsPage.toast.enableFailed", {
+        apps: names([...new Set(failures.map((failure) => failure.app))]),
+      }),
+      { closeButton: true },
+    );
   };
 
-  const handleInstallArchives = async () => {
-    if (archiveFiles.length === 0) {
-      toast.info(t("skills.installFromZip.emptySelection"), {
-        closeButton: true,
-      });
-      return;
-    }
+  // Web：ZIP 由浏览器上传（可一次多个），装进「安装到」的第一个应用再逐个启用其余的
+  const handleInstallFromZip = () => {
+    if (writeLockRef.current || interactionBlocked) return;
+    setArchiveOpen(true);
+  };
 
+  const handleInstallArchives = async (files: File[]): Promise<boolean> => {
+    if (!beginWrite(true)) return false;
     try {
-      const results = await installArchiveMutation.mutateAsync({
-        files: archiveFiles,
-        currentApp,
+      let results: SkillArchiveInstallResult[] = [];
+      const { installed, failures } = await installTo(async (firstApp) => {
+        results = await installArchiveMutation.mutateAsync({
+          files,
+          currentApp: firstApp,
+        });
+        return results.flatMap((result) => result.installed);
       });
-      const installedCount = results.reduce(
-        (count, result) => count + result.installed.length,
-        0,
-      );
       const failedResults = results.filter((result) => result.error);
-      const skippedCount = results.reduce(
-        (count, result) => count + (result.skipped?.length ?? 0),
-        0,
-      );
       const skipped = results.flatMap((result) => result.skipped ?? []);
-      if (skipped.length)
-        toast.info(t("skills.zipSkipped", { count: skipped.length }), {
-          description: skipped
-            .map((item) => `${item.directory}: ${item.existingName}`)
-            .join("; "),
-        });
-
-      if (installedCount === 0 && failedResults.length === 0) {
-        toast.info(t("skills.installFromZip.noNewSkills"), {
-          description:
-            skippedCount > 0
-              ? t("skills.installFromZip.noNewSkillsDescription", {
-                  count: skippedCount,
-                })
-              : undefined,
-          closeButton: true,
-        });
-        return;
-      }
-
-      if (failedResults.length === 0) {
-        if (installedCount === 1) {
-          const installed = results.find(
-            (result) => result.installed.length > 0,
-          )?.installed[0];
-          toast.success(
-            t("skills.installFromZip.successSingle", {
-              name: installed?.name ?? "",
+      if (skipped.length > 0) {
+        // #3749：同名被跳过要说清楚跳过了哪些、被谁占用，不能说成「ZIP 里没有技能」
+        const list = skipped
+          .map((item) =>
+            t("skills.installFromZip.skippedItem", {
+              directory: item.directory,
+              name: item.existingName,
             }),
-            {
-              description:
-                skippedCount > 0
-                  ? t("skills.installFromZip.skippedDescription", {
-                      count: skippedCount,
-                    })
-                  : undefined,
-              closeButton: true,
-            },
-          );
-        } else {
-          toast.success(
-            t("skills.installFromZip.successMultiple", {
-              count: installedCount,
-            }),
-            {
-              description:
-                skippedCount > 0
-                  ? t("skills.installFromZip.skippedDescription", {
-                      count: skippedCount,
-                    })
-                  : undefined,
-              closeButton: true,
-            },
-          );
-        }
-        setArchiveDialogOpen(false);
-        setArchiveFiles([]);
-        return;
-      }
-
-      console.error("[skills] archive install failures", failedResults);
-
-      if (installedCount > 0) {
-        toast.success(
-          t("skills.installFromZip.partialSuccess", {
-            count: installedCount,
-          }),
+          )
+          .join(listSeparator);
+        toast.warning(
+          installed.length === 0
+            ? t("skills.installFromZip.allSkipped", { count: skipped.length })
+            : t("skills.installFromZip.skippedTitle", {
+                count: skipped.length,
+              }),
           {
-            description: t("skills.installFromZip.partialSuccessDescription", {
-              count: failedResults.length,
+            description: t("skills.installFromZip.skippedBody", { list }),
+            closeButton: true,
+          },
+        );
+      }
+      if (failedResults.length > 0) {
+        console.error("[skills] archive install failures", failedResults);
+        toast.error(
+          t("skills.installFromZip.failed", { count: failedResults.length }),
+          {
+            description: t("skills.installFromZip.failedDescription", {
               files: summarizeArchiveFailures(failedResults),
             }),
             closeButton: true,
           },
         );
-        setArchiveDialogOpen(false);
-        setArchiveFiles([]);
-        return;
       }
-
-      toast.error(
-        t("skills.installFromZip.failed", {
-          count: failedResults.length,
-        }),
-        {
-          description: t("skills.installFromZip.failedDescription", {
-            files: summarizeArchiveFailures(failedResults),
+      if (installed.length === 0) {
+        if (skipped.length === 0 && failedResults.length === 0) {
+          toast.info(t("skills.installFromZip.noSkillsFound"), {
+            closeButton: true,
+          });
+        }
+      } else if (installed.length === 1) {
+        toast.success(
+          t("skillsPage.toast.installed", {
+            name: installed[0].name,
+            apps: names(targets),
           }),
-          closeButton: true,
-        },
-      );
+          { closeButton: true },
+        );
+      } else {
+        toast.success(
+          t("skillsPage.toast.installedMany", {
+            count: installed.length,
+            apps: names(targets),
+          }),
+          { closeButton: true },
+        );
+      }
+      reportEnableFailures(failures);
+      // 有文件装失败时留着对话框，方便去掉坏文件重试
+      if (failedResults.length === 0) setArchiveOpen(false);
+      return failedResults.length === 0;
     } catch (error) {
       toast.error(t("skills.installFailed"), { description: String(error) });
+      return false;
+    } finally {
+      endWrite();
     }
   };
 
   const handleOpenRestoreFromBackup = async () => {
-    setRestoreDialogOpen(true);
+    if (!beginWrite()) return;
+    setRestoreOpen(true);
     try {
-      await refetchSkillBackups();
+      await refetchSkillBackups({ throwOnError: true });
+    } catch (error) {
+      setRestoreOpen(false);
+      toast.error(t("common.error"), { description: String(error) });
+    } finally {
+      endWrite();
+    }
+  };
+
+  const handleRestoreFromBackup = async (backupId: string) => {
+    if (!beginWrite(true)) return;
+    try {
+      const { installed, failures } = await installTo(async (firstApp) => [
+        await restoreBackupMutation.mutateAsync({
+          backupId,
+          currentApp: firstApp,
+        }),
+      ]);
+      setRestoreOpen(false);
+      toast.success(
+        t("skills.restoreFromBackup.success", { name: installed[0]?.name }),
+        { closeButton: true },
+      );
+      reportEnableFailures(failures);
+    } catch (error) {
+      toast.error(t("skills.restoreFromBackup.failed"), {
+        description: String(error),
+      });
+    } finally {
+      endWrite();
+    }
+  };
+
+  const confirmDeleteBackup = async (backup: SkillBackupEntry) => {
+    if (!beginWrite(true)) return;
+    try {
+      let deleteSucceeded = false;
+      let deleteError: unknown;
+      try {
+        await deleteBackupMutation.mutateAsync(backup.backupId);
+        deleteSucceeded = true;
+      } catch (error) {
+        deleteError = error;
+      }
+
+      // The backups query is disabled by default, so invalidation alone
+      // does not fetch authoritative data. Explicitly refresh after both
+      // success and failure (remove_dir_all may have made partial progress).
+      let refreshedBackups: SkillBackupEntry[] | undefined;
+      try {
+        const result = await refetchSkillBackups({ throwOnError: true });
+        refreshedBackups = result.data;
+      } catch (error) {
+        // A refresh failure must not turn a completed deletion into a false
+        // "delete failed" report, or replace the original deletion error.
+        console.error("Failed to refresh Skill backups after deletion:", error);
+      }
+
+      if (!deleteSucceeded) {
+        if (
+          refreshedBackups &&
+          !refreshedBackups.some((entry) => entry.backupId === backup.backupId)
+        ) {
+          setConfirm(null);
+        }
+        toast.error(t("skills.restoreFromBackup.deleteFailed"), {
+          description: String(deleteError),
+        });
+      } else {
+        setConfirm(null);
+        toast.success(
+          t("skills.restoreFromBackup.deleteSuccess", {
+            name: backup.skill.name,
+          }),
+          { closeButton: true },
+        );
+      }
+    } finally {
+      endWrite();
+    }
+  };
+
+  const openDocs = async (skill: InstalledSkill) => {
+    const url =
+      skill.readmeUrl ||
+      (skill.repoOwner && skill.repoName
+        ? `https://github.com/${skill.repoOwner}/${skill.repoName}`
+        : undefined);
+    if (!url) return;
+    try {
+      await settingsApi.openExternal(url);
+    } catch {
+      // ignore
+    }
+  };
+
+  const copyName = async (skill: InstalledSkill) => {
+    try {
+      await copyText(skill.name);
+      toast.success(t("skillsPage.toast.copiedName", { name: skill.name }), {
+        closeButton: true,
+      });
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
     }
   };
 
-  const handleRestoreFromBackup = async (backupId: string) => {
+  // Web：目录在服务端那台电脑上，浏览器打不开，改为复制路径
+  const copyDirectory = async (skill: InstalledSkill) => {
     try {
-      const restored = await restoreBackupMutation.mutateAsync({
-        backupId,
-        currentApp,
+      const dir = await skillsApi.installedSkillDir(skill.directory);
+      await copyText(dir);
+      toast.success(t("skillsPage.toast.copiedDir", { path: dir }), {
+        closeButton: true,
       });
-      setRestoreDialogOpen(false);
-      toast.success(
-        t("skills.restoreFromBackup.success", { name: restored.name }),
-        {
-          closeButton: true,
-        },
-      );
     } catch (error) {
-      toast.error(t("skills.restoreFromBackup.failed"), {
-        description: String(error),
+      toast.error(t("skillsPage.toast.copyDirFailed"), {
+        description: extractErrorMessage(error),
       });
     }
   };
 
-  const handleDeleteBackup = (backup: SkillBackupEntry) => {
-    setConfirmDialog({
-      isOpen: true,
-      title: t("skills.restoreFromBackup.deleteConfirmTitle"),
-      message: t("skills.restoreFromBackup.deleteConfirmMessage", {
-        name: backup.skill.name,
-      }),
-      confirmText: t("skills.restoreFromBackup.delete"),
-      variant: "destructive",
-      onConfirm: async () => {
-        try {
-          await deleteBackupMutation.mutateAsync(backup.backupId);
-          await refetchSkillBackups();
-          setConfirmDialog(null);
-          toast.success(
-            t("skills.restoreFromBackup.deleteSuccess", {
-              name: backup.skill.name,
-            }),
-            {
-              closeButton: true,
-            },
-          );
-        } catch (error) {
-          toast.error(t("skills.restoreFromBackup.deleteFailed"), {
-            description: String(error),
-          });
-        }
-      },
-    });
+  const showInstalled = (skillId: string) => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setSourceFilter("all");
+    setView("installed");
+    setHighlightId(skillId);
   };
 
-  React.useImperativeHandle(ref, () => ({
-    openDiscovery: onOpenDiscovery,
-    openImport: handleOpenImport,
-    openInstallFromZip: handleInstallFromZip,
-    openRestoreFromBackup: handleOpenRestoreFromBackup,
-    checkUpdates: handleCheckUpdates,
-  }));
+  // ─── 渲染：页头 ─────────────────────────────────────────────────────
+  const nInstalled = installedSkills.length;
+  const nUpdates = applicableSkillUpdates.length;
+  const nUnmanaged = unmanagedSkills?.length ?? 0;
+  const loadOk = !isLoading && !isError;
+  const updatesOnly = view === "installed" && statusFilter === "updates";
+  const toggleUpdatesFilter = () => {
+    if (updatesOnly) {
+      setStatusFilter("all");
+      return;
+    }
+    setView("installed");
+    setStatusFilter("updates");
+  };
 
-  return (
-    <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
-      <SkillRepoFailures failures={updateFailures} />
-      <SkillsStorageDialog installedCount={skills?.length ?? 0} />
-      <ResyncButton
-        run={skillsApi.resync}
-        queryKey={["skills", "installed"]}
-        disabled={writePending}
-      />
-      <div className="flex items-center justify-between gap-3">
-        <AppCountBar
-          totalLabel={t("skills.installed", { count: skills?.length || 0 })}
-          counts={enabledCounts}
-          appIds={SKILLS_APP_IDS}
-          totalCount={filteredSkills.length}
-          onToggleAll={handleToggleAll}
-          pendingApp={bulkToggleAppMutation.variables?.app ?? null}
-          disabled={writePending}
-        />
-        <div className="flex items-center gap-1.5">
-          {updateProgress || applicableSkillUpdates.length > 0 ? (
+  const header = (
+    <AppPageHeader
+      icon={<SkillsIcon size={20} />}
+      title="Skills"
+      titleExtra={
+        <>
+          <HelpTip title={t("skillsPage.helpTitle")}>
+            {t("skillsPage.help")}
+          </HelpTip>
+          {/* 已安装数量只写在页签上；页头只留可点的「N 个可更新」 */}
+          {loadOk && nUpdates > 0 && (
+            <span className="ms-2 flex items-center whitespace-nowrap text-sm">
+              {/* 可点：把表格筛到可更新的项，再点恢复；「全部更新」在搜索框旁 */}
+              <HoverTip
+                content={
+                  updatesOnly
+                    ? t("skillsPage.headerUpdatesClear")
+                    : t("skillsPage.headerUpdatesShow")
+                }
+              >
+                <button
+                  type="button"
+                  aria-pressed={updatesOnly}
+                  onClick={toggleUpdatesFilter}
+                  className={cn(
+                    "-mx-1 inline-flex h-6 items-center rounded-md px-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    updatesOnly
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:bg-muted/50 hover:text-foreground",
+                  )}
+                >
+                  {t("skillsPage.headerUpdates", { count: nUpdates })}
+                </button>
+              </HoverTip>
+            </span>
+          )}
+        </>
+      }
+      actions={
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="default"
+                size="default"
+                className="pe-2.5"
+                disabled={controlsDisabled}
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} />
+                {t("skillsPage.add")}
+                <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[220px]">
+              <DropdownMenuItem onSelect={() => setView("discover")}>
+                {t("skillsPage.addMenu.discover")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleInstallFromZip}>
+                {t("skillsPage.addMenu.zip")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void handleOpenImport()}>
+                <span className="flex-1">{t("skillsPage.addMenu.import")}</span>
+                {nUnmanaged > 0 && <NeutralBadge>{nUnmanaged}</NeutralBadge>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <HoverTip content={t("common.more")}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label={t("skills.moreActions")}
+                >
+                  <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
+                </Button>
+              </DropdownMenuTrigger>
+            </HoverTip>
+            <DropdownMenuContent align="end" className="min-w-[200px]">
+              <DropdownMenuItem
+                disabled={controlsDisabled || nInstalled === 0}
+                onSelect={() => void handleCheckUpdates()}
+              >
+                {t("skills.checkUpdates")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={controlsDisabled}
+                onSelect={() => void handleOpenRestoreFromBackup()}
+              >
+                {t("skillsPage.moreMenu.restore")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={controlsDisabled}
+                onSelect={() => setRepoManagerOpen(true)}
+              >
+                {t("skillsPage.moreMenu.repos")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setStorageOpen(true)}>
+                {t("skills.storageSheet.open")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      }
+    />
+  );
+
+  // 「已安装 / 发现」换的是整块内容：页面级导航，用下划线页签（不是分段控件）。
+  // 页签行只渲染一份（两段共用，下划线才滑得过去）；各段右侧的控件用 portal 放进 trailing 槽。
+  const [tabsTrailingSlot, setTabsTrailingSlot] =
+    useState<HTMLDivElement | null>(null);
+  const viewTabsTrailing = (owner: SkillsView, trailing: React.ReactNode) =>
+    view === owner && tabsTrailingSlot
+      ? createPortal(trailing, tabsTrailingSlot)
+      : null;
+  const viewTabs = (
+    <PageTabs<SkillsView>
+      aria-label={t("skillsPage.viewAria")}
+      idPrefix="skills-view"
+      // 窄屏时页签和右侧的搜索、按钮分两行
+      className="h-auto min-h-11 flex-wrap gap-y-1 py-1 md:h-11 md:flex-nowrap md:py-0"
+      value={view}
+      onValueChange={(next) => {
+        if (next === "discover" && navigationBlocked) return;
+        setView(next);
+      }}
+      items={[
+        {
+          value: "installed",
+          label: loadOk
+            ? t("skillsPage.viewInstalledCount", { count: nInstalled })
+            : t("skillsPage.viewInstalled"),
+        },
+        {
+          value: "discover",
+          label: t("skillsPage.viewDiscover"),
+        },
+      ]}
+      trailing={<div ref={setTabsTrailingSlot} className="flex items-center" />}
+    />
+  );
+
+  // ─── 渲染：已安装段 ─────────────────────────────────────────────────
+  const statusLabel = (value: StatusFilter) => {
+    if (value === "updates") return t("skillsPage.filter.updates");
+    if (value === "none") return t("skillsPage.filter.none");
+    if (value.startsWith("app:"))
+      return t("skillsPage.filter.inApp", {
+        app: APP_DISPLAY_NAME[value.slice(4) as AppId],
+      });
+    return t("skillsPage.filter.all");
+  };
+
+  const renderInstalledBody = () => {
+    if (isLoading) {
+      return (
+        <div className="py-12 text-center text-sm text-muted-foreground">
+          {t("skills.loading")}
+        </div>
+      );
+    }
+    if (isError) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-10 pb-12 text-center">
+          <h2 className="m-0 text-base font-semibold">
+            {t("skillsPage.loadFailed")}
+          </h2>
+          <code className="max-w-[520px] rounded-[8px] bg-muted/50 px-3 py-2 text-left font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            {extractErrorMessage(loadError) || String(loadError)}
+          </code>
+          <p className="m-0 text-sm text-muted-foreground">
+            {t("mcpPage.noFilesChanged")}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="default"
+            className="mt-1"
+            onClick={() => void refetch()}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      );
+    }
+    if (nInstalled === 0) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 pb-12 text-center">
+          <h2 className="m-0 text-base font-semibold">
+            {t("skillsPage.emptyTitle")}
+          </h2>
+          <p className="m-0 text-sm text-muted-foreground">
+            {t("skillsPage.emptyBody")}
+          </p>
+          <div className="mt-2 flex gap-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setUpdateAllConfirmOpen(true)}
-              disabled={isUpdatingAll || updateSkillMutation.isPending}
+              size="default"
+              onClick={() => setView("discover")}
             >
-              {isUpdatingAll ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <RefreshCw size={12} />
-              )}
-              {updateProgress
-                ? t("skills.updatingProgress", {
-                    done: Math.min(
-                      updateProgress.done + 1,
-                      updateProgress.total,
-                    ),
-                    total: updateProgress.total,
-                  })
-                : t("skills.updateAll", {
-                    count: applicableSkillUpdates.length,
-                  })}
+              {t("skillsPage.goDiscover")}
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={handleCheckUpdates}
-            disabled={isCheckingUpdates || !skills || skills.length === 0}
-          >
-            {isCheckingUpdates ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <RefreshCw size={12} />
-            )}
-            {isCheckingUpdates
-              ? t("skills.checkingUpdates")
-              : t("skills.checkUpdates")}
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              disabled={controlsDisabled}
+              onClick={() => void handleOpenImport()}
+            >
+              {nUnmanaged
+                ? t("skillsPage.importCount", { count: nUnmanaged })
+                : t("skillsPage.addMenu.import")}
+            </Button>
+          </div>
         </div>
-      </div>
-      <OmpDiscoveryNote />
+      );
+    }
 
-      <ManagementListSearch
-        value={searchQuery}
-        onValueChange={setSearchQuery}
-        placeholder={t("skills.installedSearchPlaceholder")}
-        ariaLabel={t("skills.installedSearchAriaLabel")}
-        clearLabel={t("common.clear")}
-      />
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24">
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            {t("skills.loading")}
-          </div>
-        ) : !skills || skills.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
-              <Sparkles size={24} className="text-muted-foreground" />
+    const selectionActive = selected.size > 0;
+    const nVisibleSelected = filteredSkills.filter((skill) =>
+      selected.has(skill.id),
+    ).length;
+    const allVisibleSelected =
+      filteredSkills.length > 0 && nVisibleSelected === filteredSkills.length;
+    return (
+      <div
+        data-testid="skills-matrix"
+        className="min-h-0 overflow-auto scroll-stable rounded-lg border border-border bg-card"
+      >
+        <MatrixColumnHighlight>
+          <div className="min-w-[600px]">
+            <div className="sticky top-0 z-10 flex h-11 items-center border-b border-border bg-muted/50 px-2">
+              <span className="flex w-6 shrink-0 justify-center">
+                <Checkbox
+                  aria-label={t("skillsPage.selectAllAria")}
+                  disabled={filteredSkills.length === 0}
+                  checked={
+                    allVisibleSelected
+                      ? true
+                      : nVisibleSelected > 0
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={() =>
+                    // 只管当前筛选出来的这些行；半选时点一下补齐
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      for (const skill of filteredSkills) {
+                        if (allVisibleSelected) next.delete(skill.id);
+                        else next.add(skill.id);
+                      }
+                      return next;
+                    })
+                  }
+                />
+              </span>
+              <div className="-ms-0.5 flex min-w-0 flex-1 items-center gap-0.5">
+                {selectionActive ? (
+                  <>
+                    <span className="shrink-0 whitespace-nowrap pe-1.5 ps-2.5 text-sm font-medium tabular-nums">
+                      {t("skillsPage.bulk.selected", { count: selected.size })}
+                    </span>
+                    <AppMenuButton
+                      label={t("skillsPage.bulk.enableTo")}
+                      ariaLabel={t("skillsPage.bulk.enableToAria", {
+                        count: selected.size,
+                      })}
+                      apps={appIds}
+                      disabled={controlsDisabled}
+                      onPick={(app) => handleSelectionToggle(app, true)}
+                    />
+                    <AppMenuButton
+                      label={t("skillsPage.bulk.disable")}
+                      ariaLabel={t("skillsPage.bulk.disableAria", {
+                        count: selected.size,
+                      })}
+                      apps={appIds}
+                      disabled={controlsDisabled}
+                      onPick={(app) => handleSelectionToggle(app, false)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="px-2"
+                      disabled={controlsDisabled}
+                      onClick={() => {
+                        const ids = [...selected].filter(
+                          (id) => updatesMap[id],
+                        );
+                        if (ids.length === 0) {
+                          toast.info(
+                            t("skillsPage.toast.noUpdatesInSelection"),
+                            {
+                              closeButton: true,
+                            },
+                          );
+                          return;
+                        }
+                        void updateIds(ids);
+                      }}
+                    >
+                      {t("skills.update")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="px-2 text-destructive hover:text-destructive"
+                      disabled={controlsDisabled}
+                      onClick={() =>
+                        setConfirm({ kind: "uninstall", ids: [...selected] })
+                      }
+                    >
+                      {t("skillsPage.bulk.uninstall")}
+                    </Button>
+                    <div className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="px-2 text-muted-foreground"
+                      onClick={() => setSelected(new Set())}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <FilterMenu
+                      label={statusLabel(statusFilter)}
+                      active={statusFilter !== "all"}
+                      items={(["all", "updates", "none"] as StatusFilter[]).map(
+                        (value) => ({
+                          key: value,
+                          label: statusLabel(value),
+                          checked: statusFilter === value,
+                          onSelect: () => setStatusFilter(value),
+                        }),
+                      )}
+                    />
+                    <FilterMenu
+                      label={t("skillsPage.filter.sourceButton", {
+                        source:
+                          sourceFilter === "all"
+                            ? t("skillsPage.filter.all")
+                            : sourceLabel(sourceFilter),
+                      })}
+                      active={sourceFilter !== "all"}
+                      items={[
+                        {
+                          key: "all",
+                          label: t("skillsPage.filter.all"),
+                          checked: sourceFilter === "all",
+                          onSelect: () => setSourceFilter("all"),
+                        },
+                        ...sourceOptions.map(([key, count]) => ({
+                          key,
+                          label: sourceLabel(key),
+                          mono: key !== "local",
+                          count,
+                          checked: sourceFilter === key,
+                          onSelect: () => setSourceFilter(key),
+                        })),
+                      ]}
+                    />
+                  </>
+                )}
+              </div>
+              <div className="flex shrink-0">
+                {appIds.map((app) => {
+                  const isPi = app === "pi";
+                  const onInScope = scope.rows.filter(
+                    (skill) => skill.apps[app],
+                  ).length;
+                  const appFilter: StatusFilter = `app:${app}`;
+                  return (
+                    <MatrixColumnHeader
+                      key={app}
+                      app={app}
+                      enabledCount={
+                        installedSkills.filter((skill) => skill.apps[app])
+                          .length
+                      }
+                      totalCount={nInstalled}
+                      scopeTotal={scope.rows.length}
+                      scopeEnabled={onInScope}
+                      scopeFailed={
+                        scope.rows.filter(
+                          (skill) => fails[failKey(skill.id, app)],
+                        ).length
+                      }
+                      scopeKind={scope.kind}
+                      noun={noun}
+                      disabled={controlsDisabled}
+                      title={isPi ? t("skillsPage.piColumnTitle") : undefined}
+                      help={
+                        isPi
+                          ? {
+                              title: t("skillsPage.piHelpTitle"),
+                              body: t("skillsPage.piHelp"),
+                            }
+                          : undefined
+                      }
+                      {...ompDiscoveryColumnNote(app, t)}
+                      extraAction={{
+                        label:
+                          statusFilter === appFilter
+                            ? t("skillsPage.pop.showAll")
+                            : t("skillsPage.pop.onlyApp", {
+                                app: APP_DISPLAY_NAME[app],
+                              }),
+                        onClick: () =>
+                          setStatusFilter(
+                            statusFilter === appFilter ? "all" : appFilter,
+                          ),
+                      }}
+                      onEnableRest={() => handleColumnBulk(app, true)}
+                      onDisableAll={() => handleColumnBulk(app, false)}
+                    />
+                  );
+                })}
+              </div>
+              <span aria-hidden="true" className="w-16 shrink-0" />
             </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              {t("skills.noInstalled")}
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              {t("skills.noInstalledDescription")}
-            </p>
-          </div>
-        ) : filteredSkills.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-            <Search className="mb-4 h-10 w-10 opacity-40" />
-            <p className="text-sm">{t("skills.noInstalledSearchResults")}</p>
-          </div>
-        ) : (
-          <TooltipProvider delayDuration={300}>
-            <div className="rounded-xl border border-border-default overflow-hidden">
-              <WindowedRows>
+
+            {filteredSkills.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                <h2 className="m-0 text-base font-semibold">
+                  {normalizedQuery
+                    ? t("skillsPage.noMatch", { query: searchQuery.trim() })
+                    : t("skillsPage.noFilterMatch")}
+                </h2>
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
+                  {normalizedQuery ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="default"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        {t("mcpPage.clearSearch")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="default"
+                        onClick={() => {
+                          setDiscoverQuery(searchQuery.trim());
+                          setSearchQuery("");
+                          setView("discover");
+                        }}
+                      >
+                        {t("skillsPage.searchInDiscover", {
+                          query: searchQuery.trim(),
+                        })}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      onClick={() => {
+                        setStatusFilter("all");
+                        setSourceFilter("all");
+                      }}
+                    >
+                      {t("skillsPage.clearFilters")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <ul
+                aria-label={t("skillsPage.listLabel")}
+                className="m-0 list-none p-0"
+              >
                 {filteredSkills.map((skill, index) => (
-                  <InstalledSkillListItem
+                  <InstalledRow
                     key={skill.id}
                     skill={skill}
+                    first={index === 0}
+                    appIds={appIds}
+                    checked={selected.has(skill.id)}
                     hasUpdate={Boolean(updatesMap[skill.id])}
                     isUpdating={
                       updateSkillMutation.isPending &&
                       updateSkillMutation.variables === skill.id
                     }
-                    onToggleApp={handleToggleApp}
-                    onUninstall={() => handleUninstall(skill)}
-                    onUpdate={() => handleUpdateSkill(skill)}
-                    actionsDisabled={writePending}
-                    isLast={index === filteredSkills.length - 1}
+                    highlighted={highlightId === skill.id}
+                    onHighlightDone={() => setHighlightId(null)}
+                    fails={fails}
+                    disabled={controlsDisabled}
+                    sourceText={
+                      skill.repoOwner && skill.repoName
+                        ? `${skill.repoOwner}/${skill.repoName}`
+                        : t("skillsPage.source.local")
+                    }
+                    onPick={(checked) =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(skill.id);
+                        else next.delete(skill.id);
+                        return next;
+                      })
+                    }
+                    onCell={(app) => {
+                      const failure = fails[failKey(skill.id, app)];
+                      void writeOne(
+                        skill.id,
+                        app,
+                        failure ? failure.desired : !skill.apps[app],
+                      );
+                    }}
+                    onOpenSource={() => void openDocs(skill)}
+                    onFixSync={() => setStorageOpen(true)}
+                    onUpdate={() => void updateIds([skill.id])}
+                    onOpenDocs={() => void openDocs(skill)}
+                    onCopyName={() => void copyName(skill)}
+                    onCopyDir={() => void copyDirectory(skill)}
+                    onUninstall={() => {
+                      if (writeLockRef.current || interactionBlocked) return;
+                      setConfirm({ kind: "uninstall", ids: [skill.id] });
+                    }}
                   />
                 ))}
-              </WindowedRows>
-            </div>
-          </TooltipProvider>
+              </ul>
+            )}
+          </div>
+        </MatrixColumnHighlight>
+      </div>
+    );
+  };
+
+  const showUnmanagedBanner =
+    nUnmanaged > 0 && dismissedUnmanaged !== nUnmanaged && nInstalled > 0;
+  const showUpdateRepoFailBanner =
+    updateRepoFailures.length > 0 && dismissedRepoFailAt !== updatesCheckedAt;
+
+  const uninstallTargets =
+    confirm?.kind === "uninstall"
+      ? installedSkills.filter((skill) => confirm.ids.includes(skill.id))
+      : [];
+
+  return (
+    <>
+      {header}
+      <div id="main-content" className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 px-6 pt-1">{viewTabs}</div>
+        {/* 两段打开过就一直挂着，切回来不重新加载；不在看的那段只是隐藏 */}
+        {discoverMounted && (
+          <div
+            className={cn(
+              "min-h-0 flex-1 flex-col",
+              view === "discover" ? "flex" : "hidden",
+            )}
+          >
+            <SkillsPage
+              key={discoverQuery}
+              initialQuery={discoverQuery}
+              renderViewTabs={(trailing) =>
+                viewTabsTrailing("discover", trailing)
+              }
+              visibleAppIds={appIds}
+              installTargets={targets}
+              onInstallTargetsChange={setTargets}
+              installTo={installTo}
+              onShowInstalled={showInstalled}
+              onOpenRepoManager={() => setRepoManagerOpen(true)}
+              onEnableFailures={recordEnableFailures}
+            />
+          </div>
         )}
+        <div
+          className={cn(
+            "min-h-0 flex-1 flex-col",
+            view === "installed" ? "flex" : "hidden",
+          )}
+        >
+          {viewTabsTrailing(
+            "installed",
+            loadOk && nInstalled > 0 ? (
+              <div className="flex items-center gap-2">
+                <MatrixSearch
+                  className="w-[200px] min-w-0 shrink sm:w-[280px] sm:min-w-[160px]"
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  placeholder={t("skillsPage.searchPlaceholder")}
+                  ariaLabel={t("skills.installedSearchAriaLabel")}
+                  status={
+                    normalizedQuery
+                      ? t("appMatrix.found", {
+                          count: filteredSkills.length,
+                        })
+                      : ""
+                  }
+                />
+                <HoverTip
+                  content={
+                    lastCheckedText
+                      ? t("skillsPage.lastChecked", {
+                          when: lastCheckedText,
+                        })
+                      : undefined
+                  }
+                >
+                  {/* 已知有更新时这颗按钮就是「全部更新」；想重新检查走「⋯」菜单 */}
+                  {updateProgress ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      className="shrink-0"
+                      disabled
+                    >
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("skillsPage.updatingProgress", {
+                        done: Math.min(
+                          updateProgress.done + 1,
+                          updateProgress.total,
+                        ),
+                        total: updateProgress.total,
+                      })}
+                    </Button>
+                  ) : nUpdates > 0 && !isCheckingUpdates ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      className="shrink-0"
+                      disabled={controlsDisabled}
+                      onClick={() => setConfirm({ kind: "updateAll" })}
+                    >
+                      <ArrowUpCircle className="h-4 w-4" strokeWidth={2} />
+                      {t("skillsPage.updateAllCount", { count: nUpdates })}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="default"
+                      className="shrink-0"
+                      disabled={controlsDisabled}
+                      onClick={() => void handleCheckUpdates()}
+                    >
+                      {isCheckingUpdates ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" strokeWidth={2} />
+                      )}
+                      {isCheckingUpdates
+                        ? t("skills.checkingUpdates")
+                        : t("skills.checkUpdates")}
+                    </Button>
+                  )}
+                </HoverTip>
+              </div>
+            ) : null,
+          )}
+
+          <NoticeSlot
+            className={cn(
+              (showUnmanagedBanner || showUpdateRepoFailBanner) && "px-6 pt-3",
+            )}
+          >
+            {showUpdateRepoFailBanner && (
+              <Notice
+                tone="warning"
+                title={t("skillsPage.repoFail.title", {
+                  count: updateRepoFailures.length,
+                  repos: describeRepoFailures(updateRepoFailures, t),
+                })}
+                actions={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={controlsDisabled}
+                    onClick={() => void handleCheckUpdates()}
+                  >
+                    {t("common.retry")}
+                  </Button>
+                }
+                onDismiss={() => setDismissedRepoFailAt(updatesCheckedAt)}
+                dismissLabel={t("skillsPage.banner.close")}
+              >
+                {t("skillsPage.repoFail.updatesBody")}
+              </Notice>
+            )}
+            {showUnmanagedBanner && (
+              <Notice
+                title={t("skillsPage.banner.unmanaged", {
+                  count: nUnmanaged,
+                })}
+                actions={
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={controlsDisabled}
+                      onClick={() => void handleOpenImport()}
+                    >
+                      {t("skillsPage.banner.reviewImport")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => setDismissedUnmanaged(nUnmanaged)}
+                    >
+                      {t("skillsPage.banner.ignore")}
+                    </Button>
+                  </>
+                }
+              />
+            )}
+          </NoticeSlot>
+
+          <div className="flex min-h-0 flex-1 flex-col px-6 pb-5 pt-3">
+            {renderInstalledBody()}
+          </div>
+        </div>
       </div>
 
-      {confirmDialog && (
-        <ConfirmDialog
-          isOpen={confirmDialog.isOpen}
-          title={confirmDialog.title}
-          message={confirmDialog.message}
-          confirmText={confirmDialog.confirmText}
-          variant={confirmDialog.variant}
-          zIndex="top"
-          onConfirm={confirmDialog.onConfirm}
-          onCancel={() => setConfirmDialog(null)}
-        />
-      )}
+      <V7ConfirmDialog
+        open={confirm?.kind === "uninstall"}
+        // 卸载前会备份、能从备份恢复：可恢复操作，不用红色确认键
+        danger={false}
+        title={
+          uninstallTargets.length === 1
+            ? t("skillsPage.confirm.uninstallOne", {
+                name: uninstallTargets[0].name,
+              })
+            : t("skillsPage.confirm.uninstallMany", {
+                count: uninstallTargets.length,
+              })
+        }
+        body={t("skillsPage.confirm.uninstallBody", { path: BACKUP_DIR })}
+        confirmLabel={
+          uninstallTargets.length === 1
+            ? t("skills.uninstall")
+            : t("skillsPage.confirm.uninstallManyButton", {
+                count: uninstallTargets.length,
+              })
+        }
+        pending={writePending}
+        onConfirm={() =>
+          confirm?.kind === "uninstall" && void uninstallIds(confirm.ids)
+        }
+        onCancel={() => setConfirm(null)}
+      />
 
-      <ConfirmDialog
-        isOpen={updateAllConfirmOpen}
-        title={t("skills.confirmUpdateAll.title", {
-          count: applicableSkillUpdates.length,
-        })}
-        message={t("skills.confirmUpdateAll.body")}
+      <V7ConfirmDialog
+        open={confirm?.kind === "updateAll"}
+        danger={false}
+        title={t("skillsPage.confirm.updateAll", { count: nUpdates })}
+        body={t("skillsPage.confirm.updateBody", { path: BACKUP_DIR })}
         details={
           <ul
-            aria-label={t("skills.confirmUpdateAll.listAria")}
+            aria-label={t("skillsPage.confirm.updateListAria")}
             className="max-h-60 divide-y divide-border overflow-y-auto rounded-md border border-border"
           >
             {applicableSkillUpdates.map((update) => {
-              const skill = skills?.find((item) => item.id === update.id);
+              const skill = installedSkills.find(
+                (item) => item.id === update.id,
+              );
               const repo =
                 skill?.repoOwner && skill.repoName
                   ? `${skill.repoOwner}/${skill.repoName}`
                   : null;
-              // 和列表行的文档链接一样：有 README 地址开 README，否则开仓库首页
-              const docsUrl =
-                skill?.readmeUrl ??
-                (repo ? `https://github.com/${repo}` : null);
               return (
                 <li
                   key={update.id}
@@ -776,17 +1727,12 @@ const UnifiedSkillsPanel = React.forwardRef<
                   <span className="min-w-0 truncate font-medium text-foreground">
                     {skill?.name ?? update.name}
                   </span>
-                  {repo && docsUrl && (
+                  {repo && skill && (
+                    // 和列表行的来源链接一样：有 README 地址开 README，否则开仓库首页
                     <button
                       type="button"
-                      onClick={() =>
-                        void settingsApi.openExternal(docsUrl).catch((error) =>
-                          toast.error(t("common.error"), {
-                            description: String(error),
-                          }),
-                        )
-                      }
-                      className="ms-auto shrink-0 rounded-sm font-mono text-xs text-muted-foreground underline underline-offset-[3px] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => void openDocs(skill)}
+                      className="ms-auto shrink-0 rounded-sm font-mono text-xs text-muted-foreground/70 underline decoration-muted-foreground/40 underline-offset-[3px] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {repo}
                     </button>
@@ -796,675 +1742,424 @@ const UnifiedSkillsPanel = React.forwardRef<
             })}
           </ul>
         }
-        confirmText={t("skills.confirmUpdateAll.button", {
-          count: applicableSkillUpdates.length,
+        confirmLabel={t("skillsPage.confirm.updateAllButton", {
+          count: nUpdates,
         })}
-        variant="info"
-        zIndex="top"
-        onConfirm={() => void handleUpdateAll()}
-        onCancel={() => setUpdateAllConfirmOpen(false)}
+        pending={writePending || isUpdatingMany}
+        onConfirm={() =>
+          void updateIds(
+            applicableSkillUpdates.map((update) => update.id),
+            true,
+          )
+        }
+        onCancel={() => setConfirm(null)}
       />
 
-      {importDialogOpen && unmanagedSkills && (
-        <ImportSkillsDialog
+      {importOpen && unmanagedSkills && (
+        <SkillImportDialog
           skills={unmanagedSkills}
-          onImport={handleImport}
-          onClose={() => setImportDialogOpen(false)}
+          visibleAppIds={appIds}
+          isImporting={importMutation.isPending}
+          onImport={(imports) => void handleImport(imports)}
+          onClose={() => setImportOpen(false)}
         />
       )}
 
-      <RestoreSkillsDialog
+      <SkillRestoreDialog
+        open={restoreOpen}
         backups={skillBackups}
-        isDeleting={deleteBackupMutation.isPending}
         isLoading={isFetchingSkillBackups}
-        onDelete={handleDeleteBackup}
         isRestoring={restoreBackupMutation.isPending}
-        onRestore={handleRestoreFromBackup}
-        onClose={() => setRestoreDialogOpen(false)}
-        open={restoreDialogOpen}
+        isDeleting={deleteBackupMutation.isPending}
+        targetsLabel={names(targets)}
+        onRestore={(backupId) => void handleRestoreFromBackup(backupId)}
+        onDelete={(backup) => {
+          if (checkUpdatesLockRef.current || writeLockRef.current) return;
+          setConfirm({ kind: "deleteBackup", backup });
+        }}
+        onClose={() => setRestoreOpen(false)}
       />
 
-      <input
-        ref={archiveInputRef}
-        type="file"
-        accept=".zip,application/zip"
-        multiple
-        className="hidden"
-        onChange={handleArchiveInputChange}
-      />
-      <InstallSkillsFromZipDialog
-        open={archiveDialogOpen}
-        files={archiveFiles}
-        isDragActive={isArchiveDragActive}
-        isInstalling={installArchiveMutation.isPending}
-        onBrowse={() => archiveInputRef.current?.click()}
-        onClose={() => {
-          if (installArchiveMutation.isPending) return;
-          setArchiveDialogOpen(false);
-          setArchiveFiles([]);
-          setIsArchiveDragActive(false);
-        }}
-        onClear={() => setArchiveFiles([])}
-        onDropFiles={appendArchiveFiles}
-        onInstall={handleInstallArchives}
-        onRemoveFile={(fileKey) =>
-          setArchiveFiles((current) =>
-            current.filter((file) => buildArchiveFileKey(file) !== fileKey),
-          )
+      <V7ConfirmDialog
+        open={confirm?.kind === "deleteBackup"}
+        title={t("skills.restoreFromBackup.deleteConfirmTitle")}
+        body={
+          confirm?.kind === "deleteBackup"
+            ? t("skills.restoreFromBackup.deleteConfirmMessage", {
+                name: confirm.backup.skill.name,
+              })
+            : ""
         }
-        onSetDragActive={setIsArchiveDragActive}
+        confirmLabel={t("skills.restoreFromBackup.delete")}
+        pending={writePending}
+        onConfirm={() =>
+          confirm?.kind === "deleteBackup" &&
+          void confirmDeleteBackup(confirm.backup)
+        }
+        onCancel={() => setConfirm(null)}
       />
-    </div>
+
+      <SkillsStorageDialog
+        open={storageOpen}
+        onOpenChange={setStorageOpen}
+        installedCount={nInstalled}
+        resyncDisabled={controlsDisabled}
+      />
+
+      <SkillArchiveInstallDialog
+        open={archiveOpen}
+        isInstalling={installArchiveMutation.isPending}
+        onInstall={handleInstallArchives}
+        onClose={() => setArchiveOpen(false)}
+      />
+
+      {repoManagerOpen && (
+        <RepoManagerContainer onClose={() => setRepoManagerOpen(false)} />
+      )}
+    </>
   );
-});
+};
 
 UnifiedSkillsPanel.displayName = "UnifiedSkillsPanel";
 
-interface InstalledSkillListItemProps {
+// ─── 已安装的一行 ────────────────────────────────────────────────────────
+interface InstalledRowProps {
   skill: InstalledSkill;
-  hasUpdate?: boolean;
-  isUpdating?: boolean;
-  actionsDisabled?: boolean;
-  onToggleApp: (id: string, app: AppId, enabled: boolean) => void;
+  first: boolean;
+  appIds: AppId[];
+  checked: boolean;
+  hasUpdate: boolean;
+  isUpdating: boolean;
+  highlighted: boolean;
+  /** 闪烁结束后清掉，下次跳到同一行还能再闪 */
+  onHighlightDone: () => void;
+  fails: Record<string, WriteFailure>;
+  disabled: boolean;
+  sourceText: string;
+  onPick: (checked: boolean) => void;
+  onCell: (app: AppId) => void;
+  onOpenSource: () => void;
+  onFixSync: () => void;
+  onUpdate: () => void;
+  onOpenDocs: () => void;
+  onCopyName: () => void;
+  onCopyDir: () => void;
   onUninstall: () => void;
-  onUpdate?: () => void;
-  isLast?: boolean;
 }
 
-const InstalledSkillListItem: React.FC<InstalledSkillListItemProps> = ({
+function InstalledRow({
   skill,
+  first,
+  appIds,
+  checked,
   hasUpdate,
   isUpdating,
-  actionsDisabled,
-  onToggleApp,
-  onUninstall,
+  highlighted,
+  onHighlightDone,
+  fails,
+  disabled,
+  sourceText,
+  onPick,
+  onCell,
+  onOpenSource,
+  onFixSync,
   onUpdate,
-  isLast,
-}) => {
+  onOpenDocs,
+  onCopyName,
+  onCopyDir,
+  onUninstall,
+}: InstalledRowProps) {
   const { t } = useTranslation();
-
-  const openDocs = async () => {
-    if (!skill.readmeUrl) return;
-    try {
-      await settingsApi.openExternal(skill.readmeUrl);
-    } catch {
-      // ignore
-    }
-  };
-
-  const copyName = async () => {
-    try {
-      await copyText(skill.name);
-      toast.success(t("skills.copiedName", { name: skill.name }));
-    } catch (error) {
-      toast.error(t("common.error"), { description: String(error) });
-    }
-  };
-
-  // Web 不调用本机文件管理器：复制主副本所在目录的路径
-  const copyDirPath = async () => {
-    try {
-      const dir = await skillsApi.installedSkillDir(skill.directory);
-      await copyText(dir);
-      toast.success(t("skills.copiedDirPath"), { description: dir });
-    } catch (error) {
-      toast.error(t("skills.copyDirPathFailed"), {
-        description: String(error),
-      });
-    }
-  };
-
-  const sourceLabel = useMemo(() => {
-    if (skill.repoOwner && skill.repoName) {
-      return `${skill.repoOwner}/${skill.repoName}`;
-    }
-    return t("skills.local");
-  }, [skill.repoOwner, skill.repoName, t]);
+  const enabled = SKILLS_APP_IDS.some((app) => skill.apps[app]);
+  const failedApp = appIds.find((app) => fails[failKey(skill.id, app)]);
+  const failure = failedApp ? fails[failKey(skill.id, failedApp)] : undefined;
+  const failId = `sk-fail-${skill.id}`;
+  const hasRepo = Boolean(skill.repoOwner && skill.repoName);
 
   return (
-    <ListItemRow isLast={isLast}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+    <li
+      id={`sk-row-${skill.id}`}
+      tabIndex={-1}
+      className={cn(
+        "group relative flex h-14 items-center px-2 outline-none transition-colors duration-150 hover:bg-muted/50",
+        !first && "border-t border-border",
+        // 黄色垫在内容下面的一层，靠它的透明度闪
+        highlighted &&
+          "isolate before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:bg-[hsl(var(--warning-soft))] before:opacity-0 before:content-[''] before:animate-row-flash motion-reduce:before:animate-row-fade",
+      )}
+      onAnimationEnd={(event) => {
+        if (highlighted && event.target === event.currentTarget) {
+          onHighlightDone();
+        }
+      }}
+    >
+      <span className="flex w-6 shrink-0 justify-center">
+        <input
+          type="checkbox"
+          // 勾选框一直显示，不等悬停（批量操作入口要看得见）
+          className="h-4 w-4 accent-primary"
+          aria-label={t("skillsPage.selectAria", { name: skill.name })}
+          checked={checked}
+          onChange={(event) => onPick(event.target.checked)}
+        />
+      </span>
+      <div className="ms-2 flex min-w-0 flex-1 flex-col pe-3">
+        <div className="flex min-w-0 items-center gap-1.5">
           <button
             type="button"
-            onClick={() => void copyName()}
-            title={t("skills.copyName")}
-            className="min-w-0 cursor-copy truncate text-start font-medium text-sm text-foreground hover:underline hover:underline-offset-[3px]"
+            onClick={onCopyName}
+            className="min-w-0 cursor-copy truncate text-start text-sm font-medium hover:text-foreground hover:underline hover:underline-offset-[3px]"
           >
             {skill.name}
           </button>
-          {skill.readmeUrl && (
+          {hasRepo ? (
             <button
               type="button"
-              onClick={openDocs}
-              className="text-muted-foreground/60 hover:text-foreground flex-shrink-0"
+              onClick={onOpenSource}
+              title={sourceText}
+              className="min-w-0 shrink truncate font-mono text-xs text-muted-foreground/70 hover:text-foreground hover:underline hover:underline-offset-[3px]"
             >
-              <ExternalLink size={12} />
+              {sourceText}
             </button>
+          ) : (
+            <span className="shrink-0 text-xs text-muted-foreground/70">
+              {sourceText}
+            </span>
           )}
-          <span className="text-xs text-muted-foreground/50 flex-shrink-0">
-            {sourceLabel}
-          </span>
-          {hasUpdate ? (
-            <span className="shrink-0 rounded border border-amber-500 px-1.5 py-0 text-[10px] text-amber-600 dark:text-amber-400">
+          {hasUpdate && (
+            <span className="inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full border border-transparent bg-[hsl(var(--warning-soft))] px-1.5 text-[11px] font-medium text-[hsl(var(--warning-soft-foreground))]">
               {t("skills.updateAvailable")}
             </span>
-          ) : null}
-        </div>
-        {skill.description && (
-          <p
-            className="text-xs text-muted-foreground truncate"
-            title={skill.description}
-          >
-            {skill.description}
-          </p>
-        )}
-      </div>
-
-      <AppToggleGroup
-        apps={skill.apps}
-        onToggle={(app, enabled) => onToggleApp(skill.id, app, enabled)}
-        appIds={SKILLS_APP_IDS}
-        disabled={actionsDisabled}
-      />
-
-      <div
-        className="flex-shrink-0 flex items-center gap-0.5 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-        style={hasUpdate ? { opacity: 1 } : undefined}
-      >
-        {hasUpdate && onUpdate ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 hover:text-blue-500 hover:bg-blue-100 dark:hover:text-blue-400 dark:hover:bg-blue-500/10"
-            onClick={onUpdate}
-            disabled={actionsDisabled || isUpdating}
-            title={t("skills.update")}
-          >
-            {isUpdating ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <RefreshCw size={14} />
-            )}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => void copyDirPath()}
-          title={t("skills.copyDirPath")}
-          aria-label={t("skills.copyDirPath")}
-        >
-          <FolderOpen size={14} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
-          onClick={onUninstall}
-          disabled={actionsDisabled}
-          title={t("skills.uninstall")}
-        >
-          <Trash2 size={14} />
-        </Button>
-      </div>
-    </ListItemRow>
-  );
-};
-
-interface ImportSkillsDialogProps {
-  skills: Array<{
-    directory: string;
-    name: string;
-    description?: string;
-    foundIn: string[];
-    path: string;
-  }>;
-  onImport: (imports: ImportSkillSelection[]) => void;
-  onClose: () => void;
-}
-
-interface RestoreSkillsDialogProps {
-  backups: SkillBackupEntry[];
-  isDeleting: boolean;
-  isLoading: boolean;
-  isRestoring: boolean;
-  onDelete: (backup: SkillBackupEntry) => void;
-  onRestore: (backupId: string) => void;
-  onClose: () => void;
-  open: boolean;
-}
-
-interface InstallSkillsFromZipDialogProps {
-  open: boolean;
-  files: File[];
-  isDragActive: boolean;
-  isInstalling: boolean;
-  onBrowse: () => void;
-  onClear: () => void;
-  onClose: () => void;
-  onDropFiles: (files: File[]) => void;
-  onInstall: () => void;
-  onRemoveFile: (fileKey: string) => void;
-  onSetDragActive: (active: boolean) => void;
-}
-
-const RestoreSkillsDialog: React.FC<RestoreSkillsDialogProps> = ({
-  backups,
-  isDeleting,
-  isLoading,
-  isRestoring,
-  onDelete,
-  onRestore,
-  onClose,
-  open,
-}) => {
-  const { t } = useTranslation();
-
-  return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent
-        className="max-w-2xl max-h-[85vh] flex flex-col"
-        zIndex="alert"
-      >
-        <DialogHeader>
-          <DialogTitle>{t("skills.restoreFromBackup.title")}</DialogTitle>
-          <DialogDescription>
-            {t("skills.restoreFromBackup.description")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {isLoading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              {t("common.loading")}
-            </div>
-          ) : backups.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              {t("skills.restoreFromBackup.empty")}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {backups.map((backup) => (
-                <div
-                  key={backup.backupId}
-                  className="rounded-xl border border-border-default bg-background/70 p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-sm text-foreground">
-                          {backup.skill.name}
-                        </div>
-                        <div className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                          {backup.skill.directory}
-                        </div>
-                      </div>
-                      {backup.skill.description && (
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          {backup.skill.description}
-                        </div>
-                      )}
-                      <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                        <div>
-                          {t("skills.restoreFromBackup.createdAt")}:{" "}
-                          {formatSkillBackupDate(backup.createdAt)}
-                        </div>
-                        <div className="break-all" title={backup.backupPath}>
-                          {t("skills.restoreFromBackup.path")}:{" "}
-                          {backup.backupPath}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 sm:min-w-28">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => onRestore(backup.backupId)}
-                        disabled={isRestoring || isDeleting}
-                      >
-                        {isRestoring
-                          ? t("skills.restoreFromBackup.restoring")
-                          : t("skills.restoreFromBackup.restore")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => onDelete(backup)}
-                        disabled={isRestoring || isDeleting}
-                      >
-                        {isDeleting
-                          ? t("skills.restoreFromBackup.deleting")
-                          : t("skills.restoreFromBackup.delete")}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
+          {!enabled && <NeutralBadge>{t("mcpPage.notEnabled")}</NeutralBadge>}
         </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            {t("common.close")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-const InstallSkillsFromZipDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
-  open,
-  files,
-  isDragActive,
-  isInstalling,
-  onBrowse,
-  onClear,
-  onClose,
-  onDropFiles,
-  onInstall,
-  onRemoveFile,
-  onSetDragActive,
-}) => {
-  const { t } = useTranslation();
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    onSetDragActive(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const nextTarget = event.relatedTarget;
-    if (
-      nextTarget instanceof Node &&
-      event.currentTarget.contains(nextTarget)
-    ) {
-      return;
-    }
-    onSetDragActive(false);
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    onSetDragActive(false);
-    onDropFiles(Array.from(event.dataTransfer.files ?? []));
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent
-        className="max-w-2xl max-h-[85vh] flex flex-col"
-        zIndex="alert"
-      >
-        <DialogHeader>
-          <DialogTitle>{t("skills.installFromZip.dialogTitle")}</DialogTitle>
-          <DialogDescription>
-            {t("skills.installFromZip.dialogDescription")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          <div
-            className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-              isDragActive
-                ? "border-foreground bg-muted/60"
-                : "border-border-default bg-muted/30"
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-background shadow-sm">
-              <Upload size={20} className="text-muted-foreground" />
-            </div>
-            <div className="text-sm font-medium text-foreground">
-              {isDragActive
-                ? t("skills.installFromZip.dropActive")
-                : t("skills.installFromZip.dropTitle")}
-            </div>
-            <div className="mt-2 text-sm text-muted-foreground">
-              {t("skills.installFromZip.dropHint")}
-            </div>
-            <div className="mt-4 flex justify-center gap-3">
-              <Button type="button" variant="outline" onClick={onBrowse}>
-                {t("skills.installFromZip.selectFiles")}
-              </Button>
-              {files.length > 0 && (
-                <Button type="button" variant="ghost" onClick={onClear}>
-                  {t("skills.installFromZip.clearSelection")}
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {files.length === 0 ? (
-            <div className="rounded-xl border border-border-default bg-background/70 p-6 text-center text-sm text-muted-foreground">
-              {t("skills.installFromZip.empty")}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-foreground">
-                  {t("skills.installFromZip.selectedFiles", {
-                    count: files.length,
-                  })}
-                </div>
-              </div>
-              <div className="space-y-2">
-                {files.map((file) => {
-                  const fileKey = buildArchiveFileKey(file);
-                  return (
-                    <div
-                      key={fileKey}
-                      className="flex items-center gap-3 rounded-xl border border-border-default bg-background/80 px-4 py-3"
-                    >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                        <FileArchive
-                          size={16}
-                          className="text-muted-foreground"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">
-                          {file.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatArchiveFileSize(file.size)}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => onRemoveFile(fileKey)}
-                        disabled={isInstalling}
-                        title={t("skills.installFromZip.removeFile")}
-                      >
-                        <X size={14} />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+        <div className="flex min-w-0 whitespace-nowrap text-xs text-muted-foreground">
+          {skill.description && (
+            <span className="min-w-0 truncate" title={skill.description}>
+              {skill.description}
+            </span>
           )}
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={isInstalling}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            type="button"
-            onClick={onInstall}
-            disabled={files.length === 0 || isInstalling}
-          >
-            {isInstalling
-              ? t("skills.installFromZip.installing")
-              : t("skills.installFromZip.installSelected", {
-                  count: files.length,
-                })}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-const ImportSkillsDialog: React.FC<ImportSkillsDialogProps> = ({
-  skills,
-  onImport,
-  onClose,
-}) => {
-  const { t } = useTranslation();
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(skills.map((s) => s.directory)),
-  );
-  const [selectedApps, setSelectedApps] = useState<
-    Record<string, ImportSkillSelection["apps"]>
-  >(() =>
-    Object.fromEntries(
-      skills.map((skill) => [
-        skill.directory,
-        {
-          claude: skill.foundIn.includes("claude"),
-          "claude-desktop": skill.foundIn.includes("claude-desktop"),
-          codex: skill.foundIn.includes("codex"),
-          gemini: skill.foundIn.includes("gemini"),
-          grokbuild: skill.foundIn.includes("grokbuild"),
-          opencode: skill.foundIn.includes("opencode"),
-          openclaw: false,
-          hermes: skill.foundIn.includes("hermes"),
-          pi: skill.foundIn.includes("pi"),
-          mcode: skill.foundIn.includes("mcode"),
-        },
-      ]),
-    ),
-  );
-
-  const toggleSelect = (directory: string) => {
-    const newSelected = new Set(selected);
-    if (newSelected.has(directory)) {
-      newSelected.delete(directory);
-    } else {
-      newSelected.add(directory);
-    }
-    setSelected(newSelected);
-  };
-
-  const handleImport = () => {
-    onImport(
-      Array.from(selected).map((directory) => ({
-        directory,
-        apps: selectedApps[directory] ?? {
-          claude: false,
-          codex: false,
-          gemini: false,
-          grokbuild: false,
-          opencode: false,
-          openclaw: false,
-        },
-      })),
-    );
-  };
-
-  return (
-    <TooltipProvider delayDuration={300}>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-background rounded-xl p-6 max-w-lg w-full mx-4 shadow-xl max-h-[80vh] flex flex-col">
-          <h2 className="text-lg font-semibold mb-2">{t("skills.import")}</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t("skills.importDescription")}
-          </p>
-
-          <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-            {skills.map((skill) => (
-              <div
-                key={skill.directory}
-                className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted"
+          {failure && failedApp && (
+            <>
+              <span
+                id={failId}
+                className={cn(
+                  "min-w-0 truncate text-[hsl(var(--warning-soft-foreground))]",
+                  skill.description && "ms-1.5",
+                )}
               >
-                <input
-                  type="checkbox"
-                  checked={selected.has(skill.directory)}
-                  onChange={() => toggleSelect(skill.directory)}
-                  aria-label={skill.name}
-                  className="mt-1"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{skill.name}</div>
-                  {skill.description && (
-                    <div className="text-sm text-muted-foreground line-clamp-1">
-                      {skill.description}
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    <AppToggleGroup
-                      apps={
-                        selectedApps[skill.directory] ?? {
-                          claude: false,
-                          codex: false,
-                          gemini: false,
-                          grokbuild: false,
-                          opencode: false,
-                          openclaw: false,
-                        }
-                      }
-                      onToggle={(app, enabled) => {
-                        setSelectedApps((prev) => ({
-                          ...prev,
-                          [skill.directory]: {
-                            ...(prev[skill.directory] ?? {
-                              claude: false,
-                              codex: false,
-                              gemini: false,
-                              grokbuild: false,
-                              opencode: false,
-                              openclaw: false,
-                            }),
-                            [app]: enabled,
-                          },
-                        }));
-                      }}
-                      appIds={IMPORT_APP_IDS}
-                    />
-                  </div>
-                  <div
-                    className="text-xs text-muted-foreground/50 mt-1 truncate"
-                    title={skill.path}
-                  >
-                    {skill.path}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose}>
-              {t("common.cancel")}
-            </Button>
-            <Button onClick={handleImport} disabled={selected.size === 0}>
-              {t("skills.importSelected", { count: selected.size })}
-            </Button>
-          </div>
+                {t("skillsPage.rowFail", {
+                  app: APP_DISPLAY_NAME[failedApp],
+                  error: failure.error,
+                })}
+                &nbsp;·&nbsp;
+              </span>
+              <button
+                type="button"
+                aria-describedby={failId}
+                onClick={onFixSync}
+                className="shrink-0 text-[hsl(var(--warning-soft-foreground))] underline underline-offset-[3px]"
+              >
+                {t("skillsPage.fixSync")}
+              </button>
+            </>
+          )}
         </div>
       </div>
-    </TooltipProvider>
+      <div className="flex shrink-0">
+        {appIds.map((app) => {
+          const fail = fails[failKey(skill.id, app)];
+          const on = Boolean(skill.apps[app]);
+          const state = fail ? "fail" : on ? "on" : "off";
+          return (
+            <MatrixCell
+              key={app}
+              app={app}
+              state={state}
+              disabled={disabled}
+              label={t(`appMatrix.cell.${state}`, {
+                name: skill.name,
+                app: APP_DISPLAY_NAME[app],
+              })}
+              onClick={() => onCell(app)}
+            />
+          );
+        })}
+      </div>
+      <div className="flex w-16 shrink-0 justify-end">
+        <DropdownMenu>
+          <HoverTip content={t("common.more")}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 p-1"
+                aria-label={t("skillsPage.rowMoreAria", { name: skill.name })}
+                disabled={disabled}
+              >
+                {isUpdating ? (
+                  <Loader2 className="h-[15px] w-[15px] animate-spin" />
+                ) : (
+                  <MoreHorizontal
+                    className="h-[15px] w-[15px]"
+                    strokeWidth={1.5}
+                  />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+          </HoverTip>
+          <DropdownMenuContent align="end" className="min-w-[180px]">
+            {hasUpdate && (
+              <DropdownMenuItem onSelect={onUpdate}>
+                {t("skills.update")}
+              </DropdownMenuItem>
+            )}
+            {(skill.readmeUrl || hasRepo) && (
+              <DropdownMenuItem onSelect={onOpenDocs}>
+                {t("mcpPage.openDocs")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={onCopyDir}>
+              {t("skillsPage.copyDir")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={onUninstall}
+            >
+              {t("skillsPage.uninstallEllipsis")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </li>
   );
-};
+}
+
+// ─── 列头左侧的筛选按钮 ──────────────────────────────────────────────────
+function FilterMenu({
+  label,
+  active,
+  items,
+}: {
+  label: string;
+  active: boolean;
+  items: Array<{
+    key: string;
+    label: string;
+    checked: boolean;
+    onSelect: () => void;
+    count?: number;
+    mono?: boolean;
+  }>;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "shrink-0 pe-1.5 ps-2.5",
+            active ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          <span className="max-w-[180px] truncate">{label}</span>
+          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="min-w-[210px] max-w-[280px]"
+      >
+        {items.map((item) => (
+          <DropdownMenuItem key={item.key} onSelect={item.onSelect}>
+            <span className="flex w-4 shrink-0 justify-center">
+              {item.checked && (
+                <Check className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate",
+                item.mono && "font-mono text-xs",
+              )}
+            >
+              {item.label}
+            </span>
+            {item.count !== undefined && (
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                {item.count}
+              </span>
+            )}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── 多选条的「启用到 / 停用」应用菜单 ────────────────────────────────────
+function AppMenuButton({
+  label,
+  ariaLabel,
+  apps,
+  disabled,
+  onPick,
+}: {
+  label: string;
+  ariaLabel: string;
+  apps: AppId[];
+  disabled: boolean;
+  onPick: (app: AppId) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 pe-1.5 ps-2"
+          disabled={disabled}
+        >
+          {label}
+          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        aria-label={ariaLabel}
+        className="min-w-[200px]"
+      >
+        {apps.map((app) => (
+          <DropdownMenuItem key={app} onSelect={() => onPick(app)}>
+            <AppGlyph app={app} size={16} badgeClassName="bg-card" />
+            {APP_DISPLAY_NAME[app]}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── 仓库管理抽屉（打开时才挂载，避免进页面就去读仓库） ─────────────────────
+function RepoManagerContainer({ onClose }: { onClose: () => void }) {
+  const { data: repos = [] } = useSkillRepos();
+  const { data: discoverable = [] } = useDiscoverableSkills();
+  const { addRepo, removeRepo, setRepoEnabled } = useSkillRepoActions();
+  return (
+    <RepoManagerPanel
+      repos={repos}
+      skills={discoverable}
+      onAdd={addRepo}
+      onRemove={removeRepo}
+      onToggle={setRepoEnabled}
+      onClose={onClose}
+    />
+  );
+}
 
 export default UnifiedSkillsPanel;

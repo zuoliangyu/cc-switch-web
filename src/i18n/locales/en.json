@@ -2746,23 +2746,13 @@
     "manage": "Skills",
     "title": "Skills Management",
     "description": "Discover and install skills from popular repositories to extend Claude Code/Codex/Gemini capabilities",
-    "refresh": "Refresh",
     "refreshing": "Refreshing...",
-    "repoManager": "Repository Management",
     "count": "{{count}} skills",
-    "empty": "No skills available",
-    "emptyDescription": "Add skill repositories to discover available skills",
     "addRepo": "Add Skill Repository",
     "loading": "Loading...",
-    "installed": "Installed",
     "install": "Install",
-    "installing": "Installing...",
     "uninstall": "Uninstall",
-    "uninstalling": "Uninstalling...",
-    "view": "View",
-    "noDescription": "No description",
     "loadFailed": "Failed to load",
-    "installSuccess": "Skill {{name}} installed",
     "installFailed": "Failed to install",
     "uninstallSuccess": "Skill {{name}} uninstalled",
     "uninstallFailed": "Failed to uninstall",
@@ -2821,45 +2811,17 @@
       "removeFailed": "Failed to remove",
       "skillCount": "{{count}} skills detected"
     },
-    "search": "Search Skills",
-    "searchSource": {
-      "repos": "Repos",
-      "skillssh": "skills.sh"
-    },
-    "searchPlaceholder": "Search skill name or repo...",
     "skillssh": {
-      "searchPlaceholder": "Search skills.sh (min 2 chars)...",
-      "noResults": "No skills found for \"{{query}}\"",
       "loadMore": "Load more",
       "loading": "Searching skills.sh...",
       "error": "Failed to search skills.sh",
-      "poweredBy": "Powered by skills.sh"
+      "poweredBy": "Powered by skills.sh",
+      "installs": "{{count}} installs"
     },
-    "filter": {
-      "placeholder": "Filter by status",
-      "all": "All",
-      "installed": "Installed",
-      "uninstalled": "Not installed",
-      "repo": "Filter by repo",
-      "allRepos": "All repos"
-    },
-    "noResults": "No matching skills found",
-    "noInstalled": "No skills installed",
-    "noInstalledDescription": "Discover and install skills from repositories, or import existing skills",
-    "installedSearchPlaceholder": "Search installed skill names, descriptions, or repositories...",
     "installedSearchAriaLabel": "Search installed skills",
-    "noInstalledSearchResults": "No matching installed skills found",
-    "discover": "Discover Skills",
-    "import": "Import Existing",
-    "importDescription": "Select skills to import into CC Switch unified management",
     "importSuccess": "Successfully imported {{count}} skills",
-    "importSelected": "Import Selected ({{count}})",
     "noUnmanagedFound": "No skills to import found. All skills are already managed by CC Switch.",
     "foundIn": "Found in",
-    "local": "Local",
-    "uninstallConfirm": "Are you sure you want to uninstall \"{{name}}\"? This will remove the skill from all apps and create a local backup first.",
-    "uninstallInMainPanel": "Please uninstall skills from the main panel",
-    "notFound": "Skill not found",
     "backup": {
       "location": "Backup location: {{path}}"
     },
@@ -2870,22 +2832,11 @@
     "updateAvailable": "Update available",
     "updateSuccess": "Skill {{name}} updated",
     "updateFailed": "Failed to update skill",
-    "updateAll": "Update all ({{count}})",
     "updateAllSuccess": "Updated {{count}} skills",
-    "updatingProgress": "Updating {{done}}/{{total}}…",
-    "confirmUpdateAll": {
-      "title": "Update {{count}} Skills?",
-      "body": "Updating replaces the local folder with the repository's content. Local edits are kept only in the Skill backup, which you can restore from.",
-      "button": "Update {{count}}",
-      "listAria": "Skills to update"
-    },
     "restoreFromBackup": {
-      "button": "Restore Backup",
       "title": "Restore From Backup",
-      "description": "Choose a Skills backup to restore its files locally and add it back to the current list.",
       "empty": "No Skills backups available to restore",
       "createdAt": "Backed up at",
-      "path": "Backup path",
       "restore": "Restore",
       "restoring": "Restoring...",
       "delete": "Delete",
@@ -2905,7 +2856,6 @@
       "openclaw": "OpenClaw"
     },
     "installFromZip": {
-      "button": "Install from ZIP",
       "installing": "Installing...",
       "dialogTitle": "Install Skills in Batch",
       "dialogDescription": "Upload local ZIP files to the Rust service running on this machine. Supports multi-select and drag-and-drop.",
@@ -2921,26 +2871,20 @@
       "emptySelection": "Select at least one ZIP file first",
       "invalidFilesTitle": "Unsupported files detected",
       "invalidFilesDescription": "{{count}} non-ZIP file(s) were ignored",
-      "successSingle": "Skill {{name}} installed",
-      "successMultiple": "Successfully installed {{count}} skills",
-      "partialSuccess": "Installed {{count}} skill(s)",
-      "partialSuccessDescription": "{{count}} ZIP upload(s) failed: {{files}}",
       "failed": "{{count}} ZIP upload(s) failed",
       "failedDescription": "Failed files: {{files}}",
-      "skippedDescription": "{{count}} ZIP file(s) did not add new skills",
       "noSkillsFound": "No skills found in ZIP file (requires SKILL.md file)",
-      "noNewSkills": "No new skills were installed",
-      "noNewSkillsDescription": "{{count}} ZIP file(s) were processed but added no new skills"
+      "allSkipped": "Nothing installed: all {{count}} Skills in the ZIP use folder names that are already taken",
+      "skippedBody": "{{list}}. To use the version in the ZIP, uninstall the Skill with the same name first.",
+      "skippedItem": "{{directory}} (used by {{name}})",
+      "skippedTitle": "Skipped {{count}} Skills: folder name already in use"
     },
-    "repoFailures": "{{count}} repositories could not be read (details)",
-    "zipSkipped": "Skipped {{count}} skills with existing names",
-    "searchFailed": "Search failed. Please retry.",
     "resyncAfterSettings": "After changing the sync method, use Resync now to apply it to installed skills.",
-    "copyName": "Copy name",
-    "copiedName": "Copied {{name}}",
-    "copyDirPath": "Copy directory path",
-    "copiedDirPath": "Directory path copied",
-    "copyDirPathFailed": "Couldn't copy the directory path"
+    "moreActions": "More Skills actions",
+    "storageSheet": {
+      "open": "Storage and sync"
+    },
+    "updatesIncomplete": "No updates found, but {{count}} repositories couldn't be read"
   },
   "iconPicker": {
     "search": "Search Icons",
@@ -4508,6 +4452,199 @@
       "title": "What Oh My Pi actually loads",
       "help": "Beyond its own ~/.omp/agent config, Oh My Pi discovers MCP servers, skills, commands, hooks, rules, and settings from other agents' directories (e.g. Claude's ~/.claude, Codex's ~/.codex). To keep what Oh My Pi actually loads in sync with the CC Switch UI, disable unneeded discovery sources via disabledProviders in ~/.omp/agent/config.yml (ids match the docs, e.g. claude, codex, gemini, opencode, github, agents).",
       "docsLink": "How to stop Oh My Pi from loading other agents' config"
+    },
+    "clearSearch": "Clear search",
+    "found": "{{count}} found",
+    "columnAria": "{{app}}: enabled for {{on}} of {{total}} {{noun}}, bulk actions",
+    "pop": {
+      "count": "Enabled for {{on}} of {{total}} {{noun}}",
+      "failCount": "{{count}} failed to write",
+      "enableRest": "Enable the other {{count}}",
+      "enableAll": "Enable all",
+      "disableAll": "Turn all off",
+      "scopeAll": "Applies to the {{count}} in this list",
+      "scopeSearch": "Applies only to the {{count}} search results",
+      "scopeFilter": "Applies only to the {{count}} filtered items"
+    },
+    "toast": {
+      "enabled": "Enabled {{count}} {{noun}} in {{app}}",
+      "disabled": "Turned off {{count}} {{noun}} in {{app}}",
+      "partialFail": "; {{count}} could not be written and are marked in the list",
+      "undone": "Undone"
+    },
+    "undo": "Undo",
+    "cell": {
+      "on": "{{name}} · {{app}}: enabled",
+      "off": "{{name}} · {{app}}: off",
+      "fail": "{{name}} · {{app}}: write failed, click to retry"
     }
+  },
+  "skillsPage": {
+    "noun": "Skills",
+    "helpTitle": "How Skills sync",
+    "help": "The main copy lives in CC Switch's folder and is synced to the apps you tick. Claude Desktop and OpenClaw don't support Skills, so they have no column.",
+    "add": "Add Skill",
+    "addMenu": {
+      "discover": "Browse in Discover",
+      "zip": "Install from ZIP",
+      "import": "Import from this computer"
+    },
+    "moreMenu": {
+      "restore": "Restore from backup",
+      "repos": "Manage repositories"
+    },
+    "viewAria": "Skills view",
+    "viewInstalled": "Installed",
+    "viewInstalledCount": "Installed {{count}}",
+    "viewDiscover": "Discover",
+    "searchPlaceholder": "Search name, folder, description or repo",
+    "lastChecked": "Last checked: {{when}}",
+    "justNow": "just now",
+    "banner": {
+      "unmanaged": "{{count}} Skills on this computer aren't managed by CC Switch.",
+      "reviewImport": "Review and import",
+      "ignore": "Ignore",
+      "close": "Dismiss"
+    },
+    "filter": {
+      "all": "All",
+      "updates": "Has updates",
+      "none": "Not enabled anywhere",
+      "inApp": "Enabled in {{app}}",
+      "sourceButton": "Source: {{source}}"
+    },
+    "source": {
+      "local": "Local"
+    },
+    "bulk": {
+      "selected": "{{count}} selected",
+      "enableTo": "Enable in",
+      "enableToAria": "Enable the {{count}} selected Skills in",
+      "disable": "Turn off in",
+      "disableAria": "Turn off the {{count}} selected Skills in",
+      "uninstall": "Uninstall"
+    },
+    "piColumnTitle": "Pi counts a Skill as enabled when its folder exists in ~/.pi/agent/skills",
+    "piHelpTitle": "How Pi counts as enabled",
+    "piHelp": "Whether the folder exists in ~/.pi/agent/skills.",
+    "pop": {
+      "onlyApp": "Show only ones enabled in {{app}}",
+      "showAll": "Show all Skills"
+    },
+    "selectAria": "Select {{name}}",
+    "selectAllAria": "Select all shown",
+    "rowFail": "Enabling in {{app}} failed: {{error}}",
+    "fixSync": "Change sync method",
+    "rowMoreAria": "More actions for {{name}}",
+    "uninstallEllipsis": "Uninstall",
+    "listLabel": "Installed Skills",
+    "noMatch": "No Skills match “{{query}}”",
+    "noFilterMatch": "No Skills match the filters",
+    "searchInDiscover": "Search Discover for “{{query}}”",
+    "clearFilters": "Clear filters",
+    "loadFailed": "Couldn't load installed Skills",
+    "emptyTitle": "No Skills yet",
+    "emptyBody": "Install one from Discover, or import Skills already on this computer.",
+    "goDiscover": "Go to Discover",
+    "importCount": "Import from this computer ({{count}})",
+    "confirm": {
+      "uninstallOne": "Uninstall {{name}}?",
+      "uninstallMany": "Uninstall {{count}} Skills?",
+      "uninstallBody": "It's removed from every app and the main copy in CC Switch is deleted. A backup is saved to {{path}} first.",
+      "uninstallManyButton": "Uninstall {{count}}",
+      "updateAll": "Update {{count}} Skills?",
+      "updateBody": "Updating replaces the local folder with the repository's content. Local edits are kept only in the backup ({{path}}).",
+      "updateAllButton": "Update {{count}}",
+      "updateListAria": "Skills to update"
+    },
+    "toast": {
+      "installed": "Installed {{name}} and enabled it in {{apps}}",
+      "installedMany": "Installed {{count}} Skills and enabled them in {{apps}}",
+      "enableFailed": "Couldn't enable in {{apps}}; marked in the list",
+      "uninstalledMany": "Uninstalled {{count}} Skills",
+      "backupAt": "Backed up to {{path}}",
+      "copiedName": "Copied {{name}}",
+      "noUpdatesInSelection": "None of the selected Skills have updates",
+      "selectionAlreadyOn": "The {{count}} selected Skills are already enabled in {{app}}",
+      "selectionAlreadyOff": "None of the {{count}} selected Skills are enabled in {{app}}",
+      "disabledSelection": "Turned off {{count}} {{noun}} in {{app}}",
+      "copiedDir": "Copied the directory path: {{path}}",
+      "copyDirFailed": "Could not copy the directory path"
+    },
+    "installTo": {
+      "prefix": "Install to: ",
+      "button": "Install to: {{apps}}",
+      "many": "{{first}} and {{count}} more",
+      "title": "Enable in these apps after installing",
+      "helpTitle": "Is this remembered?",
+      "help": "Yes, your last choice is the default. You can change it any time under Installed. Installing from ZIP and restoring from backup use this choice too."
+    },
+    "discover": {
+      "searchPlaceholder": "Search name, description or repo",
+      "searchAria": "Search Discover",
+      "skillsShPlaceholder": "At least 2 characters, press Enter",
+      "skillsShAria": "Search skills.sh",
+      "skillsShHint": "Type at least 2 characters above and press Enter to search skills.sh.",
+      "skillsShNone": "Nothing found on skills.sh for “{{query}}”",
+      "sourceAria": "Discover source",
+      "sourceRepos": "Repos · {{count}}",
+      "reload": "Refresh repos",
+      "listLabel": "Skills you can install",
+      "installed": "Installed",
+      "installedAria": "{{name}} is installed in {{count}} apps; view it under Installed",
+      "dirTaken": "Folder name is used by {{name}} ({{source}})",
+      "installing": "Installing",
+      "installingAria": "Installing {{name}}",
+      "installAria": "Install {{name}}",
+      "retryAria": "Install {{name}} again",
+      "installFailed": "Install failed: {{reason}}",
+      "loadFailed": "Couldn't read repositories",
+      "noneRead": "No Skills were read from these repositories",
+      "noneReadBody": "None of the {{count}} repositories returned Skills. It may be a network problem or GitHub rate limiting.",
+      "manageRepos": "Manage repositories",
+      "allInstalled": "Every Skill in these repositories is installed",
+      "showAll": "Show all",
+      "onlyUninstalled": "Not installed only"
+    },
+    "repos": {
+      "buttonAll": "Source: all",
+      "buttonSome": "Source: {{count}} of {{total}}",
+      "popoverAria": "Repositories used by Discover",
+      "enableAria": "Use {{repo}} in Discover",
+      "disabledShort": "Off",
+      "manage": "Add or manage repositories",
+      "readFailed": "Read failed"
+    },
+    "import": {
+      "title": "Import Skills from this computer",
+      "helpTitle": "What counts as already on this computer",
+      "help": "Folders that contain a SKILL.md but aren't managed by CC Switch yet.",
+      "lead": "Importing copies them into CC Switch's folder; the original files stay as they are.",
+      "searchPlaceholder": "Search name or location",
+      "searchAria": "Search Skills to import",
+      "selectAll": "Select all",
+      "selectNone": "Select none",
+      "foundIn": "Found in: {{places}}",
+      "foundCcSwitch": "CC Switch folder",
+      "appsTitle": "Enable in these apps after importing",
+      "appsHelpTitle": "Which apps are ticked by default",
+      "appsHelp": "Apps listed under “Found in” are ticked and only enable the Skills found there; any other app you tick enables every imported Skill. Pi is decided by its folder, so it isn't listed.",
+      "submit": "Import {{count}}"
+    },
+    "restore": {
+      "lead": "Pick a backup to restore its files and add it back to the list, enabled in {{apps}} (set by “Install to” in Discover)."
+    },
+    "repoFail": {
+      "title": "Couldn't read {{count}} repositories: {{repos}}",
+      "item": "{{repo}} ({{reason}})",
+      "discoverBody": "The list may be incomplete.",
+      "updatesBody": "Skills from these repositories weren't checked, so the results may be incomplete."
+    },
+    "headerUpdates": "{{count}} updates",
+    "headerUpdatesShow": "Show only Skills with updates",
+    "headerUpdatesClear": "Show all Skills",
+    "updateAllCount": "Update all ({{count}})",
+    "updatingProgress": "Updating {{done}}/{{total}}…",
+    "copyDir": "Copy directory path"
   }
 }

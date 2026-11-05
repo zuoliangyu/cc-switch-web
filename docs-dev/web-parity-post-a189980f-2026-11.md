@@ -232,7 +232,7 @@
 | `beff557e` | v4.0.3 | feat(logging): log provider switches and routing / aggregation mode changes (#7882) | 4 模式/路由 | 4d：切换与模式日志：ProviderService::switch 记 [SWITCH]（直连 / 代理路由的去向，完成、带警告、规则拒绝记 INFO、失败记 ERROR）；进入 / 退出 / 换路由记 [MODE]（模式变化、路由那家、客户端配置有没有重写），失败日志经 error_for_log 去掉 TOML 诊断里的配置原文。前端确认框日志不适用：Web 没有前端日志通道（上游 frontendLogger 基于 tauri plugin-log） | 部分迁移 |
 | `243cd9a9` | v4.0.3 | fix(proxy): satisfy the OpenCode Go gateway's client identity requirements (#7773) | 1b 代理协议 | 1b：opencode.ai 上游补 x-opencode-session（原生会话头 > 客户端会话 > 对话指纹 > 生成 ID）与缺省 UA | 已迁移 |
 | `34759f69` | v4.0.3 | fix(usage): move usage-stat writes off tokio workers with spawn_blocking (#7822) | 1c 会话/用量导入 | 1c：代理用量与错误日志写入移到阻塞线程池（含计费模式读取），新增运行时不被阻塞的回归 | 已迁移 |
-| `a776a3b1` | v4.0.3 | feat(skills): add a select-all checkbox to the installed list header (#7887) | 5a 供应商与全局 UI | 5a4a：Web 的已安装 Skills 列表没有逐行勾选（批量操作只有按应用列的「全部启用 / 停用」），表头没有可加的全选框 | 不适用 |
+| `a776a3b1` | v4.0.3 | feat(skills): add a select-all checkbox to the installed list header (#7887) | 5a 供应商与全局 UI | 5d1：已安装改为应用矩阵（新增 mcp/AppMatrix：列头批量开关含作用范围与撤销、单元格写入失败标记重试），表头全选框只管当前筛选出的行（半选再点补齐），逐行勾选后出现多选条（启用到 / 停用 / 更新 / 卸载）；另有状态与来源筛选、行内「⋯」菜单；ZIP 仍为浏览器上传，「打开目录」改为复制服务端路径 | 已迁移 |
 | `edff2d76` | v4.0.3 | fix(proxy): handle mixed LF and CRLF SSE delimiters (#7853) | 1b 代理协议 | 1b：SSE 混合 LF/CRLF 分隔 | 已迁移 |
 | `04638fd4` | v4.0.3 | fix(ui): stop WebKit layout jitter on the usage page (#7901) | 5a 供应商与全局 UI | 5a4b：分段控件滑块改为挪 left/top，不用 transform（Safari 合成层导致图标半像素抖动）；scroll-stable 改 overflow-y: scroll 只是为 WKWebView 不支持 scrollbar-gutter，Web 跑在浏览器里，不需要 | 部分迁移 |
 | `eef7efdc` | v4.0.3 | fix(config): let the test home override win over the legacy HOME fallback (#7812) | 1d 资源/设置/工具 | Web 的 get_home_dir 已优先读 CC_SWITCH_TEST_HOME，且 Web 数据目录没有 v3.10.3 的 HOME 兼容回退 | 不适用 |
@@ -883,7 +883,7 @@
 | `e35eef5d` | v4.0.23 | test(usage): assert bounded fork token totals (#9105) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `4e31203c` | v4.0.23 | refactor(usage): return bool from bounded fork validation (#9106) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 5a4a：Web 的「发现」仍是独立页面的卡片网格，没有发现 / 已安装统一行和跳转后闪烁所依附的列表 | 不适用 |
+| `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 5d1：发现 / 已安装合成一页（PageTabs 下划线页签，两段共用一条页签行，发现段首次打开后常驻不卸载），发现结果改为与已安装同高的列表行；从发现点「已安装 ›」或目录被占用跳回已安装并让那一行闪烁（tailwind row-flash / row-fade）；旧 skillsDiscovery 视图直接打开「发现」段，App 工具栏里的 Skills 按钮移进页面自己的「添加 Skill」与「⋯」菜单 | 已迁移 |
 | `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b/2d/2e：Kimi 原生 TOML 编辑框（2b）；MiniMax Code 与 Oh My Pi 的 YAML 编辑框（2d，依赖 yaml 2.8.1）；DSH 保留 JSON 编辑框（2e，与上游一致），其模型方言（reasoningEfforts/compat）专用控件依赖 5a 的表单部件，暂作普通额外字段显示 | 部分迁移 |
 | `5c8f4e2e` | v4.0.23 | feat(presets): add OpenAI API key presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `2122f7da` | v4.0.23 | fix(proxy): send reasoning effort to non-whitelisted models on Claude OpenAI routes | 1b 代理协议 | 1b：Claude 路由经 OpenAI Chat/Responses 时按模型能力补发思考档位（claude_reasoning），表单与 Desktop 表单新增思考档位选项（自动/原样/不发） | 已迁移 |
@@ -920,7 +920,7 @@
 | `69b41cdb` | v4.0.25 | fix(usage): import Pi official subagent usage (#8386) | 2d Oh My Pi | 2d：导入 Pi 官方子代理用量（session_usage_pi 上游最终版本） | 已迁移 |
 | `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 汇率自动获取（联网），与自选货币配套；保留手动汇率回退；需新建或映射：`services/exchange_rates.rs`、`components/usage/UsageDisplaySection.tsx`等 4 个 | 待迁移 |
 | `5ba95160` | v4.0.25 | fix(proxy): send a supported tool_choice for forced web search to xAI (#8664) | 1b 代理协议 | 1b：强制 WebSearch 发往 xAI 时使用其支持的 tool_choice | 已迁移 |
-| `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 5a4a：同上，Web 发现页没有上游的列表工具栏可对齐 | 不适用 |
+| `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 5d1：发现段工具栏与已安装对齐：页签行右侧放搜索框和「刷新仓库」，表头左侧为仓库 / skills.sh 分段、仓库弹层（勾掉即停用）与「只看未安装」，右侧为「安装到」弹层（记住上次选择，ZIP 与备份恢复共用）；发现列表用 react-virtual 虚拟化 | 已迁移 |
 | `4cf15aea` | v4.0.25 | feat(session): implement Kimi session deletion and update related hints (#9157) | 2b Kimi Code | 2b：Kimi 会话删除（后端 session_manager 最终版本；Web 会话列表原本只禁止 MiniMax Code 删除，前端无需改动） | 已迁移 |
 | `0103f4c8` | v4.0.25 | chore(presets): move Qwen pay-as-you-go and Token Plan to the new MaaS domains | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `9267ec8b` | v4.0.25 | feat(claude-desktop): describe routed models with provider and upstream model | 4 模式/路由 | 4c：Desktop 路由 / 聚合模型带「供应商 · 上游模型 · 窗口」说明（/v1/models 返回 description，profile 打开 modelDiscoveryEnabled） | 已迁移 |
@@ -1147,3 +1147,8 @@
   - 文档：三语 README、`docs/pi-frontend-uiux-guidelines-zh.md`、`docs/web-global-resources-guide-zh.md` 改为「已保存供应商按 A–Z，添加时的预设按六组分节、组内 A–Z」；赞助 / 合作约束不变。README 与 CHANGELOG 中 3.0.0 的升级注意属于当时的记录，保持原样。
   - 台账回填已在 5c1、5c2 完成，本批无标记变化。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 222 个文件 2306 项通过、2 项跳过（另以 `35e2f8a7` 修复会话页用例凌晨运行时的时间边界失败）。
+- 2026-11-06：完成布局收敛批次 5d1（Skills 发现 / 已安装列表，见[界面布局向上游收敛计划](web-layout-convergence-2026-11.md)）。43a06937、42f7d0e0、a776a3b1 由不适用改为已迁移。
+  - Skills 页按上游最终版改为一页两段：「已安装」为应用矩阵（列头批量开关、表头全选只选筛选结果、多选条批量启用 / 停用 / 更新 / 卸载、状态与来源筛选、行内「⋯」菜单），「发现」改为与已安装同样的列表行并与之共用工具栏（仓库 / skills.sh 分段、仓库弹层、只看未安装、安装到），从发现跳回已安装时对应行闪烁。
+  - 保留 Web 的做法：ZIP 为浏览器上传（可多选，失败时弹窗不关）；「打开目录」改为复制服务端路径；存储与重新同步在 Web 的服务端路径弹窗里，从「⋯」菜单打开；仓库管理仍为整页面板并加了逐仓库启停。已安装列表与上游一样不再按可视区域渲染，发现列表仍虚拟化。
+  - 三语补上游 `skillsPage` 文案，删除 65 项不再使用的旧文案；`docs/web-global-resources-guide-zh.md` 同步。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 223 个文件 2350 项通过、2 项跳过。未做浏览器视觉验收，留到布局收敛完成后统一进行。

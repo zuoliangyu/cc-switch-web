@@ -1,808 +1,1066 @@
-import { WindowedRows } from "@/components/common/WindowedRows";
-import { SkillRepoFailures } from "./SkillRepoFailures";
-import { useSkillRepoFailures } from "@/hooks/useSkills";
-import {
-  useState,
-  useMemo,
-  useEffect,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  RefreshCw,
-  Search,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  ExternalLink,
   Loader2,
-  FolderGit2,
-  SlidersHorizontal,
-  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { SkillCard } from "./SkillCard";
-import { RepoManagerPanel } from "./RepoManagerPanel";
+import { settingsApi } from "@/lib/api";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { Button } from "@/components/ui/button";
+import { HelpTip } from "@/components/ui/help-tip";
+import { Notice } from "@/components/ui/notice";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { AppGlyph, APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import {
-  useDiscoverableSkills,
-  useRefreshDiscoverableSkills,
-  useInstalledSkills,
-  useInstallSkill,
-  useSkillRepos,
   useAddSkillRepo,
+  useDiscoverableSkills,
+  useDiscoverableSkillsFailures,
+  useInstallSkill,
+  useInstalledSkills,
+  useRefreshDiscoverableSkills,
   useRemoveSkillRepo,
   useSearchSkillsSh,
+  useSkillRepos,
 } from "@/hooks/useSkills";
 import type { AppId } from "@/lib/api/types";
 import type {
   DiscoverableSkill,
+  InstalledSkill,
   SkillRepo,
+  SkillRepoFailure,
   SkillsShDiscoverableSkill,
 } from "@/lib/api/skills";
-import { formatSkillError } from "@/lib/errors/skillErrorParser";
+import { SKILLS_APP_IDS } from "@/config/appConfig";
+import {
+  formatSkillError,
+  skillErrorReason,
+} from "@/lib/errors/skillErrorParser";
+import { cn } from "@/lib/utils";
+import { MatrixSearch } from "@/components/mcp/AppMatrix";
+import { CHECKBOX_CLASS } from "@/components/mcp/formBits";
+import { countRepoSkills } from "./RepoManagerPanel";
+import { describeRepoFailures, repoFailureKey } from "./repoFailures";
 
-interface SkillsPageProps {
-  initialApp?: AppId;
-}
+/** 发现列表每行高度（h-14），虚拟化按这个算 */
+const ROW_HEIGHT = 56;
+export type SkillsPageSource = "repos" | "skillssh";
 
-export interface SkillsPageHandle {
-  refresh: () => void;
-  openRepoManager: () => void;
-}
-
-type SearchSource = "repos" | "skillssh";
+type InstallRunner = <T extends { id: string }>(
+  install: (firstApp: AppId) => Promise<T[]>,
+  apps?: AppId[],
+) => Promise<{
+  installed: T[];
+  failures: Array<{ id: string; app: AppId; error: unknown }>;
+}>;
 
 const SKILLSSH_PAGE_SIZE = 20;
+const POPOVER_CLASS =
+  "z-[110] rounded-lg border border-border bg-card p-1 text-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2";
+
+/** 仓库的增删和停用（发现段的「仓库」弹层和仓库管理抽屉共用） */
+export function useSkillRepoActions() {
+  const { t } = useTranslation();
+  const addRepoMutation = useAddSkillRepo();
+  const removeRepoMutation = useRemoveSkillRepo();
+
+  const addRepo = async (repo: SkillRepo) => {
+    const discovery = await addRepoMutation.mutateAsync(repo);
+    toast.success(
+      t("skills.repo.addSuccess", {
+        owner: repo.owner,
+        name: repo.name,
+        count: countRepoSkills(discovery?.skills ?? [], repo),
+      }),
+      { closeButton: true },
+    );
+  };
+
+  const removeRepo = async (owner: string, name: string) => {
+    try {
+      await removeRepoMutation.mutateAsync({ owner, name });
+      toast.success(t("skills.repo.removeSuccess", { owner, name }), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    }
+  };
+
+  /** 勾掉 = 停用：add_skill_repo 是 INSERT OR REPLACE，带 enabled=false 写回即可 */
+  const setRepoEnabled = async (repo: SkillRepo, enabled: boolean) => {
+    try {
+      await addRepoMutation.mutateAsync({ ...repo, enabled });
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    }
+  };
+
+  return { addRepo, removeRepo, setRepoEnabled };
+}
+
+interface SkillsPageProps {
+  /**
+   * 「已安装 / 发现」页签（由外层渲染，两段共用一条页签行）；
+   * 传入的内容放在页签行右侧（安装到、搜索）。
+   */
+  renderViewTabs: (trailing: React.ReactNode) => React.ReactNode;
+  visibleAppIds: AppId[];
+  installTargets: AppId[];
+  onInstallTargetsChange: (apps: AppId[]) => void;
+  installTo: InstallRunner;
+  /** 「已安装 · 3 个应用 ›」：切到已安装段并定位到那一行 */
+  onShowInstalled: (skillId: string) => void;
+  onOpenRepoManager: () => void;
+  /** 安装后有应用没能启用：交给已安装段标 ⚠ */
+  onEnableFailures: (
+    failures: Array<{ id: string; app: AppId; error: unknown }>,
+  ) => void;
+  initialQuery?: string;
+}
+
+interface DiscoverRow {
+  key: string;
+  name: string;
+  directory: string;
+  description: string;
+  repoOwner: string;
+  repoName: string;
+  installs?: number;
+  skill: DiscoverableSkill;
+}
+
+/** 发现行的文档地址：优先 SKILL.md 所在目录，缺省回落到仓库首页 */
+function discoverDocsUrl(row: DiscoverRow): string | undefined {
+  if (row.skill.readmeUrl) return row.skill.readmeUrl;
+  if (row.repoOwner && row.repoName) {
+    return `https://github.com/${row.repoOwner}/${row.repoName}`;
+  }
+  return undefined;
+}
+
+function installedKey(directory: string, owner?: string, name?: string) {
+  const dir = directory.split(/[/\\]/).pop()?.toLowerCase() ?? "";
+  return `${dir}:${(owner ?? "").toLowerCase()}:${(name ?? "").toLowerCase()}`;
+}
+
+function formatInstalls(count: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale, {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(count);
+  } catch {
+    return String(count);
+  }
+}
 
 /**
- * Skills 发现面板
- * 用于浏览和安装来自仓库或 skills.sh 的 Skills
+ * Skills 的「发现」段：仓库 / skills.sh 两个来源，结果是行列表；显式「安装到」哪些应用。
  */
-export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
-  ({ initialApp = "claude" }, ref) => {
-    const { t } = useTranslation();
-    const { data: discoveryFailures } = useSkillRepoFailures("discoverable");
-    const [repoManagerOpen, setRepoManagerOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [filterRepo, setFilterRepo] = useState<string>("all");
-    const [filterStatus, setFilterStatus] = useState<
-      "all" | "installed" | "uninstalled"
-    >("all");
-    const [searchSource, setSearchSource] = useState<SearchSource>("repos");
-    const [skillsShInput, setSkillsShInput] = useState("");
-    const [skillsShQuery, setSkillsShQuery] = useState("");
-    const [skillsShOffset, setSkillsShOffset] = useState(0);
-    const [accumulatedResults, setAccumulatedResults] = useState<
-      SkillsShDiscoverableSkill[]
-    >([]);
+export function SkillsPage({
+  renderViewTabs,
+  visibleAppIds,
+  installTargets,
+  onInstallTargetsChange,
+  installTo,
+  onShowInstalled,
+  onOpenRepoManager,
+  onEnableFailures,
+  initialQuery = "",
+}: SkillsPageProps) {
+  const { t, i18n } = useTranslation();
+  const [source, setSource] = useState<SkillsPageSource>("repos");
+  const [query, setQuery] = useState(initialQuery);
+  const [statusFilter, setStatusFilter] = useState<"all" | "uninstalled">(
+    "all",
+  );
+  const [skillsShQuery, setSkillsShQuery] = useState("");
+  const [skillsShOffset, setSkillsShOffset] = useState(0);
+  const [accumulated, setAccumulated] = useState<SkillsShDiscoverableSkill[]>(
+    [],
+  );
+  const [installing, setInstalling] = useState<Set<string>>(new Set());
+  const [failed, setFailed] = useState<Record<string, string>>({});
 
-    const currentApp = initialApp;
+  const {
+    data: discoverable,
+    isLoading: loadingDiscoverable,
+    isFetching: fetchingDiscoverable,
+    isError: discoverError,
+    error: discoverErrorValue,
+  } = useDiscoverableSkills();
+  const refreshDiscoverable = useRefreshDiscoverableSkills();
+  const { data: repoFailures = [] } = useDiscoverableSkillsFailures();
+  const { data: installedSkills = [] } = useInstalledSkills();
+  const {
+    data: repos = [],
+    isLoading: loadingRepos,
+    refetch: refetchRepos,
+  } = useSkillRepos();
+  const {
+    data: skillsShResult,
+    isLoading: loadingSkillsSh,
+    isFetching: fetchingSkillsSh,
+    isPlaceholderData: placeholderSkillsSh,
+    isError: skillsShError,
+    refetch: refetchSkillsSh,
+  } = useSearchSkillsSh(skillsShQuery, SKILLSSH_PAGE_SIZE, skillsShOffset);
+  const installMutation = useInstallSkill();
+  const { setRepoEnabled } = useSkillRepoActions();
 
-    const { data: discoverableSkills, isLoading: loadingDiscoverable } =
-      useDiscoverableSkills();
-    // 手动刷新绕过后端按仓库的发现缓存
-    const refreshDiscoverable = useRefreshDiscoverableSkills();
-    const { data: installedSkills } = useInstalledSkills();
-    const { data: repos = [], refetch: refetchRepos } = useSkillRepos();
-    const {
-      data: skillsShResult,
-      isLoading: loadingSkillsSh,
-      isFetching: fetchingSkillsSh,
-      isError: skillsShFailed,
-      refetch: refetchSkillsSh,
-    } = useSearchSkillsSh(skillsShQuery, SKILLSSH_PAGE_SIZE, skillsShOffset);
-
-    useEffect(() => {
-      if (!skillsShResult) {
-        return;
-      }
-      if (skillsShOffset === 0) {
-        setAccumulatedResults(skillsShResult.skills);
-      } else {
-        setAccumulatedResults((prev) => [...prev, ...skillsShResult.skills]);
-      }
-    }, [skillsShResult, skillsShOffset]);
-
-    const handleSkillsShSearch = () => {
-      const trimmed = skillsShInput.trim();
-      if (trimmed.length < 2) {
-        return;
-      }
-      setSkillsShOffset(0);
-      setAccumulatedResults([]);
-      setSkillsShQuery(trimmed);
-    };
-
-    const installMutation = useInstallSkill();
-    const addRepoMutation = useAddSkillRepo();
-    const removeRepoMutation = useRemoveSkillRepo();
-
-    const installedKeys = useMemo(() => {
-      if (!installedSkills) return new Set<string>();
-      return new Set(
-        installedSkills.map((skill) => {
-          const owner = skill.repoOwner?.toLowerCase() || "";
-          const name = skill.repoName?.toLowerCase() || "";
-          return `${skill.directory.toLowerCase()}:${owner}:${name}`;
-        }),
+  useEffect(() => {
+    if (skillsShResult && !placeholderSkillsSh) {
+      setAccumulated((prev) =>
+        skillsShOffset === 0
+          ? skillsShResult.skills
+          : [...prev, ...skillsShResult.skills],
       );
-    }, [installedSkills]);
+    }
+  }, [skillsShResult, skillsShOffset, placeholderSkillsSh]);
 
-    type DiscoverableSkillItem = DiscoverableSkill & { installed: boolean };
+  // 没配置任何仓库时直接看 skills.sh；仓库读出来是空的仍留在仓库，方便重试
+  const effectiveSource: SkillsPageSource =
+    source === "repos" && !loadingRepos && repos.length === 0
+      ? "skillssh"
+      : source;
+  const isSkillsSh = effectiveSource === "skillssh";
+  const enabledRepos = repos.filter((repo) => repo.enabled);
 
-    const repoOptions = useMemo(() => {
-      if (!discoverableSkills) return [];
-      const repoSet = new Set<string>();
-      discoverableSkills.forEach((skill) => {
-        if (skill.repoOwner && skill.repoName) {
-          repoSet.add(`${skill.repoOwner}/${skill.repoName}`);
-        }
+  const submitSkillsSh = () => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return;
+    if (trimmed === skillsShQuery && skillsShOffset === 0) return;
+    setSkillsShOffset(0);
+    setAccumulated([]);
+    setSkillsShQuery(trimmed);
+  };
+
+  // 第一页失败时 query key 没变，光把 offset 设回 0 什么都不会发生，要显式重新请求
+  const retrySkillsSh = () => {
+    setAccumulated([]);
+    if (skillsShOffset === 0) {
+      void refetchSkillsSh();
+    } else {
+      setSkillsShOffset(0);
+    }
+  };
+
+  // ─── 已安装 / 目录名占用 ────────────────────────────────────────────
+  const installedByKey = useMemo(() => {
+    const map = new Map<string, InstalledSkill>();
+    for (const skill of installedSkills) {
+      map.set(
+        installedKey(skill.directory, skill.repoOwner, skill.repoName),
+        skill,
+      );
+    }
+    return map;
+  }, [installedSkills]);
+
+  const installedByDir = useMemo(() => {
+    const map = new Map<string, InstalledSkill>();
+    for (const skill of installedSkills) {
+      map.set(skill.directory.toLowerCase(), skill);
+    }
+    return map;
+  }, [installedSkills]);
+
+  const enabledAppCount = (skill: InstalledSkill) =>
+    SKILLS_APP_IDS.filter((app) => skill.apps[app]).length;
+
+  const sourceLabel = (skill: InstalledSkill) =>
+    skill.repoOwner && skill.repoName
+      ? `${skill.repoOwner}/${skill.repoName}`
+      : t("skillsPage.source.local");
+
+  // ─── 行数据 ─────────────────────────────────────────────────────────
+  const repoRows: DiscoverRow[] = useMemo(
+    () =>
+      (discoverable ?? []).map((skill) => ({
+        key: skill.key,
+        name: skill.name,
+        directory: skill.directory,
+        description: skill.description,
+        repoOwner: skill.repoOwner,
+        repoName: skill.repoName,
+        skill,
+      })),
+    [discoverable],
+  );
+
+  const skillsShRows: DiscoverRow[] = useMemo(
+    () =>
+      accumulated.map((item) => ({
+        key: item.key,
+        name: item.name,
+        directory: item.directory,
+        description: "",
+        repoOwner: item.repoOwner,
+        repoName: item.repoName,
+        installs: item.installs,
+        skill: {
+          key: item.key,
+          name: item.name,
+          description: "",
+          directory: item.directory,
+          repoOwner: item.repoOwner,
+          repoName: item.repoName,
+          repoBranch: item.repoBranch,
+          readmeUrl: item.readmeUrl,
+        },
+      })),
+    [accumulated],
+  );
+
+  const statusOf = (row: DiscoverRow) => {
+    const installed = installedByKey.get(
+      installedKey(row.directory, row.repoOwner, row.repoName),
+    );
+    if (installed) return { kind: "installed" as const, skill: installed };
+    const dir = row.directory.split(/[/\\]/).pop()?.toLowerCase() ?? "";
+    const owner = installedByDir.get(dir);
+    if (owner) return { kind: "conflict" as const, skill: owner };
+    return { kind: "available" as const };
+  };
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleRows = isSkillsSh
+    ? skillsShRows
+    : repoRows.filter((row) => {
+        if (
+          statusFilter === "uninstalled" &&
+          statusOf(row).kind !== "available"
+        )
+          return false;
+        if (!normalizedQuery) return true;
+        return [
+          row.name,
+          row.directory,
+          row.description,
+          `${row.repoOwner}/${row.repoName}`,
+        ].some((value) => value?.toLowerCase().includes(normalizedQuery));
       });
-      return Array.from(repoSet).sort();
-    }, [discoverableSkills]);
 
-    const skills: DiscoverableSkillItem[] = useMemo(() => {
-      if (!discoverableSkills) return [];
-      return discoverableSkills.map((skill) => {
-        const installName =
-          skill.directory.split(/[/\\]/).pop()?.toLowerCase() ||
-          skill.directory.toLowerCase();
-        const key = `${installName}:${skill.repoOwner.toLowerCase()}:${skill.repoName.toLowerCase()}`;
-        return {
-          ...skill,
-          installed: installedKeys.has(key),
-        };
-      });
-    }, [discoverableSkills, installedKeys]);
+  // 列表虚拟化：几个仓库加起来上千行，只渲染可视区域和前后各几行（每行固定 56）
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: visibleRows.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    getItemKey: (index) => visibleRows[index]?.key ?? index,
+    overscan: 8,
+  });
 
-    const isSkillsShInstalled = (skill: SkillsShDiscoverableSkill): boolean => {
-      const key = `${skill.directory.toLowerCase()}:${skill.repoOwner.toLowerCase()}:${skill.repoName.toLowerCase()}`;
-      return installedKeys.has(key);
-    };
+  // ─── 安装 ───────────────────────────────────────────────────────────
+  const names = (apps: AppId[]) =>
+    apps.map((app) => APP_DISPLAY_NAME[app]).join(t("mcpPage.listSeparator"));
 
-    const loading =
-      searchSource === "repos"
-        ? loadingDiscoverable && !discoverableSkills
-        : false;
-
-    useImperativeHandle(ref, () => ({
-      refresh: () => {
-        void refreshDiscoverable();
-        refetchRepos();
-      },
-      openRepoManager: () => setRepoManagerOpen(true),
-    }));
-
-    const toDiscoverableSkill = (
-      skill: SkillsShDiscoverableSkill,
-    ): DiscoverableSkill => ({
-      key: skill.key,
-      name: skill.name,
-      description: "",
-      directory: skill.directory,
-      repoOwner: skill.repoOwner,
-      repoName: skill.repoName,
-      repoBranch: skill.repoBranch,
-      readmeUrl: skill.readmeUrl,
+  const handleInstall = async (row: DiscoverRow) => {
+    if (installing.has(row.key)) return;
+    setInstalling((prev) => new Set(prev).add(row.key));
+    setFailed((prev) => {
+      const next = { ...prev };
+      delete next[row.key];
+      return next;
     });
-
-    const handleInstall = async (directory: string) => {
-      let skill: DiscoverableSkill | undefined;
-
-      if (searchSource === "skillssh") {
-        const found = accumulatedResults.find(
-          (item) => item.directory === directory,
-        );
-        if (found) {
-          skill = toDiscoverableSkill(found);
-        }
-      } else {
-        skill = discoverableSkills?.find(
-          (item) =>
-            item.directory === directory ||
-            item.directory.split("/").pop() === directory,
-        );
-      }
-
-      if (!skill) {
-        toast.error(t("skills.notFound"));
-        return;
-      }
-
-      try {
+    try {
+      const { failures } = await installTo(async (firstApp) => [
         await installMutation.mutateAsync({
-          skill,
-          currentApp,
-        });
-        toast.success(t("skills.installSuccess", { name: skill.name }), {
-          closeButton: true,
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        const { title, description } = formatSkillError(
-          errorMessage,
-          t,
-          "skills.installFailed",
-        );
-        toast.error(title, {
-          description,
-          duration: 10000,
-        });
-        console.error("Install skill failed:", error);
-      }
-    };
-
-    const handleUninstall = async (_directory: string) => {
-      toast.info(t("skills.uninstallInMainPanel"));
-    };
-
-    const handleAddRepo = async (repo: SkillRepo) => {
-      try {
-        // 只发现这一个仓库，不重拉其它仓库
-        const discovery = await addRepoMutation.mutateAsync(repo);
-        const count =
-          discovery?.skills.filter(
-            (skill) =>
-              skill.repoOwner === repo.owner &&
-              skill.repoName === repo.name &&
-              (skill.repoBranch || "main") === (repo.branch || "main"),
-          ).length ?? 0;
-        toast.success(
-          t("skills.repo.addSuccess", {
-            owner: repo.owner,
-            name: repo.name,
-            count,
+          skill: row.skill,
+          currentApp: firstApp,
+        }),
+      ]);
+      toast.success(
+        t("skillsPage.toast.installed", {
+          name: row.name,
+          apps: names(installTargets),
+        }),
+        { closeButton: true },
+      );
+      if (failures.length) {
+        onEnableFailures(failures);
+        toast.warning(
+          t("skillsPage.toast.enableFailed", {
+            apps: names(failures.map((failure) => failure.app)),
           }),
           { closeButton: true },
         );
-      } catch (error) {
-        toast.error(t("common.error"), {
-          description: String(error),
-        });
       }
-    };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const { title, description } = formatSkillError(
+        message,
+        t,
+        "skills.installFailed",
+      );
+      setFailed((prev) => ({ ...prev, [row.key]: description || title }));
+    } finally {
+      setInstalling((prev) => {
+        const next = new Set(prev);
+        next.delete(row.key);
+        return next;
+      });
+    }
+  };
 
-    const handleRemoveRepo = async (owner: string, name: string) => {
-      try {
-        await removeRepoMutation.mutateAsync({ owner, name });
-        toast.success(t("skills.repo.removeSuccess", { owner, name }), {
-          closeButton: true,
+  const reload = () => {
+    void refreshDiscoverable();
+    void refetchRepos();
+  };
+
+  // ─── 渲染 ───────────────────────────────────────────────────────────
+  const installToLabel =
+    installTargets.length <= 2
+      ? names(installTargets)
+      : t("skillsPage.installTo.many", {
+          first: APP_DISPLAY_NAME[installTargets[0]],
+          count: installTargets.length,
         });
-      } catch (error) {
-        toast.error(t("common.error"), {
-          description: String(error),
-        });
+
+  const loadingList = isSkillsSh
+    ? (loadingSkillsSh || fetchingSkillsSh) && accumulated.length === 0
+    : loadingDiscoverable || (fetchingDiscoverable && !discoverable?.length);
+
+  const hasMoreSkillsSh =
+    isSkillsSh &&
+    skillsShResult &&
+    accumulated.length < skillsShResult.totalCount;
+
+  const renderEmpty = () => {
+    let title = "";
+    let body = "";
+    let buttons: Array<{ label: string; onClick: () => void }> = [];
+    if (isSkillsSh) {
+      if (skillsShQuery.length < 2) {
+        body = t("skillsPage.discover.skillsShHint");
+      } else if (skillsShError) {
+        title = t("skills.skillssh.error");
+        buttons = [{ label: t("common.retry"), onClick: retrySkillsSh }];
+      } else {
+        title = t("skillsPage.discover.skillsShNone", { query: skillsShQuery });
       }
-    };
-
-    const filteredSkills = useMemo(() => {
-      const byRepo = skills.filter((skill) => {
-        if (filterRepo === "all") return true;
-        const skillRepo = `${skill.repoOwner}/${skill.repoName}`;
-        return skillRepo === filterRepo;
-      });
-
-      const byStatus = byRepo.filter((skill) => {
-        if (filterStatus === "installed") return skill.installed;
-        if (filterStatus === "uninstalled") return !skill.installed;
-        return true;
-      });
-
-      if (!searchQuery.trim()) return byStatus;
-
-      const query = searchQuery.toLowerCase();
-      return byStatus.filter((skill) => {
-        const name = skill.name?.toLowerCase() || "";
-        const repo =
-          skill.repoOwner && skill.repoName
-            ? `${skill.repoOwner}/${skill.repoName}`.toLowerCase()
-            : "";
-
-        return name.includes(query) || repo.includes(query);
-      });
-    }, [skills, searchQuery, filterRepo, filterStatus]);
-
-    const hasMoreSkillsSh =
-      skillsShResult && accumulatedResults.length < skillsShResult.totalCount;
-
-    const effectiveSource =
-      searchSource === "repos" && skills.length === 0 && !loading
-        ? "skillssh"
-        : searchSource;
-
+    } else if (discoverError) {
+      title = t("skillsPage.discover.loadFailed");
+      body = String(discoverErrorValue ?? "");
+      buttons = [
+        { label: t("common.retry"), onClick: reload },
+        {
+          label: t("skillsPage.discover.manageRepos"),
+          onClick: onOpenRepoManager,
+        },
+      ];
+    } else if (repoRows.length === 0) {
+      // 后端逐仓库报告了失败：如实写哪些没读到、为什么；否则是读到了但里面没有 Skill
+      title =
+        repoFailures.length > 0
+          ? t("skillsPage.discover.loadFailed")
+          : t("skillsPage.discover.noneRead");
+      body =
+        repoFailures.length > 0
+          ? t("skillsPage.repoFail.title", {
+              count: repoFailures.length,
+              repos: describeRepoFailures(repoFailures, t),
+            })
+          : t("skillsPage.discover.noneReadBody", {
+              count: enabledRepos.length,
+            });
+      buttons = [
+        { label: t("common.retry"), onClick: reload },
+        {
+          label: t("skillsPage.discover.manageRepos"),
+          onClick: onOpenRepoManager,
+        },
+      ];
+    } else if (statusFilter === "uninstalled" && !normalizedQuery) {
+      title = t("skillsPage.discover.allInstalled");
+      buttons = [
+        {
+          label: t("skillsPage.discover.showAll"),
+          onClick: () => setStatusFilter("all"),
+        },
+      ];
+    } else {
+      title = t("skillsPage.noMatch", { query: query.trim() });
+      buttons = [
+        {
+          label: t("mcpPage.clearSearch"),
+          onClick: () => {
+            setQuery("");
+            setStatusFilter("all");
+          },
+        },
+      ];
+    }
     return (
-      <div className="mx-auto flex h-full w-full max-w-7xl flex-col overflow-hidden px-4 sm:px-6">
-        <div className="scroll-overlay flex-1 overflow-y-auto overflow-x-hidden animate-fade-in">
-          <div className="space-y-4 py-4 sm:py-5">
-            <SkillRepoFailures failures={discoveryFailures} />
-            <div className="glass-card rounded-[30px] border border-border-default p-5 sm:p-6">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="space-y-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    {t("skills.workspaceLabel", {
-                      defaultValue: "Skills Workspace",
-                    })}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-                      {t("skills.title", {
-                        defaultValue: "技能工作台",
-                      })}
-                    </h2>
-                    <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                      {effectiveSource === "repos"
-                        ? t("skills.count", {
-                            count: filteredSkills.length,
-                          })
-                        : t("skills.count", {
-                            count: accumulatedResults.length,
-                          })}
-                    </span>
-                    <span className="theme-chip-tertiary inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                      {effectiveSource === "repos"
-                        ? t("skills.searchSource.repos")
-                        : t("skills.searchSource.skillssh")}
-                    </span>
-                    {effectiveSource === "repos" ? (
-                      <span className="theme-chip-success inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                        {t("skills.filter.installed")}：
-                        {skills.filter((skill) => skill.installed).length}
-                      </span>
-                    ) : null}
-                    {searchQuery.trim() || skillsShQuery.trim() ? (
-                      <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-                        {t("skills.search", { defaultValue: "搜索技能" })}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                    {effectiveSource === "repos"
-                      ? searchQuery.trim()
-                        ? t("skills.workspaceSearchDescription", {
-                            defaultValue:
-                              "正在按照技能名称和仓库来源过滤结果，便于快速定位可安装项。",
-                          })
-                        : t("skills.workspaceDescription", {
-                            defaultValue:
-                              "集中浏览来自仓库的技能、确认安装状态，并在一个面板里完成来源管理与筛选。",
-                          })
-                      : skills.length === 0 && searchSource === "repos"
-                        ? t("skills.workspaceFallbackDescription", {
-                            defaultValue:
-                              "当前仓库源还没有可发现技能，已自动切换到 skills.sh 继续探索公开目录。",
-                          })
-                        : t("skills.skillssh.workspaceDescription", {
-                            defaultValue:
-                              "从 skills.sh 搜索更广泛的技能目录，按关键词逐批加载并直接安装到当前应用。",
-                          })}
-                  </p>
-                </div>
+      <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+        {title && <h2 className="m-0 text-base font-semibold">{title}</h2>}
+        {body && (
+          <p className="m-0 max-w-[460px] text-sm text-muted-foreground">
+            {body}
+          </p>
+        )}
+        {buttons.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 pt-1">
+            {buttons.map((button) => (
+              <Button
+                key={button.label}
+                type="button"
+                variant="outline"
+                size="default"
+                onClick={button.onClick}
+              >
+                {button.label}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-w-[8rem]"
-                    onClick={() => setRepoManagerOpen(true)}
-                  >
-                    <FolderGit2 className="mr-2 h-4 w-4" />
-                    {t("skills.repoManager", {
-                      defaultValue: "仓库管理",
-                    })}
-                  </Button>
-                  {effectiveSource === "repos" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-w-[8rem]"
-                      onClick={() => {
-                        void refreshDiscoverable();
-                        refetchRepos();
-                      }}
-                    >
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      {t("common.refresh", { defaultValue: "刷新" })}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card rounded-[28px] border border-border-default p-4 sm:p-5">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background/80 shadow-sm">
-                  {effectiveSource === "repos" ? (
-                    <SlidersHorizontal className="h-5 w-5 theme-primary-text" />
-                  ) : (
-                    <Sparkles className="h-5 w-5 theme-tertiary-text" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground">
-                    {effectiveSource === "repos"
-                      ? t("skills.filtersTitle", {
-                          defaultValue: "来源与筛选",
-                        })
-                      : t("skills.skillssh.discoveryTitle", {
-                          defaultValue: "公开目录搜索",
-                        })}
-                  </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {effectiveSource === "repos"
-                      ? t("skills.filtersDescription", {
-                          defaultValue:
-                            "按仓库、安装状态和关键字快速收敛候选技能。",
-                        })
-                      : t("skills.skillssh.discoveryDescription", {
-                          defaultValue:
-                            "输入关键词搜索 skills.sh，支持继续加载更多结果。",
-                        })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <div className="inline-flex w-full flex-wrap gap-1 rounded-2xl border border-border-default bg-background/80 p-1 md:w-auto">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={effectiveSource === "repos" ? "default" : "ghost"}
-                    className={
-                      effectiveSource === "repos"
-                        ? "min-w-[7rem] rounded-xl shadow-sm"
-                        : "min-w-[7rem] rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }
-                    onClick={() => setSearchSource("repos")}
-                  >
-                    {t("skills.searchSource.repos")}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={
-                      effectiveSource === "skillssh" ? "default" : "ghost"
-                    }
-                    className={
-                      effectiveSource === "skillssh"
-                        ? "min-w-[7rem] rounded-xl shadow-sm"
-                        : "min-w-[7rem] rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }
-                    onClick={() => setSearchSource("skillssh")}
-                  >
-                    {t("skills.searchSource.skillssh")}
-                  </Button>
-                </div>
-
-                {effectiveSource === "repos" ? (
-                  <>
-                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_220px_160px]">
-                      <div className="relative min-w-0">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder={t("skills.searchPlaceholder")}
-                          value={searchQuery}
-                          onChange={(event) =>
-                            setSearchQuery(event.target.value)
-                          }
-                          className="h-11 rounded-2xl border-border-default bg-background/80 pl-10 pr-3"
-                        />
-                      </div>
-                      <Select value={filterRepo} onValueChange={setFilterRepo}>
-                        <SelectTrigger className="h-11 rounded-2xl border-border-default bg-background/80 text-foreground shadow-none">
-                          <SelectValue
-                            placeholder={t("skills.filter.repo")}
-                            className="text-left truncate"
-                          />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-64 min-w-[var(--radix-select-trigger-width)] bg-card text-foreground shadow-lg">
-                          <SelectItem
-                            value="all"
-                            className="text-left pr-3 [&[data-state=checked]>span:first-child]:hidden"
-                          >
-                            {t("skills.filter.allRepos")}
-                          </SelectItem>
-                          {repoOptions.map((repo) => (
-                            <SelectItem
-                              key={repo}
-                              value={repo}
-                              className="text-left pr-3 [&[data-state=checked]>span:first-child]:hidden"
-                              title={repo}
-                            >
-                              <span className="block max-w-[200px] truncate">
-                                {repo}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={filterStatus}
-                        onValueChange={(value) =>
-                          setFilterStatus(
-                            value as "all" | "installed" | "uninstalled",
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-11 rounded-2xl border-border-default bg-background/80 text-foreground shadow-none">
-                          <SelectValue
-                            placeholder={t("skills.filter.placeholder")}
-                            className="text-left"
-                          />
-                        </SelectTrigger>
-                        <SelectContent className="bg-card text-foreground shadow-lg">
-                          <SelectItem
-                            value="all"
-                            className="text-left pr-3 [&[data-state=checked]>span:first-child]:hidden"
-                          >
-                            {t("skills.filter.all")}
-                          </SelectItem>
-                          <SelectItem
-                            value="installed"
-                            className="text-left pr-3 [&[data-state=checked]>span:first-child]:hidden"
-                          >
-                            {t("skills.filter.installed")}
-                          </SelectItem>
-                          <SelectItem
-                            value="uninstalled"
-                            className="text-left pr-3 [&[data-state=checked]>span:first-child]:hidden"
-                          >
-                            {t("skills.filter.uninstalled")}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 font-medium">
-                        {filterRepo === "all"
-                          ? t("skills.filter.allRepos")
-                          : filterRepo}
-                      </span>
-                      <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 font-medium">
-                        {filterStatus === "all"
-                          ? t("skills.filter.all")
-                          : filterStatus === "installed"
-                            ? t("skills.filter.installed")
-                            : t("skills.filter.uninstalled")}
-                      </span>
-                      {searchQuery.trim() && (
-                        <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1 font-medium">
-                          {t("skills.count", { count: filteredSkills.length })}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-                      <div className="relative min-w-0">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder={t("skills.skillssh.searchPlaceholder")}
-                          value={skillsShInput}
-                          onChange={(event) =>
-                            setSkillsShInput(event.target.value)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              handleSkillsShSearch();
-                            }
-                          }}
-                          className="h-11 rounded-2xl border-border-default bg-background/80 pl-10 pr-3"
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={handleSkillsShSearch}
-                        disabled={
-                          skillsShInput.trim().length < 2 || fetchingSkillsSh
-                        }
-                        className="h-11 rounded-2xl px-5 lg:min-w-[8rem]"
-                      >
-                        {fetchingSkillsSh ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Search className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        {t("skills.search")}
-                      </Button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="theme-chip-neutral inline-flex items-center rounded-full px-3 py-1 font-medium">
-                        {skillsShQuery.trim()
-                          ? t("skills.skillssh.poweredBy")
-                          : t("skills.skillssh.searchPlaceholder")}
-                      </span>
-                      {skillsShQuery.trim() && skillsShResult ? (
-                        <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1 font-medium">
-                          {t("skills.count", {
-                            count: skillsShResult.totalCount,
-                          })}
-                        </span>
-                      ) : null}
-                    </div>
-                  </>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* 页签行在外层（UnifiedSkillsPanel），这里只把右侧控件交出去 */}
+      {renderViewTabs(
+        // 和「已安装」同一套：搜索框 + 去远端拉最新的文字按钮
+        <div className="flex min-w-0 items-center gap-2">
+          <MatrixSearch
+            className="w-[200px] min-w-0 shrink sm:w-[280px] sm:min-w-[160px]"
+            inputId="sk-discover-search"
+            value={query}
+            onValueChange={setQuery}
+            onEnter={isSkillsSh ? submitSkillsSh : undefined}
+            placeholder={
+              isSkillsSh
+                ? t("skillsPage.discover.skillsShPlaceholder")
+                : t("skillsPage.discover.searchPlaceholder")
+            }
+            ariaLabel={
+              isSkillsSh
+                ? t("skillsPage.discover.skillsShAria")
+                : t("skillsPage.discover.searchAria")
+            }
+            status={
+              normalizedQuery && !isSkillsSh
+                ? t("appMatrix.found", { count: visibleRows.length })
+                : ""
+            }
+          />
+          {!isSkillsSh && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="default"
+              className="shrink-0"
+              disabled={fetchingDiscoverable}
+              onClick={reload}
+            >
+              <RefreshCw
+                className={cn(
+                  "h-4 w-4",
+                  fetchingDiscoverable && "animate-spin",
                 )}
-              </div>
-            </div>
+                strokeWidth={2}
+              />
+              {t("skillsPage.discover.reload")}
+            </Button>
+          )}
+        </div>,
+      )}
 
-            {effectiveSource === "repos" ? (
-              loading ? (
-                <div className="glass-card flex h-64 items-center justify-center rounded-[28px] border border-border-default">
-                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : skills.length === 0 ? (
-                <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-12 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
-                    <FolderGit2 className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <div className="mt-4 text-lg font-semibold text-foreground">
-                    {t("skills.empty")}
-                  </div>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    {t("skills.emptyDescription")}
-                  </p>
-                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                    <Button onClick={() => setRepoManagerOpen(true)}>
-                      <FolderGit2 className="mr-2 h-4 w-4" />
-                      {t("skills.addRepo")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSearchSource("skillssh")}
-                    >
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      {t("skills.searchSource.skillssh")}
-                    </Button>
-                  </div>
-                </div>
-              ) : filteredSkills.length === 0 ? (
-                <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-10 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
-                    <Search className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <div className="mt-4 text-lg font-semibold text-foreground">
-                    {t("skills.noResults")}
-                  </div>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    {t("skills.workspaceNoResultsHint", {
-                      defaultValue:
-                        "试试放宽仓库或安装状态筛选，或者清空关键字后重新浏览全部技能。",
-                    })}
-                  </p>
-                </div>
-              ) : (
-                <WindowedRows grid>
-                  {filteredSkills.map((skill) => (
-                    <SkillCard
-                      key={skill.key}
-                      skill={skill}
-                      onInstall={handleInstall}
-                      onUninstall={handleUninstall}
-                    />
-                  ))}
-                </WindowedRows>
-              )
-            ) : loadingSkillsSh && accumulatedResults.length === 0 ? (
-              <div className="glass-card flex h-64 items-center justify-center rounded-[28px] border border-border-default">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <span className="ml-3 text-sm text-muted-foreground">
-                  {t("skills.skillssh.loading")}
-                </span>
-              </div>
-            ) : skillsShFailed ? (
-              <div className="rounded-lg border p-4">
-                <p>{t("skills.searchFailed")}</p>
-                <Button
-                  onClick={() => {
-                    if (skillsShOffset === 0) void refetchSkillsSh();
-                    else {
-                      setAccumulatedResults([]);
-                      setSkillsShOffset(0);
-                    }
-                  }}
-                >
-                  {t("common.retry")}
-                </Button>
-              </div>
-            ) : skillsShQuery.length < 2 ? (
-              <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-12 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
-                  <Sparkles className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div className="mt-4 text-lg font-semibold text-foreground">
-                  {t("skills.skillssh.discoveryTitle", {
-                    defaultValue: "从 skills.sh 发现公开技能",
-                  })}
-                </div>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  {t("skills.skillssh.searchPlaceholder")}
-                </p>
-              </div>
-            ) : accumulatedResults.length === 0 && !loadingSkillsSh ? (
-              <div className="glass-card rounded-[28px] border border-dashed border-border-default px-6 py-10 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted/70">
-                  <Search className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div className="mt-4 text-lg font-semibold text-foreground">
-                  {t("skills.skillssh.noResults", { query: skillsShQuery })}
-                </div>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  {t("skills.skillssh.noResultsHint", {
-                    defaultValue:
-                      "可以尝试更短的关键词、英文别名，或切换回仓库来源查看私有技能源。",
-                  })}
-                </p>
-              </div>
-            ) : (
+      {/* 部分仓库没读到：列表照常显示读到的，横幅如实说哪些没读到。全部没读到时由空状态说明。 */}
+      {!isSkillsSh && repoFailures.length > 0 && repoRows.length > 0 && (
+        <div className="px-6 pt-3">
+          <Notice
+            tone="warning"
+            title={t("skillsPage.repoFail.title", {
+              count: repoFailures.length,
+              repos: describeRepoFailures(repoFailures, t),
+            })}
+            actions={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={fetchingDiscoverable}
+                onClick={reload}
+              >
+                {t("common.retry")}
+              </Button>
+            }
+          >
+            {t("skillsPage.repoFail.discoverBody")}
+          </Notice>
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col px-6 pb-5 pt-3">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+          {/* 表头和「已安装」对齐：左边筛选，右边装到哪些应用（对应已安装的应用列） */}
+          <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-muted/50 px-2 py-1.5 sm:h-11 sm:flex-nowrap sm:py-0">
+            <SegmentedControl<SkillsPageSource>
+              aria-label={t("skillsPage.discover.sourceAria")}
+              size="sm"
+              value={effectiveSource}
+              onValueChange={setSource}
+              items={[
+                {
+                  value: "repos",
+                  label: t("skillsPage.discover.sourceRepos", {
+                    count: enabledRepos.length,
+                  }),
+                },
+                {
+                  value: "skillssh",
+                  label: "skills.sh",
+                },
+              ]}
+            />
+            {!isSkillsSh && (
               <>
-                <WindowedRows grid>
-                  {accumulatedResults.map((skill) => {
-                    const installed = isSkillsShInstalled(skill);
-                    return (
-                      <SkillCard
-                        key={skill.key}
-                        skill={{
-                          ...toDiscoverableSkill(skill),
-                          installed,
-                        }}
-                        installs={skill.installs}
-                        onInstall={handleInstall}
-                        onUninstall={handleUninstall}
-                      />
-                    );
-                  })}
-                </WindowedRows>
-
-                <div className="glass-card mt-2 rounded-[24px] border border-border-default px-4 py-5">
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    {hasMoreSkillsSh ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={fetchingSkillsSh}
-                        onClick={() =>
-                          setSkillsShOffset((prev) => prev + SKILLSSH_PAGE_SIZE)
-                        }
-                      >
-                        {fetchingSkillsSh ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        {t("skills.skillssh.loadMore")}
-                      </Button>
-                    ) : null}
-                    <p className="text-xs text-muted-foreground">
-                      {t("skills.skillssh.poweredBy")}
-                    </p>
-                  </div>
-                </div>
+                <RepoPopover
+                  repos={repos}
+                  discoverable={discoverable ?? []}
+                  failures={repoFailures}
+                  onToggle={setRepoEnabled}
+                  onManage={onOpenRepoManager}
+                />
+                <label className="flex h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX_CLASS}
+                    checked={statusFilter === "uninstalled"}
+                    onChange={(event) =>
+                      setStatusFilter(
+                        event.target.checked ? "uninstalled" : "all",
+                      )
+                    }
+                  />
+                  {t("skillsPage.discover.onlyUninstalled")}
+                </label>
               </>
+            )}
+            <div className="flex-1" />
+            <InstallToPopover
+              label={installToLabel}
+              fullLabel={t("skillsPage.installTo.button", {
+                apps: names(installTargets),
+              })}
+              visibleAppIds={visibleAppIds}
+              targets={installTargets}
+              onChange={onInstallTargetsChange}
+            />
+          </div>
+          <div
+            ref={listScrollRef}
+            className="min-h-0 overflow-auto scroll-stable"
+          >
+            {loadingList ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isSkillsSh
+                  ? t("skills.skillssh.loading")
+                  : t("skills.loading")}
+              </div>
+            ) : visibleRows.length === 0 ? (
+              renderEmpty()
+            ) : (
+              <ul
+                aria-label={t("skillsPage.discover.listLabel")}
+                className="relative m-0 min-w-[520px] list-none p-0"
+                style={{ height: rowVirtualizer.getTotalSize() }}
+              >
+                {rowVirtualizer.getVirtualItems().map((item) => {
+                  const index = item.index;
+                  const row = visibleRows[index];
+                  const status = statusOf(row);
+                  const isInstalling = installing.has(row.key);
+                  const failure = failed[row.key];
+                  const line2Id = `sk-d-${index}-line2`;
+                  const repo = `${row.repoOwner}/${row.repoName}`;
+                  const docsUrl = discoverDocsUrl(row);
+                  return (
+                    <li
+                      key={item.key}
+                      aria-setsize={visibleRows.length}
+                      aria-posinset={index + 1}
+                      className={cn(
+                        "absolute inset-x-0 top-0 flex h-14 items-center gap-3 pe-3 ps-4",
+                        index > 0 && "border-t border-border",
+                      )}
+                      style={{ transform: `translateY(${item.start}px)` }}
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-sm font-medium">
+                            {row.name}
+                          </span>
+                          {!isSkillsSh && (
+                            <span
+                              title={repo}
+                              className="min-w-0 shrink truncate font-mono text-xs text-muted-foreground/70"
+                            >
+                              {repo}
+                            </span>
+                          )}
+                          {typeof row.installs === "number" && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"
+                              title={t("skills.skillssh.installs", {
+                                count: row.installs,
+                              })}
+                            >
+                              <Download
+                                aria-hidden="true"
+                                className="h-3 w-3"
+                                strokeWidth={2}
+                              />
+                              {formatInstalls(row.installs, i18n.language)}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          id={line2Id}
+                          className={cn(
+                            "truncate text-xs",
+                            failure
+                              ? "text-destructive"
+                              : "text-muted-foreground",
+                          )}
+                          title={failure ?? row.description}
+                        >
+                          {failure
+                            ? t("skillsPage.discover.installFailed", {
+                                reason: failure,
+                              })
+                            : isSkillsSh
+                              ? `skills.sh · ${repo}`
+                              : row.description}
+                        </span>
+                      </div>
+                      <div className="flex max-w-[180px] shrink-0 justify-end">
+                        {status.kind === "installed" ? (
+                          <button
+                            type="button"
+                            onClick={() => onShowInstalled(status.skill.id)}
+                            aria-label={t("skillsPage.discover.installedAria", {
+                              name: row.name,
+                              count: enabledAppCount(status.skill),
+                            })}
+                            className="inline-flex h-7 items-center gap-0.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                          >
+                            {t("skillsPage.discover.installed")}
+                            <ChevronRight
+                              className="h-3.5 w-3.5"
+                              strokeWidth={2}
+                            />
+                          </button>
+                        ) : status.kind === "conflict" ? (
+                          <button
+                            type="button"
+                            onClick={() => onShowInstalled(status.skill.id)}
+                            className="inline-flex min-w-0 items-center gap-0.5 rounded-md px-1 text-right text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                          >
+                            <span className="min-w-0 truncate">
+                              {t("skillsPage.discover.dirTaken", {
+                                name: status.skill.name,
+                                source: sourceLabel(status.skill),
+                              })}
+                            </span>
+                            <ChevronRight
+                              className="h-3.5 w-3.5 shrink-0"
+                              strokeWidth={2}
+                            />
+                          </button>
+                        ) : isInstalling ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-disabled="true"
+                            aria-label={t(
+                              "skillsPage.discover.installingAria",
+                              {
+                                name: row.name,
+                              },
+                            )}
+                            className="cursor-not-allowed ps-2.5"
+                          >
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t("skillsPage.discover.installing")}
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!row.repoOwner}
+                            aria-label={
+                              failure
+                                ? t("skillsPage.discover.retryAria", {
+                                    name: row.name,
+                                  })
+                                : t("skillsPage.discover.installAria", {
+                                    name: row.name,
+                                  })
+                            }
+                            aria-describedby={failure ? line2Id : undefined}
+                            onClick={() => void handleInstall(row)}
+                          >
+                            {failure ? t("common.retry") : t("skills.install")}
+                          </Button>
+                        )}
+                      </div>
+                      {docsUrl ? (
+                        <HoverTip content={t("mcpPage.openDocs")}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 p-1"
+                            aria-label={t("mcpPage.openDocs")}
+                            onClick={() =>
+                              void settingsApi
+                                .openExternal(docsUrl)
+                                .catch(() => undefined)
+                            }
+                          >
+                            <ExternalLink
+                              className="h-[15px] w-[15px]"
+                              strokeWidth={1.5}
+                            />
+                          </Button>
+                        </HoverTip>
+                      ) : (
+                        <span aria-hidden="true" className="w-7 shrink-0" />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>
-
-        {repoManagerOpen ? (
-          <RepoManagerPanel
-            repos={repos}
-            skills={skills}
-            onAdd={handleAddRepo}
-            onRemove={handleRemoveRepo}
-            onClose={() => setRepoManagerOpen(false)}
-          />
-        ) : null}
+        {isSkillsSh && accumulated.length > 0 && (
+          <div className="mt-3 flex shrink-0 flex-col items-center gap-2">
+            {hasMoreSkillsSh && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={fetchingSkillsSh}
+                onClick={() =>
+                  setSkillsShOffset((prev) => prev + SKILLSSH_PAGE_SIZE)
+                }
+              >
+                {fetchingSkillsSh && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                )}
+                {t("skills.skillssh.loadMore")}
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground/70">
+              {t("skills.skillssh.poweredBy")}
+            </span>
+          </div>
+        )}
       </div>
-    );
-  },
-);
+    </div>
+  );
+}
 
-SkillsPage.displayName = "SkillsPage";
+// ─── 「安装到」弹层 ──────────────────────────────────────────────────────
+function InstallToPopover({
+  label,
+  fullLabel,
+  visibleAppIds,
+  targets,
+  onChange,
+}: {
+  label: string;
+  fullLabel: string;
+  visibleAppIds: AppId[];
+  targets: AppId[];
+  onChange: (apps: AppId[]) => void;
+}) {
+  const { t } = useTranslation();
+  const apps = SKILLS_APP_IDS.filter((app) => visibleAppIds.includes(app));
+  return (
+    <PopoverPrimitive.Root>
+      <PopoverPrimitive.Trigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          title={fullLabel}
+          className="min-w-0 shrink pe-2.5"
+        >
+          <span className="min-w-0 truncate">
+            {t("skillsPage.installTo.prefix")}
+            {label}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+        </Button>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="end"
+          sideOffset={6}
+          collisionPadding={8}
+          className={cn(POPOVER_CLASS, "flex w-[280px] flex-col gap-2.5 p-3")}
+        >
+          <div className="flex items-center gap-0.5">
+            <h3 className="m-0 text-xs font-semibold text-muted-foreground">
+              {t("skillsPage.installTo.title")}
+            </h3>
+            <HelpTip title={t("skillsPage.installTo.helpTitle")}>
+              {t("skillsPage.installTo.help")}
+            </HelpTip>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+            {apps.map((app) => {
+              const checked = targets.includes(app);
+              return (
+                <label
+                  key={app}
+                  className="flex h-6 cursor-pointer items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX_CLASS}
+                    checked={checked}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...targets, app]
+                        : targets.filter((item) => item !== app);
+                      // 至少留一个：后端安装必须落到某个应用
+                      if (next.length) onChange(next);
+                    }}
+                  />
+                  <AppGlyph app={app} size={16} badgeClassName="bg-card" />
+                  <span className="truncate">{APP_DISPLAY_NAME[app]}</span>
+                </label>
+              );
+            })}
+          </div>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
+}
+
+// ─── 「仓库」弹层：勾掉即停用 ────────────────────────────────────────────
+function RepoPopover({
+  repos,
+  discoverable,
+  failures,
+  onToggle,
+  onManage,
+}: {
+  repos: SkillRepo[];
+  discoverable: DiscoverableSkill[];
+  failures: SkillRepoFailure[];
+  onToggle: (repo: SkillRepo, enabled: boolean) => Promise<void>;
+  onManage: () => void;
+}) {
+  const { t } = useTranslation();
+  const failureByRepo = new Map(
+    failures.map((failure) => [repoFailureKey(failure), failure]),
+  );
+  const [open, setOpen] = useState(false);
+  const enabled = repos.filter((repo) => repo.enabled).length;
+  const label =
+    enabled === repos.length
+      ? t("skillsPage.repos.buttonAll")
+      : t("skillsPage.repos.buttonSome", {
+          count: enabled,
+          total: repos.length,
+        });
+  return (
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Trigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="pe-1.5 ps-2.5 text-muted-foreground"
+        >
+          {label}
+          <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+        </Button>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="start"
+          sideOffset={6}
+          collisionPadding={8}
+          aria-label={t("skillsPage.repos.popoverAria")}
+          className={cn(POPOVER_CLASS, "flex w-[300px] flex-col")}
+        >
+          <div className="flex max-h-[280px] flex-col overflow-y-auto">
+            {repos.map((repo) => {
+              const id = `${repo.owner}/${repo.name}`;
+              const failure = repo.enabled
+                ? failureByRepo.get(repoFailureKey(repo))
+                : undefined;
+              return (
+                <label
+                  key={id}
+                  className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/50"
+                >
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX_CLASS}
+                    checked={repo.enabled}
+                    aria-label={t("skillsPage.repos.enableAria", { repo: id })}
+                    onChange={(event) =>
+                      void onToggle(repo, event.target.checked)
+                    }
+                  />
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                    {id}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground/70">
+                    {repo.branch || "main"}
+                  </span>
+                  {failure ? (
+                    <span
+                      className="shrink-0 text-right text-xs text-[hsl(var(--warning-soft-foreground))]"
+                      title={skillErrorReason(failure.error, t)}
+                    >
+                      {t("skillsPage.repos.readFailed")}
+                    </span>
+                  ) : (
+                    <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      {repo.enabled
+                        ? countRepoSkills(discoverable, repo)
+                        : t("skillsPage.repos.disabledShort")}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          <div aria-hidden="true" className="mx-1.5 my-1 h-px bg-border" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onManage();
+            }}
+            className="flex h-8 items-center rounded-md px-2.5 text-left text-sm transition-colors hover:bg-muted/50"
+          >
+            {t("skillsPage.repos.manage")}
+          </button>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
+  );
+}

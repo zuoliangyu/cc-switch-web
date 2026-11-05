@@ -1,9 +1,7 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsApi } from "@/lib/api";
 import type { SkillSyncMethod } from "@/types";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,13 +11,22 @@ import {
 import { SkillStorageLocationSettings } from "@/components/settings/SkillStorageLocationSettings";
 import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";
 import { toast } from "sonner";
+import { ResyncButton } from "@/components/common/ResyncButton";
+import { skillsApi } from "@/lib/api/skills";
+
+/** Skills 存储位置与同步方式（Skills 页「⋯」菜单打开）；改完可立即重新同步到各应用 */
 export function SkillsStorageDialog({
+  open,
+  onOpenChange,
   installedCount,
+  resyncDisabled = false,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   installedCount: number;
+  resyncDisabled?: boolean;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const client = useQueryClient();
   const settings = useQuery({
     queryKey: ["settings"],
@@ -36,10 +43,7 @@ export function SkillsStorageDialog({
   });
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        {t("settings.skillStorage.title")}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg p-6">
           <DialogHeader>
             <DialogTitle>{t("settings.skillStorage.title")}</DialogTitle>
@@ -62,6 +66,11 @@ export function SkillsStorageDialog({
               <p className="text-sm text-muted-foreground">
                 {t("skills.resyncAfterSettings")}
               </p>
+              <ResyncButton
+                run={skillsApi.resync}
+                queryKey={["skills", "installed"]}
+                disabled={resyncDisabled}
+              />
             </div>
           ) : (
             <p>{settings.isError ? t("common.error") : t("common.loading")}</p>

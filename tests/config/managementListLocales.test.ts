@@ -13,9 +13,9 @@ const keys = [
   "prompts.searchPlaceholder",
   "prompts.searchAriaLabel",
   "prompts.noSearchResults",
-  "skills.installedSearchPlaceholder",
+  "skillsPage.searchPlaceholder",
   "skills.installedSearchAriaLabel",
-  "skills.noInstalledSearchResults",
+  "skillsPage.noMatch",
   "appSwitcher.more",
 ];
 

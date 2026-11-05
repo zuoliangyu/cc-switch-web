@@ -2746,23 +2746,13 @@
     "manage": "Skills",
     "title": "Skills 管理",
     "description": "人気リポジトリからスキルを探してインストールし、Claude Code/Codex/Gemini を拡張",
-    "refresh": "更新",
     "refreshing": "更新中...",
-    "repoManager": "リポジトリ管理",
     "count": "{{count}} 個のスキル",
-    "empty": "スキルがありません",
-    "emptyDescription": "スキルリポジトリを追加して探索してください",
     "addRepo": "スキルリポジトリを追加",
     "loading": "読み込み中...",
-    "installed": "インストール済み",
     "install": "インストール",
-    "installing": "インストール中...",
     "uninstall": "アンインストール",
-    "uninstalling": "アンインストール中...",
-    "view": "表示",
-    "noDescription": "説明なし",
     "loadFailed": "読み込みに失敗しました",
-    "installSuccess": "スキル {{name}} をインストールしました",
     "installFailed": "インストールに失敗しました",
     "uninstallSuccess": "スキル {{name}} をアンインストールしました",
     "uninstallFailed": "アンインストールに失敗しました",
@@ -2821,45 +2811,17 @@
       "removeFailed": "削除に失敗しました",
       "skillCount": "{{count}} 件のスキルを検出"
     },
-    "search": "スキルを検索",
-    "searchSource": {
-      "repos": "リポジトリ",
-      "skillssh": "skills.sh"
-    },
-    "searchPlaceholder": "スキル名またはリポジトリで検索...",
     "skillssh": {
-      "searchPlaceholder": "skills.sh を検索（2文字以上）...",
-      "noResults": "「{{query}}」に一致するスキルが見つかりませんでした",
       "loadMore": "さらに読み込む",
       "loading": "skills.sh を検索中...",
       "error": "skills.sh の検索に失敗しました",
-      "poweredBy": "Powered by skills.sh"
+      "poweredBy": "Powered by skills.sh",
+      "installs": "{{count}} インストール"
     },
-    "filter": {
-      "placeholder": "状態で絞り込み",
-      "all": "すべて",
-      "installed": "インストール済み",
-      "uninstalled": "未インストール",
-      "repo": "リポジトリで絞り込み",
-      "allRepos": "すべてのリポジトリ"
-    },
-    "noResults": "一致するスキルが見つかりませんでした",
-    "noInstalled": "インストールされたスキルがありません",
-    "noInstalledDescription": "リポジトリからスキルを発見してインストールするか、既存のスキルをインポートしてください",
-    "installedSearchPlaceholder": "インストール済みスキルの名前、説明、リポジトリを検索...",
     "installedSearchAriaLabel": "インストール済みスキルを検索",
-    "noInstalledSearchResults": "一致するインストール済みスキルがありません",
-    "discover": "スキルを発見",
-    "import": "既存をインポート",
-    "importDescription": "CC Switch 統合管理にインポートするスキルを選択してください",
     "importSuccess": "{{count}} 件のスキルをインポートしました",
-    "importSelected": "選択をインポート ({{count}})",
     "noUnmanagedFound": "インポートするスキルが見つかりませんでした。すべてのスキルは CC Switch で管理されています。",
     "foundIn": "発見場所",
-    "local": "ローカル",
-    "uninstallConfirm": "「{{name}}」をアンインストールしますか？すべてのアプリからこのスキルが削除され、削除前にローカルバックアップが自動作成されます。",
-    "uninstallInMainPanel": "メインパネルからスキルをアンインストールしてください",
-    "notFound": "スキルが見つかりません",
     "backup": {
       "location": "バックアップ場所: {{path}}"
     },
@@ -2870,22 +2832,11 @@
     "updateAvailable": "更新あり",
     "updateSuccess": "Skill {{name}} を更新しました",
     "updateFailed": "Skill の更新に失敗しました",
-    "updateAll": "すべて更新（{{count}}）",
     "updateAllSuccess": "{{count}} 件の Skill を更新しました",
-    "updatingProgress": "更新中 {{done}}/{{total}}…",
-    "confirmUpdateAll": {
-      "title": "{{count}} 件の Skill を更新しますか？",
-      "body": "更新するとローカルのフォルダーをリポジトリの内容で置き換えます。ローカルの変更は Skill のバックアップにだけ残り、バックアップから復元できます。",
-      "button": "{{count}} 件を更新",
-      "listAria": "更新する Skill"
-    },
     "restoreFromBackup": {
-      "button": "バックアップから復元",
       "title": "バックアップから復元",
-      "description": "Skills バックアップを選択して、ローカルにファイルを復元し、現在の一覧へ戻します。",
       "empty": "復元できる Skills バックアップはありません",
       "createdAt": "バックアップ日時",
-      "path": "バックアップパス",
       "restore": "復元",
       "restoring": "復元中...",
       "delete": "削除",
@@ -2905,7 +2856,6 @@
       "openclaw": "OpenClaw"
     },
     "installFromZip": {
-      "button": "ZIP からインストール",
       "installing": "インストール中...",
       "dialogTitle": "スキルを一括インストール",
       "dialogDescription": "ローカルの ZIP ファイルをこのマシン上の Rust サービスへアップロードしてインストールします。複数選択とドラッグ＆ドロップに対応します。",
@@ -2921,26 +2871,20 @@
       "emptySelection": "先に ZIP ファイルを 1 つ以上選択してください",
       "invalidFilesTitle": "未対応のファイルが含まれています",
       "invalidFilesDescription": "{{count}} 件の非 ZIP ファイルを無視しました",
-      "successSingle": "スキル {{name}} をインストールしました",
-      "successMultiple": "{{count}} 件のスキルをインストールしました",
-      "partialSuccess": "{{count}} 件のスキルをインストールしました",
-      "partialSuccessDescription": "{{count}} 件の ZIP インストールに失敗しました: {{files}}",
       "failed": "{{count}} 件の ZIP インストールに失敗しました",
       "failedDescription": "失敗したファイル: {{files}}",
-      "skippedDescription": "{{count}} 件の ZIP では新しいスキルは追加されませんでした",
       "noSkillsFound": "ZIP ファイルにスキルが見つかりません（SKILL.md が必要です）",
-      "noNewSkills": "新しいスキルはインストールされませんでした",
-      "noNewSkillsDescription": "{{count}} 件の ZIP を処理しましたが、新しいスキルは追加されませんでした"
+      "allSkipped": "インストールしませんでした：ZIP 内の {{count}} 個の Skill のフォルダ名はすべて使用中です",
+      "skippedBody": "{{list}}。ZIP 内のバージョンを使うには、先に同名の Skill をアンインストールしてください。",
+      "skippedItem": "{{directory}}（{{name}} が使用中）",
+      "skippedTitle": "{{count}} 個の Skill をスキップ：フォルダ名が使用中"
     },
-    "repoFailures": "{{count}} 件のリポジトリを読み取れませんでした（詳細）",
-    "zipSkipped": "同名のスキル {{count}} 件をスキップしました",
-    "searchFailed": "検索に失敗しました。再試行してください。",
     "resyncAfterSettings": "同期方式の変更後は「今すぐ再同期」で既存スキルに適用できます。",
-    "copyName": "名前をコピー",
-    "copiedName": "{{name}} をコピーしました",
-    "copyDirPath": "ディレクトリのパスをコピー",
-    "copiedDirPath": "ディレクトリのパスをコピーしました",
-    "copyDirPathFailed": "ディレクトリのパスをコピーできませんでした"
+    "moreActions": "Skills のその他の操作",
+    "storageSheet": {
+      "open": "保存と同期"
+    },
+    "updatesIncomplete": "更新は見つかりませんでしたが、{{count}} 個のリポジトリを読み込めませんでした"
   },
   "iconPicker": {
     "search": "アイコンを検索",
@@ -4508,6 +4452,199 @@
       "title": "Oh My Pi が実際に読み込む範囲",
       "help": "Oh My Pi は ~/.omp/agent 自身の設定に加え、他の Agent のディレクトリ（Claude の ~/.claude、Codex の ~/.codex など）からも MCP サーバー、スキル、コマンド、フック、ルール、設定を発見します。Oh My Pi の実際の読み込み内容を CC Switch の表示と一致させるには、~/.omp/agent/config.yml の disabledProviders で不要な発行元を無効化してください（id はドキュメント準拠：claude、codex、gemini、opencode、github、agents など）。",
       "docsLink": "Oh My Pi に他の Agent の設定を読み込ませない方法"
+    },
+    "clearSearch": "検索をクリア",
+    "found": "{{count}} 件見つかりました",
+    "columnAria": "{{app}}：{{total}} 件中 {{on}} 件の {{noun}} で有効、一括操作",
+    "pop": {
+      "count": "{{total}} 件中 {{on}} 件の {{noun}} で有効",
+      "failCount": "うち {{count}} 件は書き込みに失敗",
+      "enableRest": "残り {{count}} 件を有効化",
+      "enableAll": "すべて有効化",
+      "disableAll": "すべてオフ",
+      "scopeAll": "このリストの {{count}} 件だけに適用",
+      "scopeSearch": "検索結果の {{count}} 件だけに適用",
+      "scopeFilter": "絞り込んだ {{count}} 件だけに適用"
+    },
+    "toast": {
+      "enabled": "{{app}} で {{count}} 件の {{noun}} を有効化しました",
+      "disabled": "{{app}} で {{count}} 件の {{noun}} をオフにしました",
+      "partialFail": "。うち {{count}} 件は書き込めず、リストに印を付けました",
+      "undone": "元に戻しました"
+    },
+    "undo": "元に戻す",
+    "cell": {
+      "on": "{{name}} · {{app}}：有効",
+      "off": "{{name}} · {{app}}：無効",
+      "fail": "{{name}} · {{app}}：書き込み失敗、クリックで再試行"
     }
+  },
+  "skillsPage": {
+    "noun": "Skill",
+    "helpTitle": "Skills の同期のしくみ",
+    "help": "本体は CC Switch のフォルダーに置き、チェックしたアプリへ同期します。Claude Desktop と OpenClaw は Skills 非対応のため列がありません。",
+    "add": "Skill を追加",
+    "addMenu": {
+      "discover": "「見つける」で探す",
+      "zip": "ZIP からインストール",
+      "import": "このコンピューターから取り込む"
+    },
+    "moreMenu": {
+      "restore": "バックアップから復元",
+      "repos": "リポジトリの管理"
+    },
+    "viewAria": "Skills の表示",
+    "viewInstalled": "インストール済み",
+    "viewInstalledCount": "インストール済み {{count}}",
+    "viewDiscover": "見つける",
+    "searchPlaceholder": "名前・フォルダー・説明・リポジトリを検索",
+    "lastChecked": "前回の確認：{{when}}",
+    "justNow": "たった今",
+    "banner": {
+      "unmanaged": "このコンピューターに CC Switch の管理外の Skill が {{count}} 件あります。",
+      "reviewImport": "確認して取り込む",
+      "ignore": "無視",
+      "close": "閉じる"
+    },
+    "filter": {
+      "all": "すべて",
+      "updates": "更新あり",
+      "none": "どのアプリでも無効",
+      "inApp": "{{app}} で有効",
+      "sourceButton": "ソース：{{source}}"
+    },
+    "source": {
+      "local": "ローカル"
+    },
+    "bulk": {
+      "selected": "{{count}} 件選択",
+      "enableTo": "有効にする先",
+      "enableToAria": "選択した {{count}} 件の Skill を有効にする先",
+      "disable": "オフにする",
+      "disableAria": "選択した {{count}} 件の Skill をこのアプリでオフ",
+      "uninstall": "アンインストール"
+    },
+    "piColumnTitle": "Pi は ~/.pi/agent/skills にそのフォルダーがあるかで判定します",
+    "piHelpTitle": "Pi の有効の判定",
+    "piHelp": "~/.pi/agent/skills にそのフォルダーがあるかどうかです。",
+    "pop": {
+      "onlyApp": "{{app}} で有効なものだけ表示",
+      "showAll": "すべての Skill を表示"
+    },
+    "selectAria": "{{name}} を選択",
+    "selectAllAria": "表示中をすべて選択",
+    "rowFail": "{{app}} での有効化に失敗：{{error}}",
+    "fixSync": "同期方法を変更",
+    "rowMoreAria": "{{name}} のその他の操作",
+    "uninstallEllipsis": "アンインストール",
+    "listLabel": "インストール済みの Skill",
+    "noMatch": "「{{query}}」に一致する Skill はありません",
+    "noFilterMatch": "絞り込み条件に合う Skill はありません",
+    "searchInDiscover": "「見つける」で「{{query}}」を検索",
+    "clearFilters": "絞り込みを解除",
+    "loadFailed": "インストール済みの Skill を読み込めませんでした",
+    "emptyTitle": "Skill はまだありません",
+    "emptyBody": "「見つける」からインストールするか、このコンピューターにある Skill を取り込みましょう。",
+    "goDiscover": "「見つける」へ",
+    "importCount": "このコンピューターから取り込む（{{count}}）",
+    "confirm": {
+      "uninstallOne": "{{name}} をアンインストールしますか？",
+      "uninstallMany": "{{count}} 件の Skill をアンインストールしますか？",
+      "uninstallBody": "すべてのアプリから外し、CC Switch の本体も削除します。削除前に {{path}} へ自動でバックアップします。",
+      "uninstallManyButton": "{{count}} 件をアンインストール",
+      "updateAll": "{{count}} 件の Skill を更新しますか？",
+      "updateBody": "更新するとローカルのフォルダーをリポジトリの内容で置き換えます。ローカルの変更はバックアップ（{{path}}）にだけ残ります。",
+      "updateAllButton": "{{count}} 件を更新",
+      "updateListAria": "更新する Skill"
+    },
+    "toast": {
+      "installed": "{{name}} をインストールし、{{apps}} で有効にしました",
+      "installedMany": "{{count}} 件の Skill をインストールし、{{apps}} で有効にしました",
+      "enableFailed": "{{apps}} で有効にできませんでした。リストに印を付けました",
+      "uninstalledMany": "{{count}} 件の Skill をアンインストールしました",
+      "backupAt": "バックアップ先：{{path}}",
+      "copiedName": "{{name}} をコピーしました",
+      "noUpdatesInSelection": "選択した Skill に更新はありません",
+      "selectionAlreadyOn": "選択した {{count}} 件の Skill は既に {{app}} で有効です",
+      "selectionAlreadyOff": "選択した {{count}} 件の Skill はどれも {{app}} で有効ではありません",
+      "disabledSelection": "{{app}} で {{count}} 件の {{noun}} をオフにしました",
+      "copiedDir": "ディレクトリのパスをコピーしました：{{path}}",
+      "copyDirFailed": "ディレクトリのパスをコピーできませんでした"
+    },
+    "installTo": {
+      "prefix": "インストール先：",
+      "button": "インストール先：{{apps}}",
+      "many": "{{first}} ほか {{count}} 件",
+      "title": "インストール後に有効にするアプリ",
+      "helpTitle": "選んだアプリは記憶されますか",
+      "help": "はい、前回の選択が既定になります。インストール後も「インストール済み」でいつでも変更できます。ZIP からのインストールとバックアップからの復元もこの選択を使います。"
+    },
+    "discover": {
+      "searchPlaceholder": "名前・説明・リポジトリを検索",
+      "searchAria": "「見つける」を検索",
+      "skillsShPlaceholder": "2 文字以上、Enter で検索",
+      "skillsShAria": "skills.sh で検索",
+      "skillsShHint": "上に 2 文字以上入力し、Enter で skills.sh を検索します。",
+      "skillsShNone": "skills.sh で「{{query}}」は見つかりませんでした",
+      "sourceAria": "探す場所",
+      "sourceRepos": "リポジトリ · {{count}}",
+      "reload": "リポジトリを更新",
+      "listLabel": "インストールできる Skill",
+      "installed": "インストール済み",
+      "installedAria": "{{name}} は {{count}} アプリにインストール済み。「インストール済み」で表示",
+      "dirTaken": "フォルダー名は {{name}}（{{source}}）が使用中",
+      "installing": "インストール中",
+      "installingAria": "{{name}} をインストール中",
+      "installAria": "{{name}} をインストール",
+      "retryAria": "{{name}} をもう一度インストール",
+      "installFailed": "インストール失敗：{{reason}}",
+      "loadFailed": "リポジトリを読み込めませんでした",
+      "noneRead": "これらのリポジトリから Skill を読み込めませんでした",
+      "noneReadBody": "{{count}} 件のリポジトリのどれからも Skill を読み込めませんでした。ネットワークの問題か GitHub の制限かもしれません。",
+      "manageRepos": "リポジトリを管理",
+      "allInstalled": "これらのリポジトリの Skill はすべてインストール済みです",
+      "showAll": "すべて表示",
+      "onlyUninstalled": "未インストールのみ"
+    },
+    "repos": {
+      "buttonAll": "ソース：すべて",
+      "buttonSome": "ソース：{{total}} 件中 {{count}}",
+      "popoverAria": "「見つける」で使うリポジトリ",
+      "enableAria": "「見つける」で {{repo}} を使う",
+      "disabledShort": "停止中",
+      "manage": "リポジトリの追加・管理",
+      "readFailed": "読み込み失敗"
+    },
+    "import": {
+      "title": "このコンピューターの Skill を取り込む",
+      "helpTitle": "対象になるもの",
+      "help": "SKILL.md があり、まだ CC Switch が管理していないフォルダーです。",
+      "lead": "取り込むと CC Switch のフォルダーにコピーします。元のファイルはそのままです。",
+      "searchPlaceholder": "名前か場所を検索",
+      "searchAria": "取り込む Skill を検索",
+      "selectAll": "すべて選択",
+      "selectNone": "選択を解除",
+      "foundIn": "見つかった場所：{{places}}",
+      "foundCcSwitch": "CC Switch のフォルダー",
+      "appsTitle": "取り込み後に有効にするアプリ",
+      "appsHelpTitle": "既定でチェックされるアプリ",
+      "appsHelp": "「見つかった場所」のアプリは既定でチェックされ、そこで見つかった Skill だけを有効にします。追加でチェックしたアプリでは取り込むすべての Skill を有効にします。Pi はフォルダーで判定するためここにはありません。",
+      "submit": "{{count}} 件を取り込む"
+    },
+    "restore": {
+      "lead": "バックアップを選ぶとファイルを復元してリストに戻し、{{apps}} で有効にします（「見つける」の「インストール先」で決まります）。"
+    },
+    "repoFail": {
+      "title": "{{count}} 個のリポジトリを読み込めませんでした：{{repos}}",
+      "item": "{{repo}}（{{reason}}）",
+      "discoverBody": "一覧が不完全な可能性があります。",
+      "updatesBody": "これらのリポジトリの Skill は確認されていないため、結果が不完全な可能性があります。"
+    },
+    "headerUpdates": "{{count}} 件の更新",
+    "headerUpdatesShow": "更新がある Skill だけを表示",
+    "headerUpdatesClear": "すべての Skill を表示",
+    "updateAllCount": "すべて更新（{{count}} 件）",
+    "updatingProgress": "更新中 {{done}}/{{total}}…",
+    "copyDir": "ディレクトリのパスをコピー"
   }
 }

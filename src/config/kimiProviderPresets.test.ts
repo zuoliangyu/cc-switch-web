@@ -7,7 +7,12 @@ import {
   KIMI_ACCOUNT_PRESET_ID,
 } from "./kimiProviderPresets";
 import { piProviderPresets } from "./piProviderPresets";
-import { getVisiblePresetEntries } from "@/components/providers/forms/ProviderPresetSelector";
+import { getVisiblePresetRows } from "@/components/providers/forms/ProviderPresetSelector";
+import {
+  presetGroup,
+  presetRowGroup,
+  presetRowName,
+} from "@/components/providers/forms/presetGroups";
 import type { TFunction } from "i18next";
 
 const find = (name: string) =>
@@ -18,10 +23,9 @@ const model = (name: string, id: string) => {
 };
 
 describe("kimiProviderPresets", () => {
-  // Web 的预设列表还没有按组/系列合并（随批次 5a），这里只核对账号登录预设单独列出
-  it("keeps official account login separate from the API-key presets", () => {
+  it("keeps official account login separate from the API-key vendor family", () => {
     const t = ((key: string) => key) as TFunction;
-    const entries = getVisiblePresetEntries(
+    const rows = getVisiblePresetRows(
       [
         { id: KIMI_ACCOUNT_PRESET_ID, preset: kimiAccountPreset },
         ...kimiProviderPresets.map((preset) => ({
@@ -31,10 +35,14 @@ describe("kimiProviderPresets", () => {
       ],
       { query: "Kimi", t },
     );
-    expect(entries.map((entry) => entry.id)).toContain(KIMI_ACCOUNT_PRESET_ID);
+    const login = rows.find(
+      ({ row }) => row.key === KIMI_ACCOUNT_PRESET_ID,
+    )!.row;
+    expect(presetRowGroup(login)).toBe("login");
+    expect(login.family).toBeUndefined();
     expect(
-      entries.filter((entry) => entry.preset.name.startsWith("Kimi")).length,
-    ).toBeGreaterThanOrEqual(4);
+      rows.find(({ row }) => row.family === "kimi")!.row.versions,
+    ).toHaveLength(4);
   });
   it("provides the compatible catalog across vendors, platforms, cloud and local groups", () => {
     const compatible = piProviderPresets.filter(
@@ -43,6 +51,9 @@ describe("kimiProviderPresets", () => {
     expect(kimiProviderPresets.map((preset) => preset.name)).toEqual(
       compatible.map((preset) => preset.name),
     );
+    expect(new Set(kimiProviderPresets.map(presetGroup))).toEqual(
+      new Set(["vendor", "thirdparty", "cloud", "local"]),
+    );
     for (const name of [
       "88API",
       "A6API",
@@ -50,24 +61,23 @@ describe("kimiProviderPresets", () => {
       "OpenRouter",
       "TokenFactory",
     ]) {
-      // 上游的“第三方”分组即不属于厂商/云/本地/登录的预设（presetGroups 随批次 5a）
-      expect([
-        "cn_official",
-        "cloud_provider",
-        "local",
-        "official",
-      ]).not.toContain(find(name).category);
+      expect(presetGroup(find(name))).toBe("thirdparty");
       expect(find(name).apiKeyUrl).toBeTruthy();
     }
     expect(find("Third-party platform")).toBeUndefined();
   });
 
   it("keeps Kimi as one vendor row with its pay-as-you-go, coding and regional variants", () => {
-    expect(
-      kimiProviderPresets
-        .map((preset) => preset.name)
-        .filter((name) => name.startsWith("Kimi")),
-    ).toEqual([
+    const entries = kimiProviderPresets.map((preset, index) => ({
+      id: String(index),
+      preset,
+    }));
+    const t = ((key: string) => key) as TFunction;
+    const rows = getVisiblePresetRows(entries, { query: "", t });
+    const kimi = rows.find(({ row }) => row.family === "kimi")!.row;
+    expect(presetRowGroup(kimi)).toBe("vendor");
+    expect(presetRowName(kimi, t)).toBe("Kimi");
+    expect(kimi.versions.map((entry) => entry.preset.name)).toEqual([
       "Kimi",
       "Kimi Global",
       "Kimi For Coding",
@@ -115,7 +125,7 @@ describe("kimiProviderPresets", () => {
       "DigitalOcean",
       "Microsoft Foundry",
     ]) {
-      expect(find(name).category).toBe("cloud_provider");
+      expect(presetGroup(find(name))).toBe("cloud");
     }
     expect(find("Microsoft Foundry").settingsConfig.provider).toMatchObject({
       type: "anthropic",

@@ -448,17 +448,17 @@
 | `c760c8cb` | v4.0.12 | docs(readme): remove ClaudeAPI and code0.ai sponsor entries | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `d6d46c35` | v4.0.12 | chore(presets): drop ClaudeAPI and Code0 partner flags and promotion copy | 1a 预设/定价/图标 | 1a：移除 ClaudeAPI/Code0 合作标记，同步删除三语 code0/claudeapi 推广文案 | 已迁移 |
 | `c83cd728` | v4.0.12 | fix(presets): drop OpenCode presets for providers OpenCode ships built in | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位；上游 presetRows 金样测试依赖桌面分组布局，不迁移 | 已迁移 |
+| `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a/5c1：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位；可见 Claude 预设合成 111 行、各家版本排序的逻辑断言随 5c1 补上；上游 presetRows 金样用例要点击分组选择器的行和版本控件，随 5c2 | 已迁移 |
 | `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 1d：卸载测试放宽 Windows 路径解析超时（随测试最终版本） | 已迁移 |
 | `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsagePage.tsx`、`hooks/useUsageAutoRefresh.ts`等 3 个 | 待迁移 |
-| `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2：OpenCode SiliconFlow 预设此前已是上游最终版本；本批补上游 limit 完整性与 SiliconFlow 预设用例；「两个区域合成一行」用例依赖预设分组选择器（presetGroups），Web 没有该选择器，放弃该用例 | 已迁移 |
+| `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2/5c1：OpenCode SiliconFlow 预设此前已是上游最终版本；limit 完整性与 SiliconFlow 预设用例随 5a2 补上；「两个区域合成一行」用例随 5c1 补回（groupPresetRows 合成 siliconflow 一行、cn/intl 两版、presetVersionLayout 为按地区的分段），与上游同名测试文件逐字一致 | 已迁移 |
 | `f7696fa8` | v4.0.12 | feat(apps): move uninstall into a per-row overflow menu | 5a 供应商与全局 UI | 5a4a：卸载移进每行末尾的「⋯」菜单（卸载中显示转圈并禁用）；Claude Desktop 的帮助提示移到接入状态旁；用例改为经菜单卸载 | 已迁移 |
 | `e5eeb166` | v4.0.12 | fix(i18n): clarify what hiding an app in the Apps page does | 5a 供应商与全局 UI | 5a4a：「显示」列帮助说明改为只是不显示、配置与应用自身文件都不动（Web 无托盘，不提托盘菜单） | 已迁移 |
 | `5b6d317f` | v4.0.12 | fix(i18n): drop the community translation suffix from the Turkish option | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `453cdaf9` | v4.0.12 | chore(presets): point GrooRoute invite link to grooroute.pro | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `7a8087f6` | v4.0.12 | feat(usage): scan session logs at the selected interval while the usage page is open | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsagePage.tsx`、`hooks/useUsageAutoRefresh.ts`等 3 个 | 待迁移 |
 | `e380588a` | v4.0.12 | feat(presets): add icons for Baseten, DeepInfra, DigitalOcean, Fireworks, Groq, Nebius and SambaNova | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `8686c165` | v4.0.12 | feat(providers): add a Local group for local inference presets | 1b 代理协议 | 1b：本机地址（localhost/127.0.0.0/8/::1）绕过全局代理，转发、测速、流检测、模型拉取均直连；供应商单独代理仍优先。分组式预设选择器的「本地」分组依赖 5a 的 presetGroups，类别标签已随 1a 加入 | 部分迁移 |
+| `8686c165` | v4.0.12 | feat(providers): add a Local group for local inference presets | 1b 代理协议 | 1b/5c1：本机地址（localhost/127.0.0.0/8/::1）绕过全局代理，转发、测速、流检测、模型拉取均直连；供应商单独代理仍优先。「本地」分组逻辑随 5c1 迁入（presetGroup 把 local 类别归入 local 组，Claude/Codex/OpenCode 的本地推理预设有用例，三语组名与说明已补）；选择器里的分节界面随 5c2 | 部分迁移 |
 | `d5b729a5` | v4.0.12 | feat(presets): add Ollama local inference presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `16964d7c` | v4.0.12 | feat(presets): add LM Studio local inference presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `936aec4a` | v4.0.12 | feat(presets): add llama.cpp local inference presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -625,7 +625,7 @@
 | `f460410f` | v4.0.17 | feat(hermes): warn when a provider key is a Hermes built-in provider id | 5a 供应商与全局 UI | 5a2：Hermes 供应商标识是内置供应商 ID 时在字段下警告（标识已锁定的旧卡提示重新添加）；新增 hermesBuiltinProviderIds 与用例 | 已迁移 |
 | `e172f37d` | v4.0.17 | chore(release): v4.0.17 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `19798e2f` | v4.0.17 | docs(release): add v4.0.17 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
-| `c7dceb80` | v4.0.18 | feat(agy): integrate Antigravity CLI management (#8268) | 2c Antigravity | 2c：Antigravity CLI 管理（agy_config、AppType::Agy、MCP/技能/提示词、供应商只存库不写 live、会话与用量；Web schema v19 enabled_agy）；#8268 旧启动器清理函数 Web 从未安装，保留为 dead_code | 已迁移 |
+| `c7dceb80` | v4.0.18 | feat(agy): integrate Antigravity CLI management (#8268) | 2c Antigravity | 2c/5c1：Antigravity CLI 管理（agy_config、AppType::Agy、MCP/技能/提示词、供应商只存库不写 live、会话与用量；Web schema v19 enabled_agy）；#8268 旧启动器清理函数 Web 从未安装，保留为 dead_code；对 presetGroups 的改动（loginAccountKey 对 agy 返回 google）已随 5c1 迁入并有用例 | 已迁移 |
 | `3854c613` | v4.0.18 | refactor(agy): launch API-key providers from the terminal instead of a shell wrapper | 2c Antigravity | 2c：API Key 供应商经终端启动（Unix 环境变量写 0600 临时文件 source 后删除；Windows set 行），复用 Web 的 launch_terminal_command | 已迁移 |
 | `b667b00a` | v4.0.18 | feat(agy): show the model on cards and attribute session usage to it | 2c Antigravity | 2c：卡片显示模型（extractAgyModel），会话用量按模型归属 | 已迁移 |
 | `dfe10081` | v4.0.18 | feat(agy): share prompts with key profiles, resume key sessions, price usage | 2c Antigravity | 2c：Key 配置共享提示词、Key 会话恢复（agy_direct::key_resume_target）、用量计价；Web 原本只精确匹配定价，一并移植上游的候选匹配（去命名空间、日期/版本/推理档后缀、前缀匹配） | 已迁移 |
@@ -665,7 +665,7 @@
 | `4aec1aec` | v4.0.18 | chore(release): v4.0.18 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `cb90a244` | v4.0.18 | docs(release): add v4.0.18 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `e4873bc8` | v4.0.19 | feat(kimi): add Kimi Code support (#8687) | 2b Kimi Code | 2b：Kimi Code 应用（AppType::Kimi、kimi_config/kimi_session、MCP/Skills/提示词/会话/用量导入、供应商服务、工具生命周期）；Web schema v17→v18 增加 enabled_kimi；Kimi 不支持连通性测试；深链只在 MCP 中接受 kimi（同上游） | 已迁移 |
-| `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 2b：Kimi 官方设备登录与切换；Web 以 /api/auth/kimi/* 路由代替 Tauri 命令，管理器为进程级单例 | 已迁移 |
+| `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 2b/5c1：Kimi 官方设备登录与切换；Web 以 /api/auth/kimi/* 路由代替 Tauri 命令，管理器为进程级单例；对 presetGroups 的改动（loginAccountKey 对 kimi 返回 kimi）随 5c1 迁入，Kimi 账号登录预设落到 login 组、与四个 API Key 版本分开，有用例 | 已迁移 |
 | `07265bc9` | v4.0.19 | feat(kimi): support multiple official accounts in Auth Center (#8726) | 2b Kimi Code | 2b：授权中心多个 Kimi 官方账号；Web 授权中心加入 Kimi 组 | 已迁移 |
 | `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 需新建或映射：`components/usage/ChecklistMenu.tsx`、`components/usage/RequestLogColumnsMenu.tsx`等 10 个 | 待迁移 |
 | `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 4a：合并目录里 Stack 成员行的 comp_hash 按工具协议分组（code_mode_only 镜像行为 cc-switch-code_mode_only，direct 行仍为 cc-switch）；路由行统一 comp_hash 属 8a0eddb0，随 4b | 部分迁移 |
@@ -896,7 +896,7 @@
 | `57169e4b` | v4.0.23 | chore(release): v4.0.23 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `66d530d6` | v4.0.23 | docs(release): add v4.0.23 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `8be84055` | v4.0.23 | ci(release): move macOS builds to macos-15 | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
-| `1f21c289` | v4.0.24 | fix(dsh): show DeepSeek account in official sign-in subtitle (#9058) | 2e DeepSeek Harness | 2e：官方登录副标题显示 DeepSeek 账号已迁移；预设副行“用 DeepSeek 账号登录”依赖 presetGroups（loginWith），随 5a | 部分迁移 |
+| `1f21c289` | v4.0.24 | fix(dsh): show DeepSeek account in official sign-in subtitle (#9058) | 2e DeepSeek Harness | 2e/5c1：官方登录副标题显示 DeepSeek 账号已迁移；loginAccountKey 对 dsh 返回 deepseek 与三语 loginWith 文案随 5c1 迁入，DSH 账号预设落到 login 组，有用例；预设副行的界面随 5c2 | 部分迁移 |
 | `7e02e494` | v4.0.24 | fix(codex): restore reasoning effort after re-enabling (#8998) | 1b 代理协议 | 1b：重新启用 Codex Chat 思考等级时恢复默认参数名，后端修复已启用但参数为 none 的旧配置；组件交互测试依赖 Web 不同的测试夹具未迁移 | 已迁移 |
 | `c1fb9eec` | v4.0.24 | fix(tray): store Linux tray icons in app cache directory (#9021) | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `734ed4a1` | v4.0.24 | feat(auth): let sign-in copy the login link instead of opening the browser | 3 官方账号 | 3b：授权中心“登录时自动打开浏览器”开关与复制登录链接；Claude 不另传 copy_link（Web 服务端从不开浏览器，始终由前端在用户浏览器打开） | 已迁移 |
@@ -1132,3 +1132,8 @@
   - 视觉：暗色主题主文字与次级文字压低（只调 Web 自己的变量）；帮助卡默认放在「?」右侧并限制宽高；分段控件滑块不用 transform；日文「詳細オプション」。
   - 不适用：侧栏浮层展开无宽度动画（55ef871f）、应用页无配置目录入口（eda410e5，随 5d4 复核）、无额度显示方式设置（0b8662a4）、侧栏不显示今日用量（7f82b85b）等。
   - 验证：`cargo test --locked --lib` 3606 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过；Linux `cargo check --locked --lib --tests` 通过；`tsc --noEmit` 通过；前端全量 Vitest 219 个文件 2284 项通过、2 项跳过。
+- 2026-11-05：完成批次 5c1（预设分组逻辑，见[预设分组选择器跟进计划](web-preset-selector-catchup-2026-11.md)）。用户决定预设选择器完全按上游分组（登录 / 厂商 / 第三方 / 云 / 本地 / 插件分节，节内 A–Z，区域 / 套餐合一行），赞助 / 合作约束不变，主题保留 Web 变量。
+  - 迁入上游最终版 `presetGroups.ts`（与上游逐字一致，Web 预设数据无需适配）；选择器界面不变，新增的 `getVisiblePresetRows` 留给 5c2 接线。
+  - 补回逻辑层用例：23dc945e 的 SiliconFlow 两区域合一行、3069b556 的 Claude 预设合行与版本排序、本地分组、登录组与 `loginAccountKey`（dsh / kimi / agy 等）；`kimiProviderPresets.test.ts` 换成上游最终版。
+  - 三语补齐版本 / 套餐 / 区域 / 登录副行 / 六个分组与分组说明文案。
+  - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 220 个文件 2298 项通过、2 项跳过。

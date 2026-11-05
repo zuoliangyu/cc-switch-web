@@ -6,6 +6,10 @@ import {
 } from "@/config/opencodeProviderPresets";
 import { openclawProviderPresets } from "@/config/openclawProviderPresets";
 import { codexProviderPresets } from "@/config/codexProviderPresets";
+import {
+  groupPresetRows,
+  presetVersionLayout,
+} from "@/components/providers/forms/presetGroups";
 
 describe("AWS Bedrock OpenCode Provider Presets", () => {
   it("should include @ai-sdk/amazon-bedrock in npm packages", () => {
@@ -220,4 +224,25 @@ describe("SiliconFlow OpenCode provider presets", () => {
       expect(preset.icon).toBe(openclaw.icon);
     },
   );
+
+  it("groups both regions into one provider with a region selector", () => {
+    const entries = opencodeProviderPresets.map((preset, index) => ({
+      id: `opencode-${index}`,
+      preset,
+    }));
+    const rows = groupPresetRows(entries).filter((row) =>
+      row.versions.some(({ preset }) => preset.name.startsWith("SiliconFlow")),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].family).toBe("siliconflow");
+    expect(rows[0].versions.map(({ preset }) => preset.regionKey)).toEqual([
+      "cn",
+      "intl",
+    ]);
+    expect(presetVersionLayout(rows[0].versions)).toEqual({
+      kind: "single",
+      dimension: "region",
+    });
+  });
 });

@@ -1938,9 +1938,48 @@
       "volcengine": "Volcengine"
     },
     "group": {
+      "login": "アカウントでログイン",
+      "vendor": "モデルベンダー",
+      "thirdparty": "サードパーティ",
       "cloud": "クラウド事業者",
       "local": "ローカル",
-      "thirdparty": "サードパーティ"
+      "plugin": "プラグイン設定"
+    },
+    "versionLabel": "バージョン",
+    "planLabel": "プラン",
+    "regionLabel": "地域",
+    "plan": {
+      "payg": "従量課金",
+      "coding": "コーディングサブスク",
+      "codingPlan": "Coding Plan",
+      "agentPlan": "Agent Plan",
+      "tokenPlan": "Token Plan",
+      "enterpriseLite": "Enterprise Lite",
+      "enterprisePro": "Enterprise Pro",
+      "stepPlan": "Step Plan",
+      "aksk": "AKSK",
+      "apiKey": "API Key"
+    },
+    "region": {
+      "cn": "中国",
+      "intl": "グローバル"
+    },
+    "loginWith": {
+      "deepseek": "DeepSeek アカウントでログイン",
+      "kimi": "Kimi アカウントでログイン",
+      "claude": "Claude アカウントでログイン",
+      "chatgpt": "ChatGPT アカウントでログイン",
+      "github": "GitHub アカウントでログイン",
+      "xai": "xAI アカウントでログイン",
+      "google": "Google アカウントでログイン"
+    },
+    "groupHint": {
+      "login": "API Key は不要で、既存のアカウントでログインします。Claude 以外はルーティングを経由します。",
+      "vendor": "ベンダー自身の API とコーディングプラン。同じベンダーの中国サイト・グローバルサイト・各プランは 1 行にまとめ、次のステップでバージョンを選びます。",
+      "thirdparty": "複数のモデルをまとめたプラットフォーム、または公式モデルを再販する中継サービス。",
+      "cloud": "クラウド事業者のアカウントでモデルを呼び出します。",
+      "local": "このコンピューターで動かす推論サーバー。先にサーバーを起動してモデルを取得してください。キーはプレースホルダーで構いません。",
+      "plugin": "OpenCode プラグインのモデル割り当て設定。"
     }
   },
   "usage": {

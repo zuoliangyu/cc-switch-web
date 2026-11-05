@@ -13,6 +13,9 @@ import type { OpenCodeProviderPreset } from "@/config/opencodeProviderPresets";
 import type { OpenClawProviderPreset } from "@/config/openclawProviderPresets";
 import type { HermesProviderPreset } from "@/config/hermesProviderPresets";
 import type { McodeProviderPreset } from "@/config/mcodeProviderPresets";
+import type { KimiProviderPreset } from "@/config/kimiProviderPresets";
+import type { PiProviderPreset } from "@/config/piProviderPresets";
+import type { OmpProviderPreset } from "@/config/ompProviderPresets";
 import type { ProviderCategory } from "@/types";
 import {
   universalProviderPresets,
@@ -24,6 +27,12 @@ import {
   sortProvidersByName,
 } from "@/utils/providerSort";
 import { PRESET_SEARCH_ALIASES } from "@/config/presetSearchAliases";
+import {
+  groupPresetRows,
+  matchPresetRow,
+  sortPresetRowsByName,
+  type PresetRowItem,
+} from "./presetGroups";
 
 type PresetTranslator = (key: string) => unknown;
 
@@ -35,7 +44,10 @@ export type AnyPreset =
   | OpenCodeProviderPreset
   | OpenClawProviderPreset
   | HermesProviderPreset
-  | McodeProviderPreset;
+  | PiProviderPreset
+  | McodeProviderPreset
+  | KimiProviderPreset
+  | OmpProviderPreset;
 
 export type PresetEntry = {
   id: string;
@@ -104,6 +116,24 @@ export function getVisiblePresetEntries(
   const { query, t } = options;
 
   return sortPresetEntries(filterPresetEntries(entries, query, t), t);
+}
+
+/** 分组列表的一行和搜索命中的版本下标（空 = 整家命中） */
+export interface VisiblePresetRow {
+  row: PresetRowItem;
+  hits: number[];
+}
+
+/** 同一家的多个版本合成一行，再按名称排（分组式选择器用，界面随批次 5c2 接入） */
+export function getVisiblePresetRows(
+  entries: PresetEntry[],
+  { query, t }: PresetVisibilityOptions,
+): VisiblePresetRow[] {
+  const found = groupPresetRows(entries).flatMap((row) => {
+    const match = matchPresetRow(row, query, t);
+    return match ? [{ row, hits: match.versions }] : [];
+  });
+  return sortPresetRowsByName(found, t);
 }
 
 interface ProviderPresetSelectorProps {

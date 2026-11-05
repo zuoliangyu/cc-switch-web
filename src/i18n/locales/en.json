@@ -1938,9 +1938,48 @@
       "volcengine": "Volcengine"
     },
     "group": {
+      "login": "Account sign-in",
+      "vendor": "Model vendors",
+      "thirdparty": "Third-party platforms",
       "cloud": "Cloud providers",
       "local": "Local",
-      "thirdparty": "Third-party platforms"
+      "plugin": "Plugin configs"
+    },
+    "versionLabel": "Version",
+    "planLabel": "Plan",
+    "regionLabel": "Region",
+    "plan": {
+      "payg": "Pay-as-you-go",
+      "coding": "Coding subscription",
+      "codingPlan": "Coding Plan",
+      "agentPlan": "Agent Plan",
+      "tokenPlan": "Token Plan",
+      "enterpriseLite": "Enterprise Lite",
+      "enterprisePro": "Enterprise Pro",
+      "stepPlan": "Step Plan",
+      "aksk": "AKSK",
+      "apiKey": "API Key"
+    },
+    "region": {
+      "cn": "China",
+      "intl": "Global"
+    },
+    "loginWith": {
+      "deepseek": "Sign in with a DeepSeek account",
+      "kimi": "Sign in with a Kimi account",
+      "claude": "Sign in with a Claude account",
+      "chatgpt": "Sign in with a ChatGPT account",
+      "github": "Sign in with a GitHub account",
+      "xai": "Sign in with an xAI account",
+      "google": "Sign in with a Google account"
+    },
+    "groupHint": {
+      "login": "No API key: sign in with an existing account. Everything except Claude goes through routing.",
+      "vendor": "The vendors' own APIs and coding plans. A vendor's China site, global site and plans share one row; pick the version in the next step.",
+      "thirdparty": "Platforms that aggregate many models, or relays reselling official models.",
+      "cloud": "Call models with a cloud provider account.",
+      "local": "Inference servers running on this computer. Start the server and pull a model first; the key is just a placeholder.",
+      "plugin": "Model assignment configs for OpenCode plugins."
     }
   },
   "usage": {

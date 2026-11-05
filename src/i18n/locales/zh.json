@@ -1938,9 +1938,48 @@
       "volcengine": "火山引擎"
     },
     "group": {
+      "login": "账号登录",
+      "vendor": "模型厂商",
+      "thirdparty": "第三方平台",
       "cloud": "云服务商",
       "local": "本地",
-      "thirdparty": "第三方平台"
+      "plugin": "插件配置"
+    },
+    "versionLabel": "版本",
+    "planLabel": "套餐",
+    "regionLabel": "地区",
+    "plan": {
+      "payg": "按量付费",
+      "coding": "编程订阅",
+      "codingPlan": "Coding Plan",
+      "agentPlan": "Agent Plan",
+      "tokenPlan": "Token Plan",
+      "enterpriseLite": "企业 Lite",
+      "enterprisePro": "企业 Pro",
+      "stepPlan": "Step Plan",
+      "aksk": "AKSK",
+      "apiKey": "API Key"
+    },
+    "region": {
+      "cn": "国内",
+      "intl": "海外"
+    },
+    "loginWith": {
+      "deepseek": "用 DeepSeek 账号登录",
+      "kimi": "使用 Kimi 账号登录",
+      "claude": "用 Claude 账号登录",
+      "chatgpt": "用 ChatGPT 账号登录",
+      "github": "用 GitHub 账号登录",
+      "xai": "用 xAI 账号登录",
+      "google": "用 Google 账号登录"
+    },
+    "groupHint": {
+      "login": "不用 API Key，用已有账号登录。除 Claude 以外都要经过路由。",
+      "vendor": "厂商自己的 API 和编程套餐。同一家的国内站、海外站、套餐合成一行，下一步再选版本。",
+      "thirdparty": "聚合多家模型的平台，或转售官方模型的中转服务。",
+      "cloud": "用云厂商账号调用模型。",
+      "local": "在本机运行的推理服务，先启动服务并下载模型。Key 填占位值即可。",
+      "plugin": "OpenCode 插件的模型分配配置。"
     }
   },
   "usage": {

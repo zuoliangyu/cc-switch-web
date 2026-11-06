@@ -368,7 +368,28 @@ release/docker-linux/cc-switch-web-linux-x64/
 
 The package contains the single executable `cc-switch-web`. After extracting on Linux, run that binary directly.
 
-The exported Linux binary is built as `x86_64-unknown-linux-musl`, which reduces host-side runtime dependency issues.
+#### ARM / Embedded Boards
+
+For 64-bit ARM boards (aarch64 / arm64, such as Raspberry Pi 3/4/5 on a 64-bit OS,
+RK35xx, and various Allwinner boards), use the separate `Dockerfile.arm64`
+(`messense/rust-musl-cross` cross-compiles on an amd64 host without QEMU, finishes in
+a few minutes, and needs no binfmt). Do not pass `--platform`:
+
+```bash
+docker buildx build -f Dockerfile.arm64 --target package-linux-tar   --output type=local,dest=release/docker-linux .
+# -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
+```
+
+The Web Package release workflow triggered by a `v*` tag produces both
+`linux-x64` and `linux-arm64` `tar.gz` packages automatically.
+
+> 32-bit armv7 is not provided yet: the direct dependency `rquickjs-sys` ships no
+> prebuilt FFI bindings for `armv7-unknown-linux-musleabihf`, and cross-compiling
+> needs an extra bindgen/libclang toolchain that is not in the release matrix.
+
+The exported Linux binaries are all statically linked (musl): x64 is
+`x86_64-unknown-linux-musl` and arm64 is `aarch64-unknown-linux-musl`, which
+reduces problems caused by differences in host runtime libraries.
 
 ### Export Artifacts On Windows
 

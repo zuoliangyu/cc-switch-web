@@ -368,7 +368,28 @@ release/docker-linux/cc-switch-web-linux-x64/
 
 内容は単一実行ファイル `cc-switch-web` のみです。展開後はそのバイナリを直接実行してください。
 
-現在の Linux 配布バイナリは `x86_64-unknown-linux-musl` の静的リンク版で、ホスト側ランタイム差異の影響を受けにくくしています。
+#### ARM / 組み込みボード
+
+64 ビット ARM ボード（aarch64 / arm64。64 ビット OS の Raspberry Pi 3/4/5、
+RK35xx、各種 Allwinner ボードなど）向けには、専用の `Dockerfile.arm64` を使います
+（`messense/rust-musl-cross` が amd64 ホスト上でクロスコンパイルするため QEMU を使わず、
+数分で完了し、binfmt も不要です）。`--platform` は指定しないでください。
+
+```bash
+docker buildx build -f Dockerfile.arm64 --target package-linux-tar   --output type=local,dest=release/docker-linux .
+# -> release/docker-linux/cc-switch-web-linux-arm64.tar.gz
+```
+
+`v*` タグで起動する Web Package リリースワークフローは、
+`linux-x64` と `linux-arm64` の 2 つの `tar.gz` を自動で生成します。
+
+> 32 ビット armv7 は現在提供していません。直接依存の `rquickjs-sys` が
+> `armv7-unknown-linux-musleabihf` 向けの FFI バインディングを同梱しておらず、
+> クロスコンパイルには追加の bindgen/libclang 環境が必要で、リリース対象に含めていません。
+
+現在の Linux 配布バイナリはすべて静的リンク（musl）版です。x64 は
+`x86_64-unknown-linux-musl`、arm64 は `aarch64-unknown-linux-musl` で、
+ホスト側ランタイムライブラリの差異による問題を受けにくくしています。
 
 ### Windows で成果物をまとめて出力
 

@@ -351,13 +351,18 @@ export function useImportSkillsFromApps() {
         (oldData) => mergeInstalledSkills(oldData, importedSkills),
       );
     },
-    // 导入可能在后面某项失败前已写入部分 Skills；弹窗只等这两个列表，
-    // 不等「发现」重拉（要从 GitHub 下载仓库，等它会让弹窗一直锁着）
-    onSettled: () =>
-      Promise.all([
+    // 导入可能在后面某项失败前已写入部分 Skills 或 lock 文件里的仓库，相关列表都要重读；
+    // 弹窗只等已安装与可导入两个列表，不等「发现」重拉（要从 GitHub 下载仓库，等它会让弹窗一直锁着）
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skills", "repos"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["skills", "discoverable"],
+      });
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: ["skills", "installed"] }),
         queryClient.invalidateQueries({ queryKey: ["skills", "unmanaged"] }),
-      ]),
+      ]);
+    },
   });
 }
 

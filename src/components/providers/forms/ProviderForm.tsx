@@ -8,7 +8,7 @@ import type { ClaudeStackModel } from "@/types";
 import { setClaudeOneMMarker } from "./hooks/useModelState";
 import { overlayCodexProviderConfig } from "@/utils/codexEditorOverlay";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { overlayGeminiProviderFields } from "@/utils/geminiEditorOverlay";
 import {
@@ -19,7 +19,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Form, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { ImeSafeInput } from "@/components/ui/ime-safe-input";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
@@ -27,8 +26,7 @@ import {
   buildLocalProxyRequestOverrides,
   formatRequestOverrideObject,
 } from "@/lib/requestOverrides";
-import { providersApi, settingsApi, type AppId } from "@/lib/api";
-import { useSettingsQuery } from "@/lib/query";
+import { providersApi, type AppId } from "@/lib/api";
 import type {
   ProviderCategory,
   ProviderMeta,
@@ -329,23 +327,6 @@ function ProviderFormFull({
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const isEditMode = Boolean(initialData);
-  const queryClient = useQueryClient();
-  const { data: settingsData } = useSettingsQuery();
-  const showCommonConfigNotice =
-    settingsData != null && settingsData.commonConfigConfirmed !== true;
-
-  const handleCommonConfigConfirm = async () => {
-    try {
-      if (settingsData) {
-        const { webdavSync: _ignoredWebdavSync, ...rest } = settingsData;
-        await settingsApi.save({ ...rest, commonConfigConfirmed: true });
-        await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      }
-    } catch (error) {
-      console.error("Failed to save commonConfigConfirmed:", error);
-    }
-  };
-
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     initialData ? null : "custom",
   );
@@ -2887,16 +2868,6 @@ function ProviderFormFull({
           )}
         </form>
       </Form>
-
-      <ConfirmDialog
-        isOpen={showCommonConfigNotice}
-        variant="info"
-        title={t("confirm.commonConfig.title")}
-        message={t("confirm.commonConfig.message")}
-        confirmText={t("confirm.commonConfig.confirm")}
-        onConfirm={() => void handleCommonConfigConfirm()}
-        onCancel={() => void handleCommonConfigConfirm()}
-      />
     </>
   );
 }

@@ -176,6 +176,14 @@ type View =
 
 const DRAG_BAR_HEIGHT = 0; // px
 const HEADER_HEIGHT = 64; // px
+/** 页面自己画上游页头（AppPageHeader）的视图 */
+const PAGES_WITH_OWN_HEADER = new Set<View>([
+  "usage",
+  "apps",
+  "skills",
+  "skillsDiscovery",
+  "sessions",
+]);
 const STORAGE_KEY = "cc-switch-last-app";
 const getInitialApp = (): AppId => {
   const saved = localStorage.getItem(STORAGE_KEY) as AppId | null;
@@ -1136,7 +1144,13 @@ function App() {
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <h1 className="text-lg font-semibold">
+                {/* 这几页自带上游页头（图标 + 标题 + 操作），外壳的标题只留给读屏，避免显示两遍 */}
+                <h1
+                  className={cn(
+                    "text-lg font-semibold",
+                    PAGES_WITH_OWN_HEADER.has(currentView) && "sr-only",
+                  )}
+                >
                   {currentView === "usage" && t("nav.usage")}
                   {currentView === "accounts" && t("settings.authCenter.title")}
                   {currentView === "apps" && t("nav.apps")}

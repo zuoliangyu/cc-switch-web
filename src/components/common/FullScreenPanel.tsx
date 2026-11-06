@@ -25,7 +25,7 @@ interface FullScreenPanelProps {
   trackUnsavedChanges?: boolean;
   /** 返回按钮的无障碍名称（默认「返回」），比如添加供应商第 2 步写「返回选择预设」 */
   backLabel?: string;
-  /** 页头标题上方的小字（默认「Workspace Panel」），比如聚合布局的表单写「Codex（聚合模式）」 */
+  /** 页头标题上方的小字，比如聚合布局的表单写「Codex（聚合模式）」；不传就不显示 */
   subtitle?: string;
 }
 
@@ -175,9 +175,11 @@ export const FullScreenPanel: React.FC<FullScreenPanelProps> = ({
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    {subtitle ?? "Workspace Panel"}
-                  </div>
+                  {subtitle && (
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      {subtitle}
+                    </div>
+                  )}
                   <h2 className="truncate text-lg font-semibold text-foreground select-none sm:text-xl">
                     {title}
                   </h2>

@@ -38,7 +38,6 @@ import { cn } from "@/lib/utils";
 import type { SessionMeta, TurnIndex } from "@/types";
 import {
   fmtInt,
-  fmtUsd,
   formatTokensCompact,
   getLocaleFromLanguage,
   getResolvedLang,
@@ -53,6 +52,7 @@ import {
   isSessionAppId,
 } from "../utils";
 import { useReaderT } from "./i18n";
+import { useMoneyFormat } from "@/hooks/useMoneyFormat";
 import { PathChip } from "./PathChip";
 import { formatDuration } from "./toolSummary";
 import type { ReaderFilter } from "./turns";
@@ -511,6 +511,7 @@ const Sep = () => (
  */
 function SessionUsageSummary({ session }: { session: SessionMeta }) {
   const { i18n } = useTranslation();
+  const { money } = useMoneyFormat();
   const rt = useReaderT();
   const { data } = useSessionUsageSummary(
     session.providerId,
@@ -538,7 +539,7 @@ function SessionUsageSummary({ session }: { session: SessionMeta }) {
         {cost !== null && (
           <>
             {" · "}
-            {fmtUsd(cost, 2)}
+            {money(cost, 2)}
           </>
         )}
       </span>

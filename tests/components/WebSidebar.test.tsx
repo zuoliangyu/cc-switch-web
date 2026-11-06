@@ -1,12 +1,14 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { WebSidebar } from "@/components/shell/WebSidebar";
 import type { VisibleApps } from "@/types";
+import { renderWithQueryClient as render } from "../utils/testQueryClient";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) =>
       (options?.defaultValue as string) ?? key,
+    i18n: { resolvedLanguage: "zh", language: "zh" },
   }),
 }));
 

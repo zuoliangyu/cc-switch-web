@@ -867,10 +867,9 @@ function App() {
             </div>
           );
         case "usage":
+          // 页头、筛选行和滚动区由用量页自己排（上游 S6 版式），外面不再套内边距
           return (
-            <div className="px-3 md:px-6 py-4">
-              <UsagePage />
-            </div>
+            <UsagePage onOpenRoutingSettings={() => openSettings("routing")} />
           );
         case "apps":
           return (

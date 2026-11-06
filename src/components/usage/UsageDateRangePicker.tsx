@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -22,6 +29,8 @@ interface UsageDateRangePickerProps {
   onApply: (selection: UsageRangeSelection) => void;
   triggerLabel: string;
 }
+
+/* ── helpers ── */
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -55,9 +64,8 @@ function fmtTime(ts: number): string {
 
 function parseDateInput(ts: number, value: string): number {
   const [y, m, d] = value.split("-").map(Number);
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d))
     return ts;
-  }
   const base = fromTs(ts);
   return toTs(new Date(y, m - 1, d, base.getHours(), base.getMinutes()));
 }
@@ -95,6 +103,14 @@ function getCalendarDays(month: Date): Date[] {
   });
 }
 
+/* ── component ── */
+
+function resolveCalendarRange(selection: UsageRangeSelection) {
+  const r = resolveUsageRange(selection);
+  if (selection.preset !== "all") return r;
+  return { startDate: r.endDate - 30 * 24 * 60 * 60, endDate: r.endDate };
+}
+
 export function UsageDateRangePicker({
   selection,
   onApply,
@@ -102,13 +118,19 @@ export function UsageDateRangePicker({
 }: UsageDateRangePickerProps) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
+  const prevMonthLabel = t("usage.prevMonth", { defaultValue: "上个月" });
+  const nextMonthLabel = t("usage.nextMonth", { defaultValue: "下个月" });
   const [activeField, setActiveField] = useState<DraftField>("start");
+  // 「全部」的起点是 0，日历草稿改从结束日往前 30 天开始，避免跳到 1970 年
   const resolvedRange = useMemo(
-    () => resolveUsageRange(selection),
+    () => resolveCalendarRange(selection),
     [selection],
   );
   const [draftStart, setDraftStart] = useState(resolvedRange.startDate);
   const [draftEnd, setDraftEnd] = useState(resolvedRange.endDate);
+  const [draftLiveEnd, setDraftLiveEnd] = useState(
+    selection.preset === "custom" ? (selection.liveEndTime ?? false) : false,
+  );
   const [displayMonth, setDisplayMonth] = useState(
     () =>
       new Date(
@@ -122,11 +144,15 @@ export function UsageDateRangePicker({
   const language = i18n.resolvedLanguage || i18n.language || "en";
   const locale = getLocaleFromLanguage(language);
 
+  // Reset draft when popover opens
   useEffect(() => {
     if (!open) return;
-    const r = resolveUsageRange(selection);
+    const r = resolveCalendarRange(selection);
     setDraftStart(r.startDate);
     setDraftEnd(r.endDate);
+    setDraftLiveEnd(
+      selection.preset === "custom" ? (selection.liveEndTime ?? false) : false,
+    );
     setDisplayMonth(
       new Date(
         fromTs(r.startDate).getFullYear(),
@@ -137,6 +163,15 @@ export function UsageDateRangePicker({
     setActiveField("start");
     setError(null);
   }, [open, selection]);
+
+  // Keep draftEnd ticking when live mode is active and popover is open
+  useEffect(() => {
+    if (!open || !draftLiveEnd) return;
+    const tick = () => setDraftEnd(Math.floor(Date.now() / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [open, draftLiveEnd]);
 
   const calendarDays = useMemo(
     () => getCalendarDays(displayMonth),
@@ -157,8 +192,17 @@ export function UsageDateRangePicker({
   const endDay = fromTs(draftEnd);
   const today = new Date();
 
+  /* Pick a date from the calendar */
   const handleDatePick = (day: Date) => {
     setError(null);
+
+    // When live end time is active, calendar only controls start date
+    if (draftLiveEnd) {
+      const nextTs = setDateKeepTime(draftStart, day);
+      setDraftStart(nextTs);
+      return;
+    }
+
     const nextTs = setDateKeepTime(
       activeField === "start" ? draftStart : draftEnd,
       day,
@@ -166,17 +210,23 @@ export function UsageDateRangePicker({
 
     if (activeField === "start") {
       setDraftStart(nextTs);
+      // Auto-swap if start > end
       if (nextTs > draftEnd) {
         setDraftEnd(nextTs);
       }
-      setActiveField("end");
-    } else if (nextTs < draftStart) {
-      setDraftStart(nextTs);
+      // Auto-advance to end field
       setActiveField("end");
     } else {
-      setDraftEnd(nextTs);
+      // If picked end < start, treat as new start and auto-advance
+      if (nextTs < draftStart) {
+        setDraftStart(nextTs);
+        setActiveField("end");
+      } else {
+        setDraftEnd(nextTs);
+      }
     }
 
+    // Navigate calendar if the day is outside the displayed month
     if (
       day.getMonth() !== displayMonth.getMonth() ||
       day.getFullYear() !== displayMonth.getFullYear()
@@ -195,6 +245,7 @@ export function UsageDateRangePicker({
       preset: "custom",
       customStartDate: draftStart,
       customEndDate: draftEnd,
+      liveEndTime: draftLiveEnd,
     });
     setOpen(false);
   };
@@ -203,8 +254,10 @@ export function UsageDateRangePicker({
     setDisplayMonth(new Date(today.getFullYear(), today.getMonth(), 1));
   };
 
+  /* ── Field card (start / end) ── */
   const renderField = (field: DraftField) => {
     const isActive = activeField === field;
+    const isEndLive = field === "end" && draftLiveEnd;
     const ts = field === "start" ? draftStart : draftEnd;
     const setTs = field === "start" ? setDraftStart : setDraftEnd;
     const label =
@@ -215,12 +268,16 @@ export function UsageDateRangePicker({
     return (
       <div
         className={cn(
-          "cursor-pointer rounded-lg border px-3 py-2 transition-all",
-          isActive
-            ? "border-primary ring-1 ring-primary/30 bg-primary/5"
-            : "border-border/50 hover:border-border",
+          "rounded-lg border px-3 py-2 transition-all",
+          isEndLive
+            ? "border-border bg-muted cursor-not-allowed opacity-50"
+            : isActive
+              ? "border-ring ring-1 ring-ring bg-card cursor-pointer"
+              : "border-border hover:border-border cursor-pointer",
         )}
-        onClick={() => setActiveField(field)}
+        onClick={() => {
+          if (!isEndLive) setActiveField(field);
+        }}
       >
         <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
@@ -228,27 +285,41 @@ export function UsageDateRangePicker({
         <div className="flex items-center gap-1.5">
           <Input
             type="date"
-            className="h-7 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+            className={cn(
+              "h-7 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus:ring-0 focus-visible:ring-0",
+              isEndLive && "pointer-events-none",
+            )}
             value={fmtDate(ts)}
             onChange={(e) => {
+              if (isEndLive) return;
               const next = parseDateInput(ts, e.target.value);
               setTs(next);
               const d = fromTs(next);
               setDisplayMonth(new Date(d.getFullYear(), d.getMonth(), 1));
               setError(null);
             }}
-            onFocus={() => setActiveField(field)}
+            onFocus={() => {
+              if (!isEndLive) setActiveField(field);
+            }}
+            readOnly={isEndLive}
           />
           <Input
             type="time"
             step={60}
-            className="h-7 w-[90px] flex-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+            className={cn(
+              "h-7 w-[90px] flex-none border-0 bg-transparent p-0 text-sm shadow-none focus:ring-0 focus-visible:ring-0",
+              isEndLive && "pointer-events-none",
+            )}
             value={fmtTime(ts)}
             onChange={(e) => {
+              if (isEndLive) return;
               setTs(parseTimeInput(ts, e.target.value));
               setError(null);
             }}
-            onFocus={() => setActiveField(field)}
+            onFocus={() => {
+              if (!isEndLive) setActiveField(field);
+            }}
+            readOnly={isEndLive}
           />
         </div>
       </div>
@@ -260,25 +331,37 @@ export function UsageDateRangePicker({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant={selection.preset === "custom" ? "default" : "outline"}
-          className="justify-start gap-2"
+          variant="outline"
+          size="regular"
+          className="max-w-[220px] shrink-0 gap-1.5 pe-2 ps-2.5"
+          title={`${t("usage.timeRange")}: ${triggerLabel}`}
         >
-          <CalendarDays className="h-4 w-4" />
-          <span className="truncate">{triggerLabel}</span>
+          <CalendarDays
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 text-muted-foreground/70"
+          />
+          <span className="min-w-0 truncate">{triggerLabel}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[340px] max-w-[calc(100vw-2rem)] p-3 sm:w-[620px]"
-        align="end"
+        className="usage-range-popover w-[620px] max-w-[calc(100vw-2rem)] rounded-lg border-border bg-card p-3 shadow-md"
+        align="start"
       >
-        <div className="flex flex-wrap gap-1.5 border-b border-border/40 pb-2">
+        {/* Preset shortcuts */}
+        <div className="flex flex-wrap gap-1.5 pb-2 border-b border-border">
           {PRESETS.map((preset) => (
             <Button
               key={preset}
               type="button"
-              size="sm"
-              variant={selection.preset === preset ? "default" : "outline"}
-              className="h-7 px-2.5 text-xs"
+              size="compact"
+              variant="outline"
+              aria-pressed={selection.preset === preset}
+              className={cn(
+                "px-2.5",
+                selection.preset === preset &&
+                  "border-foreground bg-accent font-semibold",
+              )}
               onClick={() => {
                 onApply({ preset });
                 setOpen(false);
@@ -289,13 +372,31 @@ export function UsageDateRangePicker({
           ))}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="space-y-2 sm:w-[250px] sm:flex-none">
+        <div className="usage-range-layout mt-3 flex flex-col gap-3">
+          {/* Left: date fields */}
+          <div className="usage-range-fields space-y-2">
             <p className="text-xs text-muted-foreground">
-              {t("usage.customRangeHint", "支持日期与时间")}
+              {t("usage.customRangeHint", "支持日期与时间，最长 30 天")}
             </p>
             {renderField("start")}
             {renderField("end")}
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <Checkbox
+                checked={draftLiveEnd}
+                onCheckedChange={(checked) => {
+                  const live = checked === true;
+                  setDraftLiveEnd(live);
+                  if (live) {
+                    setDraftEnd(Math.floor(Date.now() / 1000));
+                    setActiveField("start");
+                  }
+                }}
+              />
+              <span className="text-xs text-muted-foreground">
+                {t("usage.liveEndTime", "结束时间跟随当前时刻")}
+              </span>
+            </label>
 
             {error && <p className="text-xs text-destructive">{error}</p>}
 
@@ -303,7 +404,7 @@ export function UsageDateRangePicker({
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="compact"
                 className="flex-1"
                 onClick={() => setOpen(false)}
               >
@@ -311,7 +412,8 @@ export function UsageDateRangePicker({
               </Button>
               <Button
                 type="button"
-                size="sm"
+                variant="default"
+                size="compact"
                 className="flex-1"
                 onClick={handleApply}
               >
@@ -320,56 +422,67 @@ export function UsageDateRangePicker({
             </div>
           </div>
 
-          <div className="rounded-lg border border-border/50 bg-muted/30 p-2.5 sm:min-w-0 sm:flex-1">
-            <div className="mb-1.5 flex items-center justify-between">
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() =>
-                  setDisplayMonth(
-                    new Date(
-                      displayMonth.getFullYear(),
-                      displayMonth.getMonth() - 1,
-                      1,
-                    ),
-                  )
-                }
+          {/* Right: calendar */}
+          <div className="usage-range-calendar rounded-lg border border-border bg-muted p-2.5">
+            {/* Month navigation */}
+            <div className="flex items-center justify-between mb-1.5">
+              <HoverTip content={prevMonthLabel}>
+                <Button
+                  type="button"
+                  size="icon-compact"
+                  variant="ghost"
+                  aria-label={prevMonthLabel}
+                  onClick={() =>
+                    setDisplayMonth(
+                      new Date(
+                        displayMonth.getFullYear(),
+                        displayMonth.getMonth() - 1,
+                        1,
+                      ),
+                    )
+                  }
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+              </HoverTip>
+              {/* 点月份标题跳回本月：动作不在字面上，用 HoverTip 说明 */}
+              <HoverTip
+                content={t("usage.presetToday", { defaultValue: "当天" })}
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <button
-                type="button"
-                className="text-sm font-medium transition-colors hover:text-primary"
-                onClick={goToToday}
-                title={t("usage.presetToday", { defaultValue: "当天" })}
-              >
-                {displayMonth.toLocaleDateString(locale, {
-                  year: "numeric",
-                  month: "long",
-                })}
-              </button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() =>
-                  setDisplayMonth(
-                    new Date(
-                      displayMonth.getFullYear(),
-                      displayMonth.getMonth() + 1,
-                      1,
-                    ),
-                  )
-                }
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-foreground transition-colors hover:text-muted-foreground"
+                  onClick={goToToday}
+                >
+                  {displayMonth.toLocaleDateString(locale, {
+                    year: "numeric",
+                    month: "long",
+                  })}
+                </button>
+              </HoverTip>
+              <HoverTip content={nextMonthLabel}>
+                <Button
+                  type="button"
+                  size="icon-compact"
+                  variant="ghost"
+                  aria-label={nextMonthLabel}
+                  onClick={() =>
+                    setDisplayMonth(
+                      new Date(
+                        displayMonth.getFullYear(),
+                        displayMonth.getMonth() + 1,
+                        1,
+                      ),
+                    )
+                  }
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </HoverTip>
             </div>
 
-            <div className="mb-0.5 grid grid-cols-7 text-center text-[11px] text-muted-foreground">
+            {/* Weekday headers */}
+            <div className="grid grid-cols-7 text-center text-[11px] font-medium text-muted-foreground mb-0.5">
               {weekdayLabels.map((label, i) => (
                 <div key={i} className="py-0.5">
                   {label}
@@ -377,6 +490,7 @@ export function UsageDateRangePicker({
               ))}
             </div>
 
+            {/* Day grid */}
             <div className="grid grid-cols-7 gap-px">
               {calendarDays.map((day) => {
                 const isCurrentMonth =
@@ -399,12 +513,12 @@ export function UsageDateRangePicker({
                     aria-pressed={isEndpoint}
                     className={cn(
                       "relative h-7 rounded text-xs transition-colors",
-                      !isCurrentMonth && "text-muted-foreground/30",
+                      !isCurrentMonth && "text-muted-foreground/70",
                       isCurrentMonth && !inRange && "hover:bg-muted",
-                      inRange && !isEndpoint && "bg-primary/10 text-primary",
+                      inRange && !isEndpoint && "bg-accent text-foreground",
                       isEndpoint &&
                         "bg-primary text-primary-foreground font-medium",
-                      isToday && !isEndpoint && "ring-1 ring-primary/40",
+                      isToday && !isEndpoint && "ring-1 ring-border",
                     )}
                     onClick={() => handleDatePick(day)}
                   >

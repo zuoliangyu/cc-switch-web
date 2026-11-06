@@ -4,6 +4,8 @@
 
 @layer base {
   :root {
+    /* 用量页趋势图与热力图的主色（上游 --chart-usage）：Web 一直用主题主色，热力图 1–4 档也按它取 */
+    --chart-usage: hsl(var(--primary));
     --heat-1: hsl(var(--primary) / 0.25);
     --heat-2: hsl(var(--primary) / 0.5);
     --heat-3: hsl(var(--primary) / 0.75);
@@ -847,5 +849,38 @@ html[data-window-active="false"] .status-heartbeat {
 @container (min-width: 800px) {
   .auth-quota-col {
     width: 368px;
+  }
+}
+
+/*
+ * Usage date-range picker popover.
+ *
+ * The two-column layout (date fields | calendar) must depend on how much
+ * width the popover itself actually has — not on the viewport. The popover is
+ * clamped to `100vw - 2rem` and anchored to its trigger, so a viewport-based
+ * breakpoint (e.g. Tailwind `sm:`) could enable the wide layout while the
+ * popover only had room for one column, pushing the calendar off-screen.
+ *
+ * A container query keys the layout to the popover's own inline size. The base
+ * (stacked) layout is the safe fallback when container queries are
+ * unsupported, keeping the calendar fully visible at any width.
+ */
+.usage-range-popover {
+  container-type: inline-size;
+}
+
+@container (min-width: 500px) {
+  .usage-range-layout {
+    flex-direction: row;
+  }
+
+  .usage-range-fields {
+    width: 250px;
+    flex: none;
+  }
+
+  .usage-range-calendar {
+    min-width: 0;
+    flex: 1 1 0%;
   }
 }

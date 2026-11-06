@@ -1,10 +1,15 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { UsageHeatmap } from "@/components/usage/UsageHeatmap";
 import { resolveUsageRange } from "@/lib/usageRange";
+import { renderWithQueryClient as render } from "../utils/testQueryClient";
 
 const trends = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/query/usage", () => ({ useUsageTrends: trends }));
+const firstDate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/query/usage", () => ({
+  useUsageTrends: trends,
+  useUsageFirstDate: firstDate,
+}));
 
 describe("全部时间热力图", () => {
   it("全部时间从零开始，热力图的结束时间持续跟随当前时间", () => {
@@ -25,9 +30,15 @@ describe("全部时间热力图", () => {
     ).toEqual({ startDate: 1, endDate: 9000 });
   });
 
-  it("按本地日期展示用量，支持键盘查看与切换指标", () => {
+  it("按本地日期展示用量，支持键盘查看，深浅跟着指标条选的指标", () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    // 最早一条就在今天：只画一段 53 周
+    firstDate.mockReturnValue({
+      isSuccess: true,
+      isPending: false,
+      data: null,
+    });
     trends.mockReturnValue({
       isLoading: false,
       data: [
@@ -42,11 +53,13 @@ describe("全部时间热力图", () => {
         },
       ],
     });
-    render(<UsageHeatmap appType="codex" refreshIntervalMs={0} />);
+    const { rerender } = render(
+      <UsageHeatmap metric="tokens" appType="codex" refreshIntervalMs={0} />,
+    );
     expect(trends).toHaveBeenCalledWith(
       expect.objectContaining({ preset: "custom", liveEndTime: true }),
-      { appType: "codex" },
-      { refetchInterval: false },
+      expect.objectContaining({ appType: "codex" }),
+      expect.objectContaining({ enabled: true }),
     );
     const day = document.querySelector('[aria-label$=": 180"]')!;
     expect(day).toHaveAttribute("tabindex", "0");
@@ -54,8 +67,8 @@ describe("全部时间热力图", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("180");
     fireEvent.blur(day);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "usage.trend.requests" }),
+    rerender(
+      <UsageHeatmap metric="requests" appType="codex" refreshIntervalMs={0} />,
     );
     expect(document.querySelector('[aria-label$=": 3"]')).toBeInTheDocument();
   });

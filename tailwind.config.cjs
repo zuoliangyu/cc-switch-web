@@ -38,6 +38,9 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        chart: {
+          usage: "var(--chart-usage)",
+        },
         blue: {
           400: "#409CFF",
           500: "#0A84FF",

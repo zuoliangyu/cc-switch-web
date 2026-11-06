@@ -324,18 +324,10 @@ export function PricingConfigPanel() {
                   <TableRow>
                     <TableHead>{t("usage.model")}</TableHead>
                     <TableHead>{t("usage.displayName")}</TableHead>
-                    <TableHead className="text-right">
-                      {t("usage.inputCost")}
-                    </TableHead>
-                    <TableHead className="text-right">
-                      {t("usage.outputCost")}
-                    </TableHead>
-                    <TableHead className="text-right">
-                      {t("usage.cacheReadCost")}
-                    </TableHead>
-                    <TableHead className="text-right">
-                      {t("usage.cacheWriteCost")}
-                    </TableHead>
+                    <TableHead>{t("usage.inputCost")}</TableHead>
+                    <TableHead>{t("usage.outputCost")}</TableHead>
+                    <TableHead>{t("usage.cacheReadCost")}</TableHead>
+                    <TableHead>{t("usage.cacheWriteCost")}</TableHead>
                     <TableHead className="text-right">
                       {t("common.actions")}
                     </TableHead>
@@ -348,16 +340,16 @@ export function PricingConfigPanel() {
                         {model.modelId}
                       </TableCell>
                       <TableCell>{model.displayName}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
+                      <TableCell className="font-mono text-sm">
                         ${model.inputCostPerMillion}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
+                      <TableCell className="font-mono text-sm">
                         ${model.outputCostPerMillion}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
+                      <TableCell className="font-mono text-sm">
                         ${model.cacheReadCostPerMillion}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
+                      <TableCell className="font-mono text-sm">
                         ${model.cacheCreationCostPerMillion}
                       </TableCell>
                       <TableCell className="text-right">

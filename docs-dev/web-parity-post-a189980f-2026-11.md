@@ -201,7 +201,7 @@
 | `d36bb7a9` | v4.0.1 | chore(release): v4.0.1 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `4804b723` | v4.0.1 | docs(release): add v4.0.1 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `92fa72c7` | v4.0.2 | fix(mcp): run the time preset with uvx mcp-server-time (#7863) | 5a 供应商与全局 UI | 5a2：MCP time 预设改用 uvx mcp-server-time 已随 1a 迁入；本批补上三语的名称与占位文案（mcp-server-time）；docs/ 用户手册不适用 | 已迁移 |
-| `c2c24b8c` | v4.0.2 | fix(usage): drop the gray border inside the active range field and space the picker below the presets (#7864) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `c2c24b8c` | v4.0.2 | fix(usage): drop the gray border inside the active range field and space the picker below the presets (#7864) | 5b 用量/额度 UI | 5b2b：日期范围选择器去掉当前字段框内灰边、日历与预设之间留距（UsageDateRangePicker 最终版）；补上 Web 缺的 usage-range-popover 容器查询样式，窄屏按弹层自身宽度上下排 | 已迁移 |
 | `7f3fbd06` | v4.0.2 | test(pi): pin image input on official DeepSeek V4.1 Flash preset (#7865) | 1d 资源/设置/工具 | 1d：Pi DeepSeek V4.1 Flash 图片输入断言已随 1a 的预设测试同步 | 已迁移 |
 | `5c573f19` | v4.0.2 | fix(proxy): whitelist fields carried by reasoning replay envelopes (#7876) | 1b 代理协议 | 1b：推理回放信封字段白名单 | 已迁移 |
 | `d455dd85` | v4.0.2 | feat(mcp): sync MCP servers to Pi 1.0's built-in MCP (#7862) | 2a Pi MCP/迁移基线 | 2a：Pi 1.0 内置 MCP 同步（mcp/pi.rs，只替换连接字段、取消勾选改为 enabled:false、拒绝 SSE/非法名/仅 -_ 差异的重名，先写文件后提交数据库）；Web 自有 schema v16→v17 增加 mcp_servers.enabled_pi，并在建表阶段为版本号不低于 v17 却缺该列的桌面端 v17–v19 快照补列；MCP 面板与表单加入 Pi 列（Skills 列顺序不变）；Hermes MCP 在 Web 仍不可用，相关改动不适用 | 已迁移 |
@@ -225,10 +225,10 @@
 | `bc4d1a50` | v4.0.3 | fix(usage): count cache tokens in provider and model stats | 5b 用量/额度 UI | 5b2a：新增 services/sql_helpers（fresh_input_sql / real_total_tokens_sql），供应商、模型统计的 total_tokens 改为真实消耗（新增输入 + 输出 + 缓存写入 + 缓存命中），各行之和等于汇总；Web 两张表都没有 input_token_semantics 列，Codex / Gemini / Grok Build 的输入够减时扣缓存读写、只够扣命中时按早期代理只扣命中；迁入上游用例 | 已迁移 |
 | `fc8d884b` | v4.0.3 | feat(quota): show the Codex Credits balance for ChatGPT subscriptions | 5b 用量/额度 UI | 5b1：Codex wham/usage 的 credits 解析为 SubscriptionQuota.creditsBalance（0、不限量、缺失或形状不对时不显示，不影响额度）；展开与授权中心单独一行（Credits 数 + 约合美元），卡片上有一档用完才露出并排在重置次数前，点开重置次数时附带余额；Web 无 usage_cache / 托盘，字段只加在 SubscriptionQuota 的各构造处 | 已迁移 |
 | `d7f615f0` | v4.0.3 | fix(skills): deploy imported skills to every app ticked in the import dialog | 1d 资源/设置/工具 | 1d：导入 Skill 时投影到勾选但尚无该 Skill 的应用，失败的应用不记启用并汇总报错 | 已迁移 |
-| `dd07b8f4` | v4.0.3 | fix(usage): show localized names for session-log usage providers | 5b 用量/额度 UI | 需新建或映射：`components/usage/providerLabel.ts` | 待迁移 |
+| `dd07b8f4` | v4.0.3 | fix(usage): show localized names for session-log usage providers | 5b 用量/额度 UI | 5b2b：providerLabel.ts 迁入，会话日志占位供应商名（与 Web 后端 provider_name_coalesce 一致）在供应商列、请求日志、详情、筛选菜单显示为「应用 · 会话日志」并附说明；筛选取值仍原样回传后端 | 已迁移 |
 | `14003822` | v4.0.3 | fix(proxy): respect thinking-off and per-model effort floors when mapping Claude effort | 1b 代理协议 | 1b：Claude effort 映射尊重关闭思考与模型下限；Opus 5 归入默认自适应思考 | 已迁移 |
-| `6f4d365b` | v4.0.3 | fix(usage): use a short session-log label where the app is already shown | 5b 用量/额度 UI | 需新建或映射：`components/usage/providerLabel.ts` | 待迁移 |
-| `c615c3ee` | v4.0.3 | feat(usage): show success rate and speed in model stats | 5b 用量/额度 UI | 5b2a：模型统计增加成功率与精确 / 估算速度的分子分母；速度条件按来源区分（会话日志行即便推出了首字也只算估算速度）；统计表的成功率、速度列界面随 5b2b | 部分迁移 |
+| `6f4d365b` | v4.0.3 | fix(usage): use a short session-log label where the app is already shown | 5b 用量/额度 UI | 5b2b：已有「应用」列的请求日志与详情用短名「会话日志」 | 已迁移 |
+| `c615c3ee` | v4.0.3 | feat(usage): show success rate and speed in model stats | 5b 用量/额度 UI | 5b2b：供应商、模型统计表加成功率与速度列（statsColumns.tsx）；精确速度缺失时才用会话日志估算并带 ≈（上游最终口径，Web 原先精确 / 估算分两列） | 已迁移 |
 | `beff557e` | v4.0.3 | feat(logging): log provider switches and routing / aggregation mode changes (#7882) | 4 模式/路由 | 4d：切换与模式日志：ProviderService::switch 记 [SWITCH]（直连 / 代理路由的去向，完成、带警告、规则拒绝记 INFO、失败记 ERROR）；进入 / 退出 / 换路由记 [MODE]（模式变化、路由那家、客户端配置有没有重写），失败日志经 error_for_log 去掉 TOML 诊断里的配置原文。前端确认框日志不适用：Web 没有前端日志通道（上游 frontendLogger 基于 tauri plugin-log） | 部分迁移 |
 | `243cd9a9` | v4.0.3 | fix(proxy): satisfy the OpenCode Go gateway's client identity requirements (#7773) | 1b 代理协议 | 1b：opencode.ai 上游补 x-opencode-session（原生会话头 > 客户端会话 > 对话指纹 > 生成 ID）与缺省 UA | 已迁移 |
 | `34759f69` | v4.0.3 | fix(usage): move usage-stat writes off tokio workers with spawn_blocking (#7822) | 1c 会话/用量导入 | 1c：代理用量与错误日志写入移到阻塞线程池（含计费模式读取），新增运行时不被阻塞的回归 | 已迁移 |
@@ -252,7 +252,7 @@
 | `f61dc5f5` | v4.0.4 | fix(macos): relaunch via LaunchServices so the window comes to the front after restart | — | macOS LaunchServices 重启窗口；Web 无桌面窗口 | 不适用 |
 | `e09fdf04` | v4.0.4 | feat(settings): give the About card's star prompt its own dismissible strip | 5a 供应商与全局 UI | 5a4b：关于页邀 Star 改为独立一条、可关闭（关闭记在本机 localStorage），条内按钮就是 Web 仓库入口；关掉后链接行补回「项目仓库」按钮；新增 starOnGithub 三语文案与用例 | 已迁移 |
 | `e0b36500` | v4.0.4 | feat(profiles): hide the project switcher by default | 1d 资源/设置/工具 | 1d：项目切换器默认隐藏（设置缺省值与前端回退均为 false） | 已迁移 |
-| `5b10d199` | v4.0.4 | fix(usage): keep the speed column visible in a narrow window | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `5b10d199` | v4.0.4 | fix(usage): keep the speed column visible in a narrow window | 5b 用量/额度 UI | 5b2b：窄窗口下速度列保持可见（随上游 RequestLogTable 最终版） | 已迁移 |
 | `c2282a10` | v4.0.4 | chore(release): v4.0.4 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `a29a4f38` | v4.0.4 | docs(release): add v4.0.4 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `01ee685d` | v4.0.5 | docs(release): lead with usage stats in the v4.0.4 notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -272,7 +272,7 @@
 | `b1752e1c` | v4.0.5 | ci(release): require deb and rpm signatures in latest.json check (#7943) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `3af55c39` | v4.0.5 | fix(codex): give the MoArk preset a model catalog and native Responses format (#7940) | 5a 供应商与全局 UI | 5a1：模力方舟预设的模型目录与 apiFormat 已随 1a 迁入；本批补 codex_config 断言与上游 moarkProviderPresets 用例 | 已迁移 |
 | `02759c67` | v4.0.5 | fix(proxy): mark converted function tools as non-strict for Responses (#7717) | 1b 代理协议 | 1b：转换后的 function 工具标记为非 strict | 已迁移 |
-| `5d24fdf9` | v4.0.5 | feat(usage): show all history in the all-time heatmap | 5b 用量/额度 UI | 5b2a：新增 get_first_usage_date 与 GET /api/usage/first-date（明细 + 日汇总，带应用 / 供应商 / 模型筛选），前端 usageApi.getUsageFirstDate 与 useUsageFirstDate；全部时间热力图分段展示界面随 5b2b | 部分迁移 |
+| `5d24fdf9` | v4.0.5 | feat(usage): show all history in the all-time heatmap | 5b 用量/额度 UI | 5b2b：「全部」时间范围的热力图按最早用量日期分成每 53 周一段，可展开更早的段，各段同一色阶；Web 保留每个已过去日子的键盘聚焦查看（上游只有悬停） | 已迁移 |
 | `cf02f670` | v4.0.5 | chore(release): v4.0.5 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `2db86e94` | v4.0.5 | docs(release): add v4.0.5 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
 | `889b797d` | v4.0.6 | fix(claude): allow npm scripts in the primary update path (#7099) | 4 模式/路由 | 4d：npm 安装的 Claude 主更新命令带 npm_config_allow_scripts 等环境变量（按真实路径判断，含 system 前缀）：此前工具管理批次已迁入（anchored_command_from_paths 与 4 个用例），本批无改动 | 已迁移 |
@@ -307,7 +307,7 @@
 | `533055bb` | v4.0.7 | fix(usage): bill Claude 1-hour cache writes at the 1h rate (#7653) | 1c 会话/用量导入 | 1c：Claude 1 小时缓存写入按 1h 价计费（代理解析与会话导入） | 已迁移 |
 | `3da322eb` | v4.0.7 | feat(pricing): seed Claude Sonnet 5.5 and Haiku 5.5 (#8053) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `4bbdbcdd` | v4.0.7 | fix(usage): import Codex cache-write tokens from session rollouts (#7635) | 1c 会话/用量导入 | 1c：从 Codex rollout 导入缓存写入 token 并计费；Web 无 input_token_semantics 列，写入量为 0 的 Codex 代理行一律按早期代理放行去重 | 已迁移 |
-| `a0be6456` | v4.0.7 | fix(usage): keep provider stats rows distinct across apps (#8032) | 5b 用量/额度 UI | 5b2a：供应商统计返回 app_type，按 (provider_id, app_type) 区分跨应用的同名行；Web 保持按名称 A–Z 排序（不按金额）；统计表按应用区分的行键与标签界面随 5b2b | 部分迁移 |
+| `a0be6456` | v4.0.7 | fix(usage): keep provider stats rows distinct across apps (#8032) | 5b 用量/额度 UI | 5b2b：供应商统计行按 (应用, 供应商) 区分；Web 保持按显示名 A–Z（忽略大小写），同名再按应用排，不按请求数排名（上游按请求数降序），供应商筛选菜单同样 A–Z | 已迁移 |
 | `2625bcf1` | v4.0.7 | fix(opencode): preserve untouched extra-option value types on edit (#7841) | 5a 供应商与全局 UI | 5a2：OpenCode / MiniMax Code 额外选项按行合并进已存选项（mergeOpencodeExtraOptionRows）：没改的行保留原值与类型（"123"、"false"、"null" 不再被改成数字 / 布尔 / null），改名继承旧值，改名撞上已有键时拒绝；补上游 useOpencodeFormState 用例 | 已迁移 |
 | `00db3eef` | v4.0.7 | fix(openclaw): preserve custom headers when toggling User-Agent (#7847) | 5a 供应商与全局 UI | 5a2：OpenClaw 开关 User-Agent 时保留自定义请求头（含导入的大小写变体，关时移除所有 UA 变体、开时只写一个规范 UA）；上游用例的 msw 改用 Web 的全局 server 与 runtime.local | 已迁移 |
 | `5667b287` | v4.0.7 | fix(usage): treat explicit-zero OpenAI cache fields as unreported (#8045) | 1c 会话/用量导入 | 1c：OpenAI 缓存字段显式 0 视为未上报，继续读低顺位字段（解析、转换、流式） | 已迁移 |
@@ -391,11 +391,11 @@
 | `ea1ab809` | v4.0.10 | docs(deeplink): show site owners how to wire the import button | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `502d681b` | v4.0.10 | docs: point the deep link generator to ccswitch.io and link the site owner guide | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `1a8c1ea3` | v4.0.10 | feat(i18n): lead the connection mode help with each mode's strengths | 5a 供应商与全局 UI | 5a4b：模式说明（直连 / 路由 / 聚合）改为先讲各自优点，聚合沿用 Web 原有的成员操作说明 | 已迁移 |
-| `a0dd3b39` | v4.0.10 | feat(usage): show first-token time in stats and estimate it without routing | 5b 用量/额度 UI | 5b2a：供应商、模型统计增加首字中位数（路由服务成功的流式请求）与估算首字中位数（会话日志推出的首字），format.ts 增加 formatFirstTokenSeconds；会话导入的首字估算此前已随 1c 迁入，恢复 Kimi 用量统计的上游断言；首字列界面随 5b2b | 部分迁移 |
+| `a0dd3b39` | v4.0.10 | feat(usage): show first-token time in stats and estimate it without routing | 5b 用量/额度 UI | 5b2b：统计表与请求日志、详情加首字时间（路由精确值优先，会话日志推算值带 ≈）；详情「性能」分节显示首字、耗时、速度及不计算的原因；Web 请求日志没有 pricing_model 列，详情不单列「计价模型」 | 已迁移 |
 | `3d5f8471` | v4.0.10 | docs(deeplink): note that New API and Sub2API ship an import button | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `9d4aff88` | v4.0.10 | fix(codex): move sessions from the retired cc-switch-official bucket back to openai | 5a 供应商与全局 UI | 5a4a：启动时把记在 cc-switch-official 桶下的会话（state DB 与 rollout 的 session_meta，含压缩 rollout）迁回 openai，排在统一迁移之前；config.toml 或 profile 仍选着它、state DB 锁不住时跳过且不写标记；按 Codex 目录记完成标记；备份放会话分组迁移备份目录，提示文案去掉「第三方」 | 已迁移 |
 | `0962337b` | v4.0.10 | docs(deeplink): add English and Japanese site owner guides | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `cb3c9fef` | v4.0.10 | fix(usage): left-align every usage table column and rebalance request log widths | 5b 用量/额度 UI | 需新建或映射：`components/usage/statsColumns.tsx`、`components/usage/usageTable.ts` | 待迁移 |
+| `cb3c9fef` | v4.0.10 | fix(usage): left-align every usage table column and rebalance request log widths | 5b 用量/额度 UI | 5b2b：用量各表格列一律左对齐（usageTable.ts），请求日志列宽按上游重排；Web 的定价表价格列同样改为左对齐 | 已迁移 |
 | `68411d82` | v4.0.10 | feat(providers): keep uploaded icons in a named "My Icons" library | 5a 供应商与全局 UI | 5a3a：「我的图标」库（settings 的 custom_icons 键，最多 100 个，名称 64 字）：上传后起名保存并选中，同一张图去重，库里的图标可改名/删除，不在库里的当前图标可存入；选择即关闭选择器（去掉「完成」）；新增 /api/custom-icons 路由；docs/ 用户手册不适用 | 已迁移 |
 | `4c263a85` | v4.0.10 | docs(manual): describe My Icons in the add-provider icon section | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `db29caef` | v4.0.10 | chore(release): v4.0.10 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -450,13 +450,13 @@
 | `c83cd728` | v4.0.12 | fix(presets): drop OpenCode presets for providers OpenCode ships built in | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a/5c1/5c2：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位（未回退）；合行与版本排序的逻辑断言随 5c1；5c2 迁入上游 ProviderForm.presetRows.golden 金样（点分组选择器的行与套餐 / 地区控件后提交，断言 presetId 指回所选预设），Web 快照与上游只差 meta.commonConfigEnabled 一项（Web 仍写通用配置开关） | 已迁移 |
 | `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 1d：卸载测试放宽 Windows 路径解析超时（随测试最终版本） | 已迁移 |
-| `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 5b2a：设置增加 usageDashboardRefreshIntervalMs，新增 useUsageAutoRefresh 并接入现有用量页；lib/query/usage 取上游最终版本（全局筛选、keepPreviousData、liveEndTime 进查询键）；Web 无后端事件推送，useUsageEventBridge 不适用；用量页的间隔菜单与持久化界面随 5b2b | 部分迁移 |
+| `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 5b2b：刷新间隔照上游去掉「关」、只剩 5 / 10 / 30 / 60 秒并持久化 usageDashboardRefreshIntervalMs，统计组件不再各自轮询；Web 没有服务端推送，用量页打开时按间隔扫描并重读统计，自动扫描关掉时间隔仍可选（文案改为「每 N 秒刷新」，只重读统计） | 已迁移 |
 | `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2/5c1：OpenCode SiliconFlow 预设此前已是上游最终版本；limit 完整性与 SiliconFlow 预设用例随 5a2 补上；「两个区域合成一行」用例随 5c1 补回（groupPresetRows 合成 siliconflow 一行、cn/intl 两版、presetVersionLayout 为按地区的分段），与上游同名测试文件逐字一致 | 已迁移 |
 | `f7696fa8` | v4.0.12 | feat(apps): move uninstall into a per-row overflow menu | 5a 供应商与全局 UI | 5a4a：卸载移进每行末尾的「⋯」菜单（卸载中显示转圈并禁用）；Claude Desktop 的帮助提示移到接入状态旁；用例改为经菜单卸载 | 已迁移 |
 | `e5eeb166` | v4.0.12 | fix(i18n): clarify what hiding an app in the Apps page does | 5a 供应商与全局 UI | 5a4a：「显示」列帮助说明改为只是不显示、配置与应用自身文件都不动（Web 无托盘，不提托盘菜单） | 已迁移 |
 | `5b6d317f` | v4.0.12 | fix(i18n): drop the community translation suffix from the Turkish option | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `453cdaf9` | v4.0.12 | chore(presets): point GrooRoute invite link to grooroute.pro | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `7a8087f6` | v4.0.12 | feat(usage): scan session logs at the selected interval while the usage page is open | 5b 用量/额度 UI | 5b2a：后台会话扫描改为每 10 分钟兜底一次；useUsageAutoRefresh 打开即扫、窗口重新可见补扫、按间隔加扫，Web 没有 usage-log-recorded 推送，每轮扫完都重读整页统计，自动扫描关闭时只重读不扫描；去掉「关」选项、统计不再轮询的界面改动随 5b2b | 部分迁移 |
+| `7a8087f6` | v4.0.12 | feat(usage): scan session logs at the selected interval while the usage page is open | 5b 用量/额度 UI | 5b2b：用量页打开时按所选间隔扫描会话日志（useUsageAutoRefresh 接入新页面）；用量设置抽屉里写明启动扫描一次、后台每 10 分钟、打开用量页即扫；docs/user-manual 不适用，说明写进 docs/web-global-resources-guide-zh.md | 已迁移 |
 | `e380588a` | v4.0.12 | feat(presets): add icons for Baseten, DeepInfra, DigitalOcean, Fireworks, Groq, Nebius and SambaNova | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `8686c165` | v4.0.12 | feat(providers): add a Local group for local inference presets | 1b 代理协议 | 1b/5c1/5c2：本机地址（localhost/127.0.0.0/8/::1）绕过全局代理，转发、测速、流检测、模型拉取均直连；供应商单独代理仍优先。「本地」分组逻辑随 5c1 迁入；5c2 选择器按上游分节显示「本地」一节并可在左侧分类筛选 | 已迁移 |
 | `d5b729a5` | v4.0.12 | feat(presets): add Ollama local inference presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -512,13 +512,13 @@
 | `b542627c` | v4.0.14 | fix(usage): skip malformed UTF-8 parent records without hiding read errors (#8360) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `e8880e6f` | v4.0.14 | fix(version): stop false "update available" for dev-build local versions (#8398) | 5a 供应商与全局 UI | 5a4b：前端 version.ts 取上游最终版（开发构建的 +local 版本号不可比，不误报更新）并补 version.test.ts；后端 tool_management 此前已迁入，本批补上 misc.rs 的版本提取正则，保留 +local 段，附用例 | 已迁移 |
 | `daf442e5` | v4.0.14 | fix(opencode): keep Unicode-named deep-link imports editable (#8381) | 1d 资源/设置/工具 | 1d：OpenCode 导入生成 ASCII slug + 随机后缀 ID；编辑时保留旧 ID 不报不合法 | 已迁移 |
-| `85ae0c7b` | v4.0.14 | refactor(usage): route usage amounts through one money formatter | 5b 用量/额度 UI | 5b2a：金额统一出口 formatMoney / useMoneyFormat 迁入；各用量组件、会话阅读页改走 useMoneyFormat 随 5b2b | 部分迁移 |
-| `4e20fad5` | v4.0.14 | feat(usage): show usage amounts in a chosen currency | 5b 用量/额度 UI | 5b2a：设置增加 usageDisplay（currency、exchangeRates）并在保存时规范化（三位大写币种、正汇率），format.ts 的 formatMoney 系列与 useMoneyFormat 迁入；旧组件暂经 fmtUsd 兼容包装按美元显示，金额换算显示与币种设置界面随 5b2b | 部分迁移 |
-| `8f3337d9` | v4.0.14 | feat(usage): choose what the sidebar Today label shows | 5b 用量/额度 UI | 5b2a：侧栏「今日」设置随后被 b194cc09 改为 sidebarTodayItems，按最终版本迁入字段；Web 侧栏尚无「今日」标签，useSidebarStatus 与侧栏界面随 5b2b | 部分迁移 |
-| `0cfea5e3` | v4.0.14 | feat(usage): pick which request log columns to show | 5b 用量/额度 UI | 5b2a：usageDisplay.requestLogColumns（只存改过的列）迁入并在保存时去掉空列 id；requestLogColumns.ts 与列选择菜单随 5b2b | 部分迁移 |
-| `c6daf78c` | v4.0.14 | feat(usage): remember the last view and move display choices into settings | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsageDisplaySection.tsx`、`components/usage/rememberedChoice.ts` | 待迁移 |
+| `85ae0c7b` | v4.0.14 | refactor(usage): route usage amounts through one money formatter | 5b 用量/额度 UI | 5b2b：用量页各组件、侧栏「今日」、会话阅读页（步骤、时间线、最终回复、页头、导出 Markdown）的金额都走 useMoneyFormat；toolSummary.formatCost 与 format.ts 的 fmtUsd 兼容包装删除；定价、额度与余额页脚仍按各自币种不换算；迁入 stepCost 用例 | 已迁移 |
+| `4e20fad5` | v4.0.14 | feat(usage): show usage amounts in a chosen currency | 5b 用量/额度 UI | 5b2b：用量显示设置里选币种与汇率，用量页、侧栏、会话阅读页按所选币种显示；换算金额悬停看美元原值；可选币种与上游一致，界面语言仍只有中、英、日 | 已迁移 |
+| `8f3337d9` | v4.0.14 | feat(usage): choose what the sidebar Today label shows | 5b 用量/额度 UI | 5b2b：Web 全局侧栏「用量统计」行尾加今日标签，内容在显示设置里选；新建 hooks/useSidebarStatus.ts 只取今日花费 / Token / 请求数 / 命中率（Web 侧栏不显示模式标签和授权提醒）；侧栏展开时显示小字，收起时放进按钮名与悬停标题；不加任何强调样式 | 已迁移 |
+| `0cfea5e3` | v4.0.14 | feat(usage): pick which request log columns to show | 5b 用量/额度 UI | 5b2b：请求日志工具栏「显示的列」菜单（RequestLogColumnsMenu + requestLogColumns.ts），只存改过的列，时间列固定；显示设置里同样可改 | 已迁移 |
+| `c6daf78c` | v4.0.14 | feat(usage): remember the last view and move display choices into settings | 5b 用量/额度 UI | 5b2b：记住上次的视图（rememberedChoice），显示相关选择移入用量设置抽屉 | 已迁移 |
 | `9d83b2e8` | v4.0.14 | fix(usage): drop the ≈ mark and cap decimals on converted amounts | 5b 用量/额度 UI | 5b2a：format.ts 取上游最终版本，换算金额不加 ≈、最多两位小数（日元再少两位）、很小的金额改写两位有效数字；迁入上游 usageFormat 用例（去掉土耳其语日期用例，Web 只有中英日） | 已迁移 |
-| `b194cc09` | v4.0.14 | feat(usage): show requests or cache hit rate in the sidebar Today label | 5b 用量/额度 UI | 5b2a：usageDisplay.sidebarTodayItems（空列表＝不显示，保存时按菜单顺序去重、最多两项）与 format.ts 的 resolveSidebarToday / formatHitRatePercent 迁入；侧栏显示随 5b2b | 部分迁移 |
+| `b194cc09` | v4.0.14 | feat(usage): show requests or cache hit rate in the sidebar Today label | 5b 用量/额度 UI | 5b2b：侧栏今日可选请求数或缓存命中率，最多两项，两项时上下两行只写数；用例按 Web 侧栏改写（WebSidebarToday.test.tsx） | 已迁移 |
 | `722042ad` | v4.0.14 | fix(presets): move SiliconFlow CN presets off the retired MiniMax M2.5 | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `25310890` | v4.0.14 | feat(icons): switch Pi to the three-color pi.dev mark | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `f2906db6` | v4.0.14 | fix(proxy): round-trip Gemini thought signatures on Codex chat tool calls | 1b 代理协议 | 1b：Gemini thought signature（extra_content）在 Chat 工具调用与 Responses 调用条目间往返；Web 无 CodexChatHistoryStore，靠调用条目随历史回放携带 | 已迁移 |
@@ -558,9 +558,9 @@
 | `5cc94b8d` | v4.0.15 | fix(proxy): report routed switches without unconditional restart prompts (#8378) | 4 模式/路由 | 4d：路由下的切换返回实际生效的结果（RouteSwitchResult：remembered / route / stack 与 clientConfigChanged），POST /api/proxy/apps/:app/providers/:id/switch 返回它；只有客户端文件改写了才提示重启，路由下切换 Gemini 不再无条件提示重启；docs/ 不适用 | 已迁移 |
 | `f9bc9a4f` | v4.0.15 | fix(codex): recover malformed tool-call history for Chat upstreams (#8241) | 1b 代理协议 | 1b：Codex Chat 上游的残缺工具调用历史改写为文本，避免 400 | 已迁移 |
 | `2a7080f1` | v4.0.15 | fix(proxy): normalize DeepSeek tool replay in Codex Chat requests (#8351) | 1b 代理协议 | 1b：Codex Chat 请求规范化 DeepSeek 工具回放 | 已迁移 |
-| `73f37c4b` | v4.0.15 | feat(usage): add bar and area chart toggle (#8439) | 5b 用量/额度 UI | 需新建或映射：`components/usage/rememberedChoice.ts` | 待迁移 |
-| `17960423` | v4.0.15 | feat(usage): move the trend chart style into usage display settings | 5b 用量/额度 UI | 5b2a：usageDisplay.trendChartType（bar / area，保存时只认这两个值）与 resolveTrendChartType 迁入；趋势图样式切换界面随 5b2b | 部分迁移 |
-| `61fee943` | v4.0.15 | style(usage): lay out the Display settings as an aligned grid | 5b 用量/额度 UI | 需新建或映射：`components/usage/UsageDisplaySection.tsx` | 待迁移 |
+| `73f37c4b` | v4.0.15 | feat(usage): add bar and area chart toggle (#8439) | 5b 用量/额度 UI | 5b2b：趋势图柱形 / 曲线面积两种样式（UsageTrendChart 最终版） | 已迁移 |
+| `17960423` | v4.0.15 | feat(usage): move the trend chart style into usage display settings | 5b 用量/额度 UI | 5b2b：趋势图样式移入用量显示设置，rememberedChoice 迁入（时间范围、页签、指标、每页条数记在浏览器本地） | 已迁移 |
+| `61fee943` | v4.0.15 | style(usage): lay out the Display settings as an aligned grid | 5b 用量/额度 UI | 5b2b：显示设置按上游对齐成网格（UsageDisplaySection 最终版） | 已迁移 |
 | `5a3330c5` | v4.0.15 | feat(presets): add EveryAPI sponsor presets | — | EveryAPI 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `0a5a2ed6` | v4.0.15 | feat(presets): add AllTokens sponsor presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `8e42cb75` | v4.0.15 | chore(release): v4.0.15 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -584,7 +584,7 @@
 | `cd449274` | v4.0.16 | fix(env): stop reporting inherited process env vars as conflicts on Unix | 1d 资源/设置/工具 | 1d：Unix 上不再把继承的进程环境变量报为冲突（容器、终端注入的变量在应用内删不掉） | 已迁移 |
 | `a8e17dd6` | v4.0.16 | perf(tray): make the panel respond instantly on hover and app switching | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `27c42fd1` | v4.0.16 | feat(tray): fade in sub panel content on app switch and close it on other items | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
-| `b76e83c3` | v4.0.16 | fix(usage): shorten CJK four-digit axis ticks and size the Y axis to its labels | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `b76e83c3` | v4.0.16 | fix(usage): shorten CJK four-digit axis ticks and size the Y axis to its labels | 5b 用量/额度 UI | 5b2b：中日文四位数纵轴刻度缩短、Y 轴宽度按刻度文字取（UsageTrendChart 最终版）；托盘面板部分不适用 | 已迁移 |
 | `273d166b` | v4.0.16 | fix(tray): make the macOS panel readable over dark windows | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `8a0eddb0` | v4.0.16 | fix(codex): stop aggregated sessions from compacting on the previous provider | 4 模式/路由 | 4b：第三方路由那家的行在合并目录里也加入 Stack 的 comp_hash（按工具协议分组，补上 91fc2fcb 的路由行部分），官方路由的原生行不改 | 已迁移 |
 | `3168b00f` | v4.0.16 | Revert "fix(sidebar): show only the numbers in the usage Today badge" | — | 侧栏今日用量徽标改动已被上游撤销，净效果为空 | 不适用 |
@@ -640,7 +640,7 @@
 | `ab5d4a12` | v4.0.18 | fix(ui): trim redundant provider and settings helper copy (#8633) | 5a 供应商与全局 UI | 5a3a/5a4b/5d4：表单与各面板文案精简随 5a3a / 5a4b；设置页整体版式随 5d4 收敛为上游分组目录与 SettingsBlock / SettingsCard / SettingsRow。S3 同步部分不适用：Web 没有 S3 同步 | 已迁移 |
 | `cdfdff5e` | v4.0.18 | fix(installer): make Windows desktop shortcut optional (#8601) | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `92ec18d7` | v4.0.18 | docs(aggregation): correct the workaround for the exhausted-quota lock | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `711a4127` | v4.0.18 | fix(usage): only list apps shown on the Apps page in the app filter | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `711a4127` | v4.0.18 | fix(usage): only list apps shown on the Apps page in the app filter | 5b 用量/额度 UI | 5b2b：应用筛选只列应用页设为显示的应用（读 Web 的 visibleApps 设置；Claude Desktop 显示时也列 Claude Code），当前选中的即使隐藏也保留 | 已迁移 |
 | `fdbac61c` | v4.0.18 | feat(agy): manage Antigravity official accounts in the Auth Center backend | 2c Antigravity | 2c：授权中心 Antigravity 官方账号后端（Web 单例管理器 + /api/auth 统一接口）；切号依赖 macOS 钥匙串，浏览器登录回调落在服务端本机，仅服务端为 macOS 且浏览器在同机时可用，其他平台前端隐藏该分组 | 部分迁移 |
 | `86271879` | v4.0.18 | feat(agy): add an Antigravity group to the Auth Center | 2c Antigravity | 2c：授权中心 Antigravity 分组（无用户码的浏览器登录，显示提示与「重新打开登录页」） | 已迁移 |
 | `0af8b772` | v4.0.18 | feat(agy): bind official cards to an Antigravity account | 2c Antigravity | 2c：官方卡绑定 Antigravity 账号（AgyAccountSelect，authBinding agy_oauth） | 已迁移 |
@@ -652,7 +652,7 @@
 | `997e78b5` | v4.0.18 | feat(agy): show the bound account's quota on official cards | 2c Antigravity | 2c：官方卡显示绑定账号额度（AgyOfficialQuotaFooter，仅 agy 官方卡需要 QueryClient） | 已迁移 |
 | `276eff8d` | v4.0.18 | feat(agy): open all four quota windows from the card's quota column | 2c Antigravity | 2c：卡片额度列合并成组时整列做成下拉列出四档（Web 无「剩余/已用」显示切换，tierBreakdown 去掉 display 参数；Web 无 emphasis 着色，整段按档上色） | 已迁移 |
 | `e91689f2` | v4.0.18 | fix(agy): drop the Antigravity-only note on the usage page | 2c Antigravity | 2c：用量页不显示 Antigravity 专属说明（Web 从未加入该说明与键，无需改动） | 已迁移 |
-| `6fabe63a` | v4.0.18 | fix(agy): show Antigravity session-log rows as "Session log" | 2c Antigravity | 2c 顺延 5b：Antigravity 会话日志行显示为「会话日志」依赖 components/usage/providerLabel.ts，随 dd07b8f4/6f4d365b 一并迁移 | 待迁移 |
+| `6fabe63a` | v4.0.18 | fix(agy): show Antigravity session-log rows as "Session log" | 2c Antigravity | 5b2b：Antigravity 会话日志行随 providerLabel.ts 显示为「Antigravity · 会话日志」；用例对照 backend/src/services/usage_stats.rs 的全部占位名 | 已迁移 |
 | `e59252ee` | v4.0.18 | feat(presets): promote EveryAPI to a full sponsor | — | EveryAPI 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
 | `8d4ec90f` | v4.0.18 | chore(presets): remove ZetaAPI sponsor and presets | 1a 预设/定价/图标 | 1a：九类预设移除 ZetaAPI，删除三语推广文案；Web 原本未登记其图标 | 已迁移 |
 | `0a41250d` | v4.0.18 | feat(presets): add DIT.ai sponsor presets across nine apps | — | DIT.ai 预设在区间内新增后又移除，净效果为空；Web 无该预设 | 不适用 |
@@ -667,7 +667,7 @@
 | `e4873bc8` | v4.0.19 | feat(kimi): add Kimi Code support (#8687) | 2b Kimi Code | 2b：Kimi Code 应用（AppType::Kimi、kimi_config/kimi_session、MCP/Skills/提示词/会话/用量导入、供应商服务、工具生命周期）；Web schema v17→v18 增加 enabled_kimi；Kimi 不支持连通性测试；深链只在 MCP 中接受 kimi（同上游） | 已迁移 |
 | `7da25538` | v4.0.19 | feat(kimi): add official OAuth login and provider switching (#8710) | 2b Kimi Code | 2b/5c1：Kimi 官方设备登录与切换；Web 以 /api/auth/kimi/* 路由代替 Tauri 命令，管理器为进程级单例；对 presetGroups 的改动（loginAccountKey 对 kimi 返回 kimi）随 5c1 迁入，Kimi 账号登录预设落到 login 组、与四个 API Key 版本分开，有用例 | 已迁移 |
 | `07265bc9` | v4.0.19 | feat(kimi): support multiple official accounts in Auth Center (#8726) | 2b Kimi Code | 2b：授权中心多个 Kimi 官方账号；Web 授权中心加入 Kimi 组 | 已迁移 |
-| `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 需新建或映射：`components/usage/ChecklistMenu.tsx`、`components/usage/RequestLogColumnsMenu.tsx`等 10 个 | 待迁移 |
+| `79ba7982` | v4.0.19 | feat(usage): restructure the usage page layout (#8711) | 5b 用量/额度 UI | 5b2b：用量页整体换成上游最终版式（页头同步按钮 + 用量设置抽屉、范围栏、指标条 + 趋势图 / 热力图概览、请求日志 / 供应商 / 模型三页签），迁入 UsageHero、UsageSettingsSheet、UsageDisplaySection、ChecklistMenu、RequestLogColumnsMenu、statsColumns、usageTable、rememberedChoice、settingsStyles；上游 v7 令牌映射到 Web 主题变量，按钮补 compact / regular / icon-compact 三档尺寸；删掉 Web 旧的 DataSourceBar、UsageSummaryCards；窄屏下行距改为 px-4 sm:px-6、应用筛选组横向滚动；定价页沿用 Web 自己的 PricingConfigPanel 版式 | 已迁移 |
 | `91fc2fcb` | v4.0.19 | fix(codex): split the stack comp_hash by tool protocol | 4 模式/路由 | 4a：合并目录里 Stack 成员行的 comp_hash 按工具协议分组（code_mode_only 镜像行为 cc-switch-code_mode_only，direct 行仍为 cc-switch）；路由行统一 comp_hash 属 8a0eddb0，随 4b | 部分迁移 |
 | `ce098caf` | v4.0.19 | fix(about): detach the shell version probe from the controlling terminal | 1d 资源/设置/工具 | 1d：shell 版本探测脱离控制终端（tool_management.rs） | 已迁移 |
 | `0640c6fc` | v4.0.19 | fix(codex): never turn image input off when filling fetched model metadata | 5a 供应商与全局 UI | 5a1：填取到模型元数据时不把图片输入关掉（modelMetadataFill 此前批次已是上游最终版本） | 已迁移 |
@@ -679,8 +679,8 @@
 | `d6a23241` | v4.0.19 | feat(kimi): give provider cards real add/remove actions | 2b Kimi Code | 2b：卡片“添加/移除”真实动作；Web 沿用 OpenClaw 式卡片：添加只写 config.toml，设为默认走切换，仍在 Kimi 中的官方卡不能直接删除、不能复制 | 已迁移 |
 | `7cc3141c` | v4.0.19 | style(providers): mark additive default providers in blue | 5a 供应商与全局 UI | 5a3b：累加应用默认那家用蓝色标记：Web 的 OpenClaw / Hermes / Kimi 本来就是蓝色高亮，本批让 OpenCode 默认那家也按 isDefaultModel 高亮，状态点为蓝色；docs/ 不适用 | 已迁移 |
 | `f4e9211a` | v4.0.19 | fix(panel): let Escape close only the topmost full-screen panel | 5a 供应商与全局 UI | 5a3a：面板栈只让最上层响应 Esc，一次只退一层；body 滚动锁按计数（嵌套面板关掉一层不解锁）；补用例 | 已迁移 |
-| `29f8bef3` | v4.0.19 | fix(usage): clamp the request log page when the total shrinks | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
-| `c6f85464` | v4.0.19 | style(usage): restore the original trend chart and heatmap colors | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `29f8bef3` | v4.0.19 | fix(usage): clamp the request log page when the total shrinks | 5b 用量/额度 UI | 5b2b：总数变少时请求日志页码收回到最后一页（随上游 RequestLogTable 最终版） | 已迁移 |
+| `c6f85464` | v4.0.19 | style(usage): restore the original trend chart and heatmap colors | 5b 用量/额度 UI | 5b2b：Web 加 --chart-usage（取主题主色 hsl(var(--primary))）与 Tailwind chart.usage，热力图沿用 Web 原有的 --heat-1…4；与上游一样把用量图配色与其他图表分开，Web 的颜色不变 | 已迁移 |
 | `1c52fa91` | v4.0.19 | fix(providers): reread additive client state when a removal is refused | 5a 供应商与全局 UI | 5a3b：从配置移除被拒时显示「无法移除供应商」与译好的原因（Pi / Kimi），并照样重读累加应用的现读状态（含 OpenCode / OpenClaw / Hermes 默认模型）；Kimi 改卡 / 删卡失败后也重读；Web 之前移除失败不报错、确认框卡住，一并修好；Kimi 错误映射与文案此前已迁入 | 已迁移 |
 | `93e33d11` | v4.0.19 | fix(apps): drop the redundant not-installed error line under uninstalled tools | 1d 资源/设置/工具 | 1d：未安装工具下方不再重复显示未安装错误行（tool_management.rs） | 已迁移 |
 | `b61e2767` | v4.0.19 | feat(kimi): fetch the model list and fill parameters from models.dev | 2b Kimi Code | 2b：拉取模型列表并按 models.dev 补参数（fillKimiModel、useModelMetadataFill silent 选项）；上游的弹出式选择器（带参数预览）随 5a，Web 用“获取模型”按钮 + 内联勾选 | 部分迁移 |
@@ -707,7 +707,7 @@
 | `10e0aa23` | v4.0.19 | fix(deeplink): don't let a finished import close a newer link's confirmation | 1d 资源/设置/工具 | 1d：导入完成只关闭仍在显示的请求，不误关新到链接的确认框 | 已迁移 |
 | `9cb6b6d7` | v4.0.19 | fix(agy): run background agy commands without a console window on Windows | 2c Antigravity | 2c：Windows 下后台 agy 命令不弹控制台窗口 | 已迁移 |
 | `50e091b0` | v4.0.19 | fix(usage): step 7/14/30-day presets back by calendar days across DST | 5b 用量/额度 UI | 5b1：7 / 14 / 30 天预设按本地日历往前数天，跨夏令时不多算或少算一天；迁入上游用例 | 已迁移 |
-| `e53ca7e8` | v4.0.19 | fix(usage): tighten request log column spacing | 5b 用量/额度 UI | 需新建或映射：`components/usage/usageTable.ts` | 待迁移 |
+| `e53ca7e8` | v4.0.19 | fix(usage): tighten request log column spacing | 5b 用量/额度 UI | 5b2b：请求日志列间距随上游 usageTable / RequestLogTable 最终版 | 已迁移 |
 | `bada9a4b` | v4.0.19 | fix(models): don't borrow a vendor-hosted entry that points at another vendor | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `a043b1f8` | v4.0.19 | chore(release): v4.0.19 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `d8983bb1` | v4.0.19 | docs(release): add v4.0.19 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -746,7 +746,7 @@
 | `6e040f4c` | v4.0.20 | fix(omp): check provider keys against omp's own providers | 2d Oh My Pi | 2d：供应商键按 omp 自己的供应商校验（omp_config 最终版本） | 已迁移 |
 | `f67cb33d` | v4.0.20 | fix(omp): match omp's apiKey, models.json and schema rules | 2d Oh My Pi | 2d：apiKey、models.json 与 schema 规则对齐 omp（omp_config 最终版本；表单切换自动发现类型时丢弃 injectV1） | 已迁移 |
 | `5f642640` | v4.0.20 | feat(pi): move rarely used provider settings into a collapsed advanced section | 5a 供应商与全局 UI | 5a2：Pi / omp 的请求头与模型自动发现收进模型列表下方默认收起的「高级选项」；发现类型的白话标签与说明此前已迁入。兼容项（compat）编辑器不适用：Web 的 Pi 表单在完整 JSON 里改 compat | 部分迁移 |
-| `28a2ebc0` | v4.0.20 | fix(usage): show every tab count and keep counts steady across filter changes | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `28a2ebc0` | v4.0.20 | fix(usage): show every tab count and keep counts steady across filter changes | 5b 用量/额度 UI | 5b2b：三个页签都带条数，换筛选时沿用上一份数据原地更新 | 已迁移 |
 | `50a9d103` | v4.0.20 | chore(presets): refresh preset models to the latest vendor lineups | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `c9e059a4` | v4.0.20 | chore(release): v4.0.20 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `85ad4969` | v4.0.20 | docs(release): add v4.0.20 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -799,7 +799,7 @@
 | `0820ff73` | v4.0.21 | fix(codex-oauth): stop reporting transient refresh failures as an expired login | 1b 代理协议 | 1b：Codex OAuth 刷新暂时失败不再显示登录过期；Web 无托盘事件，改在切换供应商成功后重查失败的额度 | 已迁移 |
 | `fec3629a` | v4.0.21 | docs(readme): move TeamoRouter ahead of AICoding in the sponsor table | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `9f5adaac` | v4.0.21 | ci: auto-close outside PRs that change SCHEMA_VERSION (#8903) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
-| `42ef6347` | v4.0.21 | fix(usage): prevent dashboard jumps when toggling the sidebar (#8548) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `42ef6347` | v4.0.21 | fix(usage): prevent dashboard jumps when toggling the sidebar (#8548) | 5b 用量/额度 UI | 5b2b：折叠 / 展开侧栏时趋势图不跳动（UsageTrendChart 最终版） | 已迁移 |
 | `95e29485` | v4.0.21 | feat(presets): add ClinePass presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `5cc6c47f` | v4.0.21 | fix(auth-center): refetch Claude accounts after switching Claude cards | 3 官方账号 | 3b：切换 Claude 卡后重读 Claude 账号列表；托盘切卡事件 Web 无，不适用 | 部分迁移 |
 | `cb50e600` | v4.0.21 | chore(release): v4.0.21 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -918,7 +918,7 @@
 | `b696f890` | v4.0.25 | fix(minimax): declare M3.1-Flash native thinking levels in Pi (#8540) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `1cc2c732` | v4.0.25 | fix(mcp): follow up on Pi MCP sync review notes (#7888) | 2a Pi MCP/迁移基线 | 2a：Pi MCP 审查跟进（重名检查与提交同锁、导入按 Pi 规则校验、未装 Pi 时只入库）；Pi 拒绝原因本地化；深链 MCP 的 apps 接受 pi，合并已有服务器时保留 Pi 勾选；上游集成测试改写为 services::mcp 单元测试；用户手册不适用 | 已迁移 |
 | `69b41cdb` | v4.0.25 | fix(usage): import Pi official subagent usage (#8386) | 2d Oh My Pi | 2d：导入 Pi 官方子代理用量（session_usage_pi 上游最终版本） | 已迁移 |
-| `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 5b2a：新增 services/exchange_rates（open.er-api.com，失败退 floatrates.com，8 秒超时，走全局代理）与 GET /api/usage/exchange-rates，usageDisplay 增加 rateSource / autoExchangeRates / rateFetchedAt / rateProvider，useAutoExchangeRates 去掉 Tauri 判断；测试只用解析夹具与 mock，不发真实请求；显示设置里的汇率来源界面随 5b2b | 部分迁移 |
+| `c17de413` | v4.0.25 | feat(usage): fetch exchange rates automatically (#8716) | 5b 用量/额度 UI | 5b2b：用量页挂上 useAutoExchangeRates（自动模式下汇率过期即由服务端取一次并写回设置），显示设置里可切换自动 / 手动并「立即更新」、显示来源与上次更新 | 已迁移 |
 | `5ba95160` | v4.0.25 | fix(proxy): send a supported tool_choice for forced web search to xAI (#8664) | 1b 代理协议 | 1b：强制 WebSearch 发往 xAI 时使用其支持的 tool_choice | 已迁移 |
 | `42f7d0e0` | v4.0.25 | feat(skills): align the Discover toolbar with Installed (#9125) | 5a 供应商与全局 UI | 5d1：发现段工具栏与已安装对齐：页签行右侧放搜索框和「刷新仓库」，表头左侧为仓库 / skills.sh 分段、仓库弹层（勾掉即停用）与「只看未安装」，右侧为「安装到」弹层（记住上次选择，ZIP 与备份恢复共用）；发现列表用 react-virtual 虚拟化 | 已迁移 |
 | `4cf15aea` | v4.0.25 | feat(session): implement Kimi session deletion and update related hints (#9157) | 2b Kimi Code | 2b：Kimi 会话删除（后端 session_manager 最终版本；Web 会话列表原本只禁止 MiniMax Code 删除，前端无需改动） | 已迁移 |
@@ -1193,3 +1193,13 @@
   - 前端数据层：`types/usage.ts`、`lib/api/usage.ts`、`lib/query/usage.ts`、`components/usage/format.ts` 取上游最终版本；新增 `useMoneyFormat`、`useAutoExchangeRates`（去掉 Tauri 判断）、`useUsageAutoRefresh`。Web 服务端不推送 `usage-log-recorded`，`useUsageEventBridge` 不适用：自动刷新每轮扫完都重读整页统计，关闭自动扫描时只重读。后台会话扫描改为每 10 分钟兜底一次，`useUsageAutoRefresh` 先接入现有用量页，保持页面打开时按间隔扫描。旧组件只改调用签名，金额暂经 `fmtUsd` 兼容包装按美元显示。
   - 迁入上游 `sql_helpers`、`exchange_rates`、用量统计（首个日期、日汇总边界、筛选、首字中位数、跨应用供应商行、Token 合计等 16 项）、`usageDisplay` 设置用例，恢复 Kimi 用量统计的上游断言；前端迁入 `usageFormat`、`useMoneyFormat`、`useAutoExchangeRates` 用例，`useUsageAutoRefresh` 用例按 Web 刷新方式改写，新增 Web 用量请求路由用例；删除被 `usageFormat` 覆盖的 `usageOutputTps` 用例。`docs/web-global-resources-guide-zh.md` 同步扫描节奏、Token 口径、汇率与新接口。
   - 验证：`tsc --noEmit` 通过；前端全量 Vitest 235 个文件 2499 项通过；后端 `cargo test --locked --lib` 3641 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过、无警告。未做 Docker Linux 检查与浏览器视觉验收。
+- 2026-11-06：完成用量批次 5b2b（用量页界面收敛到上游最终版），5b 全部完成，台账待迁移清零。79ba7982 等 30 项标为已迁移（含 5b2a 留下的 13 项部分迁移与 17 项待迁移，其中 6fabe63a 为 2c 顺延）。
+  - 版式：`components/usage/` 除定价相关（`PricingConfigPanel`、`PricingEditModal`、`ModelsDev*`）与 Web 独有的 `ModelTestConfigPanel` 外整体取上游最终版本：页头同步按钮（显示最近同步时间）+ 「用量设置」抽屉，范围栏（时间范围、应用筛选、供应商 / 模型级联筛选），概览（指标条 + 趋势图；「全部」时换成分段热力图），明细三页签带条数；新增 `UsageHero`、`UsageSettingsSheet`、`UsageDisplaySection`、`ChecklistMenu`、`RequestLogColumnsMenu`、`statsColumns`、`usageTable`、`rememberedChoice`、`settingsStyles`、`providerLabel`，删除 Web 旧的 `DataSourceBar`、`UsageSummaryCards`。全局下拉筛选取代请求日志的自由输入框，5b2a 留下的「部分名称搜不到」不再存在。
+  - 主题：上游 v7 令牌按既定映射换成 Web 类名（`text-fg-1/2/3` → `text-foreground` / `text-muted-foreground(/70)`，`bg-subtle` → `bg-muted`，`bg-surface` → `bg-card`，`border-border-strong` → `border-border-hover`，`text-caption/body` → `text-xs/sm` 等；映射脚本留在迁移工作目录）；`variant="neutral" / "quiet" / "solid"` 换成 Web 的 `outline` / `ghost` / `default`；Web 按钮补 `compact`（28）/ `regular`（32）/ `icon-compact` 三档尺寸。新增 `--chart-usage`（取 Web 主题主色）与 Tailwind `chart.usage`，热力图沿用 Web 原有 `--heat-1…4`，颜色不变（c6f85464）；补上 Web 缺的 `usage-range-popover` 容器查询样式。
+  - Web 差异：供应商统计与供应商筛选菜单按显示名 A–Z（忽略大小写），不按请求数排名（上游按请求数降序）；详情不单列「计价模型」（Web 请求日志没有 `pricing_model` 列）；Web 服务端不推送新用量，自动扫描关着时用量页仍按间隔重读统计，所以间隔菜单一直可选，关掉时文案为「每 N 秒刷新」（新增 `usage.refreshMenu.refreshOnlyLabel`）；热力图保留 Web 原有的逐日键盘聚焦查看；窄屏下行距改为 `px-4 sm:px-6`，应用筛选组放不下时横向滚动。应用筛选只列应用页显示的应用（读 `visibleApps`）。
+  - 侧栏：Web 全局侧栏「用量统计」行尾显示今日数字，内容在用量显示设置里选（金额 / Token / 请求数 / 命中率，最多两项）；新建 `hooks/useSidebarStatus.ts`，只取今日数字（Web 侧栏不显示模式标签与授权提醒）；收起时数字放进按钮名与悬停标题。
+  - 金额：用量页、侧栏、会话阅读页（步骤、时间线、最终回复、页头、导出 Markdown）统一走 `useMoneyFormat`，删除 `toolSummary.formatCost` 与 `format.ts` 的 `fmtUsd` 兼容包装；定价表价格列左对齐（cb3c9fef）。App 的用量页不再外包内边距，传入「打开设置 → 路由」。
+  - 三语 locale 补齐上游 `usage.*` 与 `nav.today*` 新键，预设 1d / 7d / 14d / 30d、`totalTokens`、`dataSources`、`heatmap.subtitle` 取上游文案；去掉不适用的 `modelsDevAutoSync.openFolder*`。
+  - 用例：迁入上游 `UsageDashboard`、`UsageDashboard.smoke`、`UsageDisplaySection`、`UsagePage`、`UsageTrendChart`（含 render）、`RequestLogColumnsMenu`、`rememberedChoice`、`requestLogColumns`、`usageProviderLabel`（改读 `backend/src/services/usage_stats.rs`）、`stepCost`、`toolSummary` 用例；smoke 与 dashboard 用例按 Web 刷新方式改写（扫完即重读、关掉扫描仍重读、间隔保留）；侧栏今日用例改写为 `WebSidebarToday`；Web 的 `UsageHeatmap`、`UsageSpeedPanels` 用例按新组件改写，`UsageDashboard.pi`、`UsageDashboard.sessionSync` 被上游用例覆盖后删除；`UsagePanelMotion`（d9a62313，非本批）未迁。测试环境补 `hasPointerCapture` 等指针捕获桩（与上游 `setupGlobals` 一致），每个用例后清掉 `cc-switch.usage.*` 本地记忆。
+  - `docs/web-global-resources-guide-zh.md` 补用量页版式、筛选、设置抽屉与侧栏今日说明。三语 README「当前版本」段的用量描述留待收尾统一更新。
+  - 验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2580 项通过；后端 `cargo test --locked --lib` 3641 项通过、6 项忽略（本批无后端改动）；`cargo check --locked --bin cc-switch-web` 通过、无警告。未做 Docker Linux 检查与浏览器视觉验收。

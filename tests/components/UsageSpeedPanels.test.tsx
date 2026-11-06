@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { RequestDetailPanel } from "@/components/usage/RequestDetailPanel";
 import { ProviderStatsTable } from "@/components/usage/ProviderStatsTable";
+import { renderWithQueryClient as render } from "../utils/testQueryClient";
 
 const mocks = vi.hoisted(() => ({
   detail: vi.fn(),
@@ -21,12 +22,15 @@ describe("用量详情与供应商速度", () => {
       refetch: mocks.retry,
     });
     render(<RequestDetailPanel requestId="request" onClose={() => {}} />);
-    expect(screen.getByRole("alert")).toHaveTextContent("query failed");
+    expect(screen.getByText("query failed")).toBeInTheDocument();
+    expect(screen.queryByText("usage.requestNotFound")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
     expect(mocks.retry).toHaveBeenCalledOnce();
   });
-  it("供应商统计仍按名称 A–Z，精确速度与会话估算分列", () => {
+
+  it("供应商统计仍按名称 A–Z；有精确速度时不再显示会话估算", () => {
     const base = {
+      appType: "claude",
       requestCount: 1,
       totalTokens: 1000,
       totalCost: "0",
@@ -40,8 +44,15 @@ describe("用量详情与供应商速度", () => {
     mocks.stats.mockReturnValue({
       isLoading: false,
       data: [
-        { ...base, providerId: "z", providerName: "Zulu" },
-        { ...base, providerId: "a", providerName: "alpha" },
+        // 请求多的排在后面也不上移：Web 的供应商列表一律 A–Z
+        { ...base, requestCount: 9, providerId: "z", providerName: "Zulu" },
+        {
+          ...base,
+          providerId: "a",
+          providerName: "alpha",
+          speedOutputTokens: 0,
+          speedGenerationMs: 0,
+        },
       ],
     });
     render(
@@ -50,7 +61,10 @@ describe("用量详情与供应商速度", () => {
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("alpha");
     expect(rows[1]).toHaveTextContent("Zulu");
-    expect(rows[0]).toHaveTextContent("100 tps");
-    expect(rows[0]).toHaveTextContent("40 tps");
+    // alpha 没有经路由的精确速度：用会话日志估算的 40 tok/s，带 ≈
+    expect(rows[0]).toHaveTextContent("≈40tok/s");
+    // Zulu 有精确的 100 tok/s，不再另列估算
+    expect(rows[1]).toHaveTextContent("100tok/s");
+    expect(rows[1]).not.toHaveTextContent("≈");
   });
 });

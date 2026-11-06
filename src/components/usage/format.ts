@@ -219,15 +219,6 @@ export function formatMoney(
   return `${symbol}${groupThousands(fixed)}`;
 }
 
-/** 固定按美元显示（用量页改用 `useMoneyFormat()` 之前的旧组件在用） */
-export function fmtUsd(
-  value: unknown,
-  digits: number,
-  fallback: string = "--",
-): string {
-  return formatMoney(value, digits, USD_DISPLAY, fallback);
-}
-
 /** 按大小取位数并去掉末尾的 0：`$0.0081` / `$0.012` / `$1.25` */
 export function formatMoneyCompact(usd: number, display: MoneyDisplay): string {
   const value = usd * display.rate;

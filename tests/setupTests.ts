@@ -27,6 +27,10 @@ afterEach(() => {
   resetProviderState();
   server.resetHandlers();
   vi.clearAllMocks();
+  // 用量页记住的选择（页签、时间范围、指标等）不能从一个用例带到下一个
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith("cc-switch.usage.")) localStorage.removeItem(key);
+  }
 });
 
 afterAll(() => {

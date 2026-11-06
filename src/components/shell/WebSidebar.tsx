@@ -17,6 +17,18 @@ import type { VisibleApps } from "@/types";
 import { orderAppIds } from "@/config/appConfig";
 import { APP_DISPLAY_NAME, AppGlyph } from "./AppGlyph";
 import { cn } from "@/lib/utils";
+import { useSettingsQuery } from "@/lib/query";
+import { useMoneyFormat } from "@/hooks/useMoneyFormat";
+import { useSidebarStatus } from "@/hooks/useSidebarStatus";
+import {
+  fmtInt,
+  formatHitRatePercent,
+  formatTokensCompact,
+  getLocaleFromLanguage,
+  getResolvedLang,
+  resolveSidebarToday,
+  type SidebarTodayItem,
+} from "@/components/usage/format";
 
 export type GlobalView =
   | "providers"
@@ -50,7 +62,40 @@ export const WebSidebar = memo(function WebSidebar({
   onApp: (app: AppId) => void;
   onView: (view: GlobalView) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { data: settings } = useSettingsQuery();
+  const { moneyShort } = useMoneyFormat();
+  const { todayCost, todayTokens, todayRequests, todayHitRate } =
+    useSidebarStatus();
+  // 选了的项里是 0 的不写（没配定价时金额总是 0）；命中率在今天还没有请求时不写；
+  // 全都没有就整个不显示。两项都有时只写数、上下两行（「今日」放进悬停和读屏）
+  const locale = getLocaleFromLanguage(getResolvedLang(i18n));
+  const todayValue = (entry: SidebarTodayItem): string | null => {
+    switch (entry) {
+      case "cost":
+        return todayCost > 0 ? moneyShort(todayCost) : null;
+      case "tokens":
+        return todayTokens > 0
+          ? formatTokensCompact(todayTokens, locale)
+          : null;
+      case "requests":
+        return todayRequests > 0
+          ? t("nav.todayRequests", { value: fmtInt(todayRequests, locale) })
+          : null;
+      case "hitRate":
+        return todayRequests > 0
+          ? t("nav.todayHitRate", { value: formatHitRatePercent(todayHitRate) })
+          : null;
+    }
+  };
+  const todayValues = resolveSidebarToday(settings?.usageDisplay)
+    .map(todayValue)
+    .filter((part): part is string => part != null);
+  const todayText =
+    todayValues.length > 0
+      ? t("nav.today", { value: todayValues.join(" · ") })
+      : undefined;
+  const todayTrailing = todayValues.length > 1 ? todayValues : todayText;
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem("cc-switch-web-sidebar-expanded") === "true",
   );
@@ -68,40 +113,82 @@ export const WebSidebar = memo(function WebSidebar({
     id: GlobalView,
     label: string,
     icon: ReactNode,
-    options: { dot?: boolean; title?: string } = {},
-  ) => (
-    <button
-      key={id}
-      type="button"
-      aria-label={options.title ?? label}
-      title={!expanded ? (options.title ?? label) : undefined}
-      aria-current={currentView === id ? "page" : undefined}
-      onClick={() => selectView(id)}
-      className={cn(
-        "flex h-9 w-full shrink-0 items-center gap-3 rounded-md px-3 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
-        currentView === id && "bg-accent font-medium",
-      )}
-    >
-      <span className="relative inline-flex shrink-0">
-        {icon}
-        {options.dot && (
-          <span
-            aria-hidden="true"
-            data-testid={`sidebar-dot-${id}`}
-            className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card"
-          />
-        )}
-      </span>
-      <span
+    options: {
+      dot?: boolean;
+      title?: string;
+      /** 名字后面的小字（「用量统计」行尾的今日数字）；数组时每项一行 */
+      trailing?: string | string[];
+      /** 行尾只写了数时的完整说法，放进悬停和读屏 */
+      trailingLabel?: string;
+    } = {},
+  ) => {
+    const trailingLines =
+      options.trailing == null
+        ? []
+        : Array.isArray(options.trailing)
+          ? options.trailing
+          : [options.trailing];
+    const name = [
+      options.title ?? label,
+      options.trailingLabel ?? trailingLines.join(" · "),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const showText = expanded || mobileOpen;
+    return (
+      <button
+        key={id}
+        type="button"
+        aria-label={name}
+        title={!expanded || trailingLines.length > 0 ? name : undefined}
+        aria-current={currentView === id ? "page" : undefined}
+        onClick={() => selectView(id)}
         className={cn(
-          "whitespace-nowrap",
-          !expanded && !mobileOpen && "sr-only",
+          "flex h-9 w-full shrink-0 items-center gap-3 rounded-md px-3 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+          currentView === id && "bg-accent font-medium",
         )}
       >
-        {label}
-      </span>
-    </button>
-  );
+        <span className="relative inline-flex shrink-0">
+          {icon}
+          {options.dot && (
+            <span
+              aria-hidden="true"
+              data-testid={`sidebar-dot-${id}`}
+              className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card"
+            />
+          )}
+        </span>
+        <span
+          className={cn(
+            "whitespace-nowrap",
+            trailingLines.length > 0 && "grow",
+            !showText && "sr-only",
+          )}
+        >
+          {label}
+        </span>
+        {showText && trailingLines.length > 0 && (
+          <span
+            aria-hidden="true"
+            className="min-w-0 text-end text-xs leading-[13px] tabular-nums text-muted-foreground/70"
+          >
+            {trailingLines.map((line) => (
+              <span
+                key={line}
+                className={
+                  trailingLines.length > 1
+                    ? "block whitespace-nowrap"
+                    : undefined
+                }
+              >
+                {line}
+              </span>
+            ))}
+          </span>
+        )}
+      </button>
+    );
+  };
   return (
     <>
       <button
@@ -173,6 +260,7 @@ export const WebSidebar = memo(function WebSidebar({
             "usage",
             t("nav.usage"),
             <BarChart2 className="h-4 w-4 shrink-0" />,
+            { trailing: todayTrailing, trailingLabel: todayText },
           )}
           {item(
             "accounts",

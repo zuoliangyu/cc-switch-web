@@ -30,6 +30,11 @@ const buttonVariants = cva(
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-10 rounded-md px-8",
         icon: "h-9 w-9 p-1.5",
+        // 上游 v7 的三档尺寸（用量页等迁入的组件在用）：compact 28、regular 32、icon-compact 28 见方
+        compact: "h-7 rounded-md px-3 text-[13px] font-medium",
+        regular: "h-8 rounded-md px-3.5 text-[13px] font-medium",
+        "icon-compact":
+          "h-7 w-7 rounded-md p-0 text-muted-foreground hover:text-foreground",
       },
     },
     defaultVariants: {

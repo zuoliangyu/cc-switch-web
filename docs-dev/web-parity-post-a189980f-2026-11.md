@@ -291,7 +291,7 @@
 | `1beb8fa8` | v4.0.6 | feat(ui): make the CC Switch update dot green and open About from it | 5a 供应商与全局 UI | 5a4b：有新版本时侧栏「设置」挂绿点（提示文案用 nav.settingsHasUpdate），点进去直达「关于」；Web 页头原有的绿色更新按钮不变；新增 WebSidebar 用例 | 已迁移 |
 | `ae934663` | v4.0.6 | fix(codex): build third-party catalog entries from the bundled classic tool template | 4 模式/路由 | 4b：ProxyChat / Copilot 的第三方目录条目一律用内置经典工具模板（unified_exec），不再读 models_cache.json、不再跑 codex 取模板，去掉模板缓存 | 已迁移 |
 | `c1cb531f` | v4.0.6 | feat(skills): update all Skills from the check button and list them before confirming | 5a 供应商与全局 UI | 5a4a：「检查更新」查到更新后直接弹确认框，列出将要更新的 Skill（名称 + 仓库链接，检查后又卸掉的不列）；确认即关框，进度显示在「全部更新」按钮上；ConfirmDialog 增加 details 槽；补用例 | 已迁移 |
-| `033017b0` | v4.0.6 | fix(skills): stop the import dialog from locking while discover refetches | 5a 供应商与全局 UI | 5a4a：Web 的 useImportSkillsFromApps 不等「发现」重拉（只刷新 unmanaged），导入弹窗不会因 discover 重取而锁住 | 不适用 |
+| `033017b0` | v4.0.6 | fix(skills): stop the import dialog from locking while discover refetches | 5a 供应商与全局 UI | 验收补迁：导入 Skill 后结束时重读已安装与可导入列表，弹窗不等「发现」重拉（Web 不做 repos / discoverable 刷新，导入不会自动加仓库） | 已迁移 |
 | `8919d05c` | v4.0.6 | fix(ui): use the action color for the apps page visibility switches | 5a 供应商与全局 UI | 5a4a：Web 的 Switch 没有 neutral 色调，应用页的显示开关本来就用主色 | 不适用 |
 | `4629ee2f` | v4.0.6 | fix(tray): show every quota tier in the app row title | — | 托盘/安装器/桌面图标；Web 无对应载体 | 不适用 |
 | `dc93c496` | v4.0.6 | fix(codex): keep official models visible in the aggregation catalog | 4 模式/路由 | 4b：官方列表按本机在用的最新 Codex 版本取（PATH 上的 codex 与最近线程的 cli_version）；没有 visibility = list 的列表不合格，退回自带列表并提示 officialModelsOutdated（含 4a 留下的 2e20cdcb 部分） | 已迁移 |

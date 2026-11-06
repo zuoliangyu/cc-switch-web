@@ -67,8 +67,9 @@ pub fn session_sync_mutex() -> &'static tokio::sync::Mutex<()> {
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
-/// 后台会话用量扫描间隔（与上游 cc-switch 桌面端一致）。
-const SESSION_SYNC_INTERVAL_SECS: u64 = 60;
+/// 后台会话用量扫描间隔：10 分钟兜底一次（防 CLI 清理旧会话文件前漏导入），
+/// 用量页打开时由前端按所选间隔加扫（与上游 cc-switch 桌面端一致）。
+const SESSION_SYNC_INTERVAL_SECS: u64 = 10 * 60;
 
 /// 会话用量是否处于自动扫描模式（设置 `sessionAutoSyncEnabled`，默认开启）。
 ///

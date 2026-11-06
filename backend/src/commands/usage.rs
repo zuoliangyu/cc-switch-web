@@ -8,48 +8,98 @@ use crate::services::session_usage::{DataSourceSummary, SessionSyncResult};
 use crate::services::usage_stats::*;
 use crate::store::AppState;
 
+/// Dashboard 顶栏的全局筛选：应用、供应商（展示名）、模型（有效计价模型）。
+#[derive(Debug, Clone, Default)]
+pub struct UsageScope {
+    pub app_type: Option<String>,
+    pub provider_name: Option<String>,
+    pub model: Option<String>,
+}
+
 pub fn get_usage_summary_internal(
     state: &AppState,
     start_date: Option<i64>,
     end_date: Option<i64>,
-    app_type: Option<String>,
+    scope: UsageScope,
 ) -> Result<UsageSummary, AppError> {
-    state
-        .db
-        .get_usage_summary(start_date, end_date, app_type.as_deref())
+    state.db.get_usage_summary(
+        start_date,
+        end_date,
+        scope.app_type.as_deref(),
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
+}
+
+pub fn get_usage_summary_by_app_internal(
+    state: &AppState,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+    scope: UsageScope,
+) -> Result<Vec<UsageSummaryByApp>, AppError> {
+    state.db.get_usage_summary_by_app(
+        start_date,
+        end_date,
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
 }
 
 pub fn get_usage_trends_internal(
     state: &AppState,
     start_date: Option<i64>,
     end_date: Option<i64>,
-    app_type: Option<String>,
+    scope: UsageScope,
 ) -> Result<Vec<DailyStats>, AppError> {
-    state
-        .db
-        .get_daily_trends(start_date, end_date, app_type.as_deref())
+    state.db.get_daily_trends(
+        start_date,
+        end_date,
+        scope.app_type.as_deref(),
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
+}
+
+/// 最早有用量记录的日期（本地 `YYYY-MM-DD`），没有记录时为 None
+pub fn get_usage_first_date_internal(
+    state: &AppState,
+    scope: UsageScope,
+) -> Result<Option<String>, AppError> {
+    state.db.get_first_usage_date(
+        scope.app_type.as_deref(),
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
 }
 
 pub fn get_provider_stats_internal(
     state: &AppState,
     start_date: Option<i64>,
     end_date: Option<i64>,
-    app_type: Option<String>,
+    scope: UsageScope,
 ) -> Result<Vec<ProviderStats>, AppError> {
-    state
-        .db
-        .get_provider_stats(start_date, end_date, app_type.as_deref())
+    state.db.get_provider_stats(
+        start_date,
+        end_date,
+        scope.app_type.as_deref(),
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
 }
 
 pub fn get_model_stats_internal(
     state: &AppState,
     start_date: Option<i64>,
     end_date: Option<i64>,
-    app_type: Option<String>,
+    scope: UsageScope,
 ) -> Result<Vec<ModelStats>, AppError> {
-    state
-        .db
-        .get_model_stats(start_date, end_date, app_type.as_deref())
+    state.db.get_model_stats(
+        start_date,
+        end_date,
+        scope.app_type.as_deref(),
+        scope.provider_name.as_deref(),
+        scope.model.as_deref(),
+    )
 }
 
 pub fn get_request_logs_internal(
@@ -100,6 +150,13 @@ pub fn get_usage_data_sources_internal(
     state: &AppState,
 ) -> Result<Vec<DataSourceSummary>, AppError> {
     crate::services::session_usage::get_data_source_breakdown(&state.db)
+}
+
+/// 取 USD 对各显示币种的汇率：主源 open.er-api.com，失败退 floatrates.com。
+/// 只用于金额换算显示；失败时前端保留上次缓存或手填的汇率。
+pub async fn fetch_exchange_rates_internal(
+) -> Result<crate::services::exchange_rates::FetchedExchangeRates, AppError> {
+    crate::services::exchange_rates::fetch_usd_rates().await
 }
 
 pub fn get_model_pricing_internal(state: &AppState) -> Result<Vec<ModelPricingInfo>, AppError> {

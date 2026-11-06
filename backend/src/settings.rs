@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -274,6 +275,107 @@ impl CodexQuotaProtection {
     }
 }
 
+/// 用量金额的显示方式。只影响显示：库里的费用一律是美元，按 `exchange_rates`
+/// （或自动获取到的 `auto_exchange_rates`）换算后显示。保存时丢掉认不出的值（见
+/// [`UsageDisplaySettings::normalize`]），前端读取时也会再兜底一次。
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageDisplaySettings {
+    /// 显示币种（"USD" / "CNY" / "JPY" 等，见前端 `DISPLAY_CURRENCIES`），缺省为 USD
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+    /// 1 美元折多少目标币种，按币种存：换回 USD 再换回来，填过的汇率还在
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub exchange_rates: BTreeMap<String, f64>,
+    /// 侧栏「今日」显示哪几项（"cost" / "tokens" / "requests" / "hitRate"，最多两项），
+    /// 缺省只显示金额；空列表＝不显示，所以空列表也要写进文件
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_today_items: Option<Vec<String>>,
+    /// 请求日志的列显隐：只存用户改过的列（列 id → 是否显示），没写的按各列默认值，
+    /// 以后新加的列也按它自己的默认值出现
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub request_log_columns: BTreeMap<String, bool>,
+    /// 用量趋势图的样式（"bar" / "area"），缺省为柱形图
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trend_chart_type: Option<String>,
+    /// 汇率来源："auto" 自动获取（每日更新）/"manual" 手动填写，缺省按 manual
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_source: Option<String>,
+    /// 自动获取到的汇率，按币种存；和手填的 `exchange_rates` 分开，切回手动不丢手填值
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub auto_exchange_rates: BTreeMap<String, f64>,
+    /// 上次成功取到汇率的时间（毫秒时间戳）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_fetched_at: Option<i64>,
+    /// 上次取到汇率的实际数据源，界面署名用（open.er-api.com / floatrates.com）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_provider: Option<String>,
+}
+
+/// 侧栏「今日」可选的项，顺序同前端 `SIDEBAR_TODAY_ITEMS`
+const SIDEBAR_TODAY_ITEMS: [&str; 4] = ["cost", "tokens", "requests", "hitRate"];
+/// 侧栏那一格窄，最多两项
+const SIDEBAR_TODAY_MAX_ITEMS: usize = 2;
+
+fn is_currency_code(code: &str) -> bool {
+    code.len() == 3 && code.bytes().all(|b| b.is_ascii_uppercase())
+}
+
+/// 汇率只留正的有限值，币种代码统一成大写三位字母
+fn normalize_exchange_rates(rates: &mut BTreeMap<String, f64>) {
+    *rates = std::mem::take(rates)
+        .into_iter()
+        .filter_map(|(code, rate)| {
+            let code = code.trim().to_ascii_uppercase();
+            let usable = is_currency_code(&code) && rate.is_finite() && rate > 0.0;
+            usable.then_some((code, rate))
+        })
+        .collect();
+}
+
+fn trimmed_choice(value: Option<&str>, allowed: &[&str]) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|v| allowed.contains(v))
+        .map(str::to_string)
+}
+
+impl UsageDisplaySettings {
+    /// 丢掉认不出的值：币种必须是三位大写字母（前端只认 `DISPLAY_CURRENCIES` 里的），
+    /// 侧栏项按菜单顺序去重、最多两项（空列表＝不显示，原样保留），趋势图样式和汇率
+    /// 来源只认已知取值，汇率只留正数。
+    pub fn normalize(&mut self) {
+        self.currency = self
+            .currency
+            .as_deref()
+            .map(|c| c.trim().to_ascii_uppercase())
+            .filter(|c| is_currency_code(c));
+        normalize_exchange_rates(&mut self.exchange_rates);
+        normalize_exchange_rates(&mut self.auto_exchange_rates);
+        if let Some(items) = &self.sidebar_today_items {
+            self.sidebar_today_items = Some(
+                SIDEBAR_TODAY_ITEMS
+                    .iter()
+                    .filter(|item| items.iter().any(|saved| saved.trim() == **item))
+                    .take(SIDEBAR_TODAY_MAX_ITEMS)
+                    .map(|item| item.to_string())
+                    .collect(),
+            );
+        }
+        self.request_log_columns
+            .retain(|id, _| !id.trim().is_empty());
+        self.trend_chart_type = trimmed_choice(self.trend_chart_type.as_deref(), &["bar", "area"]);
+        self.rate_source = trimmed_choice(self.rate_source.as_deref(), &["auto", "manual"]);
+        self.rate_fetched_at = self.rate_fetched_at.filter(|ts| *ts > 0);
+        self.rate_provider = self
+            .rate_provider
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string);
+    }
+}
+
 /// 应用设置结构
 ///
 /// 存储设备级别设置，保存在本地 `~/.cc-switch-web/settings.json`，不随数据库同步。
@@ -328,6 +430,12 @@ pub struct AppSettings {
     /// User has confirmed the usage query first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage_confirmed: Option<bool>,
+    /// 用量页的自动刷新间隔（毫秒）：用量页打开时按它扫描会话日志并刷新统计
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage_dashboard_refresh_interval_ms: Option<u32>,
+    /// 用量金额的显示币种与汇率等显示偏好（只影响显示）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage_display: Option<UsageDisplaySettings>,
     /// 会话用量自动扫描开关（默认开启=自动模式）。关闭后停止后台定时扫描各客户端
     /// 会话日志，仅在用户点击"立即同步"时手动扫描；代理记账不受此开关影响。
     #[serde(default = "default_true")]
@@ -475,6 +583,8 @@ impl Default for AppSettings {
             codex_stack_auto_review_model: None,
             proxy_confirmed: None,
             usage_confirmed: None,
+            usage_dashboard_refresh_interval_ms: None,
+            usage_display: None,
             session_auto_sync_enabled: true,
             stream_check_confirmed: None,
             enable_failover_toggle: false,
@@ -602,6 +712,10 @@ impl AppSettings {
             .map(|s| s.trim())
             .filter(|s| matches!(*s, "left" | "used"))
             .map(|s| s.to_string());
+
+        if let Some(display) = &mut self.usage_display {
+            display.normalize();
+        }
 
         self.preferred_terminal = self
             .preferred_terminal
@@ -1322,6 +1436,115 @@ mod tests {
         let saved = serde_json::to_value(&off).expect("serialize");
         assert_eq!(saved["codexStackClassicTools"], false);
         assert!(saved.get("codexStackClassicSubagents").is_none());
+    }
+
+    #[test]
+    fn usage_display_round_trips_and_stays_out_of_old_files() {
+        let old: AppSettings = serde_json::from_value(serde_json::json!({})).expect("old settings");
+        assert!(old.usage_display.is_none());
+        assert!(old.usage_dashboard_refresh_interval_ms.is_none());
+        assert!(serde_json::to_value(&old)
+            .expect("serialize")
+            .get("usageDisplay")
+            .is_none());
+
+        let saved: AppSettings = serde_json::from_value(serde_json::json!({
+            "usageDashboardRefreshIntervalMs": 10000,
+            "usageDisplay": {
+                "currency": "CNY",
+                "exchangeRates": { "CNY": 6.8 },
+                "sidebarTodayItems": ["cost", "requests"],
+                "requestLogColumns": { "statusCode": true, "app": false },
+                "trendChartType": "area",
+                "rateSource": "auto",
+                "autoExchangeRates": { "CNY": 6.9 },
+                "rateFetchedAt": 1_700_000_000_000i64,
+                "rateProvider": "open.er-api.com"
+            }
+        }))
+        .expect("usage display");
+        assert_eq!(saved.usage_dashboard_refresh_interval_ms, Some(10000));
+        let display = saved.usage_display.as_ref().expect("usage display");
+        assert_eq!(display.currency.as_deref(), Some("CNY"));
+        assert_eq!(display.exchange_rates.get("CNY"), Some(&6.8));
+        assert_eq!(
+            display.sidebar_today_items.as_deref(),
+            Some(&["cost".to_string(), "requests".to_string()][..])
+        );
+        assert_eq!(display.request_log_columns.get("app"), Some(&false));
+        assert_eq!(display.trend_chart_type.as_deref(), Some("area"));
+        assert_eq!(display.rate_source.as_deref(), Some("auto"));
+        assert_eq!(display.auto_exchange_rates.get("CNY"), Some(&6.9));
+        assert_eq!(display.rate_fetched_at, Some(1_700_000_000_000));
+        assert_eq!(display.rate_provider.as_deref(), Some("open.er-api.com"));
+        assert_eq!(
+            serde_json::to_value(&saved).expect("serialize")["usageDisplay"],
+            serde_json::json!({
+                "currency": "CNY",
+                "exchangeRates": { "CNY": 6.8 },
+                "sidebarTodayItems": ["cost", "requests"],
+                "requestLogColumns": { "app": false, "statusCode": true },
+                "trendChartType": "area",
+                "rateSource": "auto",
+                "autoExchangeRates": { "CNY": 6.9 },
+                "rateFetchedAt": 1_700_000_000_000i64,
+                "rateProvider": "open.er-api.com"
+            })
+        );
+
+        // 侧栏「今日」一项都不勾＝不显示：空列表要原样写回，不能当成没设置
+        let hidden: UsageDisplaySettings =
+            serde_json::from_value(serde_json::json!({ "sidebarTodayItems": [] }))
+                .expect("hidden today label");
+        assert_eq!(
+            serde_json::to_value(&hidden).expect("serialize"),
+            serde_json::json!({ "sidebarTodayItems": [] })
+        );
+    }
+
+    #[test]
+    fn usage_display_normalize_drops_unknown_values() {
+        let mut display: UsageDisplaySettings = serde_json::from_value(serde_json::json!({
+            "currency": " cny ",
+            "exchangeRates": { "cny": 6.8, "EUR": 0, "JPY": -1, "TOOLONG": 2 },
+            "sidebarTodayItems": ["hitRate", "bogus", "cost", "cost", "tokens"],
+            "requestLogColumns": { "": true, "app": false },
+            "trendChartType": "pie",
+            "rateSource": " auto ",
+            "autoExchangeRates": { "TWD": 32.0, "TRY": 49.6 },
+            "rateFetchedAt": 0,
+            "rateProvider": "  "
+        }))
+        .expect("usage display");
+        display.normalize();
+        assert_eq!(display.currency.as_deref(), Some("CNY"));
+        assert_eq!(
+            display.exchange_rates,
+            BTreeMap::from([("CNY".to_string(), 6.8)])
+        );
+        // 按菜单顺序去重，最多两项（和前端 resolveSidebarToday 一致，hitRate 排在后面被截掉）
+        assert_eq!(
+            display.sidebar_today_items,
+            Some(vec!["cost".to_string(), "tokens".to_string()])
+        );
+        assert_eq!(
+            display.request_log_columns,
+            BTreeMap::from([("app".to_string(), false)])
+        );
+        assert_eq!(display.trend_chart_type, None);
+        assert_eq!(display.rate_source.as_deref(), Some("auto"));
+        assert_eq!(display.auto_exchange_rates.len(), 2);
+        assert_eq!(display.rate_fetched_at, None);
+        assert_eq!(display.rate_provider, None);
+
+        let mut bad_currency = UsageDisplaySettings {
+            currency: Some("US$".to_string()),
+            sidebar_today_items: Some(Vec::new()),
+            ..Default::default()
+        };
+        bad_currency.normalize();
+        assert_eq!(bad_currency.currency, None);
+        assert_eq!(bad_currency.sidebar_today_items, Some(Vec::new()));
     }
 
     #[test]

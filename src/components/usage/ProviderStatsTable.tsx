@@ -29,9 +29,13 @@ export function ProviderStatsTable({
   refreshIntervalMs,
 }: ProviderStatsTableProps) {
   const { t } = useTranslation();
-  const { data: stats, isLoading } = useProviderStats(range, appType, {
-    refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
-  });
+  const { data: stats, isLoading } = useProviderStats(
+    range,
+    { appType },
+    {
+      refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
+    },
+  );
 
   const pagination = useClientPagination(
     [...(stats ?? [])].sort((a, b) =>

@@ -41,7 +41,9 @@ const withJson = async <T>(request: Request): Promise<T> => {
 const success = <T>(payload: T) => HttpResponse.json(payload as any);
 
 export const handlers = [
-  http.post(`${RUNTIME_ENDPOINT}/get_last_session_scan`, () => success(null)),
+  http.post(`${RUNTIME_ENDPOINT}/get_session_usage_last_sync`, () =>
+    success(null),
+  ),
   http.post(`${RUNTIME_ENDPOINT}/claude_account_submit_paste`, () =>
     success(null),
   ),

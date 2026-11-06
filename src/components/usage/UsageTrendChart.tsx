@@ -177,9 +177,13 @@ export function UsageTrendChart({
   const { t, i18n } = useTranslation();
   const [metric, setMetric] = useState<TrendMetric>("tokens");
   const { startDate, endDate } = resolveUsageRange(range);
-  const { data: trends, isLoading } = useUsageTrends(range, appType, {
-    refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
-  });
+  const { data: trends, isLoading } = useUsageTrends(
+    range,
+    { appType },
+    {
+      refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
+    },
+  );
 
   const durationSeconds = Math.max(endDate - startDate, 0);
   const isHourly = durationSeconds <= 24 * 60 * 60;

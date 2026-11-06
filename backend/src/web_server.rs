@@ -478,6 +478,18 @@ struct UsageRangeQuery {
     start_date: Option<i64>,
     end_date: Option<i64>,
     app_type: Option<String>,
+    provider_name: Option<String>,
+    model: Option<String>,
+}
+
+impl UsageRangeQuery {
+    fn scope(&self) -> crate::commands::UsageScope {
+        crate::commands::UsageScope {
+            app_type: self.app_type.clone(),
+            provider_name: self.provider_name.clone(),
+            model: self.model.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -2418,10 +2430,43 @@ async fn get_usage_summary(
             state.app_state.as_ref(),
             query.start_date,
             query.end_date,
-            query.app_type.clone(),
+            query.scope(),
         )
     })
     .await
+}
+
+async fn get_usage_summary_by_app(
+    State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
+) -> Result<Json<Vec<crate::services::usage_stats::UsageSummaryByApp>>, ApiError> {
+    blocking_json(move || {
+        crate::commands::get_usage_summary_by_app_internal(
+            state.app_state.as_ref(),
+            query.start_date,
+            query.end_date,
+            query.scope(),
+        )
+    })
+    .await
+}
+
+async fn get_usage_first_date(
+    State(state): State<WebApiState>,
+    Query(query): Query<UsageRangeQuery>,
+) -> Result<Json<Option<String>>, ApiError> {
+    blocking_json(move || {
+        crate::commands::get_usage_first_date_internal(state.app_state.as_ref(), query.scope())
+    })
+    .await
+}
+
+async fn fetch_usage_exchange_rates(
+) -> Result<Json<crate::services::exchange_rates::FetchedExchangeRates>, ApiError> {
+    let rates = crate::commands::fetch_exchange_rates_internal()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok(Json(rates))
 }
 
 async fn get_usage_trends(
@@ -2433,7 +2478,7 @@ async fn get_usage_trends(
             state.app_state.as_ref(),
             query.start_date,
             query.end_date,
-            query.app_type.clone(),
+            query.scope(),
         )
     })
     .await
@@ -2448,7 +2493,7 @@ async fn get_usage_provider_stats(
             state.app_state.as_ref(),
             query.start_date,
             query.end_date,
-            query.app_type.clone(),
+            query.scope(),
         )
     })
     .await
@@ -2463,7 +2508,7 @@ async fn get_usage_model_stats(
             state.app_state.as_ref(),
             query.start_date,
             query.end_date,
-            query.app_type.clone(),
+            query.scope(),
         )
     })
     .await
@@ -5345,6 +5390,9 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         )
         .route("/api/sessions/delete-batch", post(delete_sessions))
         .route("/api/usage/summary", get(get_usage_summary))
+        .route("/api/usage/summary-by-app", get(get_usage_summary_by_app))
+        .route("/api/usage/first-date", get(get_usage_first_date))
+        .route("/api/usage/exchange-rates", get(fetch_usage_exchange_rates))
         .route("/api/usage/trends", get(get_usage_trends))
         .route("/api/usage/provider-stats", get(get_usage_provider_stats))
         .route("/api/usage/model-stats", get(get_usage_model_stats))

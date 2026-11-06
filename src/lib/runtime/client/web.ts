@@ -1,6 +1,6 @@
 import type { SkillDiscoveryResult, SkillUpdateCheckResult, SkillAppSyncOutcome } from "@/lib/api/skills";
 import type { AppMode, AppModeView, RouteSwitchResult } from "@/types/proxy";
-import type { Settings } from "@/types";
+import type { FetchedExchangeRates, Settings } from "@/types";
 import type { AddCustomIconResult, CustomIconEntry } from "@/lib/api/customIcons";
 import type {
   CustomEndpoint,
@@ -99,6 +99,7 @@ import type {
   RequestLog,
   SessionSyncResult,
   UsageSummary,
+  UsageSummaryByApp,
 } from "@/types/usage";
 import {
   getDefaultAppProxyConfig,
@@ -2515,16 +2516,72 @@ export const deleteWebPiPromptTemplate = (
 export const getWebPiSessionDiscovery = (): Promise<PiSessionDiscovery> =>
   requestJson<PiSessionDiscovery>("/api/pi/session-discovery");
 
-export async function getWebUsageSummary(
+/** 用量统计接口共用的查询串：时间范围 + Dashboard 顶栏筛选（应用、供应商、模型） */
+function usageScopeQuery(
   startDate?: number,
   endDate?: number,
   appType?: string,
-): Promise<UsageSummary> {
+  providerName?: string,
+  model?: string,
+): string {
   const params = new URLSearchParams();
   if (typeof startDate === "number") params.set("startDate", String(startDate));
   if (typeof endDate === "number") params.set("endDate", String(endDate));
   if (appType) params.set("appType", appType);
-  const query = params.toString();
+  if (providerName) params.set("providerName", providerName);
+  if (model) params.set("model", model);
+  return params.toString();
+}
+
+export async function getWebUsageSummaryByApp(
+  startDate?: number,
+  endDate?: number,
+  providerName?: string,
+  model?: string,
+): Promise<UsageSummaryByApp[]> {
+  const query = usageScopeQuery(
+    startDate,
+    endDate,
+    undefined,
+    providerName,
+    model,
+  );
+  return requestJson<UsageSummaryByApp[]>(
+    `/api/usage/summary-by-app${query ? `?${query}` : ""}`,
+  );
+}
+
+/** 最早有用量记录的本地日期 `YYYY-MM-DD`，没有记录时为 null */
+export async function getWebUsageFirstDate(
+  appType?: string,
+  providerName?: string,
+  model?: string,
+): Promise<string | null> {
+  const query = usageScopeQuery(
+    undefined,
+    undefined,
+    appType,
+    providerName,
+    model,
+  );
+  return requestJson<string | null>(
+    `/api/usage/first-date${query ? `?${query}` : ""}`,
+  );
+}
+
+/** 取 USD 对各显示币种的汇率：服务端先试 open.er-api.com，失败退 floatrates.com */
+export async function fetchWebExchangeRates(): Promise<FetchedExchangeRates> {
+  return requestJson<FetchedExchangeRates>("/api/usage/exchange-rates");
+}
+
+export async function getWebUsageSummary(
+  startDate?: number,
+  endDate?: number,
+  appType?: string,
+  providerName?: string,
+  model?: string,
+): Promise<UsageSummary> {
+  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
   return requestJson<UsageSummary>(
     `/api/usage/summary${query ? `?${query}` : ""}`,
   );
@@ -2534,12 +2591,10 @@ export async function getWebUsageTrends(
   startDate?: number,
   endDate?: number,
   appType?: string,
+  providerName?: string,
+  model?: string,
 ): Promise<DailyStats[]> {
-  const params = new URLSearchParams();
-  if (typeof startDate === "number") params.set("startDate", String(startDate));
-  if (typeof endDate === "number") params.set("endDate", String(endDate));
-  if (appType) params.set("appType", appType);
-  const query = params.toString();
+  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
   return requestJson<DailyStats[]>(
     `/api/usage/trends${query ? `?${query}` : ""}`,
   );
@@ -2549,12 +2604,10 @@ export async function getWebProviderStats(
   startDate?: number,
   endDate?: number,
   appType?: string,
+  providerName?: string,
+  model?: string,
 ): Promise<ProviderStats[]> {
-  const params = new URLSearchParams();
-  if (typeof startDate === "number") params.set("startDate", String(startDate));
-  if (typeof endDate === "number") params.set("endDate", String(endDate));
-  if (appType) params.set("appType", appType);
-  const query = params.toString();
+  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
   return requestJson<ProviderStats[]>(
     `/api/usage/provider-stats${query ? `?${query}` : ""}`,
   );
@@ -2564,12 +2617,10 @@ export async function getWebModelStats(
   startDate?: number,
   endDate?: number,
   appType?: string,
+  providerName?: string,
+  model?: string,
 ): Promise<ModelStats[]> {
-  const params = new URLSearchParams();
-  if (typeof startDate === "number") params.set("startDate", String(startDate));
-  if (typeof endDate === "number") params.set("endDate", String(endDate));
-  if (appType) params.set("appType", appType);
-  const query = params.toString();
+  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
   return requestJson<ModelStats[]>(
     `/api/usage/model-stats${query ? `?${query}` : ""}`,
   );

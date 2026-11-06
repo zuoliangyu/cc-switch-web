@@ -24,7 +24,7 @@ Skills 发现和更新检查同时返回成功条目与失败仓库；存在失�
 
 提示词可复制到其他应用，每个目标创建独立、未启用的新记录，不覆盖同名项。部分失败会保留错误与失败目标，再次复制只重试这些目标。Hermes 的 `SOUL.md` 是人设文件，应按内容选择是否复制。Pi 原生文件导入没有不可执行的撤销入口；删除仍沿用 Web 确认流程。
 
-Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前文件。用量页显示服务进程最近一次后台或手动扫描的完成时间，每 30 秒刷新；进程尚未扫描时不显示。该时间表示扫描完成，不能代替同步结果中的错误明细。Web 模型测试会实际发起模型请求，因此保留模型、超时和重试设置。
+Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前文件。用量页显示服务进程最近一次后台或手动扫描的完成时间，每 30 秒刷新；进程尚未扫描时不显示。该时间表示扫描完成，不能代替同步结果中的错误明细。自动扫描模式下，服务端每 10 分钟兜底扫描一次会话日志；用量页打开且窗口可见时，按页面选择的刷新间隔另行扫描并重读统计（服务端不推送新用量）。统计中的 Token 总数含缓存写入与命中，Codex、Gemini、Grok Build 的输入先扣除其中已含的缓存；Claude Desktop 网关的用量并入 Claude Code 展示。金额换算只影响显示，库内费用一律为美元；只有选择自动获取汇率时，服务端才请求 open.er-api.com，失败时改用 floatrates.com。Web 模型测试会实际发起模型请求，因此保留模型、超时和重试设置。
 
 ## 新增或调整的 API
 
@@ -40,5 +40,9 @@ Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前�
 | `GET /api/skills/updates` | 返回 `{updates, failures}`；前端旧数组 API 继续由兼容包装提供 |
 | `POST /api/skills/install-archives` | 安装结果增加 `skipped` 诊断，已安装条目照常返回 |
 | `GET /api/usage/session-sync` | 返回最近扫描完成的 Unix 毫秒时间或 `null`；既有 POST 仍触发手动同步 |
+| `GET /api/usage/summary`、`/trends`、`/provider-stats`、`/model-stats` | 查询参数在 `startDate`、`endDate`、`appType` 外增加 `providerName`（展示名精确匹配，含会话占位名）与 `model`（模型精确匹配）；汇总增加 `realTotalTokens`、`cacheHitRate`，供应商统计增加 `appType` 与首字中位数，模型统计增加成功率、速度与首字中位数 |
+| `GET /api/usage/summary-by-app` | 同上的时间与供应商、模型筛选，按应用返回 `{appType, summary}`，按真实 Token 降序 |
+| `GET /api/usage/first-date` | 同上的应用、供应商、模型筛选，返回最早有用量的本地日期 `YYYY-MM-DD` 或 `null` |
+| `GET /api/usage/exchange-rates` | 返回 `{rates, fetchedAt, source}`：1 美元折多少 CNY / EUR / JPY / TWD / TRY；两个源都失败时返回错误 |
 
 测试使用临时目录、内存数据库、本地 HTTP 夹具和浏览器全 API mock。真实账号登录、工具安装、跨平台编译、全量测试、发布构建和 Docker 验证不包含在本轮验收内。

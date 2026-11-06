@@ -163,7 +163,7 @@ mod tests {
             assert_eq!(aborted, (499, "Request was aborted".to_string()));
         }
 
-        let providers = db.get_provider_stats(None, None, Some(OMP.app_type))?;
+        let providers = db.get_provider_stats(None, None, Some(OMP.app_type), None, None)?;
         assert!(providers.iter().any(|provider| {
             provider.provider_id == OMP.provider_placeholder
                 && provider.provider_name == "Oh My Pi (Session)"

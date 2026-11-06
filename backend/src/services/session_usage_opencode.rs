@@ -630,7 +630,9 @@ mod tests {
             .unwrap();
         assert_eq!(totals, (2, 50, "0.25".into()));
         drop(conn);
-        let stats = db.get_provider_stats(None, None, Some("opencode")).unwrap();
+        let stats = db
+            .get_provider_stats(None, None, Some("opencode"), None, None)
+            .unwrap();
         assert_eq!(stats[0].provider_name, "OpenCode (Session)");
         assert_eq!(stats[0].request_count, 2);
     }

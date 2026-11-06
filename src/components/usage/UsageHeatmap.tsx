@@ -116,9 +116,13 @@ function useYearDailyTrends(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [startKey],
   );
-  return useUsageTrends(selection, appType, {
-    refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
-  });
+  return useUsageTrends(
+    selection,
+    { appType },
+    {
+      refetchInterval: refreshIntervalMs > 0 ? refreshIntervalMs : false,
+    },
+  );
 }
 
 /** 把后端按天的数据铺成 53 周 × 7 天的格子（周一开头，未来的日子标记出来）。 */

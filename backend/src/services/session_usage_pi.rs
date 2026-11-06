@@ -1832,7 +1832,7 @@ mod tests {
             assert_eq!(empty_failure, (500, 0, "Pi request failed".to_string()));
         }
 
-        let providers = db.get_provider_stats(None, None, Some("pi"))?;
+        let providers = db.get_provider_stats(None, None, Some("pi"), None, None)?;
         assert!(providers.iter().any(|provider| {
             provider.provider_id == PI.provider_placeholder
                 && provider.provider_name == "Pi (Session)"
@@ -2049,7 +2049,7 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()?;
             assert_eq!(timings, vec![(10_000, None), (20_000, None)]);
         }
-        let stats = db.get_provider_stats(None, None, Some(PI.app_type))?;
+        let stats = db.get_provider_stats(None, None, Some(PI.app_type), None, None)?;
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].est_speed_output_tokens, 1_500);
         assert_eq!(stats[0].est_speed_duration_ms, 30_000);

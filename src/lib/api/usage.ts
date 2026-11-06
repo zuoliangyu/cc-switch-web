@@ -1,6 +1,7 @@
 import { invoke } from "@/lib/runtime/client/core";
 import type {
   UsageSummary,
+  UsageSummaryByApp,
   DailyStats,
   ProviderStats,
   ModelStats,
@@ -14,7 +15,7 @@ import type {
   SessionSyncResult,
   DataSourceSummary,
 } from "@/types/usage";
-import type { UsageResult } from "@/types";
+import type { FetchedExchangeRates, UsageResult } from "@/types";
 import type { AppId } from "./types";
 import type { TemplateType } from "@/config/constants";
 
@@ -53,32 +54,98 @@ export const usageApi = {
     startDate?: number,
     endDate?: number,
     appType?: string,
+    providerName?: string,
+    model?: string,
   ): Promise<UsageSummary> => {
-    return invoke("get_usage_summary", { startDate, endDate, appType });
+    return invoke("get_usage_summary", {
+      startDate,
+      endDate,
+      appType,
+      providerName,
+      model,
+    });
+  },
+
+  getSessionUsageSummary: async (
+    appType: string,
+    sessionId: string,
+  ): Promise<UsageSummary> => {
+    return invoke("get_session_usage_summary", { appType, sessionId });
+  },
+
+  getUsageSummaryByApp: async (
+    startDate?: number,
+    endDate?: number,
+    providerName?: string,
+    model?: string,
+  ): Promise<UsageSummaryByApp[]> => {
+    return invoke("get_usage_summary_by_app", {
+      startDate,
+      endDate,
+      providerName,
+      model,
+    });
   },
 
   getUsageTrends: async (
     startDate?: number,
     endDate?: number,
     appType?: string,
+    providerName?: string,
+    model?: string,
   ): Promise<DailyStats[]> => {
-    return invoke("get_usage_trends", { startDate, endDate, appType });
+    return invoke("get_usage_trends", {
+      startDate,
+      endDate,
+      appType,
+      providerName,
+      model,
+    });
+  },
+
+  /** 最早有用量记录的本地日期 `YYYY-MM-DD`，没有记录时为 null */
+  getUsageFirstDate: async (
+    appType?: string,
+    providerName?: string,
+    model?: string,
+  ): Promise<string | null> => {
+    return invoke("get_usage_first_date", {
+      appType,
+      providerName,
+      model,
+    });
   },
 
   getProviderStats: async (
     startDate?: number,
     endDate?: number,
     appType?: string,
+    providerName?: string,
+    model?: string,
   ): Promise<ProviderStats[]> => {
-    return invoke("get_provider_stats", { startDate, endDate, appType });
+    return invoke("get_provider_stats", {
+      startDate,
+      endDate,
+      appType,
+      providerName,
+      model,
+    });
   },
 
   getModelStats: async (
     startDate?: number,
     endDate?: number,
     appType?: string,
+    providerName?: string,
+    model?: string,
   ): Promise<ModelStats[]> => {
-    return invoke("get_model_stats", { startDate, endDate, appType });
+    return invoke("get_model_stats", {
+      startDate,
+      endDate,
+      appType,
+      providerName,
+      model,
+    });
   },
 
   getRequestLogs: async (
@@ -151,11 +218,14 @@ export const usageApi = {
     return invoke("check_provider_limits", { providerId, appType });
   },
 
-  getLastSessionScan: (): Promise<number | null> =>
-    invoke("get_last_session_scan"),
-
+  // Session usage sync
   syncSessionUsage: async (): Promise<SessionSyncResult> => {
     return invoke("sync_session_usage");
+  },
+
+  /** 会话日志扫描（后台定时或手动同步）最近一次完成的时间（毫秒）；本次启动后还没扫过时为 null */
+  getSessionUsageLastSync: async (): Promise<number | null> => {
+    return invoke("get_session_usage_last_sync");
   },
 
   rebuildCodexUsage: async (): Promise<SessionSyncResult> => {
@@ -164,5 +234,10 @@ export const usageApi = {
 
   getDataSourceBreakdown: async (): Promise<DataSourceSummary[]> => {
     return invoke("get_usage_data_sources");
+  },
+
+  /** 取 USD 对各显示币种的汇率：主源 open.er-api.com，失败退 floatrates.com */
+  fetchExchangeRates: async (): Promise<FetchedExchangeRates> => {
+    return invoke("fetch_exchange_rates");
   },
 };

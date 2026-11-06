@@ -406,19 +406,25 @@ mod tests {
                 ]
             );
         }
-        // Web 的统计接口还没有首字中位数与额外筛选参数，估算速度也仍排除带首字的行
-        // （上游随 a0dd3b39 放开，批次 5b 迁移时恢复上游断言：估算 1_500 / 30_000，实测 0 / 0）
-        let stats = db.get_provider_stats(None, None, Some("kimi")).unwrap();
+        let stats = db
+            .get_provider_stats(None, None, Some("kimi"), None, None)
+            .unwrap();
         assert_eq!(stats.len(), 1);
         assert_eq!(stats[0].request_count, 2);
-        assert_eq!(stats[0].est_speed_output_tokens, 0);
-        assert_eq!(stats[0].est_speed_duration_ms, 0);
-        // 同上：Web 目前把带首字的会话行计入实测速度（上游为 (0, 0)）
+        assert_eq!(stats[0].est_speed_output_tokens, 1_500);
+        assert_eq!(stats[0].est_speed_duration_ms, 30_000);
+        assert_eq!(stats[0].est_first_token_median_ms, Some(2_500));
         assert_eq!(
-            (stats[0].speed_output_tokens, stats[0].speed_generation_ms),
-            (1_500, 25_000)
+            (
+                stats[0].speed_output_tokens,
+                stats[0].speed_generation_ms,
+                stats[0].first_token_median_ms
+            ),
+            (0, 0, None)
         );
-        let models = db.get_model_stats(None, None, Some("kimi")).unwrap();
+        let models = db
+            .get_model_stats(None, None, Some("kimi"), None, None)
+            .unwrap();
         assert_eq!(models.len(), 2);
         assert!(models.iter().all(|model| model.model != "agent-loop"));
     }

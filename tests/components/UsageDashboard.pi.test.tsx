@@ -10,6 +10,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+// 自动刷新（按间隔扫描会话日志）有单独的 hook 用例，这里只看页面本身
+vi.mock("@/hooks/useUsageAutoRefresh", () => ({
+  useUsageAutoRefresh: () => ({ syncSessionUsage: vi.fn() }),
+}));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: 1750000000000 }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),

@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { usageApi } from "@/lib/api/usage";
+import { useUsageAutoRefresh } from "@/hooks/useUsageAutoRefresh";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usageKeys } from "@/lib/query/usage";
 import {
@@ -61,7 +62,7 @@ export function UsageDashboard({
   const queryClient = useQueryClient();
   const { data: lastSessionScan } = useQuery({
     queryKey: [...usageKeys.all, "last-session-scan"],
-    queryFn: usageApi.getLastSessionScan,
+    queryFn: usageApi.getSessionUsageLastSync,
     refetchInterval: 30_000,
   });
   const [syncingSession, setSyncingSession] = useState(false);
@@ -96,6 +97,8 @@ export function UsageDashboard({
   const [range, setRange] = useState<UsageRangeSelection>({ preset: "today" });
   const [appType, setAppType] = useState<AppTypeFilter>("all");
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(30000);
+  // 后台只每 10 分钟兜底扫描一次：用量页打开时按所选间隔加扫会话日志
+  useUsageAutoRefresh({ refreshIntervalMs, sessionAutoSyncEnabled });
 
   const refreshIntervalOptionsMs = [0, 5000, 10000, 30000, 60000] as const;
   const changeRefreshInterval = () => {

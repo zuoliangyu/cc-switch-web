@@ -351,6 +351,38 @@ export interface RemoteSnapshotInfo {
   remotePath: string;
 }
 
+/** 用量金额的显示方式；对应 Rust `UsageDisplaySettings`。保存时后端丢掉认不出的值，前端读取时再兜底。 */
+export interface UsageDisplaySettings {
+  /** 显示币种（见 `DISPLAY_CURRENCIES`），缺省为 USD */
+  currency?: string;
+  /** 1 美元折多少目标币种，按币种存 */
+  exchangeRates?: Record<string, number>;
+  /** 侧栏「今日」显示哪几项（见 `SIDEBAR_TODAY_ITEMS`），缺省只显示金额；空列表＝不显示 */
+  sidebarTodayItems?: string[];
+  /** 请求日志列显隐：只存用户改过的列（列 id → 是否显示） */
+  requestLogColumns?: Record<string, boolean>;
+  /** 用量趋势图的样式（见 `TREND_CHART_TYPES`），缺省为柱形图 */
+  trendChartType?: string;
+  /** 汇率来源（"auto" 自动获取 / "manual" 手动填写），缺省为 manual，只有用户主动选自动才联网 */
+  rateSource?: string;
+  /** 自动获取到的汇率，按币种存；与手填的 `exchangeRates` 分开，切回手动不丢手填值 */
+  autoExchangeRates?: Record<string, number>;
+  /** 上次成功取到汇率的时间（毫秒时间戳） */
+  rateFetchedAt?: number;
+  /** 上次取到汇率的实际数据源（后端返回的 source），用于界面署名 */
+  rateProvider?: string;
+}
+
+/** 后端 `fetch_exchange_rates` 的返回：1 美元折多少目标币种 */
+export interface FetchedExchangeRates {
+  rates: Record<string, number>;
+  fetchedAt: number;
+  /** 实际取到数据的源，界面标注用 */
+  source: string;
+}
+
+// 应用设置类型（用于设置对话框与 Tauri API）
+
 // 应用设置类型（用于设置页与本地 Web API）
 // 存储在本地 ~/.cc-switch-web/settings.json，不随数据库同步
 export interface Settings {
@@ -378,6 +410,10 @@ export interface Settings {
   proxyConfirmed?: boolean;
   // User has confirmed the usage query first-run notice
   usageConfirmed?: boolean;
+  // 用量页的自动刷新间隔（毫秒）：用量页打开时按它扫描会话日志并刷新统计
+  usageDashboardRefreshIntervalMs?: number;
+  // 用量金额的显示币种与汇率等显示偏好（只影响显示，库里一律存美元）
+  usageDisplay?: UsageDisplaySettings;
   // 会话用量自动扫描开关（默认开启=自动模式；关闭后仅手动同步时扫描会话日志，代理记账不受影响）
   sessionAutoSyncEnabled?: boolean;
   // User has confirmed the stream check first-run notice

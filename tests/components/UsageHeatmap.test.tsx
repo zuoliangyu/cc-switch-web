@@ -45,7 +45,7 @@ describe("全部时间热力图", () => {
     render(<UsageHeatmap appType="codex" refreshIntervalMs={0} />);
     expect(trends).toHaveBeenCalledWith(
       expect.objectContaining({ preset: "custom", liveEndTime: true }),
-      "codex",
+      { appType: "codex" },
       { refetchInterval: false },
     );
     const day = document.querySelector('[aria-label$=": 180"]')!;

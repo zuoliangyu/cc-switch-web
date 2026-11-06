@@ -210,6 +210,10 @@ import {
   getWebRequestLogs,
   getWebUsageDataSources,
   getWebUsageSummary,
+  getWebUsageSummaryByApp,
+  getWebUsageFirstDate,
+  getWebSessionUsage,
+  fetchWebExchangeRates,
   getWebUsageTrends,
   fetchWebdavRemoteInfo,
   addWebCustomEndpoint,
@@ -1043,24 +1047,50 @@ export async function invoke<T>(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
         args?.appType as string | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
+      )) as T;
+    case "get_usage_summary_by_app":
+      return (await getWebUsageSummaryByApp(
+        args?.startDate as number | undefined,
+        args?.endDate as number | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
+      )) as T;
+    case "get_session_usage_summary":
+      return (await getWebSessionUsage(
+        args?.appType as string,
+        args?.sessionId as string,
+      )) as T;
+    case "get_usage_first_date":
+      return (await getWebUsageFirstDate(
+        args?.appType as string | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
       )) as T;
     case "get_usage_trends":
       return (await getWebUsageTrends(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
         args?.appType as string | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
       )) as T;
     case "get_provider_stats":
       return (await getWebProviderStats(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
         args?.appType as string | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
       )) as T;
     case "get_model_stats":
       return (await getWebModelStats(
         args?.startDate as number | undefined,
         args?.endDate as number | undefined,
         args?.appType as string | undefined,
+        args?.providerName as string | undefined,
+        args?.model as string | undefined,
       )) as T;
     case "get_request_logs":
       return (await getWebRequestLogs(
@@ -1101,8 +1131,10 @@ export async function invoke<T>(
         args?.providerId as string,
         args?.appType as string,
       )) as T;
-    case "get_last_session_scan":
+    case "get_session_usage_last_sync":
       return (await getWebLastSessionScan()) as T;
+    case "fetch_exchange_rates":
+      return (await fetchWebExchangeRates()) as T;
     case "sync_session_usage":
       return (await syncWebSessionUsage()) as T;
     case "rebuild_codex_usage":

@@ -161,7 +161,7 @@ export const WebSidebar = memo(function WebSidebar({
         <span
           className={cn(
             "whitespace-nowrap",
-            trailingLines.length > 0 && "grow",
+            trailingLines.length > 0 && "grow text-start",
             !showText && "sr-only",
           )}
         >

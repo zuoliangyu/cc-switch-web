@@ -1175,7 +1175,13 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         className="min-h-0 overflow-auto scroll-stable rounded-lg border border-border bg-card"
       >
         <MatrixColumnHighlight>
-          <div className="min-w-[600px]">
+          {/* 窄屏横向滚动：名称区至少留 240px（放得下表头的两个筛选），再加每列应用 36px */}
+          <div
+            className="min-w-[600px]"
+            style={{
+              minWidth: Math.max(600, 24 + 240 + appIds.length * 36 + 48),
+            }}
+          >
             <div className="sticky top-0 z-10 flex h-11 items-center border-b border-border bg-muted/50 px-2">
               <span className="flex w-6 shrink-0 justify-center">
                 <Checkbox

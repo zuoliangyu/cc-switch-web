@@ -534,13 +534,8 @@ function App() {
   const isEnvBannerVisible = showEnvBanner && envConflicts.length > 0;
   const headerTopOffset =
     DRAG_BAR_HEIGHT + (isEnvBannerVisible ? envBannerHeight : 0);
-  const resourceToolbar = [
-    "skills",
-    "skillsDiscovery",
-    "mcp",
-    "prompts",
-    "universal",
-  ].includes(currentView);
+  // 窄屏把页头操作挪到第二行的页面；Skills、统一供应商的操作已在页内页头里
+  const resourceToolbar = ["mcp", "prompts"].includes(currentView);
   const [launchDashboardOpen, setLaunchDashboardOpen] = useState(false);
   const openHermesWebUI = useOpenHermesWebUI(() =>
     setLaunchDashboardOpen(true),
@@ -1571,6 +1566,8 @@ function App() {
                     <Button
                       onClick={() => openAddProvider(currentModeView)}
                       size="icon"
+                      aria-label={t("header.addProvider")}
+                      title={t("header.addProvider")}
                       className={`ml-2 hidden md:inline-flex ${addActionButtonClass}`}
                     >
                       <Plus className="w-5 h-5" />

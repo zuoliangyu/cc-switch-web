@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { getIcon, hasIcon, getIconMetadata } from "@/icons/extracted";
 import { getLocalIconUrl, hasLocalIcon } from "@/icons/local";
 import { cn } from "@/lib/utils";
@@ -21,13 +21,20 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
   className,
   showFallback = true,
 }) => {
-  // 获取图标 SVG
+  // 获取图标 SVG；渐变、裁剪等内部 id 按实例加后缀。同一图标在页面里出现多次时
+  // url(#id) 会解析到第一份，第一份在隐藏的侧栏里时其余几份都画不出来
+  const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const iconSvg = useMemo(() => {
     if (icon && !isCustomIcon(icon) && hasIcon(icon)) {
-      return getIcon(icon);
+      const svg = getIcon(icon);
+      if (!svg.includes('id="')) return svg;
+      return svg
+        .replace(/\bid="([^"]+)"/g, `id="$1-${instanceId}"`)
+        .replace(/url\(#([^)]+)\)/g, `url(#$1-${instanceId})`)
+        .replace(/href="#([^"]+)"/g, `href="#$1-${instanceId}"`);
     }
     return "";
-  }, [icon]);
+  }, [icon, instanceId]);
 
   // 本地光栅图标，或用户上传的 PNG。自定义图标只认我们自己编码的 PNG data URI，
   // 从不把外链地址当图标加载

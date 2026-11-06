@@ -338,7 +338,7 @@ export function useScanUnmanagedSkills(options?: { enabled?: boolean }) {
 
 /**
  * 从应用目录导入 Skills
- * 成功后直接更新缓存，不触发重新加载/刷新
+ * 成功后先合并缓存，结束后再重读已安装与可导入列表（按名称排好序、以服务端为准）
  */
 export function useImportSkillsFromApps() {
   const queryClient = useQueryClient();
@@ -346,16 +346,18 @@ export function useImportSkillsFromApps() {
     mutationFn: (imports: ImportSkillSelection[]) =>
       skillsApi.importFromApps(imports),
     onSuccess: (importedSkills) => {
-      // 直接更新 installed 缓存
       queryClient.setQueryData<InstalledSkill[]>(
         ["skills", "installed"],
-        (oldData) => {
-          return mergeInstalledSkills(oldData, importedSkills);
-        },
+        (oldData) => mergeInstalledSkills(oldData, importedSkills),
       );
-      // 刷新 unmanaged 列表（已被导入的应该移除）
-      queryClient.invalidateQueries({ queryKey: ["skills", "unmanaged"] });
     },
+    // 导入可能在后面某项失败前已写入部分 Skills；弹窗只等这两个列表，
+    // 不等「发现」重拉（要从 GitHub 下载仓库，等它会让弹窗一直锁着）
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["skills", "installed"] }),
+        queryClient.invalidateQueries({ queryKey: ["skills", "unmanaged"] }),
+      ]),
   });
 }
 

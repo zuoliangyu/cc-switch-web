@@ -821,7 +821,7 @@ export function UsageDashboard({
     >
       <PageTabs<UsageTab>
         aria-label={t("usage.tabs.label")}
-        className="h-11 pe-2 ps-4"
+        className="h-auto min-h-11 flex-wrap gap-y-1 pe-2 ps-4 py-1 md:h-11 md:flex-nowrap md:py-0"
         items={TABS.map((id) => ({
           value: id,
           label: (

@@ -10,6 +10,7 @@
 import type { UsageScript } from "@/types";
 import { TEMPLATE_TYPES } from "@/config/constants";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import { extractGrokBuildBaseUrl } from "@/utils/grokBuildConfig";
 
 export interface CodingPlanProviderEntry {
   /** 与 `meta.usage_script.codingPlanProvider` 取值对齐 */
@@ -86,12 +87,29 @@ export function extractBaseUrlForUsageDetection(
           : null,
       );
       break;
+    case "gemini":
+      raw = settingsConfig.env?.GOOGLE_GEMINI_BASE_URL;
+      break;
+    case "grokbuild":
+      raw =
+        typeof settingsConfig.config === "string"
+          ? extractGrokBuildBaseUrl(settingsConfig.config)
+          : null;
+      break;
     case "opencode":
+    case "mcode":
       raw = settingsConfig.options?.baseURL;
       break;
     case "pi":
     case "omp":
+    case "openclaw":
       raw = settingsConfig.baseUrl;
+      break;
+    case "kimi":
+      raw = settingsConfig.provider?.base_url;
+      break;
+    case "hermes":
+      raw = settingsConfig.base_url;
       break;
     default:
       return null;
@@ -102,24 +120,15 @@ export function extractBaseUrlForUsageDetection(
 /**
  * 按 app 判断某个 base_url 命中的 Coding Plan 套餐能否自动启用额度查询；不能时返回 null。
  *
- * - Claude app 命中任意 Coding Plan 供应商都可以；其余 app
- *   仅 OpenCode Go 可以，Codex 额外支持 Command Code
+ * - 所有 app 一视同仁：套餐额度只按 Key（智谱另看 host）查固定端点，与
+ *   客户端协议、base_url 路径无关；凭据提取与后端 `resolve_usage_credentials` 对齐
  * - 新建供应商（`injectCodingPlanUsageScript`）和深链接导入共用这条规则
  */
 export function detectCodingPlanProviderForApp(
-  appId: string,
+  _appId: string,
   baseUrl: string | null | undefined,
 ): CodingPlanProviderEntry["id"] | null {
-  const codingPlanProvider = detectCodingPlanProvider(baseUrl);
-  if (!codingPlanProvider) return null;
-  if (
-    appId !== "claude" &&
-    codingPlanProvider !== "opencode_go" &&
-    !(appId === "codex" && codingPlanProvider === "command_code")
-  ) {
-    return null;
-  }
-  return codingPlanProvider;
+  return detectCodingPlanProvider(baseUrl);
 }
 
 /**

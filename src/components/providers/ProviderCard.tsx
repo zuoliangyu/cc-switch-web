@@ -47,8 +47,6 @@ interface ProviderCardProps {
   presentation: CardPresentation;
   /** 用来决定官方订阅 / OAuth 额度是否自动查询 */
   isCurrent: boolean;
-  /** 累加应用：已写进应用配置的那几家才自动查用量 */
-  isInConfig?: boolean;
   onEdit: (provider: Provider) => void;
   onDelete: (provider: Provider) => void;
   onConfigureUsage: (provider: Provider) => void;
@@ -181,7 +179,6 @@ export function ProviderCard({
   appId,
   presentation,
   isCurrent,
-  isInConfig = true,
   onEdit,
   onDelete,
   onConfigureUsage,
@@ -251,19 +248,8 @@ export function ProviderCard({
     isBoundCodexOfficial;
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
 
-  // 获取用量数据以判断是否有多套餐
-  // 累加模式应用（OpenCode/OpenClaw/Hermes）：使用 isInConfig 代替 isCurrent
-  const shouldAutoQuery =
-    appId === "opencode" ||
-    appId === "openclaw" ||
-    appId === "hermes" ||
-    appId === "pi" ||
-    appId === "omp"
-      ? isInConfig
-      : isCurrent;
-  const autoQueryInterval = shouldAutoQuery
-    ? provider.meta?.usage_script?.autoQueryInterval || 0
-    : 0;
+  // 获取用量数据以判断是否有多套餐，按用户配置刷新，不依赖供应商启用状态。
+  const autoQueryInterval = provider.meta?.usage_script?.autoQueryInterval ?? 0;
 
   // 脚本用量只在「已启用 + 非官方 + 非官方订阅模板 + 非托管 Codex 官方账号」时才查询；
   // 展开判定必须复用同一谓词，因为禁用的 React Query observer 仍会返回同 key 的旧缓存
@@ -466,8 +452,6 @@ export function ProviderCard({
                   providerId={provider.id}
                   appId={appId}
                   usageEnabled={usageEnabled}
-                  isCurrent={isCurrent}
-                  isInConfig={isInConfig}
                   inline={true}
                 />
               )}
@@ -542,8 +526,6 @@ export function ProviderCard({
             providerId={provider.id}
             appId={appId}
             usageEnabled={usageEnabled}
-            isCurrent={isCurrent}
-            isInConfig={isInConfig}
             inline={false}
           />
         </div>

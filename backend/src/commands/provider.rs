@@ -275,9 +275,18 @@ pub(crate) async fn query_provider_usage_internal(
     if template_type == TEMPLATE_TYPE_TOKEN_PLAN {
         let (base_url, api_key) = &usage_credentials;
 
-        let quota = crate::services::coding_plan::get_coding_plan_quota(base_url, api_key)
+        let outcome = crate::services::coding_plan::query_coding_plan(base_url, api_key)
             .await
             .map_err(|e| AppError::Message(format!("Failed to query coding plan: {e}")))?;
+
+        // 智谱按量账户没有 Coding Plan：有套餐显示套餐，没有就显示账户余额（#8465），
+        // 不再显示「查询失败」让人以为供应商坏了。卡片按余额样式显示这条结果。
+        let quota = match outcome {
+            crate::services::coding_plan::CodingPlanOutcome::Quota(quota) => quota,
+            crate::services::coding_plan::CodingPlanOutcome::ZhipuNoPlan(_) => {
+                return Ok(crate::services::balance::query_zhipu_balance(base_url, api_key).await);
+            }
+        };
 
         if !quota.success {
             return Ok(crate::provider::UsageResult {

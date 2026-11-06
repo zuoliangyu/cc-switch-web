@@ -7,7 +7,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { TONE_TEXT } from "./QuotaLines";
-import type { QuotaBreakdown, QuotaLine } from "./quotaRules";
+import type {
+  QuotaBreakdown,
+  QuotaBreakdownItem,
+  QuotaLine,
+} from "./quotaRules";
 
 /**
  * 一行写不下的额度（存下了好几次重置）：整行（卡片上是那一段）是按钮，点开逐条列出明细
@@ -60,28 +64,13 @@ export function QuotaBreakdownRow({
             </span>
           )}
         </div>
-        <ul className="flex flex-col gap-1 text-xs">
-          {breakdown.items.map((item) => (
-            <li key={item.key} className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "whitespace-nowrap",
-                  item.tone === "normal"
-                    ? "text-foreground"
-                    : TONE_TEXT[item.tone],
-                )}
-              >
-                {item.label}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                {item.hint}
-              </span>
-              <span className="whitespace-nowrap text-end tabular-nums text-muted-foreground">
-                {item.value}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <BreakdownItems items={breakdown.items} />
+        {breakdown.footer && (
+          <BreakdownItems
+            items={breakdown.footer}
+            className="mt-2 border-t border-border pt-2"
+          />
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -95,5 +84,36 @@ export function QuotaBreakdownChevron() {
       className="h-3 w-3 shrink-0 transition-transform group-hover/breakdown:text-foreground group-data-[state=open]/breakdown:rotate-180"
       strokeWidth={1.5}
     />
+  );
+}
+
+function BreakdownItems({
+  items,
+  className,
+}: {
+  items: QuotaBreakdownItem[];
+  className?: string;
+}) {
+  return (
+    <ul className={cn("flex flex-col gap-1 text-xs", className)}>
+      {items.map((item) => (
+        <li key={item.key} className="flex items-center gap-2">
+          <span
+            className={cn(
+              "whitespace-nowrap",
+              item.tone === "normal" ? "text-foreground" : TONE_TEXT[item.tone],
+            )}
+          >
+            {item.label}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {item.hint}
+          </span>
+          <span className="whitespace-nowrap text-end tabular-nums text-muted-foreground">
+            {item.value}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

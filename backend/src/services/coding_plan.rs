@@ -96,7 +96,24 @@ fn make_error(message: String) -> SubscriptionQuota {
         extra_usage: None,
         error: Some(message),
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
+    }
+}
+
+/// 套餐查询的结果。智谱个人版账户没有 Coding Plan（按量付费）时单独返回
+/// `ZhipuNoPlan`（内含原来的失败结果），用量查询入口据此改查账户余额
+/// （`commands::provider` 的 token_plan 分支）；不回落的调用方用 [`Self::into_quota`]。
+pub(crate) enum CodingPlanOutcome {
+    Quota(SubscriptionQuota),
+    ZhipuNoPlan(SubscriptionQuota),
+}
+
+impl CodingPlanOutcome {
+    pub(crate) fn into_quota(self) -> SubscriptionQuota {
+        match self {
+            Self::Quota(quota) | Self::ZhipuNoPlan(quota) => quota,
+        }
     }
 }
 
@@ -140,6 +157,7 @@ async fn query_kimi_with_base(base_url: &str, api_key: &str) -> SubscriptionQuot
             extra_usage: None,
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
+            credits_balance: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -204,6 +222,7 @@ async fn query_kimi_with_base(base_url: &str, api_key: &str) -> SubscriptionQuot
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -268,11 +287,35 @@ fn parse_zhipu_token_tiers(data: &serde_json::Value) -> Vec<QuotaTier> {
         .collect()
 }
 
-async fn query_zhipu(api_key: &str) -> SubscriptionQuota {
+/// Resolve the Zhipu quota endpoint from the user's configured `base_url`.
+///
+/// Zhipu ships as two distinct presets (Zhipu GLM = `open.bigmodel.cn`,
+/// Zhipu GLM en = `api.z.ai`) that share the same quota path and JSON shape.
+/// The quota endpoint lives on the same host as the user's coding endpoint,
+/// so we route by `base_url` — no cross-host fallback, no auth-error heuristics.
+fn zhipu_quota_base(base_url: &str) -> &'static str {
+    if base_url.to_lowercase().contains("bigmodel.cn") {
+        "https://open.bigmodel.cn"
+    } else {
+        "https://api.z.ai"
+    }
+}
+
+async fn query_zhipu(base_url: &str, api_key: &str) -> CodingPlanOutcome {
+    let url = format!(
+        "{}/api/monitor/usage/quota/limit",
+        zhipu_quota_base(base_url)
+    );
+    query_zhipu_at(&url, api_key).await
+}
+
+/// 拆出 url 参数便于用本地 server 测试鉴权失败 / 没有套餐两条路径。
+async fn query_zhipu_at(url: &str, api_key: &str) -> CodingPlanOutcome {
+    use CodingPlanOutcome::Quota;
     let client = crate::proxy::http_client::get();
 
     let resp = client
-        .get("https://api.z.ai/api/monitor/usage/quota/limit")
+        .get(url)
         .header("Authorization", api_key)
         .header("Content-Type", "application/json")
         .header("Accept-Language", "en-US,en")
@@ -282,12 +325,12 @@ async fn query_zhipu(api_key: &str) -> SubscriptionQuota {
 
     let resp = match resp {
         Ok(resp) => resp,
-        Err(error) => return make_error(format!("Network error: {error}")),
+        Err(error) => return Quota(make_error(format!("Network error: {error}"))),
     };
 
     let status = resp.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return SubscriptionQuota {
+        return Quota(SubscriptionQuota {
             tool: "coding_plan".to_string(),
             credential_status: CredentialStatus::Expired,
             credential_message: Some("Invalid API key".to_string()),
@@ -296,19 +339,68 @@ async fn query_zhipu(api_key: &str) -> SubscriptionQuota {
             extra_usage: None,
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
+            credits_balance: None,
             queried_at: Some(now_millis()),
-        };
+        });
     }
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return make_error(format!("API error (HTTP {status}): {body}"));
+        return Quota(make_error(format!("API error (HTTP {status}): {body}")));
     }
 
     let body: serde_json::Value = match resp.json().await {
         Ok(value) => value,
-        Err(error) => return make_error(format!("Failed to parse response: {error}")),
+        Err(error) => return Quota(make_error(format!("Failed to parse response: {error}"))),
     };
 
+    zhipu_outcome_from_body(&body)
+}
+
+/// 智谱个人版：账户没有 Coding Plan（按量付费）单独认出来，交给调用方改查余额。
+fn zhipu_outcome_from_body(body: &serde_json::Value) -> CodingPlanOutcome {
+    let quota = zhipu_quota_from_body(body);
+    if zhipu_body_has_no_plan(body) {
+        CodingPlanOutcome::ZhipuNoPlan(quota)
+    } else {
+        CodingPlanOutcome::Quota(quota)
+    }
+}
+
+/// 按量账户查套餐时，接口回 HTTP 200 + 业务错误（2026-10-18 国内站实测）：
+/// `{"code":500,"msg":"当前用户不存在coding plan","success":false}`。
+/// 只认「msg 提到 coding plan 且说没有」，Key 无效（HTTP 401/403）、网络错误、
+/// 其他业务错误都不算，免得把真故障显示成余额。英文站文案未实测，关键词放宽了几个说法。
+fn zhipu_body_has_no_plan(body: &serde_json::Value) -> bool {
+    if body.get("success").and_then(|v| v.as_bool()) != Some(false) {
+        return false;
+    }
+    let msg = body
+        .get("msg")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let compact: String = msg
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '_' && *c != '-')
+        .collect();
+    compact.contains("codingplan")
+        && [
+            "不存在",
+            "没有",
+            "未开通",
+            "not exist",
+            "not found",
+            "not have",
+            "doesn't have",
+            "no coding plan",
+            "not subscribed",
+        ]
+        .iter()
+        .any(|kw| msg.contains(kw))
+}
+
+/// 解析智谱额度响应体。
+fn zhipu_quota_from_body(body: &serde_json::Value) -> SubscriptionQuota {
     if body.get("success").and_then(|value| value.as_bool()) == Some(false) {
         let msg = body
             .get("msg")
@@ -338,6 +430,7 @@ async fn query_zhipu(api_key: &str) -> SubscriptionQuota {
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -375,6 +468,7 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
             extra_usage: None,
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
+            credits_balance: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -452,6 +546,7 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -537,6 +632,7 @@ async fn query_opencode_go(api_key: &str) -> SubscriptionQuota {
             extra_usage: None,
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
+            credits_balance: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -565,6 +661,7 @@ async fn query_opencode_go(api_key: &str) -> SubscriptionQuota {
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -645,6 +742,7 @@ fn command_code_auth_error() -> SubscriptionQuota {
         extra_usage: None,
         error: Some("Authentication failed (HTTP 401 Unauthorized)".to_string()),
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -752,6 +850,7 @@ fn parse_command_code_quota(
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -853,25 +952,40 @@ pub async fn get_coding_plan_quota(
     base_url: &str,
     api_key: &str,
 ) -> Result<SubscriptionQuota, String> {
+    query_coding_plan(base_url, api_key)
+        .await
+        .map(CodingPlanOutcome::into_quota)
+}
+
+/// 同 [`get_coding_plan_quota`]，但把「智谱账户没有 Coding Plan」单独返回，
+/// 供用量查询入口改查余额。
+pub(crate) async fn query_coding_plan(
+    base_url: &str,
+    api_key: &str,
+) -> Result<CodingPlanOutcome, String> {
+    use CodingPlanOutcome::Quota;
+
     if api_key.trim().is_empty() {
-        return Ok(SubscriptionQuota::not_found("coding_plan"));
+        return Ok(Quota(SubscriptionQuota::not_found("coding_plan")));
     }
 
     let provider = match detect_provider(base_url) {
         Some(provider) => provider,
-        None => return Ok(SubscriptionQuota::not_found("coding_plan")),
+        None => return Ok(Quota(SubscriptionQuota::not_found("coding_plan"))),
     };
 
     let quota = match provider {
+        CodingPlanProvider::ZhipuCn | CodingPlanProvider::ZhipuEn => {
+            return Ok(query_zhipu(base_url, api_key).await)
+        }
         CodingPlanProvider::Kimi => query_kimi(api_key).await,
-        CodingPlanProvider::ZhipuCn | CodingPlanProvider::ZhipuEn => query_zhipu(api_key).await,
         CodingPlanProvider::MiniMaxCn => query_minimax(api_key, true).await,
         CodingPlanProvider::MiniMaxEn => query_minimax(api_key, false).await,
         CodingPlanProvider::OpencodeGo => query_opencode_go(api_key).await,
         CodingPlanProvider::CommandCode => query_command_code(api_key).await?,
     };
 
-    Ok(quota)
+    Ok(Quota(quota))
 }
 
 #[cfg(test)]
@@ -882,8 +996,9 @@ mod tests {
         ZHIPU_TIER_FIVE_HOUR, ZHIPU_TIER_WEEKLY_LIMIT,
     };
     use super::{
-        parse_command_code_quota, query_command_code_at, CredentialStatus, TIER_FIVE_HOUR,
-        TIER_MONTHLY, TIER_WEEKLY_LIMIT,
+        parse_command_code_quota, query_command_code_at, query_zhipu_at, zhipu_outcome_from_body,
+        zhipu_quota_base, CodingPlanOutcome, CredentialStatus, TIER_FIVE_HOUR, TIER_MONTHLY,
+        TIER_WEEKLY_LIMIT,
     };
     use serde_json::json;
     use std::io::{Read, Write};
@@ -1578,5 +1693,116 @@ mod tests {
             }
         });
         (format!("http://127.0.0.1:{port}"), captured_paths, handle)
+    }
+
+    #[test]
+    fn zhipu_quota_base_routes_by_configured_host() {
+        assert_eq!(
+            zhipu_quota_base("https://open.bigmodel.cn/api/paas/v4"),
+            "https://open.bigmodel.cn"
+        );
+        // 大小写不敏感，与 detect_provider 一致
+        assert_eq!(
+            zhipu_quota_base("HTTPS://OPEN.BIGMODEL.CN/api/anthropic"),
+            "https://open.bigmodel.cn"
+        );
+        assert_eq!(
+            zhipu_quota_base("https://api.z.ai/api/paas/v4"),
+            "https://api.z.ai"
+        );
+        // 没有明显智谱域名特征时默认走国际站
+        assert_eq!(
+            zhipu_quota_base("https://example.com/zhipu"),
+            "https://api.z.ai"
+        );
+    }
+
+    // ── 智谱个人版：没有套餐单独返回，交给用量入口改查余额（#8465）──
+
+    /// 2026-10-18 国内站无套餐按量 Key 实测原文。
+    const ZHIPU_NO_PLAN_BODY: &str =
+        r#"{"code":500,"msg":"当前用户不存在coding plan","success":false}"#;
+
+    #[test]
+    fn zhipu_no_plan_body_is_told_apart_from_other_errors() {
+        let no_plan: serde_json::Value = serde_json::from_str(ZHIPU_NO_PLAN_BODY).unwrap();
+        match zhipu_outcome_from_body(&no_plan) {
+            CodingPlanOutcome::ZhipuNoPlan(quota) => {
+                // 不回落的调用方（弹窗测试）拿到的仍是原来的失败文案
+                assert!(!quota.success);
+                assert!(quota.error.unwrap().contains("coding plan"));
+            }
+            CodingPlanOutcome::Quota(_) => panic!("无套餐应单独返回"),
+        }
+
+        for body in [
+            json!({ "code": 500, "msg": "The current user does not have a coding plan", "success": false }),
+            json!({ "code": 500, "msg": "Coding Plan not exist", "success": false }),
+        ] {
+            assert!(
+                matches!(
+                    zhipu_outcome_from_body(&body),
+                    CodingPlanOutcome::ZhipuNoPlan(_)
+                ),
+                "{body}"
+            );
+        }
+
+        // 其他业务错误、提到套餐但不是「没有」、success 不是 false 都不算没套餐
+        for body in [
+            json!({ "code": 1001, "msg": "令牌已过期或验证不正确", "success": false }),
+            json!({ "code": 500, "msg": "coding plan 查询超时", "success": false }),
+            json!({ "code": 500, "msg": "当前用户不存在coding plan" }),
+            json!({ "success": true, "data": { "limits": [] } }),
+        ] {
+            assert!(
+                matches!(zhipu_outcome_from_body(&body), CodingPlanOutcome::Quota(_)),
+                "{body}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn zhipu_personal_query_routes_plan_no_plan_and_auth_failure() {
+        ensure_no_proxy_for_loopback();
+
+        // 有套餐 → 套餐档位
+        let plan_body = json!({
+            "success": true,
+            "data": {
+                "level": "pro",
+                "limits": [{ "type": "TOKENS_LIMIT", "unit": 3, "number": 5, "percentage": 12.0 }]
+            }
+        })
+        .to_string();
+        let (base, handle) = spawn_once_server(Some(http_response("200 OK", &plan_body)));
+        let outcome = query_zhipu_at(&base, "key").await;
+        handle.join().unwrap();
+        let CodingPlanOutcome::Quota(quota) = outcome else {
+            panic!("有套餐不应回落余额");
+        };
+        assert!(quota.success);
+        assert_eq!(quota.tiers[0].name, TIER_FIVE_HOUR);
+        assert_eq!(quota.tiers[0].utilization, 12.0);
+
+        // 没有套餐（HTTP 200 + 业务错误）→ ZhipuNoPlan
+        let (base, handle) = spawn_once_server(Some(http_response("200 OK", ZHIPU_NO_PLAN_BODY)));
+        let outcome = query_zhipu_at(&base, "key").await;
+        handle.join().unwrap();
+        assert!(matches!(outcome, CodingPlanOutcome::ZhipuNoPlan(_)));
+
+        // Key 无效 → 仍报鉴权失败，不回落余额
+        let (base, handle) = spawn_once_server(Some(http_response(
+            "401 Unauthorized",
+            r#"{"error":{"code":"1000","message":"身份验证失败。"}}"#,
+        )));
+        let outcome = query_zhipu_at(&base, "bad").await;
+        handle.join().unwrap();
+        let CodingPlanOutcome::Quota(quota) = outcome else {
+            panic!("鉴权失败不应回落余额");
+        };
+        assert!(!quota.success);
+        assert!(matches!(quota.credential_status, CredentialStatus::Expired));
+        assert!(quota.error.unwrap().contains("Authentication failed"));
     }
 }

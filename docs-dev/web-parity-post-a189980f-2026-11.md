@@ -186,7 +186,7 @@
 | `a33c156e` | v4.0.1 | fix(shell): match the sidebar's bottom divider to the one above it (#7874) | 5a 供应商与全局 UI | 5a4b：Web 侧栏上下两条分隔线本来就同宽同缩进（都在 p-2 的侧栏内、上下各 8px），无需改动 | 已迁移 |
 | `636e1616` | v4.0.1 | feat(opencode): mark reasoning models so OpenCode offers thinking variants | 5a 供应商与全局 UI | 5a1：OpenCode 预设的 reasoning 标记与取模型补 reasoning:true 已随 1a 迁入（预设为上游最终版本）；本批补上游预设用例 | 已迁移 |
 | `df08bb15` | v4.0.1 | fix(grokbuild): use preset apiKeyUrl for the get-API-key link | 5a 供应商与全局 UI | 5a1：Grok Build 表单的「获取 API Key」链接优先用预设的 apiKeyUrl | 已迁移 |
-| `f6387b86` | v4.0.1 | style(quota): put the reset-credits chevron in the countdown slot | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `f6387b86` | v4.0.1 | style(quota): put the reset-credits chevron in the countdown slot | 5b 用量/额度 UI | 5b1：重置次数下拉段独占一行时，⌄ 放进倒计时格与上一行的 ⏱ 竖向对齐 | 已迁移 |
 | `259d807f` | v4.0.1 | feat(settings): add a help tip explaining the Claude Code onboarding skip | 5a 供应商与全局 UI | 5a4b：「跳过 Claude Code 初次安装确认」的说明改为讲清引导流程与原理的长文案（三语），收进标题旁的「?」帮助卡（ToggleRow 增加 help 属性） | 已迁移 |
 | `43077f55` | v4.0.1 | fix(usage): stop parented Codex sync from deadlocking on a poisoned cache | 1c 会话/用量导入 | 1c：带父线程的 Codex 同步遇到中毒缓存不再死锁 | 已迁移 |
 | `d115fddb` | v4.0.1 | fix(codex): skip Codex state DBs on WSL paths Windows cannot lock | 4 模式/路由 | 4a：Codex 状态库在 WSL 路径（\wsl$、\wsl.localhost）上时跳过（codex_state_db_is_lockable，只告警一次）：历史迁移、还原、会话标题加载都不再卡在拿不到锁上；claude_mcp 改用 config::is_wsl_path | 已迁移 |
@@ -223,7 +223,7 @@
 | `3af74823` | v4.0.3 | feat(opencode): round-trip native v2 providers via JSON editor (#7579) | 1d 资源/设置/工具 | 1d：OpenCode 2.0 原生 providers 读写（JSONC 保留注释）、来源格式记入 meta、原生卡用 JSON 编辑并校验 package/模型；Web 的 live 导入只新增不更新已有行，上游依赖导入更新的后端用例未迁移；MSW 补 live 供应商 ID 夹具 | 已迁移 |
 | `d4a24107` | v4.0.3 | feat(provider): add MoArk (模力方舟) provider presets (#7580) | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `bc4d1a50` | v4.0.3 | fix(usage): count cache tokens in provider and model stats | 5b 用量/额度 UI | 需新建或映射：`services/sql_helpers.rs` | 待迁移 |
-| `fc8d884b` | v4.0.3 | feat(quota): show the Codex Credits balance for ChatGPT subscriptions | 5b 用量/额度 UI | 需新建或映射：`services/usage_cache.rs` | 待迁移 |
+| `fc8d884b` | v4.0.3 | feat(quota): show the Codex Credits balance for ChatGPT subscriptions | 5b 用量/额度 UI | 5b1：Codex wham/usage 的 credits 解析为 SubscriptionQuota.creditsBalance（0、不限量、缺失或形状不对时不显示，不影响额度）；展开与授权中心单独一行（Credits 数 + 约合美元），卡片上有一档用完才露出并排在重置次数前，点开重置次数时附带余额；Web 无 usage_cache / 托盘，字段只加在 SubscriptionQuota 的各构造处 | 已迁移 |
 | `d7f615f0` | v4.0.3 | fix(skills): deploy imported skills to every app ticked in the import dialog | 1d 资源/设置/工具 | 1d：导入 Skill 时投影到勾选但尚无该 Skill 的应用，失败的应用不记启用并汇总报错 | 已迁移 |
 | `dd07b8f4` | v4.0.3 | fix(usage): show localized names for session-log usage providers | 5b 用量/额度 UI | 需新建或映射：`components/usage/providerLabel.ts` | 待迁移 |
 | `14003822` | v4.0.3 | fix(proxy): respect thinking-off and per-model effort floors when mapping Claude effort | 1b 代理协议 | 1b：Claude effort 映射尊重关闭思考与模型下限；Opus 5 归入默认自适应思考 | 已迁移 |
@@ -282,7 +282,7 @@
 | `42d47956` | v4.0.6 | ci(release): fail fast when linux deb or rpm package is missing (#7985) | — | 上游 CI/发布流程/仓库模板；Web 维护自有工作流 | 不适用 |
 | `f025ee05` | v4.0.6 | docs(faq): update window controls setting path for v4 in zh/en/ja manuals (#7983) | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `b4a07943` | v4.0.6 | fix(codex): stop storing representative apiFormat for Copilot (#7972) | 5a 供应商与全局 UI | 5a1：托管 Copilot 不再存 apiFormat 代表值（旧卡保存时去掉），协议只存 codexCopilotApiFormat；Chat 专属选项按实际可能走 Chat 判断 | 已迁移 |
-| `0be33a84` | v4.0.6 | fix(quota): bring back colored quota numbers and warn below 20% | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `0be33a84` | v4.0.6 | fix(quota): bring back colored quota numbers and warn below 20% | 5b 用量/额度 UI | 5b1：额度数值恢复绿 / 橙 / 红（只给数值上色，档名保持灰字），提醒阈值由 10% 改为 20%；托盘部分不适用；颜色类名沿用 Web 主题映射 | 已迁移 |
 | `18bdea7c` | v4.0.6 | chore(icons): update DMXAPI logo | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `6760cfbb` | v4.0.6 | feat(codex): add an opt-in classic sub-agent tools toggle for aggregation | 4 模式/路由 | 4b：聚合合并目录每行写 multi_agent_version = "v1" 的设备级开关（按 6aeaeb17 最终形态 codexStackClassicTools，默认开）；[features] multi_agent_v2 强制新版时提示不生效（GET /api/settings/codex-forces-multi-agent-v2）；开关变了立即重写、失败回滚设置 | 已迁移 |
 | `c37a2625` | v4.0.6 | fix(proxy): explain unreadable sub-agent tasks instead of emptying them | 1b 代理协议 | 1b：子 agent 加密任务不被整流清空；解不开时返回中性 400 并说明；原样转发流在首个非生命周期事件前暂存（Web 无首包超时配置，固定上限 10s），新增 ProxyResponse::Streamed | 已迁移 |
@@ -317,7 +317,7 @@
 | `e06ba573` | v4.0.7 | fix(windows): keep non-ASCII paths out of generated batch files | 1d 资源/设置/工具 | 1d：工具安装/升级批处理先 chcp 65001；Claude 与会话启动器的非 ASCII 目录经环境变量传入、配置文件以 %%~dp0 引用（Web 的会话启动器同样适配） | 已迁移 |
 | `e5b1e096` | v4.0.7 | fix(codex): tell ChatGPT workspaces of the same user apart when switching official cards | 4 模式/路由 | 4a：Codex 登录按「用户 + ChatGPT workspace」认人，同一人的 Plus / Team 是两个登录；登录暂存加版本号，旧暂存读入时按新身份重算并从官方卡行补回被合并掉的 workspace（登出不复活） | 已迁移 |
 | `0fc67c3b` | v4.0.7 | fix(codex): warn about stale Codex clients on Windows without a process table | 4 模式/路由 | 4b：Windows 看不到进程表时按 daemon.pid（pid + 创建时间）判断守护进程；桌面版 / 插件退化为「上次关掉提示后目录或登录变了」（unverified），关掉提示记下当前状态（POST /api/proxy/codex/stale-clients/acknowledge），staleRevision 变了重新显示；windows-sys 加 Win32_System_Threading 特性 | 已迁移 |
-| `b7d548b6` | v4.0.7 | feat(quota): let quota windows show what is used instead of what is left | 5b 用量/额度 UI | 需新建或映射：`components/quota/useQuotaDisplay.ts`、`components/settings/sections/GeneralSection.tsx` | 待迁移 |
+| `b7d548b6` | v4.0.7 | feat(quota): let quota windows show what is used instead of what is left | 5b 用量/额度 UI | 5b1：设置 → 通用 → 外观新增「额度显示」（剩余 / 已用，settings.quotaDisplay，后端只认 left / used），卡片、授权中心、展开额度条跟随，颜色与挑档仍按剩余；新增 useQuotaDisplay；托盘部分不适用，帮助文案去掉托盘 | 已迁移 |
 | `e049660a` | v4.0.7 | fix(codex): explain that old third-party sessions cannot continue on the official route | 1b 代理协议 | 1b：官方路由旧第三方会话提示新建会话；对应断言 Web 无此测试 | 已迁移 |
 | `fda103e9` | v4.0.7 | chore(release): v4.0.7 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `790ed800` | v4.0.7 | docs(release): add v4.0.7 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -386,7 +386,7 @@
 | `23c0a63f` | v4.0.10 | fix(usage): stop treating an empty Novita balance as an expired plan | 1c 会话/用量导入 | 1c：Novita 余额为空不再判为套餐过期 | 已迁移 |
 | `bee47fdf` | v4.0.10 | feat(deeplink): let provider links bring their own icon via iconUrl | 1d 资源/设置/工具 | 依赖上游 21203803 自定义图标上传（data URI 渲染/校验/备份清洗），Web 无此功能；服务端代下载另增 SSRF 面，Web 忽略 iconUrl 退回内置图标 | 不适用 |
 | `7577ca95` | v4.0.10 | docs(deeplink): rework the link generator and document iconUrl | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
-| `382c0e96` | v4.0.10 | feat(usage): add a Sub2API usage query template | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `382c0e96` | v4.0.10 | feat(usage): add a Sub2API usage query template | 5b 用量/额度 UI | 5b1：用量查询弹窗新增 Sub2API 模板（/v1/usage，带不带 /v1 都可，不限量不显示负余额），保存与测试用共享 TemplateType；常量已在 1a 迁入 | 已迁移 |
 | `fb719d99` | v4.0.10 | docs(usage): document the Sub2API template and add it to the link generator | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `ea1ab809` | v4.0.10 | docs(deeplink): show site owners how to wire the import button | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
 | `502d681b` | v4.0.10 | docs: point the deep link generator to ccswitch.io and link the site owner guide | — | 上游用户手册/指南/贡献说明；Web 文档树独立维护 | 不适用 |
@@ -407,7 +407,7 @@
 | `1ef555df` | v4.0.11 | fix(skills): show error and warning toasts for bulk failures (#8137) | 5a 供应商与全局 UI | 5a4a：Skills 按应用批量开关：全部失败报错、部分失败警告（成功的仍可撤销），撤销也按实际结果提示（新增 lib/bulkToggleToast） | 已迁移 |
 | `84464e7e` | v4.0.11 | feat(presets): add StreamLake China (Vanchin) presets and fix the intl OpenAI endpoint | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3c918cd0` | v4.0.11 | feat(presets): add AIComing presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
-| `c859026d` | v4.0.11 | feat(usage): enable coding-plan usage by default for every app | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `c859026d` | v4.0.11 | feat(usage): enable coding-plan usage by default for every app | 5b 用量/额度 UI | 5b1：套餐地址在所有应用新建时都默认启用 token_plan 用量，深链导入同一规则；base_url 读取补 Gemini、Grok Build、Hermes、OpenClaw、MiniMax Code、Kimi；Web 没有 ZenMux / 火山 / 智谱团队套餐，无需例外 | 已迁移 |
 | `b13797e3` | v4.0.11 | feat(deeplink): enable coding-plan usage by default on import | 1d 资源/设置/工具 | 1d：套餐地址且无脚本时默认启用 token_plan 额度查询；适用范围沿用 Web 新建供应商规则（detectCodingPlanProviderForApp），不采用上游“所有应用”规则 | 部分迁移 |
 | `3700af35` | v4.0.11 | feat(presets): add SoruxGPT Coding Plan for Claude Code and Codex | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `e48b84d6` | v4.0.11 | chore(presets): move AIGoCode to the .net site and .dev API host | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -525,7 +525,7 @@
 | `0d326a4c` | v4.0.14 | fix(proxy): keep the underlying cause in upstream connection errors | 1b 代理协议 | 1b：上游连接错误保留原因链；Web reqwest 路径同时去掉错误文本中的 URL | 已迁移 |
 | `122423ca` | v4.0.14 | fix(providers): explain why the direct provider can't be deleted while routing | 5a 供应商与全局 UI | 5a3b：直连指针 / 正在路由的那家删不掉时，删除按钮提示里写明原因；路由 / 聚合时直连那家单独说明「退出路由会回到这家」（provider.deleteBlockedDirectDefault），措辞按 Web 的「回到直连」入口改写 | 已迁移 |
 | `8b4b92c6` | v4.0.14 | fix(failover): keep queue positions distinct when reordering | 5a 供应商与全局 UI | 5a3b：Web 没有故障转移队列的上移 / 下移（队列按 sort_index、列表按名称排序），无 queueMoveSortUpdates 可迁 | 不适用 |
-| `2e03d8ce` | v4.0.14 | fix(sessions): merge Windows project groups that differ only in path case | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `2e03d8ce` | v4.0.14 | fix(sessions): merge Windows project groups that differ only in path case | 5b 用量/额度 UI | 5b1：会话按项目目录分组时 Windows 路径不分大小写、统一分隔符并去掉末尾分隔符，显示仍用原路径；迁入上游 sessionUtils 用例 | 已迁移 |
 | `07a9c459` | v4.0.14 | fix(openclaw): keep the User-Agent switch in sync with JSON header edits | 5a 供应商与全局 UI | 5a2：直接编辑 OpenClaw 的 JSON 请求头时 UA 开关随之同步（接在 Web 的 handleSettingsConfigChange 之后） | 已迁移 |
 | `898dd002` | v4.0.14 | fix(codex): keep retry and stream timeout keys in the proxy route table | 4 模式/路由 | 4b：代理路由表照搬路由那家的 request_max_retries、stream_max_retries、stream_idle_timeout_ms | 已迁移 |
 | `83f0155f` | v4.0.14 | fix(skills): spool repo archives to disk and lift the 128 MiB download cap | 1d 资源/设置/工具 | 1d：Skill 仓库归档流式落临时文件，下载上限对齐解压预算并单列 ARCHIVE_DOWNLOAD_TOO_LARGE；前端补齐归档类错误码映射与三语文案 | 已迁移 |
@@ -573,7 +573,7 @@
 | `a94f997f` | v4.0.16 | fix(codex): honor configured GPT context windows (#8385) | 4 模式/路由 | 4a/4d：第三方镜像官方 GPT 的目录行接受显式上下文窗口等（4a）；4d 补上 handlers 层：Codex 流式 /responses 遇到上游 HTTP 400 输入超限（规整后为 context_length_exceeded）时改回 response.failed 流，Codex 能压缩历史后重试；其他错误照旧透传，没有引入通用错误规整层 | 已迁移 |
 | `734c4831` | v4.0.16 | feat(minimax): add MiniMax-M3.1-Flash to the official MiniMax presets (#8518) | 1a 预设/定价/图标 | 1a：七类预设默认 M3.1-Flash 与定价已同步；Hermes 标题模型钉选（`hermes_config.rs`）转入 1d | 部分迁移 |
 | `0bbbb534` | v4.0.16 | fix(hermes): prefill MiniMax provider keys that don't collide with Hermes built-ins (#8538) | 5a 供应商与全局 UI | 5a2：Hermes 选 MiniMax 预设时预填不与 Hermes 内置供应商撞名的标识（resetHermesState 带上预设 providerKey） | 已迁移 |
-| `bbcf0aea` | v4.0.16 | fix(usage): show account balance when a Zhipu account has no coding plan | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `bbcf0aea` | v4.0.16 | fix(usage): show account balance when a Zhipu account has no coding plan | 5b 用量/额度 UI | 5b1：智谱个人版查套餐回「当前用户不存在coding plan」时 token_plan 用量改查账户余额（query-customer-account-report，国内站 CNY、国际站按 USD），弹窗测试仍返回原失败结果，团队版 Web 无；UsageFooter 只在全是百分比时按档显示；顺带补上游 ad030da3 的 zhipu_quota_base（Web 此前固定查 api.z.ai） | 已迁移 |
 | `e02f3a33` | v4.0.16 | chore(presets): drop invite codes from Zhipu API key links | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `68b52851` | v4.0.16 | style(providers): restore the light-blue "Get API Key" link | 5a 供应商与全局 UI | 5a1：上游把「获取 API Key」链接改成带下划线正文后又改回浅蓝；Web 的链接一直是主色、无下划线 | 不适用 |
 | `b92de269` | v4.0.16 | fix(providers): show the "Get API Key" link when editing a provider | 5a 供应商与全局 UI | 5a1：编辑已有供应商时按当前请求地址反查预设，显示其「获取 API Key」链接（链接不一致时退回官网） | 已迁移 |
@@ -696,7 +696,7 @@
 | `91d3ed10` | v4.0.19 | feat(presets): add V-API sponsor presets across nine apps | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `e85ade71` | v4.0.19 | chore(presets): swap the FluxA TokenPlan and Shengsuanyun sponsor positions | — | 赞助商推广文案/排位；Web 不展示赞助身份且按名称 A–Z 排序 | 不适用 |
 | `c8f85674` | v4.0.19 | fix(mcp): render server display name in unified MCP panel (#8692) | 5a 供应商与全局 UI | 5a4a：统一 MCP 面板显示服务器显示名，起了显示名时旁边附 ID；删除确认用显示名 | 已迁移 |
-| `52652a02` | v4.0.19 | fix(sessions): make the project group header clickable across the row (#8709) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `52652a02` | v4.0.19 | fix(sessions): make the project group header clickable across the row (#8709) | 5b 用量/额度 UI | 5b1：会话项目分组标题整行可点 | 已迁移 |
 | `2e1e2979` | v4.0.19 | fix(proxy): recognize Codex session header aliases (#8718) | 1b 代理协议 | 1b：识别 Codex 会话头别名 session-id/thread-id | 已迁移 |
 | `c3ad9bb0` | v4.0.19 | fix(model-fetch): try compatible-mode models endpoint for /apps/anthropic base URLs (#8755) | 1d 资源/设置/工具 | 1d：/apps/anthropic 地址拉取模型时追加 compatible-mode 端点候选 | 已迁移 |
 | `e5b04221` | v4.0.19 | fix(subscription): select Claude Keychain credentials by account (#8764) | 1c 会话/用量导入 | Web 只从 ~/.claude/.credentials.json 读取 Claude 订阅凭据，不读 macOS Keychain | 不适用 |
@@ -706,7 +706,7 @@
 | `7ecce7c7` | v4.0.19 | fix(proxy): carry encrypted-only reasoning as empty thinking for Claude clients | 1b 代理协议 | 1b：只有密文的推理以空 thinking 交给 Claude 客户端 | 已迁移 |
 | `10e0aa23` | v4.0.19 | fix(deeplink): don't let a finished import close a newer link's confirmation | 1d 资源/设置/工具 | 1d：导入完成只关闭仍在显示的请求，不误关新到链接的确认框 | 已迁移 |
 | `9cb6b6d7` | v4.0.19 | fix(agy): run background agy commands without a console window on Windows | 2c Antigravity | 2c：Windows 下后台 agy 命令不弹控制台窗口 | 已迁移 |
-| `50e091b0` | v4.0.19 | fix(usage): step 7/14/30-day presets back by calendar days across DST | 5b 用量/额度 UI | 目标文件 Web 未改，可按最终状态同步 | 待迁移 |
+| `50e091b0` | v4.0.19 | fix(usage): step 7/14/30-day presets back by calendar days across DST | 5b 用量/额度 UI | 5b1：7 / 14 / 30 天预设按本地日历往前数天，跨夏令时不多算或少算一天；迁入上游用例 | 已迁移 |
 | `e53ca7e8` | v4.0.19 | fix(usage): tighten request log column spacing | 5b 用量/额度 UI | 需新建或映射：`components/usage/usageTable.ts` | 待迁移 |
 | `bada9a4b` | v4.0.19 | fix(models): don't borrow a vendor-hosted entry that points at another vendor | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `a043b1f8` | v4.0.19 | chore(release): v4.0.19 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
@@ -733,7 +733,7 @@
 | `c72c82cf` | v4.0.20 | feat(auth): support browser login for managed ChatGPT accounts (#8288) | 3 官方账号 | 3a：托管 ChatGPT 账号的浏览器登录（授权码 + PKCE，codex_oauth_auth/browser.rs 上游最终版本；/api/auth/start-login 接受 loginMethod）；回调监听服务端本机 1455 端口，只有浏览器与服务端同机时才能完成，Web 因此默认设备码登录（上游默认浏览器），标题行仍可切换 | 已迁移 |
 | `309c9c51` | v4.0.20 | fix(agy): recover subagent usage models from native generations (#8693) | 2c Antigravity | 2c：从原生 generations 恢复子代理用量模型（native_models.rs） | 已迁移 |
 | `5bc562ce` | v4.0.20 | feat(apps): group the apps page into installed and not installed sections | 5a 供应商与全局 UI | 5a4a：应用页分「已安装 · N / 未安装 · N」两组（isToolPresent 与卸载条件一致，Desktop 按是否已接入），首次探测完成前不分组；补用例 | 已迁移 |
-| `72b056f6` | v4.0.20 | fix(usage): show the balance amount even when it is used up | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `72b056f6` | v4.0.20 | fix(usage): show the balance amount even when it is used up | 5b 用量/额度 UI | 5b1：余额用完或欠费照写金额（-0 归为 0.00）整行标红，删除「余额已用完」文案；后端只是注释改动；托盘部分不适用 | 已迁移 |
 | `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 1d：额度失败文案改为“额度查询失败”；托盘部分不适用 | 已迁移 |
 | `b71141a8` | v4.0.20 | feat(apps): drag to reorder installed apps, sidebar follows the order | 5a 供应商与全局 UI | 5a4a：已安装组可拖动排序（dnd-kit，只上下、限在本组），顺序存 settings.appOrder（后端 AppSettings.app_order）；侧栏 WebSidebar 与默认打开的应用跟随；新增 orderAppIds 与用例 | 已迁移 |
 | `ba6a8a55` | v4.0.20 | fix(apps): group Claude Desktop by whether it is installed | 1d 资源/设置/工具 | 1d：Claude Desktop 状态新增 installed（按数据目录/应用包推断）；Web 应用页尚无按安装分组，界面分组随 5a | 已迁移 |
@@ -818,7 +818,7 @@
 | `32db0e57` | v4.0.22 | fix(minimax): keep the weekly window visible after its quota runs out (#8124) | 1a 预设/定价/图标 | Web 的 MiniMax 解析按周总量判断，不依赖 `current_weekly_status`；额度耗尽时周桶照常显示，无需迁移 | 不适用 |
 | `6d6b7162` | v4.0.22 | feat(skills): add functionality to open installed skill directory and copy skill name (#8993) | 1d 资源/设置/工具 | 1d：点击 Skill 名称复制名称；“打开目录”按用户决定改为复制主副本目录路径（新增 /api/skills/installed-dir），三语文案 | 已迁移 |
 | `9077b432` | v4.0.22 | perf(skills): discover only the changed repo instead of every repo (#8907) | 5a 供应商与全局 UI | 5a4a：后端按仓库缓存发现结果 10 分钟（只存成功的，旧下载不覆盖新结果），手动刷新带 forceRefresh 绕过；新增 POST /api/skills/discover-repo；添加 / 启停 / 删除仓库只发现或剔除该仓库，晚到的旧结果不写回缓存；补上游 hook 用例（按 Web 的两份缓存改写） | 已迁移 |
-| `869c0b27` | v4.0.22 | fix(usage): refresh balances for inactive providers (#8342) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `869c0b27` | v4.0.22 | fix(usage): refresh balances for inactive providers (#8342) | 5b 用量/额度 UI | 5b1：脚本用量按自己的自动查询间隔刷新，不再只限当前 / 已加入配置的供应商；ProviderCard / UsageFooter 去掉 isInConfig（列表分组仍用）；迁入 UsagePolling 用例 | 已迁移 |
 | `a62203bb` | v4.0.22 | fix(ui): prevent duplicate tooltips and constrain help cards (#8593) | 5a 供应商与全局 UI | 5a4b：帮助卡默认放在「?」右侧，按可用空间限制宽高，长文本换行、超高时卡内滚动；OMO 表单的纯 CSS 悬停提示换成 HelpTip。MCP 应用矩阵列头部分不适用：Web 没有 AppMatrix | 部分迁移 |
 | `cd9c7210` | v4.0.22 | fix(proxy): reject upstream URLs that loop back to the proxy itself (#8598) | 1b 代理协议 | 1b：拒绝回环到代理自身监听地址的上游 URL | 已迁移 |
 | `144c41b9` | v4.0.22 | fix(auth-center): scroll only the panel body when jumping to an auth section (#8964) | 3 官方账号 | 3a：跳到某个授权分组时只滚动面板正文（新增 AuthCenterPanel 测试） | 已迁移 |
@@ -831,7 +831,7 @@
 | `ddcb1117` | v4.0.22 | fix(config): recognize TOML array-of-tables headers in section detection (#9029) | 5a 供应商与全局 UI | 5a1：数组表头 [[...]] 也算表头，base_url 不会写进 [[skills.config]]，已误写的移回 custom 表 | 已迁移 |
 | `6fa328f3` | v4.0.22 | feat(dsh): manage DeepSeek Harness Web and Desktop together, with account login and usage import (#8986) | 2e DeepSeek Harness | 2e：Web 与 Desktop 共用管理、DeepSeek 账号登录（/api/dsh/account*，回调落在服务端本机，仅浏览器与服务端同机时可完成）、用量导入（session_log_sync.parser_state、zstd 会话按解压后偏移读取）；Web 请求日志无 pricing_model/input_token_semantics 列：前缀模型仍按裸名计价，但导入时无定价、之后补价的前缀模型无法回填（对应上游用例未迁移）；用量页 providerLabel 与筛选随 5b | 部分迁移 |
 | `03ec9dbb` | v4.0.22 | fix(ci): make WSL2 checks manual and guard SQLite tests | 2c Antigravity | 2c：SQLite 测试在不支持的临时目录下跳过（config::sqlite_unsupported_in_temp_dir）；WSL2 nightly 工作流为桌面端 CI，不适用 | 部分迁移 |
-| `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `16b6575d` | v4.0.22 | fix(quota): point expired managed accounts to Accounts, not a command | 5b 用量/额度 UI | 5b1：自管账号（Codex OAuth / xAI OAuth）登录过期提示改为「请在授权中心重新登录这个账号」，CLI 登录仍写命令名 | 已迁移 |
 | `115677a1` | v4.0.22 | fix(agy): let a transcript win over another root's index-only entry | 2c Antigravity | 2c：会话 transcript 优先于其他根目录仅有索引的条目 | 已迁移 |
 | `11485ee7` | v4.0.22 | fix(codex): log the underlying cause when the official model list fetch fails | 4 模式/路由 | 4a：拉取 Codex 官方模型列表失败时日志带上底层原因 | 已迁移 |
 | `ed494fbc` | v4.0.22 | fix(opencode): read the V2 settings.baseURL in the connectivity check | 1d 资源/设置/工具 | 1d：OpenCode 连通性检查识别 V2 原生格式（settings.baseURL/apiKey、package、顶层 headers），Web 版按包名归一到对应 AI SDK 协议 | 已迁移 |
@@ -882,7 +882,7 @@
 | `c3adab30` | v4.0.23 | fix(dsh): dedupe profile paths that alias the same file (#9101) | 2e DeepSeek Harness | 2e：别名到同一文件的 profile 路径去重（dsh_config 最终版本） | 已迁移 |
 | `e35eef5d` | v4.0.23 | test(usage): assert bounded fork token totals (#9105) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
 | `4e31203c` | v4.0.23 | refactor(usage): return bool from bounded fork validation (#9106) | 1c 会话/用量导入 | 1c：Codex 会话导入整体同步到上游最终版本（Web 此前与基线一致），去掉 Web 没有的 input_token_semantics 列 | 已迁移 |
-| `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `a9ec21a9` | v4.0.23 | fix(usage): read DeepSeek Harness credentials for official balance queries (#9108) | 5b 用量/额度 UI | 5b1：DeepSeek Harness 读 options 凭据此前已迁入；本批补上游弹窗的末尾斜杠裁剪（与后端 resolve_usage_credentials 一致）与 Claude / Gemini 的 Key 兜底顺序，迁入上游 UsageScriptModal 用例（omp 用例改为对静态引入的 subscriptionApi 打桩） | 已迁移 |
 | `43a06937` | v4.0.23 | feat(skills): unify discover/installed rows and flash the row after jumping (#9081) | 5a 供应商与全局 UI | 5d1：发现 / 已安装合成一页（PageTabs 下划线页签，两段共用一条页签行，发现段首次打开后常驻不卸载），发现结果改为与已安装同高的列表行；从发现点「已安装 ›」或目录被占用跳回已安装并让那一行闪烁（tailwind row-flash / row-fade）；旧 skillsDiscovery 视图直接打开「发现」段，App 工具栏里的 Skills 按钮移进页面自己的「添加 Skill」与「⋯」菜单 | 已迁移 |
 | `3d4a3da3` | v4.0.23 | feat(providers): edit Kimi, MiniMax Code and omp configs in their native format | 2b Kimi Code | 2b/2d/2e：Kimi 原生 TOML 编辑框（2b）；MiniMax Code 与 Oh My Pi 的 YAML 编辑框（2d，依赖 yaml 2.8.1）；DSH 保留 JSON 编辑框（2e，与上游一致），其模型方言（reasoningEfforts/compat）专用控件依赖 5a 的表单部件，暂作普通额外字段显示 | 部分迁移 |
 | `5c8f4e2e` | v4.0.23 | feat(presets): add OpenAI API key presets | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
@@ -891,7 +891,7 @@
 | `bd89109e` | v4.0.23 | feat(presets): add Gemini CLI presets for providers that serve Gemini | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `f75cb1b6` | v4.0.23 | fix(tray): restore the main window from a second launch in lightweight mode | — | 系统托盘/轻量模式；Web 无托盘 | 不适用 |
 | `54115a8c` | v4.0.23 | fix(claude-desktop): publish claude-haiku-5-5 for the Haiku tier in route mode | 4 模式/路由 | 4c：Desktop 路由模式 Haiku 档发布 claude-haiku-5-5（目标是旧 Haiku 时除外） | 已迁移 |
-| `959e4a95` | v4.0.23 | fix(usage): read MiniMax Code and Kimi credentials for native usage queries | 5b 用量/额度 UI | 合并到 Web 已改文件 | 待迁移 |
+| `959e4a95` | v4.0.23 | fix(usage): read MiniMax Code and Kimi credentials for native usage queries | 5b 用量/额度 UI | 5b1：用量弹窗补 Kimi（provider.{base_url, api_key}）分支；MiniMax Code 此前已迁入；顺带补 Grok Build 凭据分支与 Antigravity 官方订阅的 /usage 说明（94126795 遗漏） | 已迁移 |
 | `1ddacbd8` | v4.0.23 | docs(sponsors): refresh pinned Kimi banner and copy for K3.1 Pro | — | 上游 README/赞助商表；Web 三语 README 独立维护 | 不适用 |
 | `57169e4b` | v4.0.23 | chore(release): v4.0.23 | — | 上游版本号发布；Web 保留独立版本序列 | 不适用 |
 | `66d530d6` | v4.0.23 | docs(release): add v4.0.23 release notes | — | 上游发行说明/whats-new；Web CHANGELOG 按实际迁移维护 | 不适用 |
@@ -1179,3 +1179,10 @@
   - 桌面专属与 Web 没有的设置不迁：额度显示方式、启动时检查各应用新版本、托盘与窗口、静默启动、切换时保留 Codex 官方登录、打开日志文件、浏览选择文件夹。
   - 三语补上游设置页文案，删除不再引用的约 96 项；三语 README 与 `docs/claude-codex-routing-guide-zh.md` 同步设置项位置。
   - 验证：仅前端改动；`tsc --noEmit` 通过；前端全量 Vitest 227 个文件 2412 项通过（原 2 项跳过的桌面文件选择器用例随改写去掉）。未做浏览器视觉验收，下一步统一进行。
+- 2026-11-06：完成用量批次 5b1（额度、余额、用量脚本与零散修复），f6387b86、fc8d884b、0be33a84、b7d548b6、72b056f6、16b6575d、bbcf0aea、869c0b27、382c0e96、a9ec21a9、959e4a95、c859026d、2e03d8ce、52652a02、50e091b0 共 15 项改为已迁移。
+  - 额度：数值恢复绿 / 橙 / 红，只给数值上色，提醒阈值改为剩余不到 20%；重置次数下拉的 ⌄ 与上一行倒计时对齐；余额用完或欠费照写金额并标红；ChatGPT 订阅显示 Codex Credits 余额（展开与授权中心单独一行，卡片上有一档用完才露出）；自管账号登录过期改为提示去授权中心重新登录。
+  - 设置 → 通用 → 外观新增「额度显示」（剩余 / 已用，`settings.quotaDisplay`），更正 5d4 记录里把它列为不迁的说法；托盘部分不适用。
+  - 用量查询：智谱个人版没有 Coding Plan 时改查账户余额，并补上游按 base_url 选国内 / 国际站的 `zhipu_quota_base`（Web 此前固定查 api.z.ai）；套餐地址在所有应用新建或深链导入时都默认启用套餐额度；脚本用量按自己的间隔自动刷新，不再只限当前或已加入配置的供应商；用量弹窗新增 Sub2API 模板，补 Kimi、Grok Build 凭据分支、末尾斜杠裁剪与 Claude / Gemini 的 Key 兜底，补 Antigravity 官方订阅说明（94126795 遗漏）。
+  - 会话：Windows 项目目录不分大小写合并分组，分组标题整行可点；用量 7 / 14 / 30 天预设跨夏令时按日历天数计算。
+  - 迁入上游 `quotaRules`、`SubscriptionQuotaFooter`、`UsageScriptModal`、`UsageFooter.tokenPlanBalance`、`UsagePolling`、`sessionUtils`、`usageRange` 用例及后端 Credits、智谱无套餐 / 余额、`quotaDisplay` 用例；`docs/web-global-resources-guide-zh.md` 同步额度显示说明。
+  - 验证：`tsc --noEmit` 通过；前端全量 Vitest 232 个文件 2466 项通过；后端 `cargo test --locked --lib` 3613 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过、无警告。未做 Docker Linux 检查与浏览器视觉验收，留到 5b 完成后统一进行。

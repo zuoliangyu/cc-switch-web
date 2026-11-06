@@ -543,7 +543,6 @@ export function ProviderList({
       appId={appId}
       presentation={presentation}
       isCurrent={isCurrentFor(provider)}
-      isInConfig={isInConfig(provider)}
       onEdit={onEdit}
       onDelete={onDelete}
       onDuplicate={onDuplicate}

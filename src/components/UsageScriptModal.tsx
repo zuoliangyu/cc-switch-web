@@ -10,6 +10,7 @@ import { copilotGetUsage, copilotGetUsageForAccount } from "@/lib/api/copilot";
 import { useSettingsQuery } from "@/lib/query";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
+import { parseGrokBuildConfig } from "@/utils/grokBuildConfig";
 import { resolveCodexOfficialIdentity } from "@/utils/providerCapabilities";
 import JsonEditor from "./JsonEditor";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,11 @@ import { Switch } from "@/components/ui/switch";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
-import { TEMPLATE_TYPES, PROVIDER_TYPES } from "@/config/constants";
+import {
+  TEMPLATE_TYPES,
+  PROVIDER_TYPES,
+  type TemplateType,
+} from "@/config/constants";
 import {
   CODING_PLAN_PROVIDERS,
   detectCodingPlanProvider,
@@ -96,6 +101,40 @@ const generatePresetTemplates = (
   },
 })`,
 
+  // Sub2API 的 /v1/usage 用 API Key 认证；供应商地址带不带 /v1 都能拼出同一个地址。
+  // 订阅分组不限量时 remaining 为 -1，不当作余额显示
+  [TEMPLATE_TYPES.SUB2API]: `({
+  request: {
+    url: "{{baseUrl}}".replace(/\\/+$/, "").replace(/\\/v1$/, "") + "/v1/usage",
+    method: "GET",
+    headers: {
+      "Authorization": "Bearer {{apiKey}}",
+      "User-Agent": "cc-switch/1.0"
+    }
+  },
+  extractor: function (response) {
+    var quota = response.quota || {};
+    var result = {
+      isValid: response.isValid !== false,
+      unit: response.unit || quota.unit || "USD"
+    };
+    if (typeof response.planName === "string") result.planName = response.planName;
+    if (typeof response.remaining === "number" && response.remaining >= 0) {
+      result.remaining = response.remaining;
+    }
+    if (quota.limit > 0) {
+      result.used = quota.used;
+      result.total = quota.limit;
+    }
+    if (!result.isValid) {
+      result.invalidMessage = response.status
+        ? String(response.status)
+        : "${t("usageScript.queryFailedMessage")}";
+    }
+    return result;
+  },
+})`,
+
   // GitHub Copilot 模板不需要脚本，使用专用 API
   [TEMPLATE_TYPES.GITHUB_COPILOT]: "",
 
@@ -114,6 +153,7 @@ const TEMPLATE_NAME_KEYS: Record<string, string> = {
   [TEMPLATE_TYPES.CUSTOM]: "usageScript.templateCustom",
   [TEMPLATE_TYPES.GENERAL]: "usageScript.templateGeneral",
   [TEMPLATE_TYPES.NEW_API]: "usageScript.templateNewAPI",
+  [TEMPLATE_TYPES.SUB2API]: "usageScript.templateSub2API",
   [TEMPLATE_TYPES.GITHUB_COPILOT]: "usageScript.templateCopilot",
   [TEMPLATE_TYPES.TOKEN_PLAN]: "usageScript.templateTokenPlan",
   [TEMPLATE_TYPES.BALANCE]: "usageScript.templateBalance",
@@ -160,7 +200,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const PRESET_TEMPLATES = generatePresetTemplates(t);
 
   // 从 provider 的 settingsConfig 中提取 API Key 和 Base URL
-  const getProviderCredentials = (): {
+  const readProviderCredentials = (): {
     apiKey: string | undefined;
     baseUrl: string | undefined;
   } => {
@@ -172,8 +212,13 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       if (appId === "claude" || appId === "claude-desktop") {
         // Claude / Claude Desktop: { env: { ANTHROPIC_AUTH_TOKEN | ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL } }
         const env = (config as any).env || {};
+        // Key 的兜底顺序与后端 Provider::resolve_usage_credentials 一致
         return {
-          apiKey: env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY,
+          apiKey:
+            env.ANTHROPIC_AUTH_TOKEN ||
+            env.ANTHROPIC_API_KEY ||
+            env.OPENROUTER_API_KEY ||
+            env.GOOGLE_API_KEY,
           baseUrl: env.ANTHROPIC_BASE_URL,
         };
       } else if (appId === "codex") {
@@ -188,14 +233,30 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         // Gemini / Antigravity: { env: { GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL } }
         const env = (config as any).env || {};
         return {
-          apiKey: env.GEMINI_API_KEY,
+          apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
           baseUrl: env.GOOGLE_GEMINI_BASE_URL,
+        };
+      } else if (appId === "grokbuild") {
+        const grokConfig = parseGrokBuildConfig(
+          (config as any).config,
+          provider.name,
+        );
+        return {
+          apiKey: grokConfig.apiKey,
+          baseUrl: grokConfig.baseUrl,
         };
       } else if (appId === "hermes") {
         // Hermes: settingsConfig 顶层扁平（snake_case，对应 config.yaml）
         return {
           apiKey: (config as any).api_key,
           baseUrl: (config as any).base_url,
+        };
+      } else if (appId === "kimi") {
+        // Kimi Code: 凭据在 provider.{base_url, api_key}（snake_case，对应 config.toml）
+        const kimiProvider = (config as any).provider || {};
+        return {
+          apiKey: kimiProvider.api_key,
+          baseUrl: kimiProvider.base_url,
         };
       } else if (appId === "openclaw") {
         // OpenClaw: settingsConfig 顶层扁平（camelCase，对应 openclaw.json）
@@ -230,6 +291,18 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       console.error("Failed to extract provider credentials:", error);
       return { apiKey: undefined, baseUrl: undefined };
     }
+  };
+  // 去掉末尾斜杠，与后端 resolve_usage_credentials 一致：哪条路径查询都不会拼出
+  // `{{baseUrl}}//path`
+  const getProviderCredentials = () => {
+    const raw = readProviderCredentials();
+    return {
+      apiKey: raw.apiKey,
+      baseUrl:
+        typeof raw.baseUrl === "string"
+          ? raw.baseUrl.replace(/\/+$/, "")
+          : raw.baseUrl,
+    };
   };
 
   const providerCredentials = getProviderCredentials();
@@ -427,15 +500,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
     // 保存时记录当前选择的模板类型
     const scriptWithTemplate = {
       ...script,
-      templateType: selectedTemplate as
-        | "custom"
-        | "general"
-        | "newapi"
-        | "github_copilot"
-        | "token_plan"
-        | "balance"
-        | "official_subscription"
-        | undefined,
+      templateType: (selectedTemplate ?? undefined) as TemplateType | undefined,
     };
     onSave(scriptWithTemplate);
     onClose();
@@ -572,7 +637,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
         script.baseUrl,
         script.accessToken,
         script.userId,
-        selectedTemplate as "custom" | "general" | "newapi" | undefined,
+        (selectedTemplate ?? undefined) as TemplateType | undefined,
       );
       if (result.success && result.data && result.data.length > 0) {
         const summary = result.data
@@ -655,7 +720,10 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
           accessToken: undefined,
           userId: undefined,
         });
-      } else if (presetName === TEMPLATE_TYPES.GENERAL) {
+      } else if (
+        presetName === TEMPLATE_TYPES.GENERAL ||
+        presetName === TEMPLATE_TYPES.SUB2API
+      ) {
         setScript({
           ...script,
           code: preset,
@@ -717,6 +785,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
 
   const shouldShowCredentialsConfig =
     selectedTemplate === TEMPLATE_TYPES.GENERAL ||
+    selectedTemplate === TEMPLATE_TYPES.SUB2API ||
     selectedTemplate === TEMPLATE_TYPES.NEW_API;
 
   const footer = (
@@ -906,7 +975,9 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
             {selectedTemplate === TEMPLATE_TYPES.OFFICIAL_SUBSCRIPTION && (
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="text-sm text-muted-foreground">
-                  {t("usageScript.officialSubscriptionHint")}
+                  {appId === "agy"
+                    ? t("usageScript.officialSubscriptionHintAgy")
+                    : t("usageScript.officialSubscriptionHint")}
                 </p>
               </div>
             )}
@@ -980,7 +1051,8 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {selectedTemplate === TEMPLATE_TYPES.GENERAL && (
+                  {(selectedTemplate === TEMPLATE_TYPES.GENERAL ||
+                    selectedTemplate === TEMPLATE_TYPES.SUB2API) && (
                     <>
                       <div className="space-y-2">
                         <Label htmlFor="usage-api-key">

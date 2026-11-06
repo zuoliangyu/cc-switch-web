@@ -53,6 +53,9 @@ pub struct SubscriptionQuota {
     pub extra_usage: Option<ExtraUsage>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_credits: Option<ResetCredits>,
+    /// ChatGPT 订阅买的 Codex Credits 余额（额度用完后才扣）；没有、不限量或为 0 时为 None
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credits_balance: Option<f64>,
     pub error: Option<String>,
     pub queried_at: Option<i64>,
 }
@@ -68,6 +71,7 @@ impl SubscriptionQuota {
             extra_usage: None,
             error: None,
             reset_credits: None,
+            credits_balance: None,
             queried_at: None,
         }
     }
@@ -83,6 +87,7 @@ impl SubscriptionQuota {
             extra_usage: None,
             error: Some(message),
             reset_credits: None,
+            credits_balance: None,
             queried_at: Some(now_millis()),
         }
     }
@@ -151,6 +156,24 @@ struct CodexRateLimit {
 #[derive(Debug, Deserialize)]
 struct CodexUsageResponse {
     rate_limit: Option<CodexRateLimit>,
+    /// 原样收下再挑字段：形状不对时只是不显示余额，不能让整份额度解析失败
+    credits: Option<serde_json::Value>,
+}
+
+/// `wham/usage` 的 `credits`：`{has_credits, unlimited, balance}`，balance 实测是字符串
+/// （"62500"），也收数字（同 CodexBar）。不限量、没有或为 0 时不显示
+fn parse_codex_credits_balance(credits: &serde_json::Value) -> Option<f64> {
+    if credits.get("has_credits").and_then(|v| v.as_bool()) != Some(true)
+        || credits.get("unlimited").and_then(|v| v.as_bool()) == Some(true)
+    {
+        return None;
+    }
+    let balance = match credits.get("balance")? {
+        serde_json::Value::Number(n) => n.as_f64()?,
+        serde_json::Value::String(s) => s.trim().parse::<f64>().ok()?,
+        _ => return None,
+    };
+    (balance.is_finite() && balance > 0.0).then_some(balance)
 }
 
 #[derive(Debug, Deserialize)]
@@ -733,6 +756,7 @@ fn parse_claude_quota(body: &serde_json::Value) -> SubscriptionQuota {
         extra_usage,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -939,6 +963,7 @@ pub(crate) async fn query_codex_usage(
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: body.credits.as_ref().and_then(parse_codex_credits_balance),
         queried_at: Some(now_millis()),
     }
 }
@@ -1149,6 +1174,7 @@ async fn query_gemini_quota(access_token: &str) -> SubscriptionQuota {
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -1698,6 +1724,43 @@ mod tests {
         )
         .unwrap();
         assert!(quota.reset_credits.is_none());
+        assert!(quota.credits_balance.is_none());
+    }
+
+    #[test]
+    fn codex_credits_balance_from_usage_response() {
+        let parse = |raw: &str| {
+            let body: CodexUsageResponse = serde_json::from_str(raw).unwrap();
+            body.credits.as_ref().and_then(parse_codex_credits_balance)
+        };
+        // 实测形状：balance 是字符串
+        assert_eq!(
+            parse(
+                r#"{"credits":{"has_credits":true,"unlimited":false,"overage_limit_reached":false,
+                    "balance":"62500","approx_local_messages":[15625,81250]}}"#
+            ),
+            Some(62500.0)
+        );
+        assert_eq!(
+            parse(r#"{"credits":{"has_credits":true,"unlimited":false,"balance":42.5}}"#),
+            Some(42.5)
+        );
+        // 0、不限量、没有、缺字段、形状不对：都不显示，也不让额度解析失败
+        assert_eq!(
+            parse(r#"{"credits":{"has_credits":true,"unlimited":false,"balance":"0"}}"#),
+            None
+        );
+        assert_eq!(
+            parse(r#"{"credits":{"has_credits":true,"unlimited":true,"balance":"10"}}"#),
+            None
+        );
+        assert_eq!(
+            parse(r#"{"credits":{"has_credits":false,"unlimited":false,"balance":"10"}}"#),
+            None
+        );
+        assert_eq!(parse(r#"{"credits":{"has_credits":true}}"#), None);
+        assert_eq!(parse(r#"{"credits":"weird","rate_limit":null}"#), None);
+        assert_eq!(parse(r#"{}"#), None);
     }
 }
 

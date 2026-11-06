@@ -8,17 +8,21 @@ import {
   ResetSlot,
   TONE_FILL,
   TONE_TEXT,
+  TonedText,
   useNow,
 } from "@/components/quota/QuotaLines";
+import { useQuotaDisplay } from "@/components/quota/useQuotaDisplay";
 import {
   QuotaBreakdownChevron,
   QuotaBreakdownRow,
 } from "@/components/quota/QuotaBreakdown";
 import {
+  barPercent,
   countdownStr,
   formatRelativeTime,
   lineHint,
   tierLine,
+  type QuotaDisplay,
   type QuotaLine,
 } from "@/components/quota/quotaRules";
 import {
@@ -40,7 +44,7 @@ export interface AccountQuotaRow {
   line: QuotaLine;
 }
 
-/** 额度列要画的东西：成功按档画条；查询失败写「额度查询失败」+ 原因；null 表示不显示 */
+/** 额度列要画的东西：成功按档画条；查询失败写「额度查询失败」+ 原因；查成功但没有额度时写一句灰字；null 表示不显示 */
 export type AccountQuotaState =
   | { kind: "rows"; rows: AccountQuotaRow[] }
   | { kind: "failed"; reason: string }
@@ -58,8 +62,8 @@ interface AccountQuotaColumnProps {
 }
 
 /**
- * 授权中心账号行右侧的额度（v7 Auth 画板）：额度条（条和数字都按「剩余」画，
- * 平时 --chart-1；不到 10% 换 warning，用完换 danger）+ 84 宽的「x 分钟前 ↻」。
+ * 授权中心账号行右侧的额度（v7 Auth 画板）：额度条（条和数字按设置写剩余或已用，
+ * 平时 --chart-1；不到 20% 换 warning，用完换 danger）+ 84 宽的「x 分钟前 ↻」。
  * 档名、数值、倒计时三格定宽，倒计时格没有也留着；整列宽度只随分组卡片宽度变
  * （.auth-quota-col，见 index.css），各账号、各分组的条起点和长度一致。
  * 打开页面时查一次，不轮询；↻ 手动重查。
@@ -148,6 +152,7 @@ export function AccountQuotaColumn({
 }
 
 interface QuotaRefreshCellProps {
+  /** 账号名，拼进刷新按钮的无障碍名字 */
   login: string;
   queriedAt?: number | null;
   loading: boolean;
@@ -216,9 +221,7 @@ function QuotaRowCells({
   /** 跟在说明文字后面的小图标（可点开的行用） */
   trailing?: ReactNode;
 }) {
-  const width = Number.isFinite(line.left)
-    ? Math.max(0, Math.min(100, line.left))
-    : 100;
+  const width = barPercent(line);
   const value = line.value ?? line.text;
   return (
     <>
@@ -252,14 +255,14 @@ function QuotaRowCells({
           />
         </span>
       )}
-      <span
-        className={cn(
-          // 64 宽放得下「剩余 100%」，和「剩余 99%」右边对齐
-          "w-16 shrink-0 whitespace-nowrap text-end tabular-nums",
-          line.tone === "normal" ? "text-foreground" : TONE_TEXT[line.tone],
-        )}
-      >
-        {value}
+      {/* 旁边已有额度条，正常时数值不上色 */}
+      {/* 64 宽放得下「剩余 100%」，和「剩余 99%」右边对齐 */}
+      <span className="w-16 shrink-0 whitespace-nowrap text-end tabular-nums text-foreground">
+        <TonedText
+          text={value}
+          line={line}
+          className={line.tone === "normal" ? "" : TONE_TEXT[line.tone]}
+        />
       </span>
     </>
   );
@@ -271,6 +274,7 @@ export function subscriptionQuotaState(
   quota: SubscriptionQuota | undefined,
   loading: boolean,
   locale: string,
+  display: QuotaDisplay = "left",
 ): AccountQuotaState {
   if (!quota) return loading ? { kind: "loading" } : null;
   // 没有凭据 / 凭据解析失败：和供应商卡片一样不显示
@@ -286,7 +290,7 @@ export function subscriptionQuotaState(
       reason: quotaFailureReason(t, quota),
     };
   }
-  const rows = quotaRows(t, quota, locale);
+  const rows = quotaRows(t, quota, locale, { display });
   return rows.length > 0 ? { kind: "rows", rows } : null;
 }
 
@@ -299,6 +303,7 @@ export function CopilotAccountQuota({
   login: string;
 }) {
   const { t } = useTranslation();
+  const display = useQuotaDisplay();
   const query = useCopilotQuota(accountId, { enabled: true, autoQuery: false });
   const { data: quota, isFetching: loading } = query;
 
@@ -311,7 +316,7 @@ export function CopilotAccountQuota({
             kind: "rows",
             rows: quota.tiers.map((tier) => ({
               label,
-              line: tierLine(t, tier, label),
+              line: tierLine(t, tier, label, { display }),
             })),
           }
         : null;
@@ -349,6 +354,7 @@ export function XaiAccountQuota({
   login: string;
 }) {
   const { t, i18n } = useTranslation();
+  const display = useQuotaDisplay();
   const {
     data: quota,
     isFetching: loading,
@@ -360,7 +366,7 @@ export function XaiAccountQuota({
   return (
     <AccountQuotaColumn
       login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language)}
+      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
       queriedAt={quota?.queriedAt ?? null}
       loading={loading}
       onRefresh={() => void refetch()}
@@ -377,12 +383,19 @@ export function KimiAccountQuota({
   login: string;
 }) {
   const { t, i18n } = useTranslation();
+  const display = useQuotaDisplay();
   const {
     data: quota,
     isFetching: loading,
     refetch,
   } = useKimiAccountQuota(accountId, { enabled: true, autoQuery: false });
-  const state = subscriptionQuotaState(t, quota, loading, i18n.language);
+  const state = subscriptionQuotaState(
+    t,
+    quota,
+    loading,
+    i18n.language,
+    display,
+  );
   return (
     <AccountQuotaColumn
       login={login}
@@ -408,6 +421,7 @@ export function AgyAccountQuota({
   login: string;
 }) {
   const { t, i18n } = useTranslation();
+  const display = useQuotaDisplay();
   const {
     data: quota,
     isFetching: loading,
@@ -416,7 +430,7 @@ export function AgyAccountQuota({
   return (
     <AccountQuotaColumn
       login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language)}
+      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
       queriedAt={quota?.queriedAt ?? null}
       loading={loading}
       onRefresh={() => void refetch()}
@@ -433,6 +447,7 @@ export function ClaudeAccountQuota({
   login: string;
 }) {
   const { t, i18n } = useTranslation();
+  const display = useQuotaDisplay();
   const {
     data: quota,
     isFetching: loading,
@@ -441,7 +456,7 @@ export function ClaudeAccountQuota({
   return (
     <AccountQuotaColumn
       login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language)}
+      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
       queriedAt={quota?.queriedAt ?? null}
       loading={loading}
       onRefresh={() => void refetch()}

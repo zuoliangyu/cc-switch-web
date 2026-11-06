@@ -678,11 +678,17 @@ describe("用量查询的默认启用", () => {
     expect(withScript.meta?.usage_script?.code).not.toBe("");
   });
 
-  it("新建时不自动启用的应用 / 套餐组合导入时也不启用", () => {
-    const provider = buildFromLink("gemini", {
-      endpoint: "https://api.kimi.com/coding/",
-    });
-    expect(provider.meta?.usage_script).toBeUndefined();
+  it("和新建一样，套餐地址在所有应用都默认启用", () => {
+    for (const app of ["codex", "gemini", "opencode", "hermes"]) {
+      const provider = buildFromLink(app, {
+        endpoint: "https://api.kimi.com/coding/",
+      });
+      expect(provider.meta?.usage_script, app).toMatchObject({
+        enabled: true,
+        templateType: "token_plan",
+        codingPlanProvider: "kimi",
+      });
+    }
   });
 });
 

@@ -813,7 +813,7 @@ export function SessionManagerPage({
             aria-expanded={open}
             onClick={() => toggleGroup(group.key)}
             title={group.projectDir ?? undefined}
-            className="flex h-7 min-w-0 max-w-full items-center gap-2.5 rounded-md pe-2 ps-1.5 text-left font-semibold transition-colors hover:bg-accent"
+            className="flex h-7 w-full min-w-0 max-w-full items-center gap-2.5 rounded-md pe-2 ps-1.5 text-left font-semibold transition-colors hover:bg-accent"
           >
             <ChevronDown
               aria-hidden="true"

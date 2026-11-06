@@ -365,6 +365,10 @@ pub struct AppSettings {
     pub skip_claude_onboarding: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// 按档的额度百分比写「剩余」还是「已用」（`"left"` / `"used"`，缺省为剩余）。卡片和
+    /// 授权中心一起变；余额、Credits、重置次数不受影响（#8024）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quota_display: Option<String>,
 
     // ===== 主页面显示的应用 =====
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -483,6 +487,7 @@ impl Default for AppSettings {
             launch_on_startup: None,
             skip_claude_onboarding: None,
             language: None,
+            quota_display: None,
             visible_apps: None,
             app_order: None,
             claude_config_dir: None,
@@ -589,6 +594,13 @@ impl AppSettings {
             .as_ref()
             .map(|s| s.trim())
             .filter(|s| matches!(*s, "en" | "zh" | "ja"))
+            .map(|s| s.to_string());
+
+        self.quota_display = self
+            .quota_display
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| matches!(*s, "left" | "used"))
             .map(|s| s.to_string());
 
         self.preferred_terminal = self
@@ -1310,6 +1322,24 @@ mod tests {
         let saved = serde_json::to_value(&off).expect("serialize");
         assert_eq!(saved["codexStackClassicTools"], false);
         assert!(saved.get("codexStackClassicSubagents").is_none());
+    }
+
+    #[test]
+    fn quota_display_keeps_only_left_or_used() {
+        for (raw, expected) in [
+            (" used ", Some("used")),
+            ("left", Some("left")),
+            ("remaining", None),
+        ] {
+            let mut settings = AppSettings {
+                quota_display: Some(raw.to_string()),
+                ..AppSettings::default()
+            };
+            settings.normalize_paths();
+            assert_eq!(settings.quota_display.as_deref(), expected, "{raw}");
+        }
+        let saved = serde_json::to_value(AppSettings::default()).expect("serialize");
+        assert!(saved.get("quotaDisplay").is_none());
     }
 
     #[test]

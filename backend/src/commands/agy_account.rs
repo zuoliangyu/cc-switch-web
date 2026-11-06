@@ -62,6 +62,7 @@ pub(crate) async fn agy_quota(
             tiers,
             extra_usage: None,
             reset_credits: None,
+            credits_balance: None,
             error: None,
             queried_at: Some(chrono::Utc::now().timestamp_millis()),
         },

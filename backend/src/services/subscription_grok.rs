@@ -691,6 +691,7 @@ pub(crate) async fn query_grok_quota(
         extra_usage: None,
         error: None,
         reset_credits: None,
+        credits_balance: None,
         queried_at: Some(now_millis()),
     })
 }

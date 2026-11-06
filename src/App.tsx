@@ -24,7 +24,6 @@ import {
   Wrench,
   History,
   BarChart2,
-  Download,
   FolderOpen,
   KeyRound,
   Shield,
@@ -180,6 +179,7 @@ const HEADER_HEIGHT = 64; // px
 const PAGES_WITH_OWN_HEADER = new Set<View>([
   "usage",
   "apps",
+  "mcp",
   "skills",
   "skillsDiscovery",
   "sessions",
@@ -428,7 +428,6 @@ function App() {
   }, [activeApp, currentView]);
 
   const promptPanelRef = useRef<any>(null);
-  const mcpPanelRef = useRef<any>(null);
   const addActionButtonClass = "theme-floating-action rounded-full w-8 h-8";
 
   const {
@@ -542,8 +541,8 @@ function App() {
   const isEnvBannerVisible = showEnvBanner && envConflicts.length > 0;
   const headerTopOffset =
     DRAG_BAR_HEIGHT + (isEnvBannerVisible ? envBannerHeight : 0);
-  // 窄屏把页头操作挪到第二行的页面；Skills、统一供应商的操作已在页内页头里
-  const resourceToolbar = ["mcp", "prompts"].includes(currentView);
+  // 窄屏把页头操作挪到第二行的页面；MCP、Skills、统一供应商的操作已在页内页头里
+  const resourceToolbar = ["prompts"].includes(currentView);
   const [launchDashboardOpen, setLaunchDashboardOpen] = useState(false);
   const openHermesWebUI = useOpenHermesWebUI(() =>
     setLaunchDashboardOpen(true),
@@ -919,13 +918,7 @@ function App() {
             />
           );
         case "mcp":
-          return (
-            <UnifiedMcpPanel
-              ref={mcpPanelRef}
-              visibleApps={visibleApps}
-              onOpenChange={() => setCurrentView("providers")}
-            />
-          );
+          return <UnifiedMcpPanel />;
         case "universal":
           return (
             <div className="px-6 pt-4">
@@ -1249,28 +1242,6 @@ function App() {
                     <Plus className="w-4 h-4 mr-2" />
                     {t("prompts.add")}
                   </Button>
-                )}
-                {currentView === "mcp" && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => mcpPanelRef.current?.openImport()}
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      {t("mcp.importExisting")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => mcpPanelRef.current?.openAdd()}
-                      className="hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      {t("mcp.addMcp")}
-                    </Button>
-                  </>
                 )}
                 {currentView === "providers" && (
                   <>

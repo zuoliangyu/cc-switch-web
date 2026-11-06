@@ -1,397 +1,552 @@
-import { WindowedRows } from "@/components/common/WindowedRows";
-import { ResyncButton } from "@/components/common/ResyncButton";
-import { mcpApi } from "@/lib/api/mcp";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { useMcpConnectivity } from "@/hooks/useMcpConnectivity";
-import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { Activity, Search, Server } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import {
+  Activity,
+  Download,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Server,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { HelpTip } from "@/components/ui/help-tip";
+import { Notice, NoticeSlot } from "@/components/ui/notice";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { DialogTitle } from "@/components/ui/dialog";
+import { HoverTip } from "@/components/ui/hover-tip";
+import { AppPageHeader } from "@/components/shell/AppPageHeader";
+import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
+import { useIsMutating } from "@tanstack/react-query";
+import {
+  MCP_UPSERT_MUTATION_KEY,
   useAllMcpServers,
   useBulkToggleMcpApp,
-  useToggleMcpApp,
   useDeleteMcpServer,
   useImportMcpFromApps,
+  useResyncMcpToApps,
+  useToggleMcpApp,
 } from "@/hooks/useMcp";
-import type { McpServer, VisibleApps } from "@/types";
-import type { AppId } from "@/lib/api/types";
-import McpFormModal from "./McpFormModal";
-import { ConfirmDialog } from "../ConfirmDialog";
-import { Edit3, Trash2, ExternalLink } from "lucide-react";
-import { settingsApi } from "@/lib/api";
+import type { McpServer } from "@/types";
+import type { McpAppSyncOutcome } from "@/lib/api/mcp";
+import { MCP_APP_IDS, isMcpAppId, type McpAppId } from "@/config/appConfig";
 import { mcpPresets } from "@/config/mcpPresets";
-import { toast } from "sonner";
-import { showBulkToggleResult } from "@/lib/bulkToggleToast";
-import { MCP_APP_IDS, type McpAppId } from "@/config/appConfig";
-import { AppCountBar } from "@/components/common/AppCountBar";
-import { OmpDiscoveryNote } from "@/components/common/OmpDiscoveryNote";
-import { AppToggleGroup } from "@/components/common/AppToggleGroup";
-import { ListItemRow } from "@/components/common/ListItemRow";
-import { ManagementListSearch } from "@/components/common/ManagementListSearch";
+import { settingsApi } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import {
   extractErrorMessage,
   translateMcpBackendError,
 } from "@/utils/errorUtils";
+import { cn } from "@/lib/utils";
+import McpFormModal from "./McpFormModal";
+import {
+  MatrixCell,
+  MatrixColumnHeader,
+  MatrixColumnHighlight,
+  MatrixSearch,
+  NeutralBadge,
+  ompDiscoveryColumnNote,
+  resolveBulkScope,
+  showUndoToast,
+} from "./AppMatrix";
+import { DisclosureButton, V7ConfirmDialog, V7Dialog } from "./formBits";
+import { summaryOf } from "./mcpDraft";
+import { useVisibleAppIds } from "./useVisibleAppIds";
+
+function getMcpSearchText(id: string, server: McpServer): string {
+  const spec = server.server ?? {};
+  const values: unknown[] = [
+    id,
+    server.id,
+    server.name,
+    server.description,
+    ...(Array.isArray(server.tags) ? server.tags : []),
+    spec.type,
+    spec.command,
+    ...(Array.isArray(spec.args) ? spec.args : []),
+    spec.cwd,
+    spec.url,
+    server.homepage,
+    server.docs,
+    server.source,
+  ];
+
+  // Keep this an explicit allow-list. In particular, env and headers may
+  // contain credentials and must never become part of the searchable text.
+  return values
+    .filter((value): value is string => typeof value === "string")
+    .join("\n")
+    .toLowerCase();
+}
+
+/** 导入时各应用读的用户级配置文件（只用于「读取了哪些文件」的说明） */
+const IMPORT_SOURCE_FILES: Record<
+  McpAppId,
+  { file: string; noteKey?: string }
+> = {
+  claude: { file: "~/.claude.json", noteKey: "mcpPage.import.claudeNote" },
+  codex: { file: "~/.codex/config.toml" },
+  gemini: { file: "~/.gemini/settings.json" },
+  grokbuild: { file: "~/.grok/config.toml" },
+  opencode: { file: "~/.config/opencode/opencode.json" },
+  hermes: { file: "~/.hermes/config.yaml" },
+  pi: { file: "~/.pi/agent/mcp.json" },
+  agy: { file: "~/.gemini/config/mcp_config.json" },
+  dsh: {
+    file: "~/.dsh/profiles/<profile>/cordis.patch.yml",
+    noteKey: "mcpPage.import.dshNote",
+  },
+  kimi: { file: "~/.kimi-code/mcp.json" },
+  mcode: { file: "~/.minimax/mcp.json" },
+  omp: { file: "~/.omp/agent/mcp.json" },
+};
+
+/** 先写配置文件、成功后才入库的应用：写失败时开关没变，重试要逐行重写 */
+const WRITE_THEN_SAVE_APPS: ReadonlySet<McpAppId> = new Set([
+  "mcode",
+  "kimi",
+  "dsh",
+  "pi",
+  "agy",
+  "omp",
+]);
+
+/** 写入失败：记下想要的状态，「重试」按这个值再写一次 */
+interface WriteFailure {
+  desired: boolean;
+  error: string;
+}
+
+const failKey = (id: string, app: McpAppId) => `${id}\u0000${app}`;
 
 interface UnifiedMcpPanelProps {
-  visibleApps?: VisibleApps;
-  onOpenChange: (open: boolean) => void;
+  onInteractionBlockedChange?: (blocked: boolean) => void;
 }
 
-export interface UnifiedMcpPanelHandle {
-  openAdd: () => void;
-  openImport: () => void;
+interface ImportReport {
+  added: string[];
+  hadExisting: boolean;
+  error?: string;
 }
 
-const UnifiedMcpPanel = React.forwardRef<
-  UnifiedMcpPanelHandle,
-  UnifiedMcpPanelProps
->(({ onOpenChange: _onOpenChange, visibleApps }, ref) => {
-  const visibleAppIds = MCP_APP_IDS.filter(
-    (app) => visibleApps?.[app] !== false,
-  );
+/**
+ * MCP 全局页（v7）：页头 + 应用矩阵 + 添加 / 编辑抽屉。
+ * 以这里为准写进勾选的应用；不支持的应用（Claude Desktop、OpenClaw）没有列。
+ */
+const UnifiedMcpPanel: React.FC<UnifiedMcpPanelProps> = ({
+  onInteractionBlockedChange,
+}) => {
   const { t } = useTranslation();
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const appIds = useVisibleAppIds(MCP_APP_IDS);
+  const [drawer, setDrawer] = useState<
+    { mode: "add" } | { mode: "edit"; id: string } | null
+  >(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [importFilesOpen, setImportFilesOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [confirmDialog, setConfirmDialog] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  } | null>(null);
+  const [fails, setFails] = useState<Record<string, WriteFailure>>({});
+  /** 整个应用重新同步失败（「重新同步到各应用」或通知条「重试」），不对应某一行 */
+  const [appFails, setAppFails] = useState<Partial<Record<McpAppId, string>>>(
+    {},
+  );
+  const [writePending, setWritePending] = useState(false);
+  const writeLockRef = useRef(false);
 
-  const { data: serversMap, isLoading } = useAllMcpServers();
-  // 只在用户点击时检查：检查会运行配置的命令（npx 下载、OAuth 弹窗、容器），打开页面不能触发
-  const connectivity = useMcpConnectivity(serversMap);
+  const {
+    data: serversMap,
+    isLoading,
+    isError,
+    error: loadError,
+    refetch,
+  } = useAllMcpServers();
+  const connectivity = useMcpConnectivity(isError ? undefined : serversMap);
   const toggleAppMutation = useToggleMcpApp();
   const bulkToggleAppMutation = useBulkToggleMcpApp();
   const deleteServerMutation = useDeleteMcpServer();
   const importMutation = useImportMcpFromApps();
+  const resyncMutation = useResyncMcpToApps();
+
+  const mutationPending =
+    toggleAppMutation.isPending ||
+    bulkToggleAppMutation.isPending ||
+    deleteServerMutation.isPending ||
+    importMutation.isPending ||
+    resyncMutation.isPending;
+  const dialogOpen =
+    drawer !== null || deleteId !== null || importReport !== null;
+  const interactionBlocked = writePending || mutationPending || dialogOpen;
+  // 外观上的禁用晚 300ms 才出现：点一个格子写得很快时不让整页按钮闪一下变灰。
+  // 写入本身仍由写锁（writeLockRef / interactionBlocked）拦着。
+  const controlsDisabled = useDelayedFlag(interactionBlocked);
+
+  // 编辑页自己的保存不在 mutationPending 里，按 mutation key 单独看
+  const editorSaving =
+    useIsMutating({ mutationKey: MCP_UPSERT_MUTATION_KEY }) > 0;
+  // 报给外壳的导航锁不算编辑页：编辑页只盖住内容区，离开页面就关掉它（同供应商编辑页）；
+  // 写入进行中（含编辑页自己的保存）仍锁
+  const navigationBlocked =
+    writePending ||
+    mutationPending ||
+    editorSaving ||
+    deleteId !== null ||
+    importReport !== null;
+  React.useEffect(() => {
+    onInteractionBlockedChange?.(navigationBlocked);
+  }, [navigationBlocked, onInteractionBlockedChange]);
+
+  React.useEffect(
+    () => () => onInteractionBlockedChange?.(false),
+    [onInteractionBlockedChange],
+  );
+
+  const beginWrite = (allowOpenDialog = false) => {
+    if (
+      writeLockRef.current ||
+      mutationPending ||
+      (!allowOpenDialog && dialogOpen)
+    ) {
+      return false;
+    }
+    writeLockRef.current = true;
+    setWritePending(true);
+    return true;
+  };
+
+  const endWrite = () => {
+    writeLockRef.current = false;
+    setWritePending(false);
+  };
 
   const serverEntries = useMemo((): Array<[string, McpServer]> => {
     if (!serversMap) return [];
     return Object.entries(serversMap);
   }, [serversMap]);
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredServerEntries = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return serverEntries;
-    return serverEntries.filter(([id, server]) => {
-      const spec = server.server ?? {};
-      const searchable = [
-        id,
-        server.name,
-        server.description,
-        ...(server.tags ?? []),
-        spec.type,
-        spec.command,
-        ...(spec.args ?? []),
-        spec.cwd,
-        spec.url,
-        server.homepage,
-        server.docs,
-      ];
-      return searchable.some(
-        (value) =>
-          typeof value === "string" && value.toLowerCase().includes(query),
-      );
-    });
-  }, [searchQuery, serverEntries]);
+    if (!normalizedSearchQuery) return serverEntries;
+    return serverEntries.filter(([id, server]) =>
+      getMcpSearchText(id, server).includes(normalizedSearchQuery),
+    );
+  }, [normalizedSearchQuery, serverEntries]);
 
-  const writePending =
-    toggleAppMutation.isPending || bulkToggleAppMutation.isPending;
+  const scope = resolveBulkScope(
+    serverEntries,
+    filteredServerEntries,
+    normalizedSearchQuery ? "search" : null,
+  );
 
-  const enabledCounts = useMemo(() => {
-    const counts = {
-      claude: 0,
-      "claude-desktop": 0,
-      codex: 0,
-      gemini: 0,
-      grokbuild: 0,
-      opencode: 0,
-      openclaw: 0,
-      hermes: 0,
-      pi: 0,
-      mcode: 0,
-      kimi: 0,
-      dsh: 0,
-      agy: 0,
-      omp: 0,
-    };
-    filteredServerEntries.forEach(([_, server]) => {
-      for (const app of MCP_APP_IDS) {
-        if (server.apps[app]) counts[app]++;
-      }
-    });
-    return counts;
-  }, [filteredServerEntries]);
+  const noun = t("mcpPage.noun");
 
-  const handleToggleApp = async (
-    serverId: string,
-    app: AppId,
-    enabled: boolean,
+  // ─── 写入与失败记录 ────────────────────────────────────────────────
+  const recordResult = (
+    id: string,
+    app: McpAppId,
+    desired: boolean,
+    error?: unknown,
   ) => {
-    if (writePending) return;
+    setFails((prev) => {
+      const next = { ...prev };
+      const key = failKey(id, app);
+      if (error === undefined) delete next[key];
+      else {
+        const detail = extractErrorMessage(error);
+        next[key] = {
+          desired,
+          error: translateMcpBackendError(detail, t) || detail,
+        };
+      }
+      return next;
+    });
+  };
+
+  const writeOne = async (id: string, app: McpAppId, enabled: boolean) => {
+    if (!beginWrite()) return;
     try {
-      await toggleAppMutation.mutateAsync({ serverId, app, enabled });
+      await toggleAppMutation.mutateAsync({ serverId: id, app, enabled });
+      recordResult(id, app, enabled);
     } catch (error) {
-      // Pi 拒绝的写入（SSE、名称规则）给出本地化原因
-      const detail = extractErrorMessage(error);
-      toast.error(t("common.error"), {
-        description: translateMcpBackendError(detail, t) || detail,
-      });
+      recordResult(id, app, enabled, error);
+    } finally {
+      endWrite();
     }
   };
 
-  const handleToggleAll = async (app: AppId, enabled: boolean) => {
-    if (writePending) return;
-    const serverIds = filteredServerEntries
-      .filter(
-        ([_, server]) =>
-          Boolean(server.apps[app as keyof typeof server.apps]) !== enabled,
-      )
-      .map(([id]) => id);
-    if (serverIds.length === 0) return;
+  /** 依次写一组（服务器, 应用）；返回成功写入的那些 */
+  const writeMany = async (
+    pairs: Array<{ id: string; app: McpAppId }>,
+    enabled: boolean,
+  ) => {
+    const byApp = new Map<McpAppId, string[]>();
+    for (const pair of pairs) {
+      byApp.set(pair.app, [...(byApp.get(pair.app) ?? []), pair.id]);
+    }
+    const succeeded: Array<{ id: string; app: McpAppId }> = [];
+    let failed = 0;
+    for (const [app, ids] of byApp) {
+      try {
+        const result = await bulkToggleAppMutation.mutateAsync({
+          serverIds: ids,
+          app,
+          enabled,
+        });
+        for (const id of result.succeeded) {
+          recordResult(id, app, enabled);
+          succeeded.push({ id, app });
+        }
+        for (const failure of result.failed) {
+          failed += 1;
+          recordResult(failure.item, app, enabled, failure.error);
+        }
+      } catch (error) {
+        failed += ids.length;
+        for (const id of ids) recordResult(id, app, enabled, error);
+      }
+    }
+    return { succeeded, failed };
+  };
 
-    const result = await bulkToggleAppMutation.mutateAsync({
-      serverIds,
-      app,
-      enabled,
+  const handleCellClick = (id: string, server: McpServer, app: McpAppId) => {
+    const failure = fails[failKey(id, app)];
+    if (failure) {
+      void writeOne(id, app, failure.desired);
+      return;
+    }
+    void writeOne(id, app, !server.apps[app]);
+  };
+
+  /**
+   * 记下重新同步的逐应用结果。成功的应用清掉它的失败记录——数据库里的开关已经写进去了；
+   * MiniMax Code 例外：它写失败时开关没有入库，重新同步补不上，行上的失败要留着按想要的值重试。
+   */
+  const applyResyncOutcomes = (outcomes: McpAppSyncOutcome[]) => {
+    const okApps = new Set<McpAppId>();
+    const failedApps: Partial<Record<McpAppId, string>> = {};
+    for (const outcome of outcomes) {
+      if (!isMcpAppId(outcome.app)) continue;
+      if (outcome.ok) okApps.add(outcome.app);
+      else failedApps[outcome.app] = outcome.error || t("common.error");
+    }
+    setAppFails((prev) => {
+      const next = { ...prev, ...failedApps };
+      for (const app of okApps) delete next[app];
+      return next;
     });
-    // 全部失败报错、部分失败警告，撤销也按实际结果提示
-    showBulkToggleResult(result, t, (undoIds) =>
-      bulkToggleAppMutation.mutateAsync({
-        serverIds: undoIds,
-        app,
-        enabled: !enabled,
-      }),
-    );
+    setFails((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        const app = key.split("\u0000")[1] as McpAppId;
+        if (okApps.has(app) && !WRITE_THEN_SAVE_APPS.has(app)) delete next[key];
+      }
+      return next;
+    });
+    return outcomes.filter((outcome) => !outcome.ok);
   };
 
-  const handleEdit = (id: string) => {
-    setEditingId(id);
-    setIsFormOpen(true);
-  };
+  const rowFailsFor = (app: McpAppId) =>
+    Object.entries(fails).filter(([key]) => key.endsWith(`\u0000${app}`));
 
-  const handleAdd = () => {
-    setEditingId(null);
-    setIsFormOpen(true);
-  };
-
-  const handleImport = async () => {
+  const retryApp = async (app: McpAppId) => {
+    if (!beginWrite()) return;
     try {
-      const count = await importMutation.mutateAsync();
-      if (count === 0) {
-        toast.success(t("mcp.unifiedPanel.noImportFound"), {
+      const entries = rowFailsFor(app);
+      let ok = true;
+      if (WRITE_THEN_SAVE_APPS.has(app) && entries.length > 0) {
+        // MiniMax Code / Pi 写失败时开关没入库：按每行想要的值再写一次
+        for (const [key, failure] of entries) {
+          const id = key.split("\u0000")[0];
+          const { failed } = await writeMany([{ id, app }], failure.desired);
+          if (failed) ok = false;
+        }
+      } else {
+        // 其余应用的开关已经入库：按这里的开关把这个应用整个重写一遍
+        try {
+          const outcomes = await resyncMutation.mutateAsync([app]);
+          ok = applyResyncOutcomes(outcomes).length === 0;
+        } catch (error) {
+          ok = false;
+          setAppFails((prev) => ({
+            ...prev,
+            [app]: extractErrorMessage(error) || String(error),
+          }));
+        }
+      }
+      if (ok) {
+        toast.success(
+          t("mcpPage.toast.written", { app: APP_DISPLAY_NAME[app] }),
+          { closeButton: true },
+        );
+      }
+    } finally {
+      endWrite();
+    }
+  };
+
+  const handleResyncAll = async () => {
+    if (!beginWrite()) return;
+    try {
+      const outcomes = await resyncMutation.mutateAsync(undefined);
+      const failed = applyResyncOutcomes(outcomes);
+      if (failed.length === 0) {
+        toast.success(t("mcpPage.toast.resynced", { count: outcomes.length }), {
           closeButton: true,
         });
       } else {
-        toast.success(t("mcp.unifiedPanel.importSuccess", { count }), {
-          closeButton: true,
-        });
+        toast.warning(
+          t("mcpPage.toast.resyncPartial", {
+            count: failed.length,
+            apps: failed
+              .map((outcome) =>
+                isMcpAppId(outcome.app)
+                  ? APP_DISPLAY_NAME[outcome.app]
+                  : outcome.app,
+              )
+              .join(t("mcpPage.listSeparator")),
+          }),
+          { closeButton: true },
+        );
       }
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: extractErrorMessage(error) || String(error),
+      });
+    } finally {
+      endWrite();
+    }
+  };
+
+  const handleBulk = async (app: McpAppId, enabled: boolean) => {
+    if (!beginWrite()) return;
+    try {
+      const targets = scope.rows
+        .filter(([, server]) => Boolean(server.apps[app]) !== enabled)
+        .map(([id]) => ({ id, app }));
+      if (targets.length === 0) return;
+      const { succeeded, failed } = await writeMany(targets, enabled);
+      const appName = APP_DISPLAY_NAME[app];
+      let text = enabled
+        ? t("appMatrix.toast.enabled", {
+            app: appName,
+            count: succeeded.length,
+            noun,
+          })
+        : t("appMatrix.toast.disabled", {
+            app: appName,
+            count: succeeded.length,
+            noun,
+          });
+      if (failed) text += t("appMatrix.toast.partialFail", { count: failed });
+      showUndoToast(
+        text,
+        t("appMatrix.undo"),
+        succeeded.length
+          ? () => {
+              void (async () => {
+                if (!beginWrite()) return;
+                try {
+                  const result = await writeMany(succeeded, !enabled);
+                  if (result.failed) {
+                    toast[result.succeeded.length ? "warning" : "error"](
+                      t("common.bulkToggleFailed", { count: result.failed }),
+                      { closeButton: true },
+                    );
+                  } else {
+                    toast.success(t("appMatrix.toast.undone"), {
+                      closeButton: true,
+                    });
+                  }
+                } finally {
+                  endWrite();
+                }
+              })();
+            }
+          : undefined,
+        failed ? (succeeded.length ? "warning" : "error") : "success",
+      );
+    } finally {
+      endWrite();
+    }
+  };
+
+  const handleRowAll = async (id: string, server: McpServer, on: boolean) => {
+    if (!beginWrite()) return;
+    try {
+      const targets = appIds
+        .filter((app) => Boolean(server.apps[app]) !== on)
+        .map((app) => ({ id, app }));
+      if (targets.length === 0) return;
+      const { failed } = await writeMany(targets, on);
+      if (!failed) {
+        toast.success(
+          on
+            ? t("mcpPage.toast.rowAllOn", { id, count: appIds.length })
+            : t("mcpPage.toast.rowAllOff", { id }),
+          { closeButton: true },
+        );
+      }
+    } finally {
+      endWrite();
+    }
+  };
+
+  // ─── 其他操作 ───────────────────────────────────────────────────────
+  const openAdd = () => {
+    if (writeLockRef.current || interactionBlocked) return;
+    setDrawer({ mode: "add" });
+  };
+
+  const openEdit = (id: string) => {
+    if (writeLockRef.current || interactionBlocked) return;
+    setDrawer({ mode: "edit", id });
+  };
+
+  const handleImport = async () => {
+    if (!beginWrite()) return;
+    const before = new Set(Object.keys(serversMap ?? {}));
+    let error: string | undefined;
+    try {
+      await importMutation.mutateAsync();
+    } catch (err) {
+      // 后端是 best-effort：部分应用读失败时其余的已经入库
+      error = extractErrorMessage(err) || String(err);
+    }
+    try {
+      const { data } = await refetch();
+      const added = Object.keys(data ?? {})
+        .filter((id) => !before.has(id))
+        .sort();
+      setImportFilesOpen(false);
+      setImportReport({ added, hadExisting: before.size > 0, error });
+    } finally {
+      endWrite();
+    }
+  };
+
+  const copyJson = async (servers: Record<string, McpServer>, text: string) => {
+    const mcpServers = Object.fromEntries(
+      Object.entries(servers).map(([id, server]) => [id, server.server]),
+    );
+    try {
+      await copyText(JSON.stringify({ mcpServers }, null, 2));
+      toast.success(text, { closeButton: true });
     } catch (error) {
       toast.error(t("common.error"), { description: String(error) });
     }
   };
 
-  React.useImperativeHandle(ref, () => ({
-    openAdd: handleAdd,
-    openImport: handleImport,
-  }));
-
-  const handleDelete = (id: string) => {
-    setConfirmDialog({
-      isOpen: true,
-      title: t("mcp.unifiedPanel.deleteServer"),
-      message: t("mcp.unifiedPanel.deleteConfirm", {
-        id: serversMap?.[id]?.name?.trim() || id,
-      }),
-      onConfirm: async () => {
-        try {
-          await deleteServerMutation.mutateAsync(id);
-          setConfirmDialog(null);
-          toast.success(t("common.success"), { closeButton: true });
-        } catch (error) {
-          toast.error(t("common.error"), { description: String(error) });
-        }
-      },
-    });
-  };
-
-  const handleCloseForm = () => {
-    setIsFormOpen(false);
-    setEditingId(null);
-  };
-
-  return (
-    <div className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!connectivity.canCheck || connectivity.checking}
-          onClick={connectivity.checkAll}
-        >
-          <Activity className="h-4 w-4" />
-          {t("mcp.connectivity.checkAll")}
-        </Button>
-        <ResyncButton
-          run={() => mcpApi.resyncToApps()}
-          queryKey={["mcp", "all"]}
-          disabled={writePending}
-        />
-      </div>
-      <AppCountBar
-        totalLabel={t("mcp.serverCount", { count: serverEntries.length })}
-        counts={enabledCounts}
-        appIds={visibleAppIds}
-        totalCount={filteredServerEntries.length}
-        onToggleAll={handleToggleAll}
-        pendingApp={bulkToggleAppMutation.variables?.app ?? null}
-        disabled={writePending}
-      />
-      {visibleAppIds.includes("omp") && <OmpDiscoveryNote />}
-
-      <ManagementListSearch
-        value={searchQuery}
-        onValueChange={setSearchQuery}
-        placeholder={t("mcp.unifiedPanel.searchPlaceholder")}
-        ariaLabel={t("mcp.unifiedPanel.searchAriaLabel")}
-        clearLabel={t("common.clear")}
-      />
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-24">
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            {t("mcp.loading")}
-          </div>
-        ) : serverEntries.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
-              <Server size={24} className="text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              {t("mcp.unifiedPanel.noServers")}
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              {t("mcp.emptyDescription")}
-            </p>
-          </div>
-        ) : filteredServerEntries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-            <Search className="mb-4 h-10 w-10 opacity-40" />
-            <p className="text-sm">{t("mcp.unifiedPanel.noSearchResults")}</p>
-          </div>
-        ) : (
-          <TooltipProvider delayDuration={300}>
-            <div className="rounded-xl border border-border-default overflow-hidden">
-              <WindowedRows>
-                {filteredServerEntries.map(([id, server], index) => (
-                  <UnifiedMcpListItem
-                    key={id}
-                    id={id}
-                    server={server}
-                    visibleAppIds={visibleAppIds}
-                    onToggleApp={handleToggleApp}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    connection={
-                      MCP_APP_IDS.some((app) => server.apps[app])
-                        ? (connectivity.states[id] ?? "unchecked")
-                        : "disabled"
-                    }
-                    onTestConnection={() => connectivity.checkServer(id)}
-                    disabled={writePending}
-                    isLast={index === filteredServerEntries.length - 1}
-                  />
-                ))}
-              </WindowedRows>
-            </div>
-          </TooltipProvider>
-        )}
-      </div>
-
-      {isFormOpen && (
-        <McpFormModal
-          editingId={editingId || undefined}
-          initialData={
-            editingId && serversMap ? serversMap[editingId] : undefined
-          }
-          existingServers={serversMap ?? {}}
-          visibleAppIds={visibleAppIds}
-          onSave={async () => {
-            setIsFormOpen(false);
-            setEditingId(null);
-          }}
-          onClose={handleCloseForm}
-        />
-      )}
-
-      {confirmDialog && (
-        <ConfirmDialog
-          isOpen={confirmDialog.isOpen}
-          title={confirmDialog.title}
-          message={confirmDialog.message}
-          onConfirm={confirmDialog.onConfirm}
-          onCancel={() => setConfirmDialog(null)}
-        />
-      )}
-    </div>
-  );
-});
-
-UnifiedMcpPanel.displayName = "UnifiedMcpPanel";
-
-interface UnifiedMcpListItemProps {
-  visibleAppIds: McpAppId[];
-  id: string;
-  server: McpServer;
-  onToggleApp: (serverId: string, app: AppId, enabled: boolean) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  disabled?: boolean;
-  isLast?: boolean;
-  connection:
-    | "unchecked"
-    | "checking"
-    | "connected"
-    | "disconnected"
-    | "disabled";
-  onTestConnection: () => void;
-}
-
-const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
-  id,
-  server,
-  visibleAppIds,
-  onToggleApp,
-  onEdit,
-  onDelete,
-  disabled,
-  isLast,
-  connection,
-  onTestConnection,
-}) => {
-  const { t } = useTranslation();
-  const name = server.name?.trim() || id;
-  // 起了显示名时把 ID 也写在旁边：写进各应用配置的键是 ID
-  const hasCustomName = Boolean(
-    server.name?.trim() && server.name.trim() !== id,
-  );
-  const description = server.description || "";
-
-  const meta = mcpPresets.find((p) => p.id === id);
-  const docsUrl = server.docs || meta?.docs;
-  const homepageUrl = server.homepage || meta?.homepage;
-  const tags = server.tags || meta?.tags;
-
-  const openDocs = async () => {
-    const url = docsUrl || homepageUrl;
+  const openDocs = async (server: McpServer, id: string) => {
+    const preset = mcpPresets.find((item) => item.id === id);
+    const url =
+      server.docs || preset?.docs || server.homepage || preset?.homepage;
     if (!url) return;
     try {
       await settingsApi.openExternal(url);
@@ -400,112 +555,688 @@ const UnifiedMcpListItem: React.FC<UnifiedMcpListItemProps> = ({
     }
   };
 
-  return (
-    <ListItemRow isLast={isLast}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span
-            role="img"
-            aria-label={t(`mcp.connectivity.state.${connection}`)}
-            title={t(`mcp.connectivity.state.${connection}`)}
-            className={cn(
-              "h-2 w-2 shrink-0 rounded-full",
-              connection === "connected"
-                ? "bg-emerald-500"
-                : connection === "disconnected"
-                  ? "bg-red-500"
-                  : connection === "checking"
-                    ? "animate-pulse bg-muted-foreground/50"
-                    : "bg-muted-foreground/30",
-            )}
-          />
-          <span
-            title={name}
-            className="font-medium text-sm text-foreground truncate"
-          >
-            {name}
-          </span>
-          {hasCustomName && (
-            <span
-              title={id}
-              className="min-w-0 shrink truncate font-mono text-xs text-muted-foreground"
-            >
-              {id}
-            </span>
-          )}
-          {docsUrl && (
-            <button
-              type="button"
-              onClick={openDocs}
-              className="text-muted-foreground/60 hover:text-foreground flex-shrink-0"
-              title={t("mcp.presets.docs")}
-            >
-              <ExternalLink size={12} />
-            </button>
-          )}
-        </div>
-        {description && (
-          <p
-            className="text-xs text-muted-foreground truncate"
-            title={description}
-          >
-            {description}
-          </p>
-        )}
-        {!description && tags && tags.length > 0 && (
-          <p className="text-xs text-muted-foreground/60 truncate">
-            {tags.join(", ")}
-          </p>
-        )}
-      </div>
+  const confirmDelete = async () => {
+    if (!deleteId || !beginWrite(true)) return;
+    const id = deleteId;
+    try {
+      await deleteServerMutation.mutateAsync(id);
+      setDeleteId(null);
+      setDrawer(null);
+      setFails((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(
+            ([key]) => !key.startsWith(`${id}\u0000`),
+          ),
+        ),
+      );
+      toast.success(t("mcpPage.toast.deleted", { id }), { closeButton: true });
+    } catch (error) {
+      toast.error(t("common.error"), { description: String(error) });
+    } finally {
+      endWrite();
+    }
+  };
 
-      <AppToggleGroup
-        apps={server.apps}
-        onToggle={(app, enabled) => onToggleApp(id, app, enabled)}
-        appIds={visibleAppIds}
-        disabled={disabled}
+  // ─── 派生显示 ───────────────────────────────────────────────────────
+  /** 有写入失败的应用 → 通知条里显示的错误（整个应用的失败优先） */
+  const failedApps = useMemo(() => {
+    const map = new Map<McpAppId, string>();
+    for (const [key, failure] of Object.entries(fails)) {
+      const app = key.split("\u0000")[1] as McpAppId;
+      if (!serversMap?.[key.split("\u0000")[0]]) continue;
+      if (!map.has(app)) map.set(app, failure.error);
+    }
+    for (const app of MCP_APP_IDS) {
+      const error = appFails[app];
+      if (error !== undefined) map.set(app, error);
+    }
+    return map;
+  }, [fails, appFails, serversMap]);
+
+  const enabledNames = (server: McpServer) =>
+    MCP_APP_IDS.filter((app) => server.apps[app]).map(
+      (app) => APP_DISPLAY_NAME[app],
+    );
+
+  const deleteTarget = deleteId ? serversMap?.[deleteId] : undefined;
+  const deleteApps = deleteTarget ? enabledNames(deleteTarget) : [];
+  const listSeparator = t("mcpPage.listSeparator");
+
+  const hasServers = serverEntries.length > 0;
+  const showList = !isLoading && !isError && hasServers;
+
+  return (
+    <>
+      <AppPageHeader
+        icon={<Server className="h-5 w-5" strokeWidth={1.5} />}
+        title="MCP"
+        titleExtra={
+          <HelpTip title={t("mcpPage.helpTitle")}>{t("mcpPage.help")}</HelpTip>
+        }
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="regular"
+              disabled={!connectivity.canCheck || connectivity.checking}
+              onClick={connectivity.checkAll}
+            >
+              <Activity className="h-4 w-4" strokeWidth={2} />
+              {t("mcpPage.checkConnectivity")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="regular"
+              disabled={controlsDisabled}
+              onClick={() => void handleImport()}
+            >
+              <Download className="h-4 w-4" strokeWidth={2} />
+              {t("mcpPage.importFromApps")}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              size="regular"
+              disabled={controlsDisabled}
+              onClick={openAdd}
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              {t("mcpPage.add")}
+            </Button>
+            <DropdownMenu>
+              <HoverTip content={t("common.more")}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-compact"
+                    className="h-8 w-8"
+                    aria-label={t("mcpPage.moreActions")}
+                  >
+                    <MoreHorizontal className="h-4 w-4" strokeWidth={1.5} />
+                  </Button>
+                </DropdownMenuTrigger>
+              </HoverTip>
+              <DropdownMenuContent align="end" className="min-w-[240px]">
+                <DropdownMenuItem
+                  disabled={controlsDisabled}
+                  onSelect={() => void handleResyncAll()}
+                >
+                  {t("mcpPage.resync")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!hasServers}
+                  onSelect={() =>
+                    void copyJson(
+                      serversMap ?? {},
+                      t("mcpPage.toast.copiedAll", {
+                        count: serverEntries.length,
+                      }),
+                    )
+                  }
+                >
+                  {t("mcpPage.copyAll")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
       />
 
-      <div className="flex items-center gap-0.5 flex-shrink-0 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {connection !== "disabled" && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onTestConnection}
-            disabled={connection === "checking"}
-            title={t("mcp.connectivity.test")}
-            aria-label={t("mcp.connectivity.test")}
-          >
-            <Activity size={14} />
-          </Button>
+      <div id="main-content" className="flex min-h-0 flex-1 flex-col">
+        {showList && (
+          <div className="flex h-14 shrink-0 items-center gap-3 px-6">
+            <MatrixSearch
+              className="w-[320px] min-w-[180px] shrink"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder={t("mcpPage.searchPlaceholder")}
+              ariaLabel={t("mcp.unifiedPanel.searchAriaLabel")}
+              status={
+                normalizedSearchQuery
+                  ? t("appMatrix.found", {
+                      count: filteredServerEntries.length,
+                    })
+                  : ""
+              }
+            />
+            <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+              {normalizedSearchQuery
+                ? t("mcpPage.countFiltered", {
+                    shown: filteredServerEntries.length,
+                    count: serverEntries.length,
+                  })
+                : t("mcpPage.count", { count: serverEntries.length })}
+            </span>
+            <span className="ms-auto min-w-0 truncate text-xs text-muted-foreground">
+              {t("mcpPage.overwriteNote")}
+            </span>
+          </div>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => onEdit(id)}
-          disabled={disabled}
-          title={t("common.edit")}
-        >
-          <Edit3 size={14} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 hover:text-red-500 hover:bg-red-100 dark:hover:text-red-400 dark:hover:bg-red-500/10"
-          onClick={() => onDelete(id)}
-          disabled={disabled}
-          title={t("common.delete")}
-        >
-          <Trash2 size={14} />
-        </Button>
+
+        <NoticeSlot className={cn(failedApps.size > 0 && "px-6 pb-3")}>
+          {Array.from(failedApps.entries()).map(([app, error]) => (
+            <Notice
+              key={app}
+              tone="warning"
+              title={t("mcpPage.failNoticeTitle", {
+                app: APP_DISPLAY_NAME[app],
+              })}
+              actions={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="compact"
+                  disabled={controlsDisabled}
+                  onClick={() => void retryApp(app)}
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            >
+              {t("mcpPage.failNoticeBody", { error })}
+            </Notice>
+          ))}
+        </NoticeSlot>
+
+        <div className="flex min-h-0 flex-1 flex-col px-6 pb-5">
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {t("mcp.loading")}
+            </div>
+          ) : isError ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-10 pb-12 text-center">
+              <h2 className="m-0 text-[15px] font-semibold">
+                {t("mcpPage.loadFailed")}
+              </h2>
+              <code className="max-w-[520px] rounded-[8px] bg-muted px-3 py-2 text-left font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {extractErrorMessage(loadError) || String(loadError)}
+              </code>
+              <p className="m-0 text-sm text-muted-foreground">
+                {t("mcpPage.noFilesChanged")}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="regular"
+                className="mt-1"
+                onClick={() => void refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : !hasServers ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 pb-12 text-center">
+              <h2 className="m-0 text-[15px] font-semibold">
+                {t("mcpPage.emptyTitle")}
+              </h2>
+              <div className="flex items-center gap-0.5">
+                <p className="m-0 text-sm text-muted-foreground">
+                  {t("mcpPage.emptyBody")}
+                </p>
+                <HelpTip title={t("mcpPage.importHelpTitle")} align="end">
+                  {t("mcpPage.importHelp")}
+                </HelpTip>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="regular"
+                  disabled={controlsDisabled}
+                  onClick={() => void handleImport()}
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  {t("mcpPage.importFromApps")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="regular"
+                  disabled={controlsDisabled}
+                  onClick={openAdd}
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  {t("mcpPage.add")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div
+              data-testid="mcp-matrix"
+              className="min-h-0 overflow-auto scroll-stable rounded-lg border border-border bg-card"
+            >
+              <MatrixColumnHighlight>
+                {/* 窄屏横向滚动：名称区至少留 240px，再加每列应用 36px 与行尾操作 64px */}
+                <div
+                  className="min-w-[560px]"
+                  style={{
+                    minWidth: Math.max(560, 24 + 240 + appIds.length * 36 + 64),
+                  }}
+                >
+                  <div className="sticky top-0 z-10 flex h-11 items-center border-b border-border bg-muted pe-2 ps-4">
+                    <span className="min-w-0 flex-1 text-xs font-semibold text-muted-foreground">
+                      {t("mcpPage.columnName")}
+                    </span>
+                    <div className="flex shrink-0">
+                      {appIds.map((app) => {
+                        const enabledCount = serverEntries.filter(
+                          ([, server]) => server.apps[app],
+                        ).length;
+                        const scopeEnabled = scope.rows.filter(
+                          ([, server]) => server.apps[app],
+                        ).length;
+                        const scopeFailed = scope.rows.filter(
+                          ([id]) => fails[failKey(id, app)],
+                        ).length;
+                        return (
+                          <MatrixColumnHeader
+                            key={app}
+                            app={app}
+                            enabledCount={enabledCount}
+                            totalCount={serverEntries.length}
+                            scopeTotal={scope.rows.length}
+                            scopeEnabled={scopeEnabled}
+                            scopeFailed={scopeFailed}
+                            scopeKind={scope.kind}
+                            noun={noun}
+                            disabled={controlsDisabled}
+                            {...ompDiscoveryColumnNote(app, t)}
+                            onEnableRest={() => void handleBulk(app, true)}
+                            onDisableAll={() => void handleBulk(app, false)}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span aria-hidden="true" className="w-16 shrink-0" />
+                  </div>
+
+                  {filteredServerEntries.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+                      <span className="text-sm text-muted-foreground">
+                        {t("mcpPage.noMatch", { query: searchQuery.trim() })}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="regular"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        {t("mcpPage.clearSearch")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <ul
+                      aria-label={t("mcpPage.listLabel")}
+                      className="m-0 list-none p-0"
+                    >
+                      {filteredServerEntries.map(([id, server], index) => {
+                        const enabled = MCP_APP_IDS.some(
+                          (app) => server.apps[app],
+                        );
+                        const connection = enabled
+                          ? (connectivity.states[id] ?? "unchecked")
+                          : "disabled";
+                        const rowFailedApps = appIds.filter(
+                          (app) => fails[failKey(id, app)],
+                        );
+                        const summary = summaryOf(server.server);
+                        const failedNames = rowFailedApps
+                          .map((app) => APP_DISPLAY_NAME[app])
+                          .join(listSeparator);
+                        const hasDocs = Boolean(
+                          server.docs ||
+                          server.homepage ||
+                          mcpPresets.find((item) => item.id === id)?.docs,
+                        );
+                        const displayName = server.name?.trim() || id;
+                        const hasCustomName = Boolean(
+                          server.name?.trim() && server.name.trim() !== id,
+                        );
+                        return (
+                          <li
+                            key={id}
+                            onClick={() => openEdit(id)}
+                            className={cn(
+                              "flex h-14 cursor-pointer items-center pe-2 ps-4 transition-colors duration-150 hover:bg-muted",
+                              index > 0 && "border-t border-border",
+                            )}
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col pe-3">
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <span
+                                  role="img"
+                                  aria-label={t(
+                                    `mcpPage.connection.${connection}`,
+                                  )}
+                                  title={t(`mcpPage.connection.${connection}`)}
+                                  className={cn(
+                                    "h-2 w-2 shrink-0 rounded-full",
+                                    connection === "connected"
+                                      ? "bg-emerald-500"
+                                      : connection === "disconnected"
+                                        ? "bg-destructive"
+                                        : connection === "checking"
+                                          ? "animate-pulse bg-muted-foreground/50"
+                                          : "bg-muted-foreground/30",
+                                  )}
+                                />
+                                <span
+                                  title={displayName}
+                                  className="min-w-0 truncate text-sm font-medium"
+                                >
+                                  {displayName}
+                                </span>
+                                {hasCustomName && (
+                                  <span
+                                    title={id}
+                                    className="min-w-0 shrink truncate font-mono text-xs text-muted-foreground/70"
+                                  >
+                                    {id}
+                                  </span>
+                                )}
+                                {!enabled && (
+                                  <NeutralBadge>
+                                    {t("mcpPage.notEnabled")}
+                                  </NeutralBadge>
+                                )}
+                              </div>
+                              <div className="flex min-w-0 items-center text-xs text-muted-foreground">
+                                <span
+                                  title={summary}
+                                  className="min-w-0 truncate font-mono"
+                                >
+                                  {summary}
+                                </span>
+                                {rowFailedApps.length > 0 && (
+                                  <span className="ms-2.5 shrink-0 whitespace-nowrap text-amber-600 dark:text-amber-400">
+                                    {t("mcpPage.rowFail", {
+                                      apps: failedNames,
+                                    })}
+                                    {" · "}
+                                    <button
+                                      type="button"
+                                      className="font-medium underline underline-offset-[3px]"
+                                      aria-label={t("mcpPage.rowRetryAria", {
+                                        id,
+                                        apps: failedNames,
+                                      })}
+                                      disabled={controlsDisabled}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        const app = rowFailedApps[0];
+                                        void writeOne(
+                                          id,
+                                          app,
+                                          fails[failKey(id, app)].desired,
+                                        );
+                                      }}
+                                    >
+                                      {t("common.retry")}
+                                    </button>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0">
+                              {appIds.map((app) => {
+                                const failure = fails[failKey(id, app)];
+                                const on = Boolean(server.apps[app]);
+                                const state = failure
+                                  ? "fail"
+                                  : on
+                                    ? "on"
+                                    : "off";
+                                return (
+                                  <MatrixCell
+                                    key={app}
+                                    app={app}
+                                    state={state}
+                                    disabled={controlsDisabled}
+                                    label={t(`appMatrix.cell.${state}`, {
+                                      name: id,
+                                      app: APP_DISPLAY_NAME[app],
+                                    })}
+                                    onClick={() =>
+                                      handleCellClick(id, server, app)
+                                    }
+                                  />
+                                );
+                              })}
+                            </div>
+                            <div
+                              className="flex w-16 shrink-0 justify-end gap-1"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <HoverTip content={t("common.edit")}>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-compact"
+                                  aria-label={t("mcpPage.editAria", { id })}
+                                  disabled={controlsDisabled}
+                                  onClick={() => openEdit(id)}
+                                >
+                                  <Pencil
+                                    className="h-[15px] w-[15px]"
+                                    strokeWidth={1.5}
+                                  />
+                                </Button>
+                              </HoverTip>
+                              <DropdownMenu>
+                                <HoverTip content={t("common.more")}>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-compact"
+                                      aria-label={t("mcpPage.rowMoreAria", {
+                                        id,
+                                      })}
+                                      disabled={controlsDisabled}
+                                    >
+                                      <MoreHorizontal
+                                        className="h-[15px] w-[15px]"
+                                        strokeWidth={1.5}
+                                      />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                </HoverTip>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="min-w-[200px]"
+                                >
+                                  {enabled && (
+                                    <DropdownMenuItem
+                                      disabled={connection === "checking"}
+                                      onSelect={() =>
+                                        connectivity.checkServer(id)
+                                      }
+                                    >
+                                      {t("mcpPage.testConnection")}
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      void copyJson(
+                                        { [id]: server },
+                                        t("mcpPage.toast.copiedOne", { id }),
+                                      )
+                                    }
+                                  >
+                                    {t("mcpPage.copyJson")}
+                                  </DropdownMenuItem>
+                                  {hasDocs && (
+                                    <DropdownMenuItem
+                                      onSelect={() => void openDocs(server, id)}
+                                    >
+                                      {t("mcpPage.openDocs")}
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      void handleRowAll(id, server, true)
+                                    }
+                                  >
+                                    {t("mcpPage.enableEverywhere")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      void handleRowAll(id, server, false)
+                                    }
+                                  >
+                                    {t("mcpPage.disableEverywhere")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onSelect={() => setDeleteId(id)}
+                                  >
+                                    {t("mcpPage.deleteEllipsis")}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </MatrixColumnHighlight>
+            </div>
+          )}
+        </div>
       </div>
-    </ListItemRow>
+
+      {drawer && (
+        <McpFormModal
+          key={drawer.mode === "edit" ? `edit:${drawer.id}` : "add"}
+          editingId={drawer.mode === "edit" ? drawer.id : undefined}
+          initialData={
+            drawer.mode === "edit" ? serversMap?.[drawer.id] : undefined
+          }
+          existingServers={serversMap ?? {}}
+          visibleAppIds={appIds}
+          onSave={() => setDrawer(null)}
+          onClose={() => setDrawer(null)}
+          onRequestDelete={(id) => setDeleteId(id)}
+        />
+      )}
+
+      <V7ConfirmDialog
+        open={deleteId !== null}
+        title={t("mcpPage.deleteTitle", {
+          id: deleteTarget?.name?.trim() || deleteId || "",
+        })}
+        body={
+          deleteApps.length
+            ? t("mcpPage.deleteBodyApps", {
+                apps: deleteApps.join(listSeparator),
+              })
+            : t("mcpPage.deleteBody")
+        }
+        confirmLabel={t("common.delete")}
+        pending={writePending}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteId(null)}
+      />
+
+      <V7Dialog
+        open={importReport !== null}
+        onOpenChange={(open) => {
+          if (!open) setImportReport(null);
+        }}
+        describedBy="mcp-import-lead"
+      >
+        {importReport && (
+          <>
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <DialogTitle className="text-[15px] font-semibold">
+                {t("mcpPage.import.title")}
+              </DialogTitle>
+              <p id="mcp-import-lead" className="m-0 text-sm">
+                {importReport.added.length
+                  ? t("mcpPage.import.added", {
+                      count: importReport.added.length,
+                      names: importReport.added.join(listSeparator),
+                    })
+                  : t("mcpPage.import.none")}
+              </p>
+              {importReport.hadExisting && (
+                <p className="m-0 text-sm text-muted-foreground">
+                  {t("mcpPage.import.sameName")}
+                </p>
+              )}
+            </div>
+            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto scroll-stable overscroll-contain">
+              {importReport.error && (
+                <section className="flex flex-col gap-2">
+                  <h3 className="m-0 text-sm font-semibold">
+                    {t("mcpPage.import.failedTitle")}
+                  </h3>
+                  <code className="rounded-[8px] bg-muted px-3 py-2 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                    {importReport.error}
+                  </code>
+                </section>
+              )}
+              <div className="flex flex-col gap-2">
+                <DisclosureButton
+                  open={importFilesOpen}
+                  controls="mcp-import-files"
+                  onToggle={() => setImportFilesOpen((value) => !value)}
+                >
+                  {t("mcpPage.import.filesTitle")}
+                </DisclosureButton>
+                {importFilesOpen && (
+                  <ul
+                    id="mcp-import-files"
+                    className="m-0 flex list-none flex-col gap-1 rounded-lg bg-muted px-3.5 py-2.5"
+                  >
+                    {appIds.map((app) => (
+                      <li
+                        key={app}
+                        className="flex min-w-0 items-baseline gap-3 text-xs"
+                      >
+                        <span className="w-[84px] shrink-0 text-muted-foreground">
+                          {APP_DISPLAY_NAME[app]}
+                        </span>
+                        <span className="min-w-0">
+                          <code className="whitespace-nowrap font-mono">
+                            {IMPORT_SOURCE_FILES[app].file}
+                          </code>
+                          {IMPORT_SOURCE_FILES[app].noteKey && (
+                            <span className="text-muted-foreground">
+                              {t(IMPORT_SOURCE_FILES[app].noteKey as string)}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 justify-end pt-1">
+              <Button
+                type="button"
+                variant="default"
+                size="regular"
+                autoFocus
+                onClick={() => setImportReport(null)}
+              >
+                {t("mcpPage.import.ok")}
+              </Button>
+            </div>
+          </>
+        )}
+      </V7Dialog>
+    </>
   );
 };
+
+UnifiedMcpPanel.displayName = "UnifiedMcpPanel";
 
 export default UnifiedMcpPanel;

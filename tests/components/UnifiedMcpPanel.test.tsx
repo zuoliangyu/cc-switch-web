@@ -1,115 +1,729 @@
-import { toast } from "sonner";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+} from "@tanstack/react-query";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import UnifiedMcpPanel from "@/components/mcp/UnifiedMcpPanel";
-import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import { settingsApi } from "@/lib/api";
+import type { McpApps, McpServer, McpServerSpec } from "@/types";
 
-const bulkToggle = vi.fn().mockResolvedValue({ succeeded: [], failed: [] });
-
-vi.mock("@/hooks/useMcp", () => ({
-  useAllMcpServers: () => ({
-    data: {
-      alpha: {
-        id: "alpha",
-        name: "Alpha",
-        server: { command: "alpha" },
-        apps: {},
-      },
-      beta: {
-        id: "beta",
-        name: "Beta",
-        server: { command: "beta" },
-        apps: {},
-      },
-    },
-    isLoading: false,
-  }),
-  useToggleMcpApp: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useBulkToggleMcpApp: () => ({
-    mutateAsync: bulkToggle,
-    isPending: false,
-    variables: undefined,
-  }),
-  useDeleteMcpServer: () => ({ mutateAsync: vi.fn() }),
-  useImportMcpFromApps: () => ({ mutateAsync: vi.fn() }),
+const mocks = vi.hoisted(() => ({
+  serversMap: {} as Record<string, McpServer>,
+  isLoading: false,
+  isError: false,
+  toggle: vi.fn(),
+  bulkToggle: vi.fn(),
+  deleteServer: vi.fn(),
+  importServers: vi.fn(),
+  resync: vi.fn(),
+  refetch: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
+  visibleApps: ["claude", "codex", "gemini"] as string[],
+  connectivity: {
+    states: { alpha: "connected", beta: "disconnected" } as Record<
+      string,
+      string
+    >,
+    checking: false,
+    canCheck: true,
+    checkAll: vi.fn(),
+    checkServer: vi.fn(),
+  },
 }));
 
+vi.mock("@/hooks/useMcp", () => ({
+  MCP_UPSERT_MUTATION_KEY: ["mcp", "upsert"],
+  useAllMcpServers: () => ({
+    data: mocks.serversMap,
+    isLoading: mocks.isLoading,
+    isError: mocks.isError,
+    error: mocks.isError ? new Error("database is locked") : null,
+    refetch: mocks.refetch,
+  }),
+  useToggleMcpApp: () => ({ mutateAsync: mocks.toggle, isPending: false }),
+  useBulkToggleMcpApp: () => ({
+    mutateAsync: mocks.bulkToggle,
+    isPending: false,
+  }),
+  useDeleteMcpServer: () => ({
+    mutateAsync: mocks.deleteServer,
+    isPending: false,
+  }),
+  useImportMcpFromApps: () => ({
+    mutateAsync: mocks.importServers,
+    isPending: false,
+  }),
+  useResyncMcpToApps: () => ({
+    mutateAsync: mocks.resync,
+    isPending: false,
+  }),
+}));
+
+vi.mock("@/components/mcp/useVisibleAppIds", () => ({
+  useVisibleAppIds: (ids: string[]) =>
+    ids.filter((id) => mocks.visibleApps.includes(id)),
+}));
+
+vi.mock("@/hooks/useMcpConnectivity", () => ({
+  useMcpConnectivity: () => mocks.connectivity,
+}));
+
+vi.mock("@/components/mcp/McpFormModal", () => ({
+  default: ({ editingId }: { editingId?: string }) => (
+    <div data-testid="mcp-drawer">{editingId ?? "add"}</div>
+  ),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+    warning: mocks.toastWarning,
+    info: vi.fn(),
+  },
+}));
+
+type ServerOverrides = Partial<Omit<McpServer, "apps" | "server">> & {
+  apps?: Partial<McpApps>;
+  server?: Partial<McpServerSpec>;
+};
+
+function makeServer(id: string, overrides: ServerOverrides = {}): McpServer {
+  const { apps, server, ...metadata } = overrides;
+  return {
+    id,
+    name: id,
+    ...metadata,
+    server: { type: "stdio", command: "default-command", ...server },
+    apps: {
+      claude: false,
+      codex: false,
+      gemini: false,
+      grokbuild: false,
+      opencode: false,
+      openclaw: false,
+      hermes: false,
+      ...apps,
+    },
+  } as McpServer;
+}
+
+const renderPanel = (
+  onBlocked?: (blocked: boolean) => void,
+  extra?: React.ReactNode,
+) =>
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UnifiedMcpPanel onInteractionBlockedChange={onBlocked} />
+      {extra}
+    </QueryClientProvider>,
+  );
+
+/** 模拟编辑页发起、一直没完成的保存 */
+function PendingEditorSave() {
+  const save = useMutation({
+    mutationKey: ["mcp", "upsert"],
+    mutationFn: () => new Promise<void>(() => {}),
+  });
+  return (
+    <button type="button" onClick={() => save.mutate()}>
+      start-editor-save
+    </button>
+  );
+}
+
+const rowNames = () =>
+  within(screen.getByRole("list", { name: "mcpPage.listLabel" }))
+    .getAllByRole("listitem")
+    .map((item) => item.querySelector("span[title].truncate")?.textContent);
+
 describe("UnifiedMcpPanel", () => {
-  it("部分失败时给警告，撤销只恢复已经成功的条目", async () => {
-    // 部分失败不再报「已保存」：警告提示里带撤销（上游 6b4c09ac）
-    const success = vi.spyOn(toast, "warning");
-    bulkToggle.mockClear();
-    bulkToggle.mockResolvedValueOnce({
-      succeeded: ["alpha"],
-      failed: [{ item: "beta", error: "offline" }],
-    });
-    render(<UnifiedMcpPanel onOpenChange={() => {}} />);
-    await userEvent.click(screen.getAllByRole("checkbox")[0]);
-    await waitFor(() => expect(success).toHaveBeenCalled());
-    const action = success.mock.calls.at(-1)?.[1]?.action;
-    if (!action || typeof action !== "object" || !("onClick" in action))
-      throw new Error("missing undo action");
-    action.onClick({} as React.MouseEvent<HTMLButtonElement>);
-    await waitFor(() =>
-      expect(bulkToggle).toHaveBeenLastCalledWith({
-        serverIds: ["alpha"],
-        app: "claude",
-        enabled: false,
-      }),
+  beforeEach(() => {
+    mocks.serversMap = {};
+    mocks.isLoading = false;
+    mocks.isError = false;
+    mocks.visibleApps = ["claude", "codex", "gemini"];
+    mocks.connectivity.states = { alpha: "connected", beta: "disconnected" };
+    mocks.connectivity.checking = false;
+    mocks.connectivity.canCheck = true;
+    mocks.connectivity.checkAll.mockReset();
+    mocks.connectivity.checkServer.mockReset();
+    mocks.toggle.mockReset().mockResolvedValue(true);
+    mocks.bulkToggle.mockReset().mockImplementation(async ({ serverIds }) => ({
+      succeeded: serverIds,
+      failed: [],
+    }));
+    mocks.deleteServer.mockReset().mockResolvedValue(true);
+    mocks.importServers.mockReset().mockResolvedValue(0);
+    mocks.resync.mockReset().mockImplementation(async (apps?: string[]) =>
+      (apps ?? ["claude", "codex", "gemini"]).map((app) => ({
+        app,
+        ok: true,
+      })),
     );
-    success.mockRestore();
+    mocks.toastWarning.mockReset();
+    mocks.refetch.mockReset().mockResolvedValue({ data: mocks.serversMap });
+    mocks.toastError.mockReset();
+    mocks.toastSuccess.mockReset();
   });
 
-  it("搜索过滤时批量开关只作用于匹配列表", async () => {
-    render(<UnifiedMcpPanel onOpenChange={() => {}} />);
+  it("searches the allow-listed fields but never env or header values", async () => {
+    mocks.serversMap = {
+      alpha: makeServer("alpha", {
+        server: { command: "uvx", args: ["fetch-tool"] },
+      }),
+      beta: makeServer("beta", {
+        server: {
+          type: "http",
+          url: "https://beta.example.com/mcp",
+          headers: { Authorization: "secret-token" },
+          env: { API_KEY: "hidden-value" },
+        },
+      }),
+    };
+    renderPanel();
+    expect(rowNames()).toEqual(["alpha", "beta"]);
+    // 第二行显示命令 / 去掉协议的 URL，不显示请求头
+    expect(screen.getByText("uvx fetch-tool")).toBeInTheDocument();
+    expect(screen.getByText("beta.example.com/mcp")).toBeInTheDocument();
+    expect(screen.queryByText(/secret-token/)).not.toBeInTheDocument();
 
-    await userEvent.type(screen.getByRole("textbox"), "Alpha");
-    await userEvent.click(screen.getAllByRole("checkbox")[0]);
+    const search = screen.getByRole("textbox", {
+      name: "mcp.unifiedPanel.searchAriaLabel",
+    });
+    await userEvent.type(search, "fetch-tool");
+    expect(rowNames()).toEqual(["alpha"]);
+    await userEvent.clear(search);
+    await userEvent.type(search, "secret-token");
+    expect(screen.getByText("mcpPage.noMatch")).toBeInTheDocument();
+    await userEvent.clear(search);
+    await userEvent.type(search, "hidden-value");
+    expect(screen.getByText("mcpPage.noMatch")).toBeInTheDocument();
+  });
 
-    expect(bulkToggle).toHaveBeenCalledWith({
-      serverIds: ["alpha"],
-      app: "claude",
+  it("shows the empty state, not a search miss, when there are no servers", () => {
+    renderPanel();
+    expect(screen.getByText("mcpPage.emptyTitle")).toBeInTheDocument();
+    expect(screen.queryByText("mcpPage.noMatch")).not.toBeInTheDocument();
+  });
+
+  it("shows compact connectivity lights separately from app enablement", () => {
+    mocks.serversMap = {
+      alpha: makeServer("alpha", { apps: { claude: true } }),
+      beta: makeServer("beta", { apps: { codex: true } }),
+      pending: makeServer("pending", { apps: { claude: true } }),
+      disabled: makeServer("disabled"),
+    };
+    renderPanel();
+    expect(
+      screen.getByRole("img", { name: "mcpPage.connection.connected" }),
+    ).toHaveClass("bg-emerald-500", "rounded-full");
+    expect(
+      screen.getByRole("img", { name: "mcpPage.connection.disconnected" }),
+    ).toHaveClass("bg-destructive", "rounded-full");
+    expect(
+      screen.getByRole("img", { name: "mcpPage.connection.unchecked" }),
+    ).toHaveClass("bg-muted-foreground/30");
+    expect(
+      screen.queryByRole("img", { name: "mcpPage.connection.checking" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "mcpPage.connection.disabled" }),
+    ).toHaveClass("bg-muted-foreground/30");
+  });
+
+  it("checks connectivity only when asked, for the page or a single row", async () => {
+    mocks.serversMap = {
+      alpha: makeServer("alpha", { apps: { claude: true } }),
+      disabled: makeServer("disabled"),
+    };
+    renderPanel();
+    expect(mocks.connectivity.checkAll).not.toHaveBeenCalled();
+    expect(mocks.connectivity.checkServer).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "mcpPage.checkConnectivity" }),
+    );
+    expect(mocks.connectivity.checkAll).toHaveBeenCalledTimes(1);
+
+    const [alphaMore, disabledMore] = screen.getAllByRole("button", {
+      name: "mcpPage.rowMoreAria",
+    });
+    await userEvent.click(alphaMore);
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "mcpPage.testConnection" }),
+    );
+    expect(mocks.connectivity.checkServer).toHaveBeenCalledWith("alpha");
+
+    await userEvent.click(disabledMore);
+    await screen.findByRole("menuitem", { name: "mcpPage.copyJson" });
+    expect(
+      screen.queryByRole("menuitem", { name: "mcpPage.testConnection" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables the page check while a check runs or nothing is enabled", () => {
+    mocks.serversMap = {
+      alpha: makeServer("alpha", { apps: { claude: true } }),
+    };
+    mocks.connectivity.checking = true;
+    const { unmount } = renderPanel();
+    expect(
+      screen.getByRole("button", { name: "mcpPage.checkConnectivity" }),
+    ).toBeDisabled();
+    unmount();
+    mocks.connectivity.checking = false;
+    mocks.connectivity.canCheck = false;
+    renderPanel();
+    expect(
+      screen.getByRole("button", { name: "mcpPage.checkConnectivity" }),
+    ).toBeDisabled();
+  });
+
+  it("shows the load error instead of the empty state", () => {
+    mocks.isError = true;
+    renderPanel();
+    expect(screen.getByText("mcpPage.loadFailed")).toBeInTheDocument();
+    expect(screen.getByText("database is locked")).toBeInTheDocument();
+    expect(screen.queryByText("mcpPage.emptyTitle")).not.toBeInTheDocument();
+  });
+
+  it("only renders columns for apps shown on the Apps page", () => {
+    mocks.serversMap = { alpha: makeServer("alpha") };
+    renderPanel();
+    const header = screen.getByTestId("mcp-matrix");
+    expect(
+      within(header).getAllByRole("button", { name: /appMatrix.columnAria/ }),
+    ).toHaveLength(3);
+  });
+
+  it("highlights a column for its cells but shows the app name only when hovering the header", async () => {
+    const user = userEvent.setup();
+    mocks.serversMap = { alpha: makeServer("alpha") };
+    renderPanel();
+    const columns = screen.getAllByRole("button", {
+      name: /appMatrix.columnAria/,
+    });
+    const cell = screen.getAllByRole("button", { name: /appMatrix.cell/ })[1];
+    act(() => cell.focus());
+    expect(columns[1]).toHaveAttribute("data-highlighted");
+    expect(screen.queryByTestId("matrix-column-name")).not.toBeInTheDocument();
+    act(() => cell.blur());
+    expect(columns[1]).not.toHaveAttribute("data-highlighted");
+
+    await user.hover(cell);
+    expect(columns[1]).toHaveAttribute("data-highlighted");
+    expect(screen.queryByTestId("matrix-column-name")).not.toBeInTheDocument();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "appMatrix.cell.off",
+    );
+    await user.click(cell);
+    expect(screen.queryByTestId("matrix-column-name")).not.toBeInTheDocument();
+
+    await user.hover(columns[1]);
+    expect(screen.getByTestId("matrix-column-name")).toHaveTextContent("Codex");
+    await user.unhover(columns[1]);
+    expect(screen.queryByTestId("matrix-column-name")).not.toBeInTheDocument();
+
+    await user.hover(columns[1]);
+    await user.hover(cell);
+    expect(columns[1]).toHaveAttribute("data-highlighted");
+    expect(screen.queryByTestId("matrix-column-name")).not.toBeInTheDocument();
+  });
+
+  it("bulk-enables only the rows left by the search and offers undo", async () => {
+    mocks.serversMap = {
+      "alpha-one": makeServer("alpha-one"),
+      "alpha-two": makeServer("alpha-two", { apps: { codex: true } }),
+      beta: makeServer("beta"),
+    };
+    renderPanel();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "mcp.unifiedPanel.searchAriaLabel" }),
+      "alpha",
+    );
+    const codexColumn = screen.getAllByRole("button", {
+      name: /appMatrix.columnAria/,
+    })[1];
+    await userEvent.click(codexColumn);
+    expect(screen.getByText("appMatrix.pop.scopeSearch")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "appMatrix.pop.enableRest" }),
+    );
+
+    await waitFor(() => expect(mocks.bulkToggle).toHaveBeenCalledTimes(1));
+    expect(mocks.bulkToggle).toHaveBeenCalledWith({
+      serverIds: ["alpha-one"],
+      app: "codex",
       enabled: true,
     });
+    await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalled());
+    const [, options] = mocks.toastSuccess.mock.calls[0];
+    expect(options.action.label).toBe("appMatrix.undo");
+
+    options.action.onClick();
+    await waitFor(() => expect(mocks.bulkToggle).toHaveBeenCalledTimes(2));
+    expect(mocks.bulkToggle).toHaveBeenLastCalledWith({
+      serverIds: ["alpha-one"],
+      app: "codex",
+      enabled: false,
+    });
   });
 
-  it("Oh My Pi 显示时说明它还会发现其他 Agent 的配置", async () => {
+  it.each<["error" | "warning", string[]]>([
+    ["error", ["alpha", "beta"]],
+    ["warning", ["beta"]],
+  ])("shows a %s toast when bulk writes fail", async (level, failedIds) => {
+    mocks.serversMap = {
+      alpha: makeServer("alpha"),
+      beta: makeServer("beta"),
+    };
+    mocks.bulkToggle.mockImplementationOnce(async ({ serverIds }) => ({
+      succeeded: serverIds.filter((id: string) => !failedIds.includes(id)),
+      failed: failedIds.map((item) => ({ item, error: "write failed" })),
+    }));
+    renderPanel();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /appMatrix.columnAria/ })[1],
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "appMatrix.pop.enableRest" }),
+    );
+
+    const expected = level === "error" ? mocks.toastError : mocks.toastWarning;
+    await waitFor(() =>
+      expect(expected).toHaveBeenCalledWith(
+        expect.stringContaining("appMatrix.toast.partialFail"),
+        expect.objectContaining({ closeButton: true }),
+      ),
+    );
+    // 全部失败没有可撤销的，部分失败只撤销写成功的那些
+    expect(Boolean(expected.mock.calls[0][1].action)).toBe(level === "warning");
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByRole("button", { name: "appMatrix.cell.fail" }),
+    ).toHaveLength(failedIds.length);
+  });
+
+  it.each(["success", "partial", "total", "rejected"] as const)(
+    "reports the real result of a bulk undo (%s)",
+    async (outcome) => {
+      mocks.serversMap = {
+        alpha: makeServer("alpha"),
+        beta: makeServer("beta"),
+      };
+      renderPanel();
+      await userEvent.click(
+        screen.getAllByRole("button", { name: /appMatrix.columnAria/ })[1],
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "appMatrix.pop.enableRest" }),
+      );
+      await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledTimes(1));
+      const [, options] = mocks.toastSuccess.mock.calls[0];
+      mocks.toastSuccess.mockClear();
+
+      const failedIds =
+        outcome === "success"
+          ? []
+          : outcome === "partial"
+            ? ["beta"]
+            : ["alpha", "beta"];
+      if (outcome === "rejected") {
+        mocks.bulkToggle.mockRejectedValueOnce(new Error("undo failed"));
+      } else {
+        mocks.bulkToggle.mockImplementationOnce(async ({ serverIds }) => ({
+          succeeded: serverIds.filter((id: string) => !failedIds.includes(id)),
+          failed: failedIds.map((item) => ({ item, error: "undo failed" })),
+        }));
+      }
+      act(() => options.action.onClick());
+
+      const expected =
+        outcome === "success"
+          ? mocks.toastSuccess
+          : outcome === "partial"
+            ? mocks.toastWarning
+            : mocks.toastError;
+      await waitFor(() =>
+        expect(expected).toHaveBeenCalledWith(
+          outcome === "success"
+            ? "appMatrix.toast.undone"
+            : "common.bulkToggleFailed",
+          { closeButton: true },
+        ),
+      );
+      for (const other of [
+        mocks.toastSuccess,
+        mocks.toastWarning,
+        mocks.toastError,
+      ]) {
+        if (other !== expected) expect(other).not.toHaveBeenCalled();
+      }
+      expect(mocks.bulkToggle).toHaveBeenLastCalledWith({
+        serverIds: ["alpha", "beta"],
+        app: "codex",
+        enabled: false,
+      });
+    },
+  );
+
+  it("marks a failed write with a warning and retries the wanted state", async () => {
+    mocks.serversMap = { serena: makeServer("serena") };
+    mocks.toggle.mockRejectedValueOnce(new Error("config.toml line 12"));
+    renderPanel();
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "appMatrix.cell.off" })[1],
+    );
+    await waitFor(() =>
+      expect(screen.getByText("mcpPage.failNoticeTitle")).toBeInTheDocument(),
+    );
+    expect(mocks.toggle).toHaveBeenCalledWith({
+      serverId: "serena",
+      app: "codex",
+      enabled: true,
+    });
+    const failCell = screen.getByRole("button", {
+      name: "appMatrix.cell.fail",
+    });
+
+    await userEvent.click(failCell);
+    await waitFor(() => expect(mocks.toggle).toHaveBeenCalledTimes(2));
+    expect(mocks.toggle).toHaveBeenLastCalledWith({
+      serverId: "serena",
+      app: "codex",
+      enabled: true,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText("mcpPage.failNoticeTitle"),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("retries a failed app from the notice by resyncing that app", async () => {
+    mocks.serversMap = { serena: makeServer("serena") };
+    mocks.toggle.mockRejectedValueOnce(new Error("config.toml line 12"));
+    renderPanel();
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "appMatrix.cell.off" })[1],
+    );
+    await waitFor(() =>
+      expect(screen.getByText("mcpPage.failNoticeTitle")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "common.retry" }));
+
+    await waitFor(() => expect(mocks.resync).toHaveBeenCalledWith(["codex"]));
+    expect(mocks.toggle).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(
+        screen.queryByText("mcpPage.failNoticeTitle"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "mcpPage.toast.written",
+      expect.anything(),
+    );
+  });
+
+  it("rewrites Oh My Pi cell by cell on retry, because the toggle never reached the DB", async () => {
+    // omp commits only after the config write succeeds (`sync_and_commit`), so a
+    // failed write leaves the row's flag unset: the retry must re-write that
+    // value instead of resyncing from the (unchanged) database state.
+    mocks.visibleApps = ["omp"];
+    mocks.serversMap = { serena: makeServer("serena") };
+    mocks.toggle.mockRejectedValueOnce(new Error("models.yml line 3"));
+    renderPanel();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "appMatrix.cell.off" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("mcpPage.failNoticeTitle")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "common.retry" }));
+
+    await waitFor(() =>
+      expect(mocks.bulkToggle).toHaveBeenCalledWith({
+        serverIds: ["serena"],
+        app: "omp",
+        enabled: true,
+      }),
+    );
+    expect(mocks.toggle).toHaveBeenCalledTimes(1);
+    expect(mocks.resync).not.toHaveBeenCalled();
+  });
+
+  it("explains Oh My Pi's discovery in its column popover only", async () => {
     const openExternal = vi
       .spyOn(settingsApi, "openExternal")
       .mockResolvedValue(undefined);
-    const { unmount } = render(<UnifiedMcpPanel onOpenChange={() => {}} />);
+    mocks.visibleApps = ["codex", "omp"];
+    mocks.serversMap = { serena: makeServer("serena") };
+    renderPanel();
+    const [codexColumn, ompColumn] = screen.getAllByRole("button", {
+      name: /appMatrix.columnAria/,
+    });
+
+    await userEvent.click(codexColumn);
+    expect(
+      screen.queryByRole("button", { name: "appMatrix.ompDiscovery.docsLink" }),
+    ).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(ompColumn);
+    expect(
+      screen.getByRole("button", { name: "appMatrix.ompDiscovery.title" }),
+    ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: "appMatrix.ompDiscovery.docsLink" }),
     );
     expect(openExternal).toHaveBeenCalledWith(
       expect.stringContaining("oh-my-pi/blob/main/docs/context-files.md"),
     );
-    unmount();
-
-    render(
-      <UnifiedMcpPanel
-        onOpenChange={() => {}}
-        visibleApps={{ ...DEFAULT_VISIBLE_APPS, omp: false }}
-      />,
-    );
-    expect(
-      screen.queryByRole("button", { name: "appMatrix.ompDiscovery.docsLink" }),
-    ).not.toBeInTheDocument();
     openExternal.mockRestore();
   });
-});
 
-function render(ui: React.ReactElement) {
-  return rtlRender(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
-      {ui}
-    </QueryClientProvider>,
-  );
-}
+  it("keeps the notice when the resync retry fails again", async () => {
+    mocks.serversMap = { serena: makeServer("serena") };
+    mocks.toggle.mockRejectedValueOnce(new Error("config.toml line 12"));
+    mocks.resync.mockResolvedValueOnce([
+      { app: "codex", ok: false, error: "still broken" },
+    ]);
+    renderPanel();
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "appMatrix.cell.off" })[1],
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "common.retry" }),
+    );
+
+    await waitFor(() => expect(mocks.resync).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("mcpPage.failNoticeTitle")).toBeInTheDocument();
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("resyncs every app from the more menu and reports the ones that failed", async () => {
+    mocks.serversMap = {
+      serena: makeServer("serena", { apps: { codex: true } }),
+    };
+    mocks.resync.mockResolvedValueOnce([
+      { app: "claude", ok: true },
+      { app: "codex", ok: false, error: "config.toml line 12" },
+    ]);
+    renderPanel();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "mcpPage.moreActions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "mcpPage.resync" }),
+    );
+
+    await waitFor(() => expect(mocks.resync).toHaveBeenCalledWith(undefined));
+    await waitFor(() =>
+      expect(screen.getByText("mcpPage.failNoticeTitle")).toBeInTheDocument(),
+    );
+    expect(mocks.toastWarning).toHaveBeenCalledWith(
+      "mcpPage.toast.resyncPartial",
+      expect.anything(),
+    );
+
+    // 再来一次全部成功：通知条消失
+    await userEvent.click(
+      screen.getByRole("button", { name: "mcpPage.moreActions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "mcpPage.resync" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByText("mcpPage.failNoticeTitle"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "mcpPage.toast.resynced",
+      expect.anything(),
+    );
+  });
+
+  it("opens the edit drawer from the pencil button", async () => {
+    mocks.serversMap = {
+      serena: makeServer("serena", { apps: { claude: true, hermes: true } }),
+    };
+    renderPanel();
+    await userEvent.click(
+      screen.getByRole("button", { name: "mcpPage.editAria" }),
+    );
+    expect(screen.getByTestId("mcp-drawer")).toHaveTextContent("serena");
+  });
+
+  it("deletes after confirming in the dialog", async () => {
+    mocks.serversMap = {
+      serena: makeServer("serena", { apps: { claude: true } }),
+    };
+    renderPanel();
+    await userEvent.click(
+      screen.getByRole("button", { name: "mcpPage.rowMoreAria" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "mcpPage.deleteEllipsis" }),
+    );
+    expect(screen.getByText("mcpPage.deleteBodyApps")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "common.delete" }),
+    );
+    await waitFor(() =>
+      expect(mocks.deleteServer).toHaveBeenCalledWith("serena"),
+    );
+  });
+
+  it("reports which servers an import added", async () => {
+    mocks.serversMap = {};
+    mocks.refetch.mockResolvedValue({
+      data: {
+        context7: makeServer("context7"),
+        fetch: makeServer("fetch"),
+      },
+    });
+    renderPanel();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "mcpPage.importFromApps" })[0],
+    );
+    await waitFor(() =>
+      expect(screen.getByText("mcpPage.import.title")).toBeInTheDocument(),
+    );
+    expect(mocks.importServers).toHaveBeenCalled();
+    expect(screen.getByText("mcpPage.import.added")).toBeInTheDocument();
+  });
+
+  it("locks navigation while the editor page is saving", async () => {
+    const onBlocked = vi.fn();
+    renderPanel(onBlocked, <PendingEditorSave />);
+    expect(onBlocked).toHaveBeenLastCalledWith(false);
+    await userEvent.click(
+      screen.getByRole("button", { name: "start-editor-save" }),
+    );
+    await waitFor(() => expect(onBlocked).toHaveBeenLastCalledWith(true));
+  });
+
+  it("does not lock navigation just because the editor page is open", async () => {
+    const onBlocked = vi.fn();
+    mocks.serversMap = { alpha: makeServer("alpha") };
+    renderPanel(onBlocked);
+    expect(onBlocked).toHaveBeenLastCalledWith(false);
+    await userEvent.click(screen.getByRole("button", { name: "mcpPage.add" }));
+    expect(onBlocked).toHaveBeenLastCalledWith(false);
+  });
+});

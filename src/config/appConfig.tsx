@@ -49,6 +49,10 @@ export const MCP_APP_IDS = [
 ] as const satisfies readonly AppId[];
 export type McpAppId = (typeof MCP_APP_IDS)[number];
 
+export function isMcpAppId(appId: string): appId is McpAppId {
+  return (MCP_APP_IDS as readonly string[]).includes(appId);
+}
+
 export const SKILLS_APP_IDS = [
   "claude",
   "codex",

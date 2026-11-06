@@ -2491,8 +2491,6 @@
   "mcp": {
     "title": "MCP Management",
     "import": "Import",
-    "importExisting": "Import Existing",
-    "addMcp": "Add MCP",
     "claudeTitle": "Claude Code MCP Management",
     "codexTitle": "Codex MCP Management",
     "geminiTitle": "Gemini MCP Management",
@@ -2500,12 +2498,7 @@
       "title": "MCP Server Management",
       "addServer": "Add Server",
       "editServer": "Edit Server",
-      "deleteServer": "Delete Server",
-      "deleteConfirm": "Are you sure you want to delete server \"{{id}}\"? This action cannot be undone.",
-      "noServers": "No servers yet",
       "enabledApps": "Enabled Apps",
-      "noImportFound": "No MCP servers to import found. All servers are already managed by CC Switch.",
-      "importSuccess": "Successfully imported {{count}} MCP servers",
       "searchPlaceholder": "Search MCP names, descriptions, tags, or commands...",
       "searchAriaLabel": "Search managed MCP servers",
       "noSearchResults": "No matching MCP servers found",
@@ -2523,7 +2516,6 @@
     "serverList": "Servers",
     "loading": "Loading...",
     "empty": "No MCP servers",
-    "emptyDescription": "Click the button in the top right to add your first MCP server",
     "add": "Add MCP",
     "addServer": "Add MCP",
     "editServer": "Edit MCP",
@@ -4136,6 +4128,7 @@
       "failedTitle": "Some apps couldn't be read",
       "filesTitle": "Which files were read",
       "claudeNote": " (top-level mcpServers)",
+      "dshNote": " (written to every initialized profile: web, desktop, headless, acp)",
       "ok": "Got it"
     },
     "templateLabels": {
@@ -4240,7 +4233,16 @@
       "docs": "Docs",
       "delete": "Delete"
     },
-    "resync": "Rewrite every app's config from these switches"
+    "resync": "Rewrite every app's config from these switches",
+    "checkConnectivity": "Check connectivity",
+    "testConnection": "Test connection",
+    "connection": {
+      "unchecked": "Not checked",
+      "connected": "Connection successful",
+      "disconnected": "Connection failed",
+      "checking": "Checking connection",
+      "disabled": "Not enabled"
+    }
   },
   "appsPage": {
     "showInSidebar": "Show {{name}} in the sidebar",

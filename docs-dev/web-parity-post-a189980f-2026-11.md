@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.1–v4.0.25 差异清单
 
-> 状态：已完成（2026-11-06）。758 项中已迁移 558、部分迁移 19（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
+> 状态：已完成（2026-11-06）。758 项中已迁移 559、部分迁移 18（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 已置为 `DISABLED_READ_ONLY`）。
 > 起点：`a189980f`（v4.0.0 之后，上一轮冻结目标）；目标：`upstream/main` = `a3eafa40`（v4.0.25，2026-11-02）。
 > 范围：758 个提交（无合并提交），1097 个文件变化（+180074/−23740）。Web 起点为 `be2ba289`（3.0.0 之后）。
@@ -737,7 +737,7 @@
 | `e68e6943` | v4.0.20 | fix(i18n): reword the failed quota line in Chinese as "query failed" | 1d 资源/设置/工具 | 1d：额度失败文案改为“额度查询失败”；托盘部分不适用 | 已迁移 |
 | `b71141a8` | v4.0.20 | feat(apps): drag to reorder installed apps, sidebar follows the order | 5a 供应商与全局 UI | 5a4a：已安装组可拖动排序（dnd-kit，只上下、限在本组），顺序存 settings.appOrder（后端 AppSettings.app_order）；侧栏 WebSidebar 与默认打开的应用跟随；新增 orderAppIds 与用例 | 已迁移 |
 | `ba6a8a55` | v4.0.20 | fix(apps): group Claude Desktop by whether it is installed | 1d 资源/设置/工具 | 1d：Claude Desktop 状态新增 installed（按数据目录/应用包推断）；Web 应用页尚无按安装分组，界面分组随 5a | 已迁移 |
-| `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | 收尾：Skills 已安装矩阵的列头弹层带 omp 发现说明（5d1，ompDiscoveryColumnNote）；Web 的 MCP 页没有改成应用矩阵版式（用户 2026-11-05 只定了 Skills 等四处收敛），仍用计数条下方的一行说明与文档链接 | 部分迁移 |
+| `c6617bc2` | v4.0.20 | fix(omp): move the discovery note from the apps page to the MCP and Skills columns | 2d Oh My Pi | MCP 矩阵：MCP 页改为上游应用矩阵后，Oh My Pi 列头弹层带发现说明（ompDiscoveryColumnNote），删除计数条下方的 OmpDiscoveryNote；Skills 部分已随 5d1 完成 | 已迁移 |
 | `6c2fc74e` | v4.0.20 | feat(pi): pick fetched models in a dialog for Pi and omp | 5a 供应商与全局 UI | 5a2：Pi / omp 的取模型改用共用的 FetchedModelPicker 弹窗：勾上的模型按行加入并静默补参数（思考映射只给 Pi），取消勾选移除对应行，拉到的 ID 去重；行内下拉保留 | 已迁移 |
 | `f395cd6b` | v4.0.20 | fix(kimi): import subagent usage from their own wire logs | 2b Kimi Code | 2b：子代理用量从各自的 wire 日志导入 | 已迁移 |
 | `b9f317af` | v4.0.20 | fix(usage): stop treating an empty DeepSeek balance as an expired plan | 1c 会话/用量导入 | 1c：DeepSeek 余额为空不再判为套餐过期 | 已迁移 |
@@ -1215,3 +1215,9 @@
   - 保留部分迁移（有意的 Web 差异）：a4d07f31、04638fd4、98222d19、3e9eede4、5cc6c47f、67cce7ad、03ec9dbb（桌面专属：Sheet / 托盘 / 冷启动 / WKWebView / 桌面 CI）；beff557e（没有前端日志通道）；f9db9f70、9403960f（Copilot 优化器基线前已移除）；36e2ce2c（Codex 没有 Anthropic 上游格式）；fdbac61c（Antigravity 切号依赖 macOS 钥匙串）；6fa328f3、accc4489（请求日志缺 pricing_model / input_token_semantics 列）；71524045（A–Z、不做拖动排名）；a03c6c7a、5f642640（Web 自写的 Pi 表单）；c6617bc2（MCP 页未改矩阵版式）；fe08e10a（表单内没有账号管理抽屉，账号在授权中心添加）。
   - 验证：`tsc --noEmit` 通过；前端全量 Vitest 245 个文件 2585 项通过；后端 `cargo test --locked --lib` 3644 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过、无警告；`hermes_config.rs` rustfmt 干净。未做 Docker Linux 检查与浏览器验收。
 - 2026-11-06：收尾评估 Claude Desktop 官方卡。上游通过 `ensure_official_seed_by_id` 保证固定 id `claude-desktop-official` 的官方卡存在，后端 `is_official_provider` 只认这个 id；Web 不预置官方卡，从「Claude Desktop Official」预设加的卡是随机 id，被当成第三方网关处理。处理：添加时官方预设落到固定 id（已有官方卡就直接返回、不加第二张，对应上游只补缺）；后端同时认分类为 official 的 Desktop 卡，旧数据里随机 id 的官方卡不用迁移即可正常工作；从 Claude 导入的兼容判断仍不把 Claude 官方卡当 Desktop 官方卡。新增前端 mutation 与后端判定用例。
+- 2026-11-06：MCP 页改为上游应用矩阵版式（用户决定把复看时保留的布局项也做掉）。c6617bc2 由部分迁移改为已迁移。
+  - `UnifiedMcpPanel` 取上游最终版本：页头（检查连通性、从应用导入、添加、「⋯」重新同步 / 复制全部 JSON）、搜索与计数行、写入失败通知条（按应用重试：先写文件后入库的应用逐格按想要的值重写，其余整应用重新同步）、应用矩阵（`AppMatrix` 的列头批量开关含作用范围与撤销、单元格失败态、列高亮、Oh My Pi 列头发现说明）、行内状态点 / 摘要 / 失败重试与「⋯」菜单（测试连接、复制 JSON、打开文档、全部启用 / 停用、删除）、删除确认与导入结果对话框（含读取了哪些文件）；上游令牌按既定映射换成 Web 类名，连通状态点沿用 Web 原配色。`useMcp` 取上游最终版本（`MCP_UPSERT_MUTATION_KEY`、`useResyncMcpToApps`、各写入 onSettled 刷新）；`appConfig` 补 `isMcpAppId`。
+  - Web 差异：矩阵按应用列数给最小宽度，窄屏横向滚动；编辑页保留 Web 的「删除…」入口（接到同一删除确认）；外壳不接上游的导航锁（`onInteractionBlockedChange` 可选，Web 不传，与 Skills 一致）；列表不再按可视区域渲染（与上游一致）。
+  - 外壳：MCP 加入 `PAGES_WITH_OWN_HEADER`（外壳只留返回按钮）、移出窄屏第二行工具栏，去掉外壳页头里 MCP 的导入 / 添加按钮。
+  - 删除被取代的 `AppCountBar`、`AppToggleGroup`、`ListItemRow`、`OmpDiscoveryNote`、`WindowedRows`、`lib/bulkToggleToast` 及其用例，三语删去只被旧列表使用的 8 个 `mcp.*` 键、补上游 `mcpPage` 连通性与 DSH 导入说明键。迁入上游 `UnifiedMcpPanel` 用例（26 项，状态点颜色断言改为 Web 类名）。`docs/web-global-resources-guide-zh.md` 同步 MCP 页说明。
+  - 验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2603 项通过。无后端改动。未做浏览器验收。

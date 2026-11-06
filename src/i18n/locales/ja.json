@@ -147,6 +147,8 @@
     "exitEditMode": "編集モードを終了"
   },
   "provider": {
+    "liveConfigReadFailed": "{{app}} の設定ファイルを読み込めません",
+    "liveConfigReadFailedHint": "設定ファイルを修正するまで、プロバイダーの追加・削除は失敗します。",
     "tabProvider": "プロバイダー",
     "tabUniversal": "統一プロバイダー",
     "noProviders": "まだプロバイダーがありません",

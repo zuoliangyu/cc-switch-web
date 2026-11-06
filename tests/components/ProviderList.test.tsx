@@ -11,6 +11,7 @@ import {
 const providerCardRenderSpy = vi.fn();
 const getClaudeDesktopStatusMock = vi.hoisted(() => vi.fn());
 const importDefaultMock = vi.hoisted(() => vi.fn());
+const getHermesLiveProviderIdsMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock("sonner", () => ({
@@ -23,6 +24,7 @@ vi.mock("@/lib/api/providers", () => ({
     importOpenCodeFromLive: vi.fn(),
     importOpenClawFromLive: vi.fn(),
     getOpenCodeLiveProviderIds: vi.fn(),
+    getHermesLiveProviderIds: getHermesLiveProviderIdsMock,
   },
 }));
 
@@ -606,5 +608,31 @@ describe("ProviderList Component", () => {
 
     expect(await screen.findByText("dsh.empty.title")).toBeInTheDocument();
     expect(screen.queryByTestId("dsh-account-card")).not.toBeInTheDocument();
+  });
+});
+
+describe("ProviderList live config read failures", () => {
+  it("warns when an additive app's live config cannot be read", async () => {
+    getHermesLiveProviderIdsMock.mockRejectedValue(
+      new Error("Failed to parse Hermes config as YAML"),
+    );
+
+    renderWithQueryClient(
+      <ProviderList
+        providers={{}}
+        currentProviderId=""
+        appId="hermes"
+        onSwitch={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onOpenWebsite={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("无法读取 apps.hermes 配置文件");
+    expect(
+      screen.getByText(/Failed to parse Hermes config as YAML/),
+    ).toBeInTheDocument();
   });
 });

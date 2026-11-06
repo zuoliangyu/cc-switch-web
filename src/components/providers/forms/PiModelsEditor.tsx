@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import JsonEditor from "@/components/JsonEditor";
 import { ModelDropdown } from "./shared/ModelDropdown";
+import { GptContextWindowHint } from "./shared/GptContextWindowHint";
 import { REQUIRED_LABEL } from "./BasicFormFields";
 import {
   FetchedModelPicker,
@@ -361,6 +362,12 @@ export function PiModelsEditor({
                     })
                   }
                 />
+                {field === "contextWindow" && (
+                  <GptContextWindowHint
+                    modelId={text(model.id)}
+                    contextWindow={model.contextWindow}
+                  />
+                )}
               </label>
             ))}
             <label className="flex items-center gap-2 text-sm">

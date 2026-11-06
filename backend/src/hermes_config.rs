@@ -347,28 +347,80 @@ pub fn set_provider(name: &str, provider_config: serde_json::Value) -> Result<()
 }
 
 pub fn remove_provider(name: &str) -> Result<(), AppError> {
-    let _guard = hermes_write_guard()?;
-    let config = read_hermes_config()?;
-    if dict_only_provider(&config, name) {
-        return Err(AppError::Config(format!(
-            "Provider '{name}' is managed by Hermes' providers map; remove it in Hermes Web UI"
-        )));
+    let removed_title_model = get_providers()?
+        .get(name)
+        .and_then(declared_title_generation_model)
+        .map(String::from);
+    {
+        let _guard = hermes_write_guard()?;
+        let config = read_hermes_config()?;
+        if dict_only_provider(&config, name) {
+            return Err(AppError::Config(format!(
+                "Provider '{name}' is managed by Hermes' providers map; remove it in Hermes Web UI"
+            )));
+        }
+        let mut providers = config
+            .get("custom_providers")
+            .and_then(serde_yaml::Value::as_sequence)
+            .cloned()
+            .unwrap_or_default();
+        let previous_len = providers.len();
+        providers.retain(|provider| {
+            provider.get("name").and_then(serde_yaml::Value::as_str) != Some(name)
+        });
+        if providers.len() == previous_len {
+            return Ok(());
+        }
+        write_yaml_section_to_config_locked(
+            "custom_providers",
+            &serde_yaml::Value::Sequence(providers),
+        )?;
     }
-    let mut providers = config
-        .get("custom_providers")
-        .and_then(serde_yaml::Value::as_sequence)
-        .cloned()
-        .unwrap_or_default();
-    let previous_len = providers.len();
-    providers
-        .retain(|provider| provider.get("name").and_then(serde_yaml::Value::as_str) != Some(name));
-    if providers.len() == previous_len {
-        return Ok(());
+
+    // 删掉的卡可能是唯一声明当前标题模型钉选的那张；当前那家仍要这个模型时保留，否则放开
+    if let Some(removed) = removed_title_model {
+        let active = active_provider_settings()?;
+        let wanted = active.as_ref().and_then(declared_title_generation_model);
+        if let Err(e) = sync_title_generation_model(wanted, Some(&removed)) {
+            log::warn!("Failed to release Hermes auxiliary.title_generation.model: {e}");
+        }
     }
-    write_yaml_section_to_config_locked("custom_providers", &serde_yaml::Value::Sequence(providers))
+    Ok(())
+}
+
+/// Hermes `model.provider` 指向的那张卡（按名称或 `provider_key` 找）
+fn active_provider_settings() -> Result<Option<serde_json::Value>, AppError> {
+    let Some(active) = get_model_config()?.and_then(|model| model.provider) else {
+        return Ok(None);
+    };
+    let providers = get_providers()?;
+    if let Some(provider) = providers.get(&active) {
+        return Ok(Some(provider.clone()));
+    }
+    Ok(providers
+        .values()
+        .find(|provider| {
+            provider
+                .get("provider_key")
+                .and_then(serde_json::Value::as_str)
+                == Some(&active)
+        })
+        .cloned())
 }
 
 pub fn apply_switch_defaults(
+    provider_id: &str,
+    settings_config: &serde_json::Value,
+) -> Result<(), AppError> {
+    write_switch_model_defaults(provider_id, settings_config)?;
+    let wanted = declared_title_generation_model(settings_config);
+    if let Err(e) = sync_title_generation_model(wanted, None) {
+        log::warn!("Failed to sync Hermes auxiliary.title_generation.model: {e}");
+    }
+    Ok(())
+}
+
+fn write_switch_model_defaults(
     provider_id: &str,
     settings_config: &serde_json::Value,
 ) -> Result<(), AppError> {
@@ -406,6 +458,79 @@ pub fn apply_switch_defaults(
         );
     }
     write_yaml_section_to_config_locked("model", &serde_yaml::Value::Mapping(model))
+}
+
+/// 供应商卡声明的 `title_generation_model`（例如 MiniMax 卡写 M3）
+fn declared_title_generation_model(provider: &serde_json::Value) -> Option<&str> {
+    provider
+        .get("title_generation_model")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+}
+
+/// 把 `auxiliary.title_generation.model` 钉成当前那家声明的模型（MiniMax M3.1 不接受
+/// Hermes 标题请求带的 `reasoning_effort: none`，标题改用接受它的模型），`wanted` 为空时放开。
+///
+/// 只动 CC Switch 可能写过的钉选：当前值为空，或等于某张卡声明的值（或正在删除的那张卡
+/// 声明的 `released`）。用户自己选的标题模型、指向自己供应商 / 地址的标题路由都不碰。
+fn sync_title_generation_model(
+    wanted: Option<&str>,
+    released: Option<&str>,
+) -> Result<(), AppError> {
+    let _guard = hermes_write_guard()?;
+    let config = read_hermes_config()?;
+    let mut aux = config
+        .get("auxiliary")
+        .and_then(serde_yaml::Value::as_mapping)
+        .cloned()
+        .unwrap_or_default();
+    let k_title = serde_yaml::Value::from("title_generation");
+    let mut title = aux
+        .get(&k_title)
+        .and_then(serde_yaml::Value::as_mapping)
+        .cloned()
+        .unwrap_or_default();
+    let text = |key: &str| {
+        title
+            .get(key)
+            .and_then(serde_yaml::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(String::from)
+    };
+    if text("provider").is_some_and(|provider| provider != "auto") || text("base_url").is_some() {
+        return Ok(());
+    }
+    let current = text("model");
+    let owned = |model: &str| -> Result<bool, AppError> {
+        Ok(released == Some(model)
+            || get_providers()?
+                .values()
+                .any(|provider| declared_title_generation_model(provider) == Some(model)))
+    };
+    let next = match (wanted, current.as_deref()) {
+        (Some(w), Some(cur)) if w == cur => return Ok(()),
+        (Some(w), None) => Some(w),
+        (Some(w), Some(cur)) if owned(cur)? => Some(w),
+        (None, Some(cur)) if owned(cur)? => None,
+        _ => return Ok(()),
+    };
+    let k_model = serde_yaml::Value::from("model");
+    match next {
+        Some(model) => {
+            title.insert(k_model, serde_yaml::Value::from(model));
+        }
+        None => {
+            title.remove(&k_model);
+        }
+    }
+    if title.is_empty() {
+        aux.remove(&k_title);
+    } else {
+        aux.insert(k_title, serde_yaml::Value::Mapping(title));
+    }
+    write_yaml_section_to_config_locked("auxiliary", &serde_yaml::Value::Mapping(aux))
 }
 
 fn scan_hermes_health_internal(content: &str) -> Vec<HermesHealthWarning> {
@@ -781,5 +906,155 @@ mod tests {
         assert!(!dict_only_provider(&config, "editable"));
         assert!(dict_only_provider(&config, "builtin-key"));
         assert!(dict_only_provider(&config, "Built In"));
+    }
+
+    /// 临时 HOME：Hermes 目录跟着 `CC_SWITCH_TEST_HOME` 走，设置也重读一遍（不带目录覆盖）
+    struct HomeGuard(tempfile::TempDir, Option<std::ffi::OsString>);
+    impl HomeGuard {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            crate::settings::reload_settings().unwrap();
+            Self(dir, previous)
+        }
+    }
+    impl Drop for HomeGuard {
+        fn drop(&mut self) {
+            match self.1.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+            let _ = crate::settings::reload_settings();
+        }
+    }
+
+    fn write_section(key: &str, yaml: &str) {
+        let _guard = hermes_write_guard().unwrap();
+        write_yaml_section_to_config_locked(key, &serde_yaml::from_str(yaml).unwrap()).unwrap();
+    }
+
+    fn title_section() -> serde_yaml::Value {
+        read_hermes_config().unwrap()["auxiliary"]["title_generation"].clone()
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn title_generation_model_is_pinned_and_removed_only_when_owned() {
+        let _home = HomeGuard::new();
+        let mm = json!({
+            "base_url": "https://api.minimax.cn/v1",
+            "models": [{ "id": "MiniMax-M3.1-Flash" }, { "id": "MiniMax-M3" }],
+            "title_generation_model": "MiniMax-M3",
+        });
+        let other = json!({ "models": [{ "id": "x" }] });
+        set_provider("minimax", mm.clone()).unwrap();
+        set_provider("other", other.clone()).unwrap();
+        // 用户别的 auxiliary 设置要留着
+        write_section(
+            "auxiliary",
+            "title_generation:
+  timeout: 9
+compression:
+  model: keep
+",
+        );
+
+        apply_switch_defaults("minimax", &mm).unwrap();
+        assert_eq!(title_section()["model"].as_str(), Some("MiniMax-M3"));
+        apply_switch_defaults("other", &other).unwrap();
+        assert!(title_section()["model"].is_null());
+        let cfg = read_hermes_config().unwrap();
+        assert_eq!(
+            cfg["auxiliary"]["title_generation"]["timeout"].as_i64(),
+            Some(9)
+        );
+        assert_eq!(
+            cfg["auxiliary"]["compression"]["model"].as_str(),
+            Some("keep")
+        );
+
+        // 用户手动写的钉选不删
+        apply_switch_defaults("minimax", &mm).unwrap();
+        write_section(
+            "auxiliary",
+            "title_generation:
+  model: mine
+",
+        );
+        apply_switch_defaults("other", &other).unwrap();
+        assert_eq!(title_section()["model"].as_str(), Some("mine"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn title_generation_model_leaves_user_choice_and_follows_deleted_cards() {
+        let _home = HomeGuard::new();
+        let mm = json!({
+            "models": [{ "id": "MiniMax-M3.1-Flash" }],
+            "title_generation_model": "MiniMax-M3",
+        });
+        let other = json!({ "models": [{ "id": "x" }] });
+        set_provider("minimax", mm.clone()).unwrap();
+        set_provider("minimax_en", mm.clone()).unwrap();
+        set_provider("other", other.clone()).unwrap();
+        let set_title = |yaml: &str| {
+            write_section(
+                "auxiliary",
+                &format!(
+                    "title_generation:
+{yaml}"
+                ),
+            )
+        };
+
+        // 用户把标题路由指到自己的供应商时从不改
+        set_title(
+            "  provider: openrouter
+  model: google/gemini-flash
+",
+        );
+        apply_switch_defaults("minimax", &mm).unwrap();
+        assert_eq!(
+            title_section()["model"].as_str(),
+            Some("google/gemini-flash")
+        );
+        apply_switch_defaults("other", &other).unwrap();
+        assert_eq!(
+            title_section()["model"].as_str(),
+            Some("google/gemini-flash")
+        );
+
+        // 自动路由下用户自己选的标题模型也不改
+        set_title(
+            "  model: my-model
+",
+        );
+        apply_switch_defaults("minimax", &mm).unwrap();
+        assert_eq!(title_section()["model"].as_str(), Some("my-model"));
+
+        // 删掉声明钉选的卡：当前那家还要时保留……
+        set_title(
+            "  timeout: 9
+",
+        );
+        apply_switch_defaults("minimax_en", &mm).unwrap();
+        remove_provider("minimax").unwrap();
+        assert_eq!(title_section()["model"].as_str(), Some("MiniMax-M3"));
+        // ……没有卡要了就放开
+        remove_provider("minimax_en").unwrap();
+        assert!(title_section()["model"].is_null());
+        assert_eq!(title_section()["timeout"].as_i64(), Some(9));
+
+        // 在 Hermes 里自己换了供应商，下次切换不会留下钉选
+        set_provider("minimax", mm.clone()).unwrap();
+        apply_switch_defaults("minimax", &mm).unwrap();
+        write_section(
+            "model",
+            "provider: other
+",
+        );
+        apply_switch_defaults("other", &other).unwrap();
+        assert!(title_section()["model"].is_null());
     }
 }

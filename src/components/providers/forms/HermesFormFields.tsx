@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Download, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
-import { ApiKeySection, ModelDropdown } from "./shared";
+import { ApiKeySection, GptContextWindowHint, ModelDropdown } from "./shared";
 import {
   fetchModelsForConfig,
   showFetchModelsError,
@@ -432,6 +432,10 @@ export function HermesFormFields({
                             );
                           }}
                           placeholder="200000"
+                        />
+                        <GptContextWindowHint
+                          modelId={model.id}
+                          contextWindow={model.context_length}
                         />
                       </div>
                       <div className="flex h-9 items-center gap-2.5 self-end">

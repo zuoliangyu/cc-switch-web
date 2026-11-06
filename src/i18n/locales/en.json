@@ -147,6 +147,8 @@
     "exitEditMode": "Exit Edit Mode"
   },
   "provider": {
+    "liveConfigReadFailed": "Couldn't read the {{app}} config file",
+    "liveConfigReadFailedHint": "Adding or removing providers will fail until the config file is fixed.",
     "tabProvider": "Provider",
     "tabUniversal": "Universal",
     "noProviders": "No providers added yet",

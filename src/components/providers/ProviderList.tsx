@@ -26,6 +26,7 @@ import {
 import { useStreamCheck } from "@/hooks/useStreamCheck";
 import { ProviderCard } from "@/components/providers/ProviderCard";
 import { ProviderEmptyState } from "@/components/providers/ProviderEmptyState";
+import { Notice } from "@/components/ui/notice";
 import {
   DshAccountCard,
   accountName as dshAccountName,
@@ -117,7 +118,11 @@ export function ProviderList({
     [providers],
   );
 
-  const { data: opencodeLiveIds, isPending: opencodeLivePending } = useQuery({
+  const {
+    data: opencodeLiveIds,
+    isPending: opencodeLivePending,
+    error: opencodeLiveIdsError,
+  } = useQuery({
     queryKey: ["opencodeLiveProviderIds"],
     queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
     enabled: appId === "opencode",
@@ -134,11 +139,17 @@ export function ProviderList({
     "omp",
   );
 
-  const { data: openclawLiveIds, isPending: openclawLivePending } =
-    useOpenClawLiveProviderIds(appId === "openclaw");
+  const {
+    data: openclawLiveIds,
+    isPending: openclawLivePending,
+    error: openclawLiveIdsError,
+  } = useOpenClawLiveProviderIds(appId === "openclaw");
 
-  const { data: hermesLiveIds, isPending: hermesLivePending } =
-    useHermesLiveProviderIds(appId === "hermes");
+  const {
+    data: hermesLiveIds,
+    isPending: hermesLivePending,
+    error: hermesLiveIdsError,
+  } = useHermesLiveProviderIds(appId === "hermes");
   const { data: hermesModelConfig } = useHermesModelConfig(appId === "hermes");
 
   // 累加应用：供应商是否已写进应用自己的配置
@@ -489,6 +500,34 @@ export function ProviderList({
     (appId === "hermes" && hermesLivePending) ||
     (appId === "pi" && piLivePending) ||
     (appId === "omp" && ompStatePending);
+  // 累加式应用读不了 live 配置（如 YAML 写坏了）时，列表和空状态看起来跟没配置过一样，
+  // 添加 / 移除又会报错，所以在顶部说清楚
+  const liveIdsError =
+    appId === "opencode"
+      ? opencodeLiveIdsError
+      : appId === "openclaw"
+        ? openclawLiveIdsError
+        : appId === "hermes"
+          ? hermesLiveIdsError
+          : null;
+  const liveIdsErrorMessage = liveIdsError
+    ? extractErrorMessage(liveIdsError)
+    : "";
+  const liveConfigErrorNotice = liveIdsError ? (
+    <Notice
+      tone="warning"
+      title={t("provider.liveConfigReadFailed", {
+        app: t(`apps.${appId}`),
+        defaultValue: "无法读取 {{app}} 配置文件",
+      })}
+    >
+      {t("provider.liveConfigReadFailedHint", {
+        defaultValue: "修好配置文件之前，添加、移除供应商都会失败。",
+      })}
+      {liveIdsErrorMessage ? ` ${liveIdsErrorMessage}` : ""}
+    </Notice>
+  ) : null;
+
   if (isLoading || (membershipPending && sortedProviders.length > 0)) {
     return (
       <div className="space-y-2">
@@ -514,9 +553,10 @@ export function ProviderList({
         }
       />
     );
-    return dshAccountCard ? (
+    return dshAccountCard || liveConfigErrorNotice ? (
       <div className="space-y-4">
-        <DshAccountCard status={dshAccountCard} />
+        {liveConfigErrorNotice}
+        {dshAccountCard && <DshAccountCard status={dshAccountCard} />}
         {emptyState}
       </div>
     ) : (
@@ -641,6 +681,7 @@ export function ProviderList({
 
   return (
     <div className="space-y-4">
+      {liveConfigErrorNotice}
       {claudeDesktopStatusMessages.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
           <div className="flex items-center gap-2 font-medium">

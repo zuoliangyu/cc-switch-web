@@ -147,6 +147,8 @@
     "exitEditMode": "退出编辑模式"
   },
   "provider": {
+    "liveConfigReadFailed": "无法读取 {{app}} 配置文件",
+    "liveConfigReadFailedHint": "修好配置文件之前，添加、移除供应商都会失败。",
     "tabProvider": "供应商",
     "tabUniversal": "统一供应商",
     "noProviders": "还没有添加任何供应商",

@@ -186,4 +186,60 @@ describe("useAddProviderMutation", () => {
       undefined,
     );
   });
+
+  it.each([
+    [{}, true],
+    [
+      {
+        "claude-desktop-official": {
+          id: "claude-desktop-official",
+          name: "Claude Desktop Official",
+          category: "official",
+          settingsConfig: { env: {} },
+        },
+      },
+      false,
+    ],
+  ])(
+    "Claude Desktop 官方预设落到固定 id，已有官方卡时不再加第二张（%#）",
+    async (existing, shouldAdd) => {
+      addMock.mockReset();
+      addMock.mockResolvedValue(undefined);
+      getAllMock.mockReset();
+      getAllMock.mockResolvedValue(existing);
+      const queryClient = new QueryClient({
+        defaultOptions: { mutations: { retry: false } },
+      });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+      const { result } = renderHook(
+        () => useAddProviderMutation("claude-desktop"),
+        { wrapper },
+      );
+
+      let returned: Provider | undefined;
+      await act(async () => {
+        returned = await result.current.mutateAsync({
+          name: "Claude Desktop Official",
+          category: "official",
+          settingsConfig: { env: {} },
+          ensureClaudeDesktopOfficialSeed: true,
+        });
+      });
+
+      expect(returned?.id).toBe("claude-desktop-official");
+      if (shouldAdd) {
+        expect(addMock).toHaveBeenCalledWith(
+          expect.objectContaining({ id: "claude-desktop-official" }),
+          "claude-desktop",
+          undefined,
+        );
+      } else {
+        expect(addMock).not.toHaveBeenCalled();
+      }
+    },
+  );
 });

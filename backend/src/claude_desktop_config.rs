@@ -313,11 +313,20 @@ pub fn default_proxy_routes() -> Vec<ClaudeDesktopDefaultRoute> {
 
 #[cfg_attr(not(test), allow(dead_code))] // 与上游对等保留，Web 暂未提供从 Claude 导入 Claude Desktop（仅测试覆盖）
 pub fn is_compatible_direct_provider(provider: &Provider) -> bool {
+    // 从 Claude 导入时，Claude 的官方卡不是 Desktop 官方卡（按分类认官方只用于 Desktop 自己的行）
+    if provider.id != CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID
+        && provider.category.as_deref() == Some("official")
+    {
+        return false;
+    }
     validate_direct_provider(provider).is_ok()
 }
 
+/// 上游只认固定 id 的官方种子；Web 不预置官方卡，旧版从「官方」预设加的卡是随机 id，
+/// 所以分类为 official 的也算（前端卡片同样按分类认官方）。
 pub fn is_official_provider(provider: &Provider) -> bool {
     provider.id == CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID
+        || provider.category.as_deref() == Some("official")
 }
 
 /// 这张卡在直连模式下写不进去，要经本地路由：模型映射卡（上游模型名 Desktop 不认）、托管
@@ -1843,6 +1852,15 @@ mod tests {
             err.to_string().contains("真实监听端口"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn official_preset_card_with_random_id_counts_as_official() {
+        let mut legacy = official_provider();
+        legacy.id = "3f1c2b8e-legacy-official".to_string();
+        assert!(is_official_provider(&legacy));
+        assert!(is_official_provider(&official_provider()));
+        assert!(!is_official_provider(&direct_provider("relay")));
     }
 
     fn official_provider() -> Provider {

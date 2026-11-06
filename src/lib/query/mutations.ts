@@ -18,6 +18,7 @@ import { generateUUID } from "@/utils/uuid";
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import { invalidateHermesProviderCaches } from "@/hooks/useHermes";
 import {
+  CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
   CODEX_OFFICIAL_PROVIDER_ID,
   GROKBUILD_OFFICIAL_PROVIDER_ID,
 } from "@/utils/providerCapabilities";
@@ -34,6 +35,7 @@ export const useAddProviderMutation = (appId: AppId) => {
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
         ensureCodexOfficialSeed?: boolean;
+        ensureClaudeDesktopOfficialSeed?: boolean;
         editorSave?: ProviderEditorSave;
       },
     ) => {
@@ -42,6 +44,7 @@ export const useAddProviderMutation = (appId: AppId) => {
         addToLive,
         ensureGrokBuildOfficialSeed,
         ensureCodexOfficialSeed,
+        ensureClaudeDesktopOfficialSeed,
         editorSave,
         ...rest
       } = providerInput;
@@ -63,6 +66,14 @@ export const useAddProviderMutation = (appId: AppId) => {
           );
         }
         return officialProvider;
+      }
+
+      if (appId === "claude-desktop" && ensureClaudeDesktopOfficialSeed) {
+        // 官方卡已经有了就不再加第二张（上游 ensure_official_seed_by_id 同样只补缺）
+        const existing = (await providersApi.getAll(appId))[
+          CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID
+        ];
+        if (existing) return existing;
       }
 
       let id: string;
@@ -91,6 +102,11 @@ export const useAddProviderMutation = (appId: AppId) => {
         }
       } else if (appId === "codex" && ensureCodexOfficialSeed) {
         id = CODEX_OFFICIAL_PROVIDER_ID;
+      } else if (
+        appId === "claude-desktop" &&
+        ensureClaudeDesktopOfficialSeed
+      ) {
+        id = CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID;
       } else {
         id = generateUUID();
       }

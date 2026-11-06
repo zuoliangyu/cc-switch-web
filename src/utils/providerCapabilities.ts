@@ -13,6 +13,7 @@ import { resolveManagedAccountId } from "@/lib/authBinding";
 
 export const GROKBUILD_OFFICIAL_PROVIDER_ID = "grokbuild-official";
 export const CODEX_OFFICIAL_PROVIDER_ID = "codex-official";
+export const CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID = "claude-desktop-official";
 export const KIMI_OFFICIAL_PROVIDER_ID = "managed:kimi-code";
 
 /** Kimi 官方账号卡：config.toml 里 type = "kimi" 且带 OAuth 引用（与后端 is_official_provider 一致） */

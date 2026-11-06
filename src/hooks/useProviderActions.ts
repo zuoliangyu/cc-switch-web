@@ -76,6 +76,7 @@ export function useProviderActions(
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
         ensureCodexOfficialSeed?: boolean;
+        ensureClaudeDesktopOfficialSeed?: boolean;
         editorSave?: ProviderEditorSave;
       },
     ) => {

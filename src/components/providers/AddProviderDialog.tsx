@@ -43,6 +43,7 @@ interface AddProviderDialogProps {
       addToLive?: boolean;
       ensureGrokBuildOfficialSeed?: boolean;
       ensureCodexOfficialSeed?: boolean;
+      ensureClaudeDesktopOfficialSeed?: boolean;
       editorSave?: ProviderEditorSave;
     },
   ) => Promise<void> | void;
@@ -169,6 +170,7 @@ export function AddProviderDialog({
         addToLive?: boolean;
         ensureGrokBuildOfficialSeed?: boolean;
         ensureCodexOfficialSeed?: boolean;
+        ensureClaudeDesktopOfficialSeed?: boolean;
         editorSave?: ProviderEditorSave;
       } = {
         name: values.name.trim(),
@@ -195,6 +197,11 @@ export function AddProviderDialog({
         values.presetId === "codex-0"
       ) {
         providerData.ensureCodexOfficialSeed = true;
+      }
+
+      // Desktop 官方预设落到固定 id 的官方卡（后端按这个 id 认官方，与上游 ensure 官方种子一致）
+      if (appId === "claude-desktop" && values.presetCategory === "official") {
+        providerData.ensureClaudeDesktopOfficialSeed = true;
       }
 
       // 累加模式应用：传递 providerKey 作为 Provider ID

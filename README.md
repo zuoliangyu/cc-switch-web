@@ -24,6 +24,7 @@ CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Cl
 - Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi 和 MiniMax Code 的 Provider 管理
 - MiniMax Code 的 Provider/模型（原生 `custom_provider`）、MCP、Skills、全局指令（`AGENTS.md`）、只读会话历史与用量导入；会话删除仍由 MiniMax Code 原生应用负责
 - Pi 的 Provider、Prompts、Skills、Sessions 与 Usage；Pi `/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管明确由 Pi 原生管理
+- Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness 的 Provider、MCP、会话与用量导入；Antigravity 官方账号切换依赖 macOS 钥匙串，仅服务端为 macOS 时可用
 - Claude、Codex、Gemini 的官方订阅额度展示
 - ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
 - Claude → Codex 路由支持内置 WebSearch，Codex 路由支持 Alpha Search 透传
@@ -88,6 +89,8 @@ docker run -d --name cc-switch-web \
 ## 当前版本
 
 当前仓库版本为 `3.0.0`。本次主版本升级引入关键字段配置写入与冲突处理、直连／路由／聚合模式、全局导航与账号中心，以及结构化会话阅读器、用量分析和资源管理。完整变更见 [CHANGELOG](CHANGELOG.md)。版本号与说明已更新，发布包和 Release 尚未发布。
+
+尚未发布的改动已完成上游 `a189980f..a3eafa40`（v4.0.1–v4.0.25）的 Web 迁移：758 项提交中 558 项已迁移或适配、19 项部分迁移（均为有意保留的 Web 差异）、181 项不适用。新增 Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness；界面向上游最终版收敛（供应商卡片、模式页签与面板、按模式的表单、设置分节目录、Skills 矩阵、分组预设选择器），Web 主题保持不变；用量页支持币种换算与自动汇率、全局筛选、成功率 / 速度 / 首字时间和侧栏今日数字。Windows 验证：前端 2585 项通过；Rust 3644 项通过、6 项忽略；零编译警告；已在隔离数据目录下完成桌面与窄屏浏览器验收。处置与验证见 [迁移台账](docs-dev/web-parity-post-a189980f-2026-11.md)，变更见 CHANGELOG 未发布段。
 
 本版本完成上游 `f8788719..a189980f`（v4.0.0）适用内容的 Web 迁移。195 项提交中，176 项已迁移或按 Web 实现适配，19 项属于桌面、发行、文档布局或与 Web 约束不适用的内容。处置与验证记录见 [迁移台账](docs-dev/web-parity-post-f8788719-2026-10.md)。
 

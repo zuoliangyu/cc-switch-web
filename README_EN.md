@@ -24,6 +24,7 @@ Capabilities already available on the Web branch:
 - Provider management for Claude, Claude Desktop, Codex, Gemini, Grok Build, OpenCode, OpenClaw, Hermes, Pi, and MiniMax Code
 - MiniMax Code providers/models (native `custom_provider`), MCP, Skills, global instructions (`AGENTS.md`), read-only session history, and usage import; deleting sessions stays in the native MiniMax Code app
 - Pi Provider, Prompts, Skills, Sessions, and Usage support; Pi keeps ownership of `/login`, `auth.json`, the default Provider/Model, proxying, failover, and managed OAuth
+- Providers, MCP, sessions, and usage import for Kimi Code, Antigravity, Oh My Pi, and DeepSeek Harness; Antigravity official account switching relies on the macOS Keychain and works only when the server runs on macOS
 - Official subscription quota display for Claude, Codex, and Gemini
 - Managed ChatGPT (Codex OAuth) account center, Claude preset, and quota display
 - Built-in WebSearch for Claude-to-Codex routing and Alpha Search passthrough for Codex routes
@@ -88,6 +89,8 @@ Open [http://localhost:8890](http://localhost:8890). Web data persists in the `c
 ## Version
 
 The current repository version is `3.0.0`. This major update introduces key-field configuration writes and conflict resolution, Direct/Routing/Aggregation modes, global navigation and an account center, plus structured session reading, usage analysis, and resource management. See the [CHANGELOG](CHANGELOG.md) for details. Version metadata and documentation are updated; release packages and the Release have not been published.
+
+Unreleased changes complete the Web migration of upstream `a189980f..a3eafa40` (v4.0.1–v4.0.25): of 758 commits, 558 are ported or adapted, 19 are partially ported (all intentional Web differences), and 181 are inapplicable. They add Kimi Code, Antigravity, Oh My Pi, and DeepSeek Harness; converge the UI on upstream's final layout (provider cards, mode tabs and panel, per-mode forms, sectioned settings, the Skills matrix, and the grouped preset picker) while keeping the Web theme; and bring currency conversion with automatic exchange rates, global filters, success rate / speed / first-token time, and the sidebar Today figure to the usage page. Windows validation: 2585 frontend tests pass; 3644 Rust tests pass with 6 ignored; zero compiler warnings; desktop and narrow-screen browser checks were done against an isolated data directory. See the [migration ledger](docs-dev/web-parity-post-a189980f-2026-11.md) for dispositions and validation, and the CHANGELOG Unreleased section for changes.
 
 This version completes the applicable Web migration from upstream `f8788719..a189980f` (v4.0.0). Of 195 commits, 176 are ported or adapted for Web and 19 are inapplicable desktop, release, documentation-layout, or Web-specific differences. See the [migration ledger](docs-dev/web-parity-post-f8788719-2026-10.md) for dispositions and validation.
 

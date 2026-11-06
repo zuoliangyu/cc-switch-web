@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.1–v4.0.25 差异清单
 
-> 状态：批次 1a、1b、1c 已完成，1d 进行中（累计已迁移 226、部分迁移 5）；其余待迁移 359 项、不适用 168 项。需决策项已由用户确定。
+> 状态：已完成（2026-11-06）。758 项中已迁移 558、部分迁移 19（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 已置为 `DISABLED_READ_ONLY`）。
 > 起点：`a189980f`（v4.0.0 之后，上一轮冻结目标）；目标：`upstream/main` = `a3eafa40`（v4.0.25，2026-11-02）。
 > 范围：758 个提交（无合并提交），1097 个文件变化（+180074/−23740）。Web 起点为 `be2ba289`（3.0.0 之后）。
@@ -1214,3 +1214,4 @@
   - 补迁：Hermes 标题模型钉选（734c4831：`hermes_config.rs` 新增 `declared_title_generation_model` / `sync_title_generation_model`，切换时钉、换走或删卡时只放开 CC Switch 写的钉选，用户自选的标题模型与自定标题路由不动，迁入上游两条用例）；GPT 超大窗口提示（8d7a7415：Codex 目录行、Hermes、OpenClaw、Pi 模型编辑接上 `GptContextWindowHint`，迁入上游组件用例）；供应商列表的 live 配置读取失败提示（c1933fd0：OpenCode / OpenClaw / Hermes 读不了配置时在列表与空状态上方说明，三语补 `provider.liveConfigReadFailed*`，迁入上游用例）。
   - 保留部分迁移（有意的 Web 差异）：a4d07f31、04638fd4、98222d19、3e9eede4、5cc6c47f、67cce7ad、03ec9dbb（桌面专属：Sheet / 托盘 / 冷启动 / WKWebView / 桌面 CI）；beff557e（没有前端日志通道）；f9db9f70、9403960f（Copilot 优化器基线前已移除）；36e2ce2c（Codex 没有 Anthropic 上游格式）；fdbac61c（Antigravity 切号依赖 macOS 钥匙串）；6fa328f3、accc4489（请求日志缺 pricing_model / input_token_semantics 列）；71524045（A–Z、不做拖动排名）；a03c6c7a、5f642640（Web 自写的 Pi 表单）；c6617bc2（MCP 页未改矩阵版式）；fe08e10a（表单内没有账号管理抽屉，账号在授权中心添加）。
   - 验证：`tsc --noEmit` 通过；前端全量 Vitest 245 个文件 2585 项通过；后端 `cargo test --locked --lib` 3644 项通过、6 项忽略；`cargo check --locked --bin cc-switch-web` 通过、无警告；`hermes_config.rs` rustfmt 干净。未做 Docker Linux 检查与浏览器验收。
+- 2026-11-06：收尾评估 Claude Desktop 官方卡。上游通过 `ensure_official_seed_by_id` 保证固定 id `claude-desktop-official` 的官方卡存在，后端 `is_official_provider` 只认这个 id；Web 不预置官方卡，从「Claude Desktop Official」预设加的卡是随机 id，被当成第三方网关处理。处理：添加时官方预设落到固定 id（已有官方卡就直接返回、不加第二张，对应上游只补缺）；后端同时认分类为 official 的 Desktop 卡，旧数据里随机 id 的官方卡不用迁移即可正常工作；从 Claude 导入的兼容判断仍不把 Claude 官方卡当 Desktop 官方卡。新增前端 mutation 与后端判定用例。

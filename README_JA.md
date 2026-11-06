@@ -24,6 +24,7 @@ Web ブランチで既に利用できる機能:
 - Claude、Claude Desktop、Codex、Gemini、Grok Build、OpenCode、OpenClaw、Hermes、Pi、MiniMax Code の Provider 管理
 - MiniMax Code の Provider/モデル（ネイティブ `custom_provider`）、MCP、Skills、グローバル指示（`AGENTS.md`）、読み取り専用のセッション履歴、使用量の取り込み。セッション削除は MiniMax Code 本体で行う
 - Pi の Provider、Prompts、Skills、Sessions、Usage。Pi の `/login`、`auth.json`、デフォルト Provider/Model、プロキシ、フェイルオーバー、OAuth 管理は Pi 本体が所有
+- Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness の Provider、MCP、セッション、使用量の取り込み。Antigravity の公式アカウント切替は macOS キーチェーンに依存し、サーバーが macOS の場合のみ利用可能
 - Claude、Codex、Gemini の公式サブスクリプションクォータ表示
 - ChatGPT（Codex OAuth）の管理アカウントセンター、Claude プリセット、クォータ表示
 - Claude → Codex ルーティングの組み込み WebSearch と Codex ルートの Alpha Search パススルー
@@ -88,6 +89,8 @@ docker run -d --name cc-switch-web \
 ## 現在のバージョン
 
 現在のリポジトリバージョンは `3.0.0` です。このメジャーアップデートでは、主要フィールドの設定書き込みと競合解決、直結／ルーティング／集約モード、グローバルナビゲーションとアカウント管理、構造化セッション閲覧、使用量分析、リソース管理を導入しました。詳細は [CHANGELOG](CHANGELOG.md) を参照してください。バージョン情報と文書は更新済みですが、配布パッケージと Release はまだ公開していません。
+
+未リリースの変更では、アップストリーム `a189980f..a3eafa40`（v4.0.1–v4.0.25）の Web 移行を完了しました。758 コミットのうち 558 件を移植または適応、19 件を部分移植（いずれも意図的な Web との差異）、181 件を対象外としました。Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness を追加し、Web のテーマを保ったまま UI をアップストリームの最終レイアウト（プロバイダーカード、モードタブとパネル、モード別フォーム、セクション分けした設定、Skills マトリクス、グループ化したプリセット選択）に揃えました。使用量画面は通貨換算と為替レートの自動取得、全体フィルター、成功率・速度・初回トークン時間、サイドバーの今日の数値に対応します。Windows での検証：フロントエンド 2585 件成功、Rust 3644 件成功・6 件無視、コンパイル警告 0 件。隔離したデータディレクトリでデスクトップと狭い画面のブラウザー確認を行いました。処置と検証は[移行台帳](docs-dev/web-parity-post-a189980f-2026-11.md)、変更は CHANGELOG の Unreleased を参照してください。
 
 本バージョンでは、アップストリーム `f8788719..a189980f`（v4.0.0）の適用可能な変更の Web 移行を完了しました。195 コミットのうち 176 件を移植または Web 向けに適応し、19 件はデスクトップ、リリース、文書レイアウト、Web 固有の制約により対象外です。処置と検証の記録は[移行台帳](docs-dev/web-parity-post-f8788719-2026-10.md)を参照してください。
 

@@ -29,6 +29,7 @@ export * as authApi from "./auth";
 export * as copilotApi from "./copilot";
 export type { Prompt } from "./prompts";
 export type {
+  AuthCenterTarget,
   ManagedAuthProvider,
   ManagedAuthAccount,
   ManagedAuthStatus,

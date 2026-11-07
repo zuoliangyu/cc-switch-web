@@ -54,6 +54,7 @@ import {
   type FetchedModel,
 } from "@/lib/api/model-fetch";
 import { claudeDesktopApi } from "@/lib/api/claudeDesktop";
+import type { AuthCenterTarget } from "@/lib/api";
 import {
   copilotGetModels,
   copilotGetModelsForAccount,
@@ -101,6 +102,8 @@ export interface ClaudeDesktopProviderFormProps {
     iconColor?: string;
   };
   showButtons?: boolean;
+  /** 账号选择处的「添加或管理账号」：打开全屏授权中心并定位到这一组 */
+  onManageAuthAccounts?: (target: AuthCenterTarget) => void;
 }
 
 type RouteRow = {
@@ -253,6 +256,7 @@ export function ClaudeDesktopProviderForm({
   onSubmittingChange,
   initialData,
   showButtons = true,
+  onManageAuthAccounts,
 }: ClaudeDesktopProviderFormProps) {
   const { t } = useTranslation();
   const initialMode = isOAuthProviderType(initialData?.meta?.providerType)
@@ -998,11 +1002,21 @@ export function ClaudeDesktopProviderForm({
                   <CopilotAuthSection
                     selectedAccountId={selectedGitHubAccountId}
                     onAccountSelect={setSelectedGitHubAccountId}
+                    onManageAccounts={
+                      onManageAuthAccounts
+                        ? () => onManageAuthAccounts("github_copilot")
+                        : undefined
+                    }
                   />
                 ) : activeProviderType === "codex_oauth" ? (
                   <CodexOAuthSection
                     selectedAccountId={selectedCodexAccountId}
                     onAccountSelect={setSelectedCodexAccountId}
+                    onManageAccounts={
+                      onManageAuthAccounts
+                        ? () => onManageAuthAccounts("codex_oauth")
+                        : undefined
+                    }
                   />
                 ) : (
                   <XaiOAuthSection

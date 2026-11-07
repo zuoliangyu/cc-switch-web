@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.1–v4.0.25 差异清单
 
-> 状态：已完成（2026-11-06）。758 项中已迁移 559、部分迁移 18（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
+> 状态：已完成（2026-11-06）。758 项中已迁移 560、部分迁移 17（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 已置为 `DISABLED_READ_ONLY`）。
 > 起点：`a189980f`（v4.0.0 之后，上一轮冻结目标）；目标：`upstream/main` = `a3eafa40`（v4.0.25，2026-11-02）。
 > 范围：758 个提交（无合并提交），1097 个文件变化（+180074/−23740）。Web 起点为 `be2ba289`（3.0.0 之后）。
@@ -781,7 +781,7 @@
 | `ec5c5f8a` | v4.0.21 | fix(forms): align Claude Desktop Copilot URL detection and sync zh/en/ja manuals (#8838) | 5a 供应商与全局 UI | 5a2：Claude Desktop 手填 Copilot 地址时也按 Copilot 自动选格式，Codex / xAI OAuth 卡忽略 Copilot 地址；用例按 Web 的必填标签与 OAuth 区块替身改写；docs/ 不适用 | 已迁移 |
 | `d2008fdb` | v4.0.21 | fix(i18n): complete Turkish catalog follow-ups (#8836) | 1d 资源/设置/工具 | 用户决定不新增土耳其语，Web 保持 zh/en/ja | 不适用 |
 | `238d8a71` | v4.0.21 | test(proxy): add end-to-end regression tests for inline <think> block conversion (#8835) | 1b 代理协议 | 1b：内联 <think> 转换端到端回归（适配 Web 代理构造参数） | 已迁移 |
-| `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 收尾：Claude 官方卡账号选择器已取上游最终版本（3b）；上游在添加 / 编辑面板里弹出账号管理抽屉（onManageAuthAccounts），Web 的授权中心是独立的全局页，表单内没有这个入口，账号在授权中心添加 | 部分迁移 |
+| `fe08e10a` | v4.0.21 | feat(claude): match the Codex sign-in picker on official cards | 5a 供应商与全局 UI | 账号入口：Claude 官方卡账号选择器取上游最终版本（3b）；按上游接上 onManageAuthAccounts——新增/编辑面板持有授权中心目标，表单里 Claude 官方、ChatGPT、Copilot 的「添加或管理账号」与 Kimi Code、DeepSeek 账号预设的「管理账号」打开盖在表单上的全屏授权中心（AuthSettingsPanel）并定位到对应分组，返回 / Esc 先关它、表单草稿不动；表单单独渲染时 Kimi / DSH 仍就地登录 | 已迁移 |
 | `ea1645f9` | v4.0.21 | fix(auth): align quota bars across accounts in the auth center | 3 官方账号 | 3a：授权中心各账号的额度列定宽对齐（.auth-quota-col 与分组卡片 container query） | 已迁移 |
 | `45155e9d` | v4.0.21 | feat(terminal): say on the card when a terminal is isolated | 5a 供应商与全局 UI | 5a3b：终端隔离判定 terminalIsIsolated（Claude 带地址与凭据 / 官方卡绑账号、agy Key 卡、Codex 带路由表的第三方卡），对话框显示隔离说明，卡片终端按钮提示带「环境隔离」 | 已迁移 |
 | `5f0fc253` | v4.0.21 | fix(apps): count Hermes's leftover hermes.cmd beside hermes.exe as one install | 1d 资源/设置/工具 | 1d：Hermes 的 hermes.exe 旁残留 hermes.cmd 按一处安装计（tool_management.rs） | 已迁移 |
@@ -1221,3 +1221,9 @@
   - 外壳：MCP 加入 `PAGES_WITH_OWN_HEADER`（外壳只留返回按钮）、移出窄屏第二行工具栏，去掉外壳页头里 MCP 的导入 / 添加按钮。
   - 删除被取代的 `AppCountBar`、`AppToggleGroup`、`ListItemRow`、`OmpDiscoveryNote`、`WindowedRows`、`lib/bulkToggleToast` 及其用例，三语删去只被旧列表使用的 8 个 `mcp.*` 键、补上游 `mcpPage` 连通性与 DSH 导入说明键。迁入上游 `UnifiedMcpPanel` 用例（26 项，状态点颜色断言改为 Web 类名）。`docs/web-global-resources-guide-zh.md` 同步 MCP 页说明。
   - 验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2603 项通过。无后端改动。未做浏览器验收。
+- 2026-11-07：供应商表单里的账号管理入口（fe08e10a 由部分迁移改为已迁移）。
+  - 按上游接上 `onManageAuthAccounts`：新建 `providers/AuthSettingsPanel`（全屏授权中心，定位到目标分组）；新增 / 编辑面板持有目标，返回 / Esc 时先关授权中心（面板栈只让最上层响应 Esc），对话框重开时清掉；授权中心盖在表单上、表单不卸载，草稿保留，里面的操作包在 `data-unsaved-ignore` 里不算表单的未保存改动。
+  - 入口：Claude 官方卡（`ClaudeAccountSelect`）、Codex 官方卡与 Claude / Claude Desktop 的 ChatGPT 托管账号（`CodexOAuthSection`）、Codex / Claude / Claude Desktop 的 Copilot（`CopilotAuthSection`）显示「添加或管理账号」；Kimi Code、DeepSeek 账号预设改为「管理账号」按钮（上游做法），表单单独渲染（没有对话框提供入口）时仍就地登录。xAI 选择组件上游也没有这个入口，保持一致。
+  - 类型：新增 `AuthCenterTarget`（托管账号之外加 `kimi_oauth`、`dsh_account`），授权中心可定位到 Kimi Code 与 DeepSeek Harness 两组。
+  - 用例：AddProviderDialog 增加授权中心开关与重开清空（返回先关授权中心、不离开表单）；EditProviderDialog 增加重开清空；Kimi / DSH 添加对话框改为经「管理账号」进入授权中心再登录。`docs/web-global-resources-guide-zh.md` 同步入口说明。
+  - 验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2606 项通过。本批无后端改动。未做浏览器验收。

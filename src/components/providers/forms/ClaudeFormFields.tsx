@@ -1,3 +1,4 @@
+import type { AuthCenterTarget } from "@/lib/api";
 import {
   ClaudeStackModelsField,
   type ClaudeStackModelRow,
@@ -104,6 +105,8 @@ interface ClaudeFormFieldsProps {
   selectedGitHubAccountId?: string | null;
   /** GitHub 账号选择回调（多账号支持） */
   onGitHubAccountSelect?: (accountId: string | null) => void;
+  /** 打开全屏授权中心并定位到某一组（新增 / 编辑对话框提供；不给就不显示「添加或管理账号」） */
+  onManageAuthAccounts?: (target: AuthCenterTarget) => void;
 
   // Codex OAuth
   isCodexOauthPreset?: boolean;
@@ -196,6 +199,7 @@ export function ClaudeFormFields({
   isCopilotAuthenticated,
   selectedGitHubAccountId,
   onGitHubAccountSelect,
+  onManageAuthAccounts,
   isCodexOauthPreset,
   selectedCodexAccountId,
   onCodexAccountSelect,
@@ -568,6 +572,11 @@ export function ClaudeFormFields({
           mode="select"
           selectedAccountId={selectedGitHubAccountId}
           onAccountSelect={onGitHubAccountSelect}
+          onManageAccounts={
+            onManageAuthAccounts
+              ? () => onManageAuthAccounts("github_copilot")
+              : undefined
+          }
         />
       )}
       {isCopilotPreset && (
@@ -581,6 +590,11 @@ export function ClaudeFormFields({
           mode="select"
           selectedAccountId={selectedCodexAccountId}
           onAccountSelect={onCodexAccountSelect}
+          onManageAccounts={
+            onManageAuthAccounts
+              ? () => onManageAuthAccounts("codex_oauth")
+              : undefined
+          }
         />
       )}
 

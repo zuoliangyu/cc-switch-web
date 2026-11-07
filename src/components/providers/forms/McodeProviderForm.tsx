@@ -91,6 +91,7 @@ export function McodeProviderForm({
   showButtons = true,
   onSubmittingChange,
   onAccountLoginChange,
+  onManageAuthAccounts,
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const presets = appId === "dsh" ? dshProviderPresets : mcodeProviderPresets;
@@ -232,12 +233,22 @@ export function McodeProviderForm({
         >
           {presetSelector}
           {showAccountLogin && (
-            // Web 没有从表单跳到授权中心的入口：直接在这里登录，登录后账号卡出现在列表最前面
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 {t("dsh.account.presetDescription")}
               </p>
-              <DshAccountLogin helpSide="bottom" />
+              {onManageAuthAccounts ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onManageAuthAccounts("dsh_account")}
+                >
+                  {t("dsh.account.manageAccounts")}
+                </Button>
+              ) : (
+                // 没有授权中心入口（单独渲染表单时）就地登录，登录后账号卡出现在列表最前面
+                <DshAccountLogin helpSide="bottom" />
+              )}
             </div>
           )}
         </form>

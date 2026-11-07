@@ -7,8 +7,9 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
+import { AuthSettingsPanel } from "@/components/providers/AuthSettingsPanel";
 import type { Provider, CustomEndpoint, UniversalProvider } from "@/types";
-import type { AppId } from "@/lib/api";
+import type { AppId, AuthCenterTarget } from "@/lib/api";
 import { universalProvidersApi } from "@/lib/api";
 import {
   ProviderForm,
@@ -120,7 +121,11 @@ export function AddProviderDialog({
   const [isFormSubmitting, setIsFormSubmitting] = useState(false);
   // Kimi 的官方账号预设在表单里直接登录，没有「添加」这一步，底栏只留取消
   const [accountLogin, setAccountLogin] = useState(false);
+  // 表单里「添加或管理账号」打开的授权中心（盖在表单上，关掉回到表单）
+  const [authSettingsTarget, setAuthSettingsTarget] =
+    useState<AuthCenterTarget | null>(null);
   useEffect(() => {
+    setAuthSettingsTarget(null);
     if (open) setAccountLogin(false);
   }, [open, appId]);
 
@@ -385,13 +390,17 @@ export function AddProviderDialog({
   }, [open, editorReady, appId]);
 
   const handlePanelClose = useCallback(() => {
+    if (authSettingsTarget) {
+      setAuthSettingsTarget(null);
+      return;
+    }
     // 第 2 步的返回回到选预设
     if (step === "form") {
       setStep("pick");
       return;
     }
     onOpenChange(false);
-  }, [onOpenChange, step]);
+  }, [authSettingsTarget, onOpenChange, step]);
 
   const footer =
     step === "form" ? (
@@ -470,6 +479,7 @@ export function AddProviderDialog({
                 onCancel={() => onOpenChange(false)}
                 onSubmittingChange={setIsFormSubmitting}
                 onAccountLoginChange={setAccountLogin}
+                onManageAuthAccounts={setAuthSettingsTarget}
                 showButtons={false}
                 onUniversalPresetSelect={
                   showUniversal
@@ -506,6 +516,12 @@ export function AddProviderDialog({
           </FullScreenPanel>
         )}
       </FullScreenPanel>
+      {/* 放在表单面板外面：授权中心里的开关、下拉（含渲染到 body 的选项）不沿组件树冒泡到
+          表单的未保存登记；两个面板都渲染到 body，后打开的在上，Esc 按打开顺序先关它 */}
+      <AuthSettingsPanel
+        target={authSettingsTarget}
+        onClose={() => setAuthSettingsTarget(null)}
+      />
     </>
   );
 }

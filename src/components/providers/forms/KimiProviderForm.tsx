@@ -119,6 +119,7 @@ export function KimiProviderForm({
   onSubmittingChange,
   onSubmitReadyChange,
   onAccountLoginChange,
+  onManageAuthAccounts,
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const [config, setConfig] = useState<KimiProviderConfig>(() =>
@@ -446,12 +447,22 @@ export function KimiProviderForm({
         >
           {presetSelector}
           {showAccountLogin && (
-            // Web 没有从表单跳到授权中心的入口：直接在这里登录，账号登录后即出现在 Kimi 列表
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 {t("kimi.oauth.description")}
               </p>
-              <KimiAccountLogin helpSide="bottom" />
+              {onManageAuthAccounts ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onManageAuthAccounts("kimi_oauth")}
+                >
+                  {t("kimi.oauth.manageAccounts")}
+                </Button>
+              ) : (
+                // 没有授权中心入口（单独渲染表单时）就地登录，账号登录后即出现在 Kimi 列表
+                <KimiAccountLogin helpSide="bottom" />
+              )}
             </div>
           )}
         </form>

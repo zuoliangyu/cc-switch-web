@@ -1,3 +1,4 @@
+import type { AuthCenterTarget } from "@/lib/api";
 import {
   useCallback,
   useEffect,
@@ -156,6 +157,8 @@ interface CodexFormFieldsProps {
   isCopilotAuthenticated?: boolean;
   selectedGitHubAccountId?: string | null;
   onGitHubAccountSelect?: (accountId: string | null) => void;
+  /** 打开全屏授权中心并定位到某一组（新增 / 编辑对话框提供；不给就不显示「添加或管理账号」） */
+  onManageAuthAccounts?: (target: AuthCenterTarget) => void;
   isXaiOauthPreset?: boolean;
   isXaiOauthAuthenticated?: boolean;
   selectedXaiAccountId?: string | null;
@@ -601,6 +604,7 @@ export function CodexFormFields({
   isCopilotAuthenticated,
   selectedGitHubAccountId,
   onGitHubAccountSelect,
+  onManageAuthAccounts,
   isXaiOauthPreset,
   isXaiOauthAuthenticated,
   selectedXaiAccountId,
@@ -1515,6 +1519,11 @@ export function CodexFormFields({
           mode="select"
           selectedAccountId={selectedGitHubAccountId}
           onAccountSelect={onGitHubAccountSelect}
+          onManageAccounts={
+            onManageAuthAccounts
+              ? () => onManageAuthAccounts("github_copilot")
+              : undefined
+          }
         />
       )}
 

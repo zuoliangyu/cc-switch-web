@@ -193,6 +193,31 @@ describe("Codex editor snapshots", () => {
       expect(apiMocks.getLiveProviderSettings).not.toHaveBeenCalled();
     },
   );
+  it("clears the nested auth panel before the dialog reopens", async () => {
+    apiMocks.getCodexEditorView.mockResolvedValue(snapshot);
+    const props = {
+      provider,
+      onOpenChange: vi.fn(),
+      onSubmit: vi.fn(),
+      appId: "codex" as const,
+    };
+    const { rerender } = render(<EditProviderDialog open {...props} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "manage-auth" }));
+    expect(screen.getByTestId("auth-settings-panel")).toHaveTextContent(
+      "codex_oauth",
+    );
+
+    rerender(<EditProviderDialog open={false} {...props} />);
+    rerender(<EditProviderDialog open {...props} />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("auth-settings-panel"),
+      ).not.toBeInTheDocument();
+    });
+    expect(props.onOpenChange).not.toHaveBeenCalled();
+  });
   it("keeps the list visible until the initial editor projection is ready", async () => {
     let resolveView!: (view: typeof snapshot) => void;
     apiMocks.getCodexEditorView.mockReturnValue(

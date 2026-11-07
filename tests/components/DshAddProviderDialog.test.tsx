@@ -31,6 +31,10 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 }));
 vi.mock("@/components/providers/forms/AgyOAuthSection", () => ({
   AgyOAuthSection: () => null,
+  useAgyAccountSupported: () => false,
+}));
+vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
+  ClaudeOfficialSection: () => null,
 }));
 vi.mock("@/components/providers/KimiAccountLogin", () => ({
   KimiAccountLogin: () => null,
@@ -81,8 +85,7 @@ describe("DeepSeek account entry in the DeepSeek Harness add-provider dialog", (
     vi.mocked(dshApi.accountStatus).mockResolvedValue(signedOut);
   });
 
-  // Web 没有从表单跳到授权中心的入口：DeepSeek 账号组直接显示在表单里
-  it("signs in inline without provider fields or an add footer", async () => {
+  it("directs official sign-in to Auth Center without provider fields or an add footer", async () => {
     const onSubmit = vi.fn();
     render(
       <QueryClientProvider client={createTestQueryClient()}>
@@ -96,13 +99,18 @@ describe("DeepSeek account entry in the DeepSeek Harness add-provider dialog", (
     );
 
     await selectAccountPreset();
-    const group = await screen.findByRole("region", {
-      name: "DeepSeek Harness",
+    const manage = await screen.findByRole("button", {
+      name: "dsh.account.manageAccounts",
     });
     expect(
       screen.queryByRole("button", { name: "common.add" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^API Key/)).not.toBeInTheDocument();
+
+    fireEvent.click(manage);
+    const group = await screen.findByRole("region", {
+      name: "DeepSeek Harness",
+    });
     expect(
       await within(group).findByRole("button", { name: "添加账号" }),
     ).toBeEnabled();

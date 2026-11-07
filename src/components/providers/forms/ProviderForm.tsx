@@ -26,7 +26,7 @@ import {
   buildLocalProxyRequestOverrides,
   formatRequestOverrideObject,
 } from "@/lib/requestOverrides";
-import { providersApi, type AppId } from "@/lib/api";
+import { providersApi, type AppId, type AuthCenterTarget } from "@/lib/api";
 import type {
   ProviderCategory,
   ProviderMeta,
@@ -286,6 +286,8 @@ export interface ProviderFormProps {
   onCancel: () => void;
   onUniversalPresetSelect?: (preset: UniversalProviderPreset) => void;
   onManageUniversalProviders?: () => void;
+  /** 账号选择处的「添加或管理账号」：打开全屏授权中心并定位到这一组（上游 fe08e10a） */
+  onManageAuthAccounts?: (target: AuthCenterTarget) => void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
   onSubmitReadyChange?: (isReady: boolean) => void;
   /** Native account login supplies its own actions instead of the provider-save footer. */
@@ -319,6 +321,7 @@ function ProviderFormFull({
   onCancel,
   onUniversalPresetSelect,
   onManageUniversalProviders,
+  onManageAuthAccounts,
   onSubmittingChange,
   initialData,
   showButtons = true,
@@ -2420,6 +2423,7 @@ function ProviderFormFull({
               isCodexOauthAuthenticated={isCodexOauthAuthenticated}
               selectedGitHubAccountId={selectedGitHubAccountId}
               onGitHubAccountSelect={setSelectedGitHubAccountId}
+              onManageAuthAccounts={onManageAuthAccounts}
               selectedCodexAccountId={selectedCodexAccountId}
               onCodexAccountSelect={setSelectedCodexAccountId}
               selectedXaiAccountId={selectedXaiAccountId}
@@ -2472,6 +2476,11 @@ function ProviderFormFull({
             <ClaudeAccountSelect
               value={selectedClaudeAccountId}
               onChange={setSelectedClaudeAccountId}
+              onManageAccounts={
+                onManageAuthAccounts
+                  ? () => onManageAuthAccounts("claude_official")
+                  : undefined
+              }
             />
           )}
 
@@ -2481,6 +2490,11 @@ function ProviderFormFull({
                 <CodexOAuthSection
                   selectedAccountId={selectedCodexAccountId}
                   onAccountSelect={setSelectedCodexAccountId}
+                  onManageAccounts={
+                    onManageAuthAccounts
+                      ? () => onManageAuthAccounts("codex_oauth")
+                      : undefined
+                  }
                 />
               )}
               <CodexFormFields
@@ -2492,6 +2506,7 @@ function ProviderFormFull({
                 isCopilotAuthenticated={isCopilotAuthenticated}
                 selectedGitHubAccountId={selectedGitHubAccountId}
                 onGitHubAccountSelect={setSelectedGitHubAccountId}
+                onManageAuthAccounts={onManageAuthAccounts}
                 isXaiOauthPreset={
                   presetProviderType === "xai_oauth" ||
                   initialData?.meta?.providerType === "xai_oauth"

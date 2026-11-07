@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { hasUnsavedChanges } from "@/lib/unsavedChanges";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import type { ProviderFormValues } from "@/components/providers/forms/ProviderForm";
 import { usePresetStep } from "@/components/providers/forms/presetStep";
@@ -37,10 +38,12 @@ let universalProps: {
 vi.mock("@/components/providers/forms/ProviderForm", () => ({
   ProviderForm: ({
     onSubmit,
+    onManageAuthAccounts,
     onUniversalPresetSelect,
     onManageUniversalProviders,
   }: {
     onSubmit: (values: ProviderFormValues) => void;
+    onManageAuthAccounts?: (target: "codex_oauth") => void;
     onUniversalPresetSelect?: unknown;
     onManageUniversalProviders?: unknown;
   }) => {
@@ -66,9 +69,27 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
               presetStep.host,
             )
           : null}
+        <button
+          type="button"
+          onClick={() => onManageAuthAccounts?.("codex_oauth")}
+        >
+          manage-auth
+        </button>
       </form>
     );
   },
+}));
+
+vi.mock("@/components/providers/AuthSettingsPanel", () => ({
+  AuthSettingsPanel: ({ target }: { target: string | null }) =>
+    target ? (
+      <div data-testid="auth-settings-panel">
+        {target}
+        <button type="button" role="switch" aria-checked="false">
+          auth-switch
+        </button>
+      </div>
+    ) : null,
 }));
 
 describe("AddProviderDialog", () => {
@@ -282,6 +303,57 @@ context_window = 500000
       screen.getByRole("button", { name: "provider.backToList" }),
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("表单里的「添加或管理账号」打开授权中心，返回先关它、不离开表单", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={onOpenChange}
+        appId="codex"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "manage-auth" }));
+    expect(screen.getByTestId("auth-settings-panel")).toHaveTextContent(
+      "codex_oauth",
+    );
+
+    // 授权中心渲染在表单面板外面，里面的开关不算表单的未保存改动
+    fireEvent.click(screen.getByRole("switch", { name: "auth-switch" }));
+    expect(hasUnsavedChanges()).toBe(false);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "providerPreset.backToPick" }),
+    );
+    expect(screen.queryByTestId("auth-settings-panel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "manage-auth" })).toBeVisible();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("clears the nested auth panel before the dialog reopens", async () => {
+    const props = {
+      onOpenChange: vi.fn(),
+      appId: "codex" as const,
+      onSubmit: vi.fn(),
+    };
+    const { rerender } = render(<AddProviderDialog open {...props} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "manage-auth" }));
+    expect(screen.getByTestId("auth-settings-panel")).toHaveTextContent(
+      "codex_oauth",
+    );
+
+    rerender(<AddProviderDialog open={false} {...props} />);
+    rerender(<AddProviderDialog open {...props} />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("auth-settings-panel"),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("只有能接收统一供应商的应用才拿到统一预设入口", async () => {

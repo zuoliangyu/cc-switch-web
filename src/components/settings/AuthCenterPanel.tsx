@@ -12,10 +12,10 @@ import {
 import { ClaudeOfficialSection } from "@/components/providers/forms/ClaudeOfficialSection";
 import { Switch } from "@/components/ui/switch";
 import { useAuthOpenBrowser, writeAuthOpenBrowser } from "@/lib/authLoginLink";
-import type { ManagedAuthProvider } from "@/lib/api";
+import type { AuthCenterTarget } from "@/lib/api";
 
 interface AuthCenterPanelProps {
-  authScrollTarget?: ManagedAuthProvider | null;
+  authScrollTarget?: AuthCenterTarget | null;
   /**
    * 页头没有「?」说明时（供应商表单里打开的全屏「授权中心」）在最上面写一行说明；
    * 侧栏「授权中心」页的页头已经有了，就不再显示。
@@ -89,6 +89,8 @@ export function AuthCenterPanel({
   const xaiOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const agyOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const claudeOfficialSectionRef = useRef<HTMLDivElement | null>(null);
+  const kimiOauthSectionRef = useRef<HTMLDivElement | null>(null);
+  const dshAccountSectionRef = useRef<HTMLDivElement | null>(null);
   const showAgy = useAgyAccountSupported();
 
   useEffect(() => {
@@ -97,15 +99,19 @@ export function AuthCenterPanel({
     if (!root) return;
 
     const sectionRef =
-      authScrollTarget === "claude_official"
-        ? claudeOfficialSectionRef
-        : authScrollTarget === "github_copilot"
-          ? copilotSectionRef
-          : authScrollTarget === "codex_oauth"
-            ? codexOauthSectionRef
-            : authScrollTarget === "agy_oauth"
-              ? agyOauthSectionRef
-              : xaiOauthSectionRef;
+      authScrollTarget === "kimi_oauth"
+        ? kimiOauthSectionRef
+        : authScrollTarget === "dsh_account"
+          ? dshAccountSectionRef
+          : authScrollTarget === "claude_official"
+            ? claudeOfficialSectionRef
+            : authScrollTarget === "github_copilot"
+              ? copilotSectionRef
+              : authScrollTarget === "codex_oauth"
+                ? codexOauthSectionRef
+                : authScrollTarget === "agy_oauth"
+                  ? agyOauthSectionRef
+                  : xaiOauthSectionRef;
 
     const target = sectionRef.current;
     const container = findScrollContainer(root);
@@ -199,11 +205,11 @@ export function AuthCenterPanel({
       <div ref={xaiOauthSectionRef}>
         <XaiOAuthSection mode="manage" helpSide="top" />
       </div>
-      <div>
+      <div ref={kimiOauthSectionRef}>
         <KimiAccountLogin helpSide="top" />
       </div>
       {/* DeepSeek 账号的登录回调也落在服务端本机：浏览器要和服务端在同一台机器上 */}
-      <div>
+      <div ref={dshAccountSectionRef}>
         <DshAccountLogin helpSide="top" />
       </div>
       {/* Antigravity 切号只实现了 macOS 钥匙串，登录回调也只监听服务端本机：服务端支持时才显示 */}

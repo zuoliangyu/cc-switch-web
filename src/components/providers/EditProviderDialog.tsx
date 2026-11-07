@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
+import { AuthSettingsPanel } from "@/components/providers/AuthSettingsPanel";
+import type { AuthCenterTarget } from "@/lib/api";
 import type { Provider } from "@/types";
 import {
   ProviderForm,
@@ -78,6 +80,19 @@ export function EditProviderDialog({
       appId !== "grokbuild") ||
     !!providerEditor.view;
   const [isFormSubmitting, setIsFormSubmitting] = useState(false);
+  // 表单里「添加或管理账号」打开的授权中心（盖在表单上，关掉回到表单）
+  const [authSettingsTarget, setAuthSettingsTarget] =
+    useState<AuthCenterTarget | null>(null);
+  useEffect(() => {
+    setAuthSettingsTarget(null);
+  }, [appId, open, provider?.id]);
+  const handlePanelClose = useCallback(() => {
+    if (authSettingsTarget) {
+      setAuthSettingsTarget(null);
+      return;
+    }
+    onOpenChange(false);
+  }, [authSettingsTarget, onOpenChange]);
 
   // 默认使用传入的 provider.settingsConfig，若当前编辑对象是"当前生效供应商"，则尝试读取实时配置替换初始值
   const [liveSettings, setLiveSettings] = useState<Record<
@@ -312,7 +327,7 @@ export function EditProviderDialog({
             ? t("provider.formSubtitleStack", { app: APP_DISPLAY_NAME[appId] })
             : undefined
         }
-        onClose={() => onOpenChange(false)}
+        onClose={handlePanelClose}
         footer={
           <Button
             type="submit"
@@ -361,10 +376,18 @@ export function EditProviderDialog({
               onSubmittingChange={setIsFormSubmitting}
               initialData={initialData}
               showButtons={false}
+              onManageAuthAccounts={setAuthSettingsTarget}
             />
           </>
         )}
+
       </FullScreenPanel>
+      {/* 放在表单面板外面：授权中心里的开关、下拉（含渲染到 body 的选项）不沿组件树冒泡到
+          表单的未保存登记；两个面板都渲染到 body，后打开的在上，Esc 按打开顺序先关它 */}
+      <AuthSettingsPanel
+        target={authSettingsTarget}
+        onClose={() => setAuthSettingsTarget(null)}
+      />
     </>
   );
 }

@@ -33,6 +33,13 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 }));
 vi.mock("@/components/providers/forms/AgyOAuthSection", () => ({
   AgyOAuthSection: () => null,
+  useAgyAccountSupported: () => false,
+}));
+vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
+  ClaudeOfficialSection: () => null,
+}));
+vi.mock("@/components/providers/DshAccount", () => ({
+  DshAccountLogin: () => null,
 }));
 vi.mock("@/components/JsonEditor", () => ({
   default: ({
@@ -106,10 +113,13 @@ async function selectAccount() {
     return button;
   });
   fireEvent.click(preset);
+  await screen.findByRole("button", { name: "kimi.oauth.manageAccounts" });
 }
-// Web 没有从表单跳到授权中心的入口：账号组直接显示在表单里
 async function openAuthCenter() {
   await selectAccount();
+  fireEvent.click(
+    screen.getByRole("button", { name: "kimi.oauth.manageAccounts" }),
+  );
   return screen.findByRole("region", { name: "Kimi Code" });
 }
 
@@ -121,7 +131,7 @@ describe("Kimi account entry in the add-provider dialog", () => {
     vi.mocked(kimiOAuthApi.useAccount).mockResolvedValue(undefined);
   });
 
-  it("signs in inline without API-key fields or an add footer", async () => {
+  it("directs official sign-in to Auth Center without API-key fields or an add footer", async () => {
     const { onSubmit } = setup();
     await selectAccount();
     expect(
@@ -131,6 +141,9 @@ describe("Kimi account entry in the add-provider dialog", () => {
       screen.queryByRole("button", { name: "kimi.oauth.signIn" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^API Key/)).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "kimi.oauth.manageAccounts" }),
+    );
     const group = await screen.findByRole("region", { name: "Kimi Code" });
     expect(
       within(group).getByRole("button", { name: "添加账号" }),

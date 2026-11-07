@@ -7,6 +7,12 @@ export type ManagedAuthProvider =
   | "agy_oauth"
   | "claude_official";
 
+/** 授权中心里可以定位到的分组：托管账号之外还有 Kimi Code 与 DeepSeek Harness 的登录 */
+export type AuthCenterTarget =
+  | ManagedAuthProvider
+  | "kimi_oauth"
+  | "dsh_account";
+
 /** ChatGPT 托管账号的登录方式：浏览器（PKCE，回调落在服务端本机 1455 端口）或设备码 */
 export type CodexLoginMethod = "browser" | "device_code";
 /**

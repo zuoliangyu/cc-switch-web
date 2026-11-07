@@ -1227,3 +1227,4 @@
   - 类型：新增 `AuthCenterTarget`（托管账号之外加 `kimi_oauth`、`dsh_account`），授权中心可定位到 Kimi Code 与 DeepSeek Harness 两组。
   - 用例：AddProviderDialog 增加授权中心开关与重开清空（返回先关授权中心、不离开表单）；EditProviderDialog 增加重开清空；Kimi / DSH 添加对话框改为经「管理账号」进入授权中心再登录。`docs/web-global-resources-guide-zh.md` 同步入口说明。
   - 验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2606 项通过。本批无后端改动。未做浏览器验收。
+- 2026-11-07：MCP 矩阵与账号入口复验。授权中心改为渲染在表单面板之外（两者都渲染到 body，后打开的在上，Esc 按打开顺序先关它），授权中心里的开关与下拉选项不再沿组件树冒泡到表单的未保存登记，补用例并确认旧放法下用例会失败。隔离后端浏览器复验：MCP 矩阵桌面与 390px（横向滚动、页头按钮换行）、Oh My Pi 列头弹层；Claude 的 ChatGPT 账号预设里「添加或管理 ChatGPT 账号」打开授权中心，Esc 先关它，表单草稿保留。验证：`tsc --noEmit` 通过；前端全量 Vitest 243 个文件 2606 项通过；无后端改动。三语 README 与 CHANGELOG 的测试数字改为 2606。

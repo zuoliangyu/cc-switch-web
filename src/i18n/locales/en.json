@@ -998,7 +998,7 @@
     "contextWindowInvalid": "Context window must be a positive integer",
     "rawConfig": "config.toml",
     "invalidToml": "Invalid config.toml: {{error}}",
-    "defaultModelPlaceholder": "e.g. grok-4.5",
+    "defaultModelPlaceholder": "e.g. grok-4.7",
     "defaultModelHint": "The model Grok Build requests by default; change it anytime without waiting for a preset update.",
     "reasoningEffortHint": "Enable when the upstream supports thinking-depth control such as low/high/max. Enabling this also turns on thinking mode and converts the request's reasoning effort into the upstream Chat parameter.",
     "routeOnlySettingsHint": "The two settings below only apply in routing mode."
@@ -2381,6 +2381,9 @@
       "byRequest": "Priced by request model",
       "edit": "Change",
       "tableTitle": "Model pricing · {{count}}",
+      "searchPlaceholder": "Search model ID or name",
+      "noSearchMatch": "No model matches \"{{query}}\"",
+      "addForQuery": "Add pricing for {{query}}",
       "costHelpTitle": "How cost is calculated",
       "costHelp": "Each request is priced by its model: fresh input, output, cache hits and cache writes are each multiplied by their unit price and added up.",
       "unit": "USD / 1M tokens",

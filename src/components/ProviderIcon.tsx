@@ -1,5 +1,12 @@
 import React, { useId, useMemo, useState } from "react";
-import { getIcon, hasIcon, getIconMetadata } from "@/icons/extracted";
+import {
+  getIcon,
+  hasIcon,
+  getIconMetadata,
+  isDarkInk,
+  adaptSvgToTheme,
+  isTileIcon,
+} from "@/icons/extracted";
 import { getLocalIconUrl, hasLocalIcon } from "@/icons/local";
 import { cn } from "@/lib/utils";
 import { isCustomIcon } from "@/utils/customIcon";
@@ -13,6 +20,25 @@ interface ProviderIconProps {
   showFallback?: boolean; // 是否显示 fallback
 }
 
+/**
+ * 提取供应商名称的首字母（最多 2 个字符）。
+ *
+ * 使用 `Array.from` 按 Unicode 码位安全切分，避免 emoji 或 UTF-16 代理对（surrogate pairs）
+ * 被截半产生无效字符（例如 `🤖 AI` 会被截出孤立的高代理项 `\ud83e`）。
+ */
+export function getProviderInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return Array.from(
+    words
+      .map((word) => Array.from(word)[0])
+      .filter(Boolean)
+      .join(""),
+  )
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
 export const ProviderIcon: React.FC<ProviderIconProps> = ({
   icon,
   name,
@@ -24,16 +50,22 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
   // 获取图标 SVG；渐变、裁剪等内部 id 按实例加后缀。同一图标在页面里出现多次时
   // url(#id) 会解析到第一份，第一份在隐藏的侧栏里时其余几份都画不出来
   const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const iconSvg = useMemo(() => {
+  const { svg: iconSvg, adapted } = useMemo(() => {
     if (icon && !isCustomIcon(icon) && hasIcon(icon)) {
-      const svg = getIcon(icon);
-      if (!svg.includes('id="')) return svg;
-      return svg
-        .replace(/\bid="([^"]+)"/g, `id="$1-${instanceId}"`)
-        .replace(/url\(#([^)]+)\)/g, `url(#$1-${instanceId})`)
-        .replace(/href="#([^"]+)"/g, `href="#$1-${instanceId}"`);
+      const raw = getIcon(icon);
+      // tile 图标自带底色，里面的深色是底，不能换成文字色
+      const svg = isTileIcon(icon) ? raw : adaptSvgToTheme(raw);
+      const adapted = svg !== raw;
+      if (!svg.includes('id="')) return { svg, adapted };
+      return {
+        svg: svg
+          .replace(/\bid="([^"]+)"/g, `id="$1-${instanceId}"`)
+          .replace(/url\(#([^)]+)\)/g, `url(#$1-${instanceId})`)
+          .replace(/href="#([^"]+)"/g, `href="#$1-${instanceId}"`),
+        adapted,
+      };
     }
-    return "";
+    return { svg: "", adapted: false };
   }, [icon, instanceId]);
 
   // 本地光栅图标，或用户上传的 PNG。自定义图标只认我们自己编码的 PNG data URI，
@@ -63,22 +95,24 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
     };
   }, [size]);
 
-  // 获取有效颜色：优先使用传入的有效 color，否则从元数据获取 defaultColor
+  // 获取有效颜色：优先使用传入的有效 color，否则从元数据获取 defaultColor。
+  // 近黑色（#000 / #111 这类）的颜色不写死，交给外层文字色，
+  // 否则深色模式下是黑底上的黑图标。已经把近黑笔画换成 currentColor 的图标
+  // 也不能再套品牌色，否则眼睛、嘴这些细节会和脸同色
   const effectiveColor = useMemo(() => {
-    // 只有当 color 是有效的非空字符串时才使用
+    if (adapted) return undefined;
+    let resolved: string | undefined;
     if (color && typeof color === "string" && color.trim() !== "") {
-      return color;
-    }
-    // 否则从元数据获取 defaultColor
-    if (icon) {
+      resolved = color;
+    } else if (icon) {
       const metadata = getIconMetadata(icon);
       // 只有当 defaultColor 不是 currentColor 时才使用
       if (metadata?.defaultColor && metadata.defaultColor !== "currentColor") {
-        return metadata.defaultColor;
+        resolved = metadata.defaultColor;
       }
     }
-    return undefined;
-  }, [color, icon]);
+    return isDarkInk(resolved) ? undefined : resolved;
+  }, [color, icon, adapted]);
 
   if (localIconUrl && localIconUrl !== brokenUrl) {
     return (
@@ -114,12 +148,7 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
 
   // Fallback：显示首字母
   if (showFallback) {
-    const initials = name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    const initials = getProviderInitials(name);
     const fallbackFontSize =
       typeof size === "number" ? `${Math.max(size * 0.5, 12)}px` : "0.5em";
     return (

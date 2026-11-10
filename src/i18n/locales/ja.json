@@ -998,7 +998,7 @@
     "contextWindowInvalid": "コンテキストウィンドウは正の整数で指定してください",
     "rawConfig": "config.toml",
     "invalidToml": "config.toml の形式が不正です: {{error}}",
-    "defaultModelPlaceholder": "例: grok-4.5",
+    "defaultModelPlaceholder": "例: grok-4.7",
     "defaultModelHint": "Grok Build がデフォルトでリクエストするモデルです。プリセットの更新を待たずにいつでも変更できます。",
     "reasoningEffortHint": "上流が low/high/max などの思考の深さの制御に対応している場合に有効化します。有効にすると思考モードも自動的にオンになり、リクエストの reasoning effort を上流の Chat パラメータに変換します。",
     "routeOnlySettingsHint": "以下の二つはルーティングモードでのみ有効です。"
@@ -2381,6 +2381,9 @@
       "byRequest": "リクエストモデルで計算",
       "edit": "変更",
       "tableTitle": "モデル料金 · {{count}}",
+      "searchPlaceholder": "モデル ID または名前で検索",
+      "noSearchMatch": "「{{query}}」に一致するモデルはありません",
+      "addForQuery": "{{query}} の料金を追加",
       "costHelpTitle": "コストの計算方法",
       "costHelp": "各リクエストのコストはモデル料金で計算します。新規入力・出力・キャッシュヒット・キャッシュ書き込みにそれぞれの単価を掛けて合計します。",
       "unit": "USD / 100 万トークン",

@@ -1,5 +1,5 @@
 import { TablePagination, useClientPagination } from "./TablePagination";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Table,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SearchField } from "@/components/ui/search-field";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,42 @@ interface AppConfig {
 
 type AppConfigState = Record<PricingApp, AppConfig>;
 
+const WORD_SEPARATOR = /[\s\-._/]/;
+
+/** text 在整串开头或任意一个词首（`-` `.` `_` `/` 空白之后）以 needle 开头。 */
+function startsAtWordBoundary(text: string, needle: string): boolean {
+  const value = text.toLowerCase();
+  for (let i = 0; i <= value.length - needle.length; i++) {
+    if (i > 0 && !WORD_SEPARATOR.test(value[i - 1])) continue;
+    if (value.startsWith(needle, i)) return true;
+  }
+  return false;
+}
+
+/**
+ * 定价表搜索：模型 ID 或显示名的整串开头或任意词首命中查询串（不区分大小写）。
+ * `sonnet` 能命中 `claude-sonnet-4-5`，`net` 不会；查询串里可以带分隔符，
+ * 如 `sonnet 4` 命中「Claude Sonnet 4.5」。
+ * 空查询原样返回；完全等于某个模型 ID 的那条排到最前，回车编辑的就是它。
+ */
+export function filterPricingByPrefix(
+  rows: readonly ModelPricing[],
+  query: string,
+): ModelPricing[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...rows];
+  const matches = rows.filter(
+    (row) =>
+      startsAtWordBoundary(row.modelId, needle) ||
+      startsAtWordBoundary(row.displayName ?? "", needle),
+  );
+  const exact = matches.findIndex(
+    (row) => row.modelId.toLowerCase() === needle,
+  );
+  if (exact > 0) matches.unshift(...matches.splice(exact, 1));
+  return matches;
+}
+
 export function PricingConfigPanel() {
   const { t } = useTranslation();
   const { data: pricing, isLoading, error } = useModelPricing();
@@ -51,6 +88,7 @@ export function PricingConfigPanel() {
   const [editingModel, setEditingModel] = useState<ModelPricing | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   // 三个应用的配置状态
   const [appConfigs, setAppConfigs] = useState<AppConfigState>({
@@ -159,10 +197,10 @@ export function PricingConfigPanel() {
     });
   };
 
-  const handleAddNew = () => {
+  const handleAddNew = (modelId = "") => {
     setIsAddingNew(true);
     setEditingModel({
-      modelId: "",
+      modelId,
       displayName: "",
       inputCostPerMillion: "0",
       outputCostPerMillion: "0",
@@ -171,7 +209,17 @@ export function PricingConfigPanel() {
     });
   };
 
-  const pagination = useClientPagination(pricing ?? []);
+  const handleEdit = (model: ModelPricing) => {
+    setIsAddingNew(false);
+    setEditingModel(model);
+  };
+
+  const trimmedQuery = query.trim();
+  const filteredRows = useMemo(
+    () => filterPricingByPrefix(pricing ?? [], query),
+    [pricing, query],
+  );
+  const pagination = useClientPagination(filteredRows, trimmedQuery);
 
   if (isLoading) {
     return (
@@ -296,10 +344,36 @@ export function PricingConfigPanel() {
       <div className="space-y-4">
         <ModelsDevAutoSyncPanel />
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-sm font-medium text-muted-foreground">
             {t("usage.modelPricingDesc")} {t("usage.perMillion")}
           </h4>
+          <div className="flex-1" />
+          <SearchField
+            value={query}
+            onValueChange={setQuery}
+            clearLabel={t("common.clear")}
+            placeholder={t("usage.pricing.searchPlaceholder")}
+            aria-label={t("usage.pricing.searchPlaceholder")}
+            autoComplete="off"
+            containerClassName="w-full sm:w-56"
+            className="h-8"
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              // WebKit 输入法回车确认候选词时 isComposing 已是 false，只剩 keyCode 229 可辨认
+              if (
+                event.nativeEvent.isComposing ||
+                event.nativeEvent.keyCode === 229
+              )
+                return;
+              event.preventDefault();
+              if (!trimmedQuery) return;
+              // 编辑页不接管焦点：先让搜索框失焦，免得后续按键还落在被挡住的搜索框上
+              event.currentTarget.blur();
+              if (filteredRows.length > 0) handleEdit(filteredRows[0]);
+              else handleAddNew(trimmedQuery);
+            }}
+          />
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -317,6 +391,21 @@ export function PricingConfigPanel() {
             <Alert>
               <AlertDescription>{t("usage.noPricingData")}</AlertDescription>
             </Alert>
+          ) : filteredRows.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-md bg-card/60 px-4 py-8 text-sm text-muted-foreground shadow-sm">
+              <span>
+                {t("usage.pricing.noSearchMatch", { query: trimmedQuery })}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleAddNew(trimmedQuery)}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                {t("usage.pricing.addForQuery", { query: trimmedQuery })}
+              </Button>
+            </div>
           ) : (
             <div className="rounded-md bg-card/60 shadow-sm">
               <Table>
@@ -357,10 +446,7 @@ export function PricingConfigPanel() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => {
-                              setIsAddingNew(false);
-                              setEditingModel(model);
-                            }}
+                            onClick={() => handleEdit(model)}
                             title={t("common.edit")}
                           >
                             <Pencil className="h-4 w-4" />

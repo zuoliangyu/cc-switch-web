@@ -35,7 +35,7 @@
 
 | 批次 | 范围 | 提交数 | 状态 |
 | --- | --- | --- | --- |
-| A | 预设/定价/图标 | 11 | 待迁移 |
+| A | 预设/定价/图标 | 11 | 已完成（11 已迁移） |
 | B | 代理 | 22 | 待迁移 |
 | C | 后端杂项 | 27 | 待迁移 |
 | D | Codex | 13 | 待迁移 |
@@ -46,9 +46,9 @@
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 0 |
+| 已迁移 | 11 |
 | 部分迁移 | 0 |
-| 待迁移 | 86 |
+| 待迁移 | 75 |
 | 不适用 | 22 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
@@ -63,7 +63,7 @@
 | 提交 | 版本 | 标题 | 批次 | 说明 | 处置 |
 | --- | --- | --- | --- | --- | --- |
 | `7afceec1` | v4.0.26 | ci(release): retry xcrun stapler when CloudKit drops the connection | — | 上游发布 CI；Web 维护自有工作流 | 不适用 |
-| `51fce968` | v4.0.26 | fix(presets): refresh stale default models (grok-4.7, kimi-k3.1-pro, qwen3.7-plus) (#9193) | A 预设/定价/图标 |  | 待迁移 |
+| `51fce968` | v4.0.26 | fix(presets): refresh stale default models (grok-4.7, kimi-k3.1-pro, qwen3.7-plus) (#9193) | A 预设/定价/图标 | A：Grok Build 默认模型改 grok-4.7（前端常量、三语占位文案、表单用例；Web 的 grok_config.rs 没有 DEFAULT_MODEL 常量，无需改），xAI / Kimi / 千问预设默认模型按上游刷新；上游 PiProviderForm 用例不迁（Web 的 Pi 表单是自写版本） | 已迁移 |
 | `b8fa4199` | v4.0.26 | fix(codex): follow up on sub-agent concurrency limit review notes (#9148) | D Codex |  | 待迁移 |
 | `e217bfcb` | v4.0.26 | perf(proxy): reduce forwarding allocations and failover database reads (#9161) | B 代理 |  | 待迁移 |
 | `e7878471` | v4.0.26 | fix(proxy): stop classifier retry loops (#9201) | B 代理 |  | 待迁移 |
@@ -81,7 +81,7 @@
 | `78971d56` | v4.0.26 | feat(copilot): show every capped quota and label premium as Credits | E 界面 |  | 待迁移 |
 | `cf3c86fe` | v4.0.26 | feat(auth): show each account's subscription plan in the Auth Center | E 界面 |  | 待迁移 |
 | `626f0226` | v4.0.26 | feat(providers): show the plan on official provider cards | E 界面 |  | 待迁移 |
-| `3cf79926` | v4.0.26 | fix(claude-desktop): point the official card at claude.com/download | A 预设/定价/图标 |  | 待迁移 |
+| `3cf79926` | v4.0.26 | fix(claude-desktop): point the official card at claude.com/download | A 预设/定价/图标 | A：Claude Desktop 官方卡地址改为 claude.com/download（预设、claude_desktop_config；上游 providers_seed 在 Web 对应 mode/controller 的官方卡补建） | 已迁移 |
 | `51b464bd` | v4.0.26 | feat(deeplink): import providers for Claude Desktop and the Pi-family apps | C 后端杂项 |  | 待迁移 |
 | `420646d8` | v4.0.26 | fix(dsh): let headless profiles read keys CC Switch stores | C 后端杂项 |  | 待迁移 |
 | `1c2ed066` | v4.0.26 | fix(apps): explain npm bin collisions instead of echoing --force | C 后端杂项 |  | 待迁移 |
@@ -97,26 +97,26 @@
 | `7a0718e1` | v4.0.26 | fix(ui): stop macOS from capitalizing text typed into raw inputs | E 界面 |  | 待迁移 |
 | `0f06fed2` | v4.0.26 | fix(ui): center dialogs without translate so they stay sharp on 1x displays | E 界面 |  | 待迁移 |
 | `81a9fa79` | v4.0.26 | feat(dsh): allow overriding the DeepSeek Harness home directory | C 后端杂项 |  | 待迁移 |
-| `a5100e0e` | v4.0.26 | chore(presets): switch TeamoRouter domain from .cn to .com | A 预设/定价/图标 |  | 待迁移 |
+| `a5100e0e` | v4.0.26 | chore(presets): switch TeamoRouter domain from .cn to .com | A 预设/定价/图标 | A：TeamoRouter 各应用预设域名 .cn → .com；迁入上游 teamorouterClaudePresets 用例；Web 三语 README 无 TeamoRouter，不改 | 已迁移 |
 | `44c7fa9b` | v4.0.26 | fix(proxy): fill outbound_model on the classifier-loop early return | B 代理 |  | 待迁移 |
 | `8c05b622` | v4.0.26 | chore(release): v4.0.26 | — | 上游版本号与 whats-new | 不适用 |
 | `f621d421` | v4.0.26 | docs(release): add v4.0.26 release notes | — | 上游发行说明 | 不适用 |
 | `4e13413f` | v4.0.26 | docs(manual): add the Japanese FAQ for Copilot replies showing twice | — | 上游用户手册 | 不适用 |
 | `1d6efa64` | v4.0.27 | fix(stream_check): don't follow redirects in reachability checks (#9253) | B 代理 |  | 待迁移 |
 | `cb2f2389` | v4.0.27 | fix(tray): stabilize Linux quick panel rendering in lightweight mode (#9233) | — | 系统托盘 | 不适用 |
-| `158b2ba3` | v4.0.27 | feat(pricing): add search to the model pricing table (#9205) | A 预设/定价/图标 |  | 待迁移 |
-| `e66441d8` | v4.0.27 | fix(ui): make provider icons follow the theme (#8438) | A 预设/定价/图标 |  | 待迁移 |
+| `158b2ba3` | v4.0.27 | feat(pricing): add search to the model pricing table (#9205) | A 预设/定价/图标 | A：定价表搜索（词首前缀匹配、精确 ID 置顶、回车编辑首条或按查询新增），按 Web 保留的定价页布局接入；编辑弹窗自动聚焦；三语文案；迁入上游用例（定价页先有计费默认表，取最后一张表） | 已迁移 |
+| `e66441d8` | v4.0.27 | fix(ui): make provider icons follow the theme (#8438) | A 预设/定价/图标 | A：近黑单墨色 SVG 换成 currentColor 跟随主题，近黑色不写死，位图 / 仍带近黑笔画的图标深色下垫白；Web 的位图图标在 @/icons/local，needsLightBacking 按它判断；卡片图标框去掉底色；迁入 themeAdapt 用例 | 已迁移 |
 | `89409412` | v4.0.27 | feat(terminal): open a Grok Build terminal for the current provider (#9234) | E 界面 |  | 待迁移 |
 | `6a3a7a44` | v4.0.27 | docs(tray): update outdated comments about the Linux panel background (#9279) | — | 系统托盘 | 不适用 |
 | `566448f0` | v4.0.27 | fix(ui): keep the window draggable and its controls clickable while a dialog is open (#9140) | — | 桌面窗口拖动与标题栏控件 | 不适用 |
 | `65106ce6` | v4.0.27 | feat(skills): tidy the installed Skills layout (#9210) | E 界面 |  | 待迁移 |
 | `4e7413c5` | v4.0.27 | feat(ui): add interface density and zoom settings (#9209) | E 界面 |  | 待迁移 |
-| `cd15a164` | v4.0.27 | feat(provider): add Genesis presets for compatible clients (#9269) | A 预设/定价/图标 |  | 待迁移 |
-| `b9fd5d99` | v4.0.27 | feat(presets): move Mistral AI to Large 4 and unhide it | A 预设/定价/图标 |  | 待迁移 |
-| `2360631f` | v4.0.27 | chore(presets): align Genesis presets with the inline preset style | A 预设/定价/图标 |  | 待迁移 |
+| `cd15a164` | v4.0.27 | feat(provider): add Genesis presets for compatible clients (#9269) | A 预设/定价/图标 | A：Genesis 预设（Claude / Codex / Pi）、图标（按 Web 布局登记在 @/icons/local）、取模型按地址补 ?type=chat；迁入上游预设与取模型用例（mock 改 Web 的 runtime client），Claude 表单用例按 Web 结构改写 | 已迁移 |
+| `b9fd5d99` | v4.0.27 | feat(presets): move Mistral AI to Large 4 and unhide it | A 预设/定价/图标 | A：Mistral AI 改为 Large 4 并取消隐藏；行数断言随 4ed410ad 换成上游最终的「不丢预设」用例 | 已迁移 |
+| `2360631f` | v4.0.27 | chore(presets): align Genesis presets with the inline preset style | A 预设/定价/图标 | A：Genesis 预设改为内联写法，删除 genesisModels.ts，取模型常量内联 | 已迁移 |
 | `deb6d5a1` | v4.0.27 | feat(sessions): search message text across sessions with a local FTS5 index (#7896) | F 会话全文搜索 |  | 待迁移 |
 | `c88d7cc1` | v4.0.27 | fix(tray): convert Linux panel coordinates across display and DPR scale (#9287) | — | 系统托盘 | 不适用 |
-| `c39db7df` | v4.0.27 | fix(ui): handle surrogate pairs and whitespace in provider icon initials fallback (#8139) | A 预设/定价/图标 |  | 待迁移 |
+| `c39db7df` | v4.0.27 | fix(ui): handle surrogate pairs and whitespace in provider icon initials fallback (#8139) | A 预设/定价/图标 | A：首字母兜底按码位切分、忽略多余空白（getProviderInitials），迁入上游用例 | 已迁移 |
 | `44e7d3ef` | v4.0.27 | fix(security): detect IPv4-compatible, SIIT, and NAT64 addresses in deep link risk classifier (#8127) | C 后端杂项 |  | 待迁移 |
 | `13af7fc9` | v4.0.27 | fix(codex): write an absolute model_catalog_json pointer for native config dirs | D Codex |  | 待迁移 |
 | `7d10364b` | v4.0.27 | test(codex): expect the absolute catalog pointer in tests added since the PR | D Codex |  | 待迁移 |
@@ -124,14 +124,14 @@
 | `747b1327` | v4.0.27 | fix(skill): migrate legacy cached hashes when upstream ships bytecode | C 后端杂项 |  | 待迁移 |
 | `66e4362b` | v4.0.27 | fix(skill): keep updated_at when migrating a legacy cached hash | C 后端杂项 |  | 待迁移 |
 | `05218b11` | v4.0.27 | fix(ui): disable WebView default context menu | — | WebView 默认右键菜单；Web 运行在普通浏览器里，保留浏览器菜单 | 不适用 |
-| `f3c88da9` | v4.0.27 | fix(pricing): give the models.dev fetch time to finish reading the body | A 预设/定价/图标 |  | 待迁移 |
+| `f3c88da9` | v4.0.27 | fix(pricing): give the models.dev fetch time to finish reading the body | A 预设/定价/图标 | A：models.dev 拉取给读取响应体留足时间 | 已迁移 |
 | `8dab4ed4` | v4.0.27 | fix(apps): stop treating Python's pi.exe as the Pi coding agent on Windows | C 后端杂项 |  | 待迁移 |
 | `a94226b1` | v4.0.27 | fix(skills): stop showing 0 skills for repos discovery actually read | C 后端杂项 |  | 待迁移 |
 | `92ca821e` | v4.0.27 | fix(config): write through symlinked live config files | C 后端杂项 |  | 待迁移 |
 | `883382f1` | v4.0.27 | fix(proxy): name the provider in circuit breaker and skip logs | B 代理 |  | 待迁移 |
 | `4a8f113f` | v4.0.27 | fix(proxy): return the half-open probe permit when an attempt is dropped | B 代理 |  | 待迁移 |
 | `07798d56` | v4.0.27 | fix(ci): keep the WSL2 suite on a stable test root and match UNC catalog pointers | — | 上游 WSL2 CI | 不适用 |
-| `4ed410ad` | v4.0.27 | feat(providers): add TokenPlus presets (#9296) | A 预设/定价/图标 |  | 待迁移 |
+| `4ed410ad` | v4.0.27 | feat(providers): add TokenPlus presets (#9296) | A 预设/定价/图标 | A：TokenPlus 预设（Claude / Desktop / Codex / Hermes / OpenClaw / OpenCode / Pi）、图标与 Pi 模型目录；推广文案按既定约束不迁（Web 不展示合作推广，TokenPlusDescription 用例不迁）；分组用例换成上游最终版 | 已迁移 |
 | `07a10b9c` | v4.0.27 | fix(dsh): name the profile file when its YAML cannot be parsed | C 后端杂项 |  | 待迁移 |
 | `f3c6774c` | v4.0.27 | test: skip WSL-share-only failures in the WSL2 lib suite | — | 上游 WSL2 CI | 不适用 |
 | `2aeb27d8` | v4.0.27 | chore(release): v4.0.27 | — | 上游版本号与 whats-new | 不适用 |
@@ -183,3 +183,11 @@
   - 用例：迁入上游 `usage_rollup`（语义归一、两个维度、剪枝前补价）、`sql_helpers`、logger（Grok Build 语义）、9 个补价用例、筛选用例（计价模型优先）与各会话导入断言（含 DSH 前缀模型补价）；新增 v21 → v22 迁移、建表兜底与桌面端快照迁入用例、请求详情计价模型用例。
   - 上一轮台账：6fa328f3、accc4489 由部分迁移改为已迁移（已迁移 562、部分迁移 15、不适用 181）；bc4d1a50、4bbdbcdd、a0dd3b39、258c367f 与 1c 的 11 项 Codex 会话导入更新说明。
   - 验证：`cargo test --locked --lib` 3665 项通过、6 项忽略（PATH 去掉 `~/.bun/bin` 后运行；带着它时 `omp_search_paths_include_the_bun_global_bin` 是已知的环境性失败）；`cargo check --locked --bin cc-switch-web` 通过、无警告；Docker（rust:1-bookworm）Linux `cargo check --locked --lib --tests` 通过，警告均在未改动的文件；改动的 Rust 文件 rustfmt 干净；`tsc --noEmit` 通过；前端全量 Vitest 244 个文件 2608 项通过（需排除 `.claude/**`：同时有别的代理的 worktree 在仓库内，默认匹配会把它的用例也跑进来、加载两份 React）。
+- 2026-11-10：完成批次 A（预设 / 定价 / 图标，11 项全部已迁移）。
+  - 方法：上游补丁按 `src-tauri/src` → `backend/src` 映射后逐个 `git apply --3way`；上游对象在本仓库里，预设文件与上游基线几乎一致，基本直接合入。冲突多为上下文冲突（CodexFormFields、ProviderCard、ProviderIcon、图标索引、定价页、若干用例），恢复 Web 版本后只手工补上真正的改动。
+  - 预设：Grok Build 默认 grok-4.7（三语占位文案同步）、xAI / Kimi / 千问默认模型刷新；TeamoRouter 改 .com；Mistral AI 改 Large 4 并取消隐藏；新增 Genesis（Claude / Codex / Pi）与 TokenPlus（Claude / Desktop / Codex / Hermes / OpenClaw / OpenCode / Pi）。Web 自有的排序注释保留，上游「赞助商预设」分段注释与 TokenPlus 推广文案不迁（Web 不展示合作推广）；文件顺序跟上游，Desktop 首项现为 TokenPlus（应用内按分组与名称展示）。Codex 预设与上游的剩余差异来自批次 D 的 `5f2f527d`（`disable_response_storage`）。
+  - Claude Desktop 官方卡地址改为 claude.com/download（预设、`claude_desktop_config.rs`、`mode/controller.rs` 的官方卡补建；Web 没有上游的 `providers_seed.rs`）。
+  - 定价：models.dev 拉取给读取响应体留足时间；定价表搜索（词首前缀匹配、精确 ID 置顶、回车编辑首条或按查询新增，三语文案）按 Web 保留的定价页布局接入，编辑弹窗自动聚焦。
+  - 图标：近黑单墨色 SVG 换成 currentColor 跟随主题、近黑颜色不写死，位图与仍带近黑笔画的图标深色下垫白；Web 的位图 / URL 图标登记在 `@/icons/local`，`needsLightBacking` 按它判断，Genesis、TokenPlus 图标也登记在那里；与 Web 已有的 SVG 内部 id 实例后缀一并保留。卡片图标框去掉底色。首字母兜底按码位切分、忽略多余空白。
+  - 用例：迁入上游 `themeAdapt`、`ProviderIcon`、`PricingConfigPanel`（Web 定价页先有计费默认表，取最后一张表）、`genesisProviderPresets`、`teamorouterClaudePresets`、三份 TokenPlus 预设用例与 `model-fetch` 的 Genesis 用例（mock 改为 Web 的 `@/lib/runtime/client/core`）；Claude 表单的 Genesis 取模型用例按 Web 结构改写；`presetGroups` 的 Claude 行数断言换成上游最终的「分组不丢预设」；Genesis 图标断言改查 `@/icons/local`；Web 自有目录用例（Desktop 130、Hermes 122）按新数据更新，Desktop 官方卡按名称查找。不迁：上游 `PiProviderForm` 用例（Web 的 Pi 表单是自写版本）、`TokenPlusDescription`（推广文案）。
+  - 验证：`tsc --noEmit` 通过；前端全量 Vitest 251 个文件 2664 项通过；后端 `cargo test --locked --lib` 3643 项通过、6 项忽略，1 项失败为已知的环境性用例 `omp_search_paths_include_the_bun_global_bin`（PATH 含 `~/.bun/bin`），去掉该 PATH 项后单独重跑通过；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 无输出；改动的前端文件 Prettier 检查通过。未做浏览器验收。

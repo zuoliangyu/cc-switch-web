@@ -3,8 +3,13 @@ import { claudeDesktopProviderPresets } from "@/config/claudeDesktopProviderPres
 
 describe("Claude Desktop provider presets", () => {
   it("includes the complete upstream catalog and managed OAuth presets", () => {
-    expect(claudeDesktopProviderPresets).toHaveLength(129);
-    expect(claudeDesktopProviderPresets[0]).toMatchObject({
+    expect(claudeDesktopProviderPresets).toHaveLength(130);
+    // 文件顺序跟上游（TokenPlus 排在官方卡前面）；应用内按分组与名称展示，不看文件顺序
+    expect(
+      claudeDesktopProviderPresets.find(
+        (preset) => preset.name === "Claude Desktop Official",
+      ),
+    ).toMatchObject({
       name: "Claude Desktop Official",
       category: "official",
       mode: "direct",

@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ComponentProps, PropsWithChildren } from "react";
 import { useForm } from "react-hook-form";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,6 +108,31 @@ describe("ClaudeFormFields role-based model mapping", () => {
   });
 
   // 上游 b3e5e32c / 4b57f7e1
+  // 上游 cd15a164：Genesis 预设地址按预设的 modelsUrl 只拉对话模型
+  it("Genesis 使用当前 Key 拉取可用对话模型", async () => {
+    renderForm({
+      category: "aggregator",
+      shouldShowApiKey: true,
+      apiKey: "test-key",
+      baseUrl: "https://token.moi.matrixorigin.cn",
+    });
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "providerForm.fetchModels" })[0],
+    );
+
+    await waitFor(() => {
+      expect(modelFetchApiMock.fetchModelsForConfig).toHaveBeenCalledWith(
+        "https://token.moi.matrixorigin.cn",
+        "test-key",
+        false,
+        "https://token.moi.matrixorigin.cn/v1/models?type=chat",
+        "",
+        { requestHeaders: undefined },
+      );
+    });
+  });
+
   it("一键设置会同时写入 Subagent 模型", () => {
     const onModelChange = vi.fn();
     renderForm({

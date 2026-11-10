@@ -314,7 +314,12 @@ export function ProviderCard({
           icon={provider.icon}
           name={provider.name}
           color={provider.iconColor}
-          className={cn("bg-background/80", presentation.dim && "opacity-60")}
+          className={cn(
+            // 不垫底色：单色 / 近黑笔画的图标跟随文字色（ProviderIcon 里换成 currentColor），
+            // 自带底色的 tile 图标铺满整框（上游 e66441d8）
+            "bg-transparent text-foreground",
+            presentation.dim && "opacity-60",
+          )}
         />
 
         <div className="min-w-0 flex-1 basis-40">

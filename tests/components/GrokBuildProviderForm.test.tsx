@@ -128,9 +128,9 @@ describe("GrokBuildProviderForm", () => {
     const settings = JSON.parse(submitted.settingsConfig);
     const config = parseToml(settings.config) as any;
 
-    expect(config.models.default).toBe("grok-4.5");
-    expect(config.model["grok-4.5"]).toEqual({
-      model: "grok-4.5",
+    expect(config.models.default).toBe("grok-4.7");
+    expect(config.model["grok-4.7"]).toEqual({
+      model: "grok-4.7",
       base_url: "https://relay.example.com/v1",
       name: "Example Relay",
       api_key: "secret-key",

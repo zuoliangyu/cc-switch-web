@@ -41,6 +41,8 @@ import icon_qiniu from "@/icons/extracted/qiniu.png";
 import icon_runtoken from "@/icons/extracted/runtoken.jpg";
 import icon_soruxgpt from "@/icons/extracted/soruxgpt.jpg";
 import icon_streamlake from "@/icons/extracted/streamlake.svg";
+import icon_genesis from "@/icons/extracted/genesis.svg";
+import icon_tokenplus from "@/icons/extracted/tokenplus.png";
 import icon_subrouter from "@/icons/extracted/subrouter.svg";
 import icon_sudocode from "@/icons/extracted/sudocode.png";
 import icon_sudocode_us from "@/icons/extracted/sudocode-us.png";
@@ -91,11 +93,13 @@ const localIcons: Record<string, string> = {
   runtoken: icon_runtoken,
   soruxgpt: icon_soruxgpt,
   streamlake: icon_streamlake,
+  genesis: icon_genesis,
   subrouter: icon_subrouter,
   sudocode: icon_sudocode,
   "sudocode-us": icon_sudocode_us,
   teamorouter: icon_teamorouter,
   tokenflux: icon_tokenflux,
+  tokenplus: icon_tokenplus,
 };
 
 export const localIconList = Object.keys(localIcons);

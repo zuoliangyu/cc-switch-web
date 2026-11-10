@@ -1,6 +1,9 @@
 // Auto-generated icon index
 // Do not edit manually
 
+import { hasLocalIcon } from "@/icons/local";
+import { getIconMetadata, isTileIcon } from "./metadata";
+
 export const icons: Record<string, string> = {
   together: `<svg height="1em" style="flex:none;line-height:1" viewBox="0 0 24 24" width="1em" xmlns="http://www.w3.org/2000/svg"><title>together.ai</title><path d="M23.197 4.503A6 6 0 0015 2.307a5.973 5.973 0 00-2.995 4.933l5.996.008v.515h-5.996c.039.937.298 1.87.8 2.74a6 6 0 1010.39-6z" fill="#EF2CC1"></path><path d="M.805 4.5A6 6 0 003 12.697a5.972 5.972 0 005.77.127L5.779 7.627l.446-.257 2.997 5.192A6 6 0 10.804 4.5z" fill="#CAAEF5"></path><path d="M12 23.894a6 6 0 005.999-6c0-2.13-1.1-3.996-2.775-5.06l-3.005 5.189-.444-.258 2.997-5.192A6 6 0 1012 23.894z" fill="#FC4C02"></path></svg>`,
   therouter: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" style="flex:none;line-height:1" viewBox="0 0 512 512" fill="none"><title>TheRouter</title><path d="M179.883 259.836H456.879M456.879 259.836L302.56 138.854M456.879 259.836L302.56 373.828" stroke="currentColor" stroke-width="43.0159" stroke-linecap="round"/><path d="M50 120L138.311 170.986C156.278 181.36 167.346 200.531 167.346 221.278V289.722C167.346 310.469 156.278 329.64 138.311 340.014L50 391" stroke="currentColor" stroke-width="20.9489" stroke-linecap="round"/></svg>`,
@@ -117,4 +120,84 @@ export function hasIcon(name: string): boolean {
   return name.toLowerCase() in icons;
 }
 
-export { getIconMetadata, isTileIcon } from "./metadata";
+function hexChannels(hex: string): [number, number, number] | null {
+  let h = hex.slice(1);
+  if (h.length === 3 || h.length === 4) {
+    h = [...h.slice(0, 3)].map((c) => c + c).join("");
+  }
+  if (!/^[0-9a-f]{6}([0-9a-f]{2})?$/.test(h)) return null;
+  const n = parseInt(h.slice(0, 6), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255];
+}
+
+/** 近黑色：三个通道都很低（深红、深蓝这类有色的深色不算）。 */
+export function isDarkInk(color?: string): boolean {
+  const c = color?.trim().toLowerCase();
+  if (!c) return false;
+  if (c === "black") return true;
+  if (!c.startsWith("#")) return false;
+  const rgb = hexChannels(c);
+  return rgb !== null && Math.max(...rgb) <= 0x50;
+}
+
+// <defs> / <clipPath> / <mask> 里的颜色是遮罩语义，不是画出来的墨色
+const MASK_BLOCK = /(<(defs|clipPath|mask)\b[\s\S]*?<\/\2>)/g;
+const PAINT_ATTR = /\b(fill|stroke)="([^"]+)"/g;
+
+function paintedColors(svg: string): string[] {
+  return [...svg.replace(MASK_BLOCK, "").matchAll(PAINT_ATTR)].map((m) => m[2]);
+}
+
+const adaptedSvgCache = new Map<string, string>();
+
+/**
+ * 深色模式适配：只处理单墨色图标——画出来的颜色全是近黑色时，换成 currentColor 跟随文字色。
+ * 多色图标里的近黑细节（Hugging Face 的眼睛、LionCC 的线稿）画在彩色形状上，
+ * 换成浅色文字色反而糊掉，保持原样。遮罩里的颜色不参与判断。
+ */
+export function adaptSvgToTheme(svg: string): string {
+  const cached = adaptedSvgCache.get(svg);
+  if (cached !== undefined) return cached;
+  const paints = paintedColors(svg).filter((c) => c.trim() !== "none");
+  const singleInk = paints.length > 0 && paints.every(isDarkInk);
+  const result = !singleInk
+    ? svg
+    : svg
+        .split(MASK_BLOCK)
+        // split 带捕获组：[正文, 整块, 标签名, 正文, ...]，丢掉标签名后只改正文
+        .filter((_, i) => i % 3 !== 2)
+        .map((part, i) =>
+          i % 2 === 0
+            ? part.replace(PAINT_ATTR, (whole, attr, color) =>
+                isDarkInk(color) ? `${attr}="currentColor"` : whole,
+              )
+            : part,
+        )
+        .join("");
+  adaptedSvgCache.set(svg, result);
+  return result;
+}
+
+const lightBackingCache = new Map<string, boolean>();
+
+/**
+ * 深色卡片上需要浅色衬底的图标（tile 图标自带底色，不算）：
+ * - 位图图标（Web 登记在 `@/icons/local`）：可能是透明底上的深色墨；
+ * - 适配后仍带近黑笔画的内联 SVG：多色图标的近黑部分不改色（如 OpenCode 的外框、
+ *   Cubence 的深灰顶面），直接画在透明底上，深色卡片上看不清。
+ * 全是近黑的单色图标已经换成 currentColor 跟随文字色，不需要。
+ */
+export function needsLightBacking(name?: string): boolean {
+  if (!name) return false;
+  const key = name.toLowerCase();
+  if (isTileIcon(key)) return false;
+  const svg = icons[key];
+  if (!svg) return hasLocalIcon(key);
+  const cached = lightBackingCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = paintedColors(adaptSvgToTheme(svg)).some(isDarkInk);
+  lightBackingCache.set(key, result);
+  return result;
+}
+
+export { getIconMetadata, isTileIcon };

@@ -1387,7 +1387,7 @@ fn ensure_desktop_official_row(state: &AppState) -> Result<(), AppError> {
         id.to_string(),
         "Claude Desktop Official".to_string(),
         serde_json::json!({ "env": {} }),
-        Some("https://claude.ai/download".to_string()),
+        Some("https://claude.com/download".to_string()),
     );
     official.category = Some("official".to_string());
     official.icon = Some("claude".to_string());

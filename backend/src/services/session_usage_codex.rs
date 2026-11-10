@@ -25,6 +25,7 @@ use crate::services::session_usage::{
     parse_timestamp_millis, update_sync_state, update_sync_state_on_conn, EstimatedTiming,
     SessionSyncResult,
 };
+use crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_TOTAL;
 use crate::services::usage_stats::{
     find_model_pricing, has_suspected_codex_session_duplicate, should_skip_session_insert, DedupKey,
 };
@@ -2506,8 +2507,9 @@ fn insert_codex_session_entry_on_conn(
             input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
             input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
             latency_ms, first_token_ms, status_code, error_message, session_id,
-            provider_type, is_streaming, cost_multiplier, created_at, data_source
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+            provider_type, is_streaming, cost_multiplier, created_at, data_source,
+            input_token_semantics
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
         )
         .and_then(|mut stmt| stmt.execute(rusqlite::params![
                 request_id,
@@ -2534,6 +2536,7 @@ fn insert_codex_session_entry_on_conn(
                 "1.0",               // cost_multiplier
                 created_at,
                 "codex_session",     // data_source
+                INPUT_TOKEN_SEMANTICS_TOTAL, // input_tokens 含缓存读写
             ]))
         .map_err(|e| AppError::Database(format!("插入 Codex 会话日志失败: {e}")))?;
 
@@ -2549,6 +2552,7 @@ fn find_codex_pricing(conn: &rusqlite::Connection, model_id: &str) -> Option<Mod
 mod tests {
     use super::*;
     use crate::services::session_usage::get_sync_state;
+    use crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_LEGACY;
     use tempfile::tempdir;
 
     const PARENT_ID: &str = "00000000-0000-4000-8000-000000000001";
@@ -3849,8 +3853,7 @@ mod tests {
         assert_eq!(sync_test_file(&db, &file, &[&file])?.imported, 1);
 
         let conn = lock_conn!(db.conn);
-        // Web 的 Codex 会话行 input_tokens 含缓存读写，新鲜输入按差值算
-        let fresh_input = "input_tokens - cache_read_tokens - cache_creation_tokens";
+        let fresh_input = crate::services::sql_helpers::fresh_input_sql("");
         let (fresh, cache_read, cache_creation, cache_creation_cost, total_cost): (
             i64,
             i64,
@@ -5987,20 +5990,26 @@ mod tests {
 
     #[test]
     fn test_codex_session_cache_writes_dedup_against_legacy_proxy_log() -> Result<(), AppError> {
-        // 早期代理不记录 Codex 缓存写入（写入量恒为 0）。Web 没有 input_token_semantics 列，
-        // 写入量为 0 的 Codex 代理行一律放行任意 session 写入量，重建时不会重复计费。
+        // v3.17.0 之前的代理不记录 Codex 缓存写入（legacy 语义行写入量恒为 0）。
+        // 重建时带写入量的 session 行仍是同一请求；新语义代理行保持精确匹配。
         let db = Database::memory()?;
         {
             let conn = lock_conn!(db.conn);
-            conn.execute(
-                "INSERT INTO proxy_request_logs (
-                    request_id, provider_id, app_type, model, request_model,
-                    input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                    total_cost_usd, latency_ms, status_code, created_at, data_source
-                ) VALUES ('legacy-proxy', 'openai', 'codex', 'gpt-5.6', 'gpt-5.6', 1000, 50, 300, 0,
-                          '0.01', 100, 200, 1000, 'proxy')",
-                [],
-            )?;
+            for (request_id, created_at, semantics) in [
+                ("legacy-proxy", 1000, INPUT_TOKEN_SEMANTICS_LEGACY),
+                ("total-proxy", 5000, INPUT_TOKEN_SEMANTICS_TOTAL),
+            ] {
+                conn.execute(
+                    "INSERT INTO proxy_request_logs (
+                        request_id, provider_id, app_type, model, request_model,
+                        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                        total_cost_usd, latency_ms, status_code, created_at, data_source,
+                        input_token_semantics
+                    ) VALUES (?1, 'openai', 'codex', 'gpt-5.6', 'gpt-5.6', 1000, 50, 300, 0,
+                              '0.01', 100, 200, ?2, 'proxy', ?3)",
+                    rusqlite::params![request_id, created_at, semantics],
+                )?;
+            }
         }
 
         let delta = DeltaTokens {
@@ -6010,16 +6019,21 @@ mod tests {
             output: 50,
         };
         let mut suspected_duplicates = 0;
-        let inserted = insert_codex_session_entry(
-            &db,
-            "session-legacy",
-            &delta,
-            "gpt-5.6",
-            Some("session-1"),
-            Some("1970-01-01T00:16:45Z"),
-            &mut suspected_duplicates,
-        )?;
-        assert!(!inserted);
+        for (request_id, timestamp, expect_inserted) in [
+            ("session-legacy", "1970-01-01T00:16:45Z", false),
+            ("session-total", "1970-01-01T01:23:25Z", true),
+        ] {
+            let inserted = insert_codex_session_entry(
+                &db,
+                request_id,
+                &delta,
+                "gpt-5.6",
+                Some("session-1"),
+                Some(timestamp),
+                &mut suspected_duplicates,
+            )?;
+            assert_eq!(inserted, expect_inserted, "{request_id}");
+        }
 
         Ok(())
     }

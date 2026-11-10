@@ -135,8 +135,14 @@ function useDetailSections(request: RequestLog) {
       mono: true,
     });
   }
-  // 上游在这里另列「计价模型」（路由接管按请求模型计价时与 model 不同）；
-  // Web 的请求日志没有 pricing_model 列，计价就按 model，不单列
+  if (request.pricingModel && request.pricingModel !== request.model) {
+    basic.push({
+      key: "pricingModel",
+      label: t("usage.pricingModel"),
+      value: request.pricingModel,
+      mono: true,
+    });
+  }
   if (isProxy) {
     basic.push({
       key: "source",

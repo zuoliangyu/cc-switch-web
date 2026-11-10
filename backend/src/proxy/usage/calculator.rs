@@ -60,7 +60,7 @@ impl CostCalculator {
             usage,
             pricing,
             cost_multiplier,
-            matches!(app_type, "codex" | "gemini" | "grokbuild"),
+            crate::services::sql_helpers::is_cache_inclusive_app(app_type),
         )
     }
 

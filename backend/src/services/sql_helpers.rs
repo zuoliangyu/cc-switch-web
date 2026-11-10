@@ -16,16 +16,27 @@
 /// style provider not added here) shows up loudly as a too-low cache hit
 /// rate, which is easier to catch than the silent over-deduction that
 /// would happen with the opposite default.
-/// 前端 `src/types/usage.ts` 的同名常量是跨语言的对应物，改动须同步；
-/// 计价侧（`proxy::usage::calculator`）用的是同一组应用。
+/// 单一语义集（SSOT）：写入侧（proxy logger/calculator）、回填侧
+/// （usage_stats 成本重算）与展示侧（本文件的 SQL 归一）都必须引用这里，
+/// 防止同一语义散落多处后新增 app 时漏改（grokbuild 曾在回填侧漏掉）。
+/// 前端 `src/types/usage.ts` 的同名常量是跨语言的对应物，改动须同步。
 pub(crate) const CACHE_INCLUSIVE_APP_TYPES: &[&str] = &["codex", "gemini", "grokbuild"];
+
+/// `app_type` 的存储 `input_tokens` 是否已包含 cache read/write。
+pub(crate) fn is_cache_inclusive_app(app_type: &str) -> bool {
+    CACHE_INCLUSIVE_APP_TYPES.contains(&app_type)
+}
+
+pub(crate) const INPUT_TOKEN_SEMANTICS_LEGACY: i64 = 0;
+pub(crate) const INPUT_TOKEN_SEMANTICS_TOTAL: i64 = 1;
+pub(crate) const INPUT_TOKEN_SEMANTICS_FRESH: i64 = 2;
 
 /// Build an SQL expression that returns the cache-normalized `input_tokens`
 /// for a single row in `proxy_request_logs` or `usage_daily_rollups`.
 ///
-/// Web 的两张表都没有上游的 `input_token_semantics` 列：这几个应用的明细行和
-/// 按天汇总都存原始输入（含缓存）。输入够减时把缓存读写都扣掉；只够扣缓存命中
-/// 时按早期代理（不记缓存写入）的口径只扣命中；连命中都不够扣的坏数据原样返回。
+/// Legacy rows subtract cache reads only. New total-inclusive rows subtract
+/// both cache reads and writes. Rollups normalized to fresh input are returned
+/// unchanged.
 ///
 /// Pass an empty string to reference the columns directly (no alias),
 /// or a table alias such as `"l"` to emit `l.input_tokens` style references.
@@ -42,10 +53,13 @@ pub fn fresh_input_sql(alias: &str) -> String {
         .join(", ");
     format!(
         "CASE \
+              WHEN {prefix}input_token_semantics = {INPUT_TOKEN_SEMANTICS_FRESH} THEN {prefix}input_tokens \
               WHEN {prefix}app_type IN ({app_type_list}) \
+                   AND {prefix}input_token_semantics = {INPUT_TOKEN_SEMANTICS_TOTAL} \
                    AND {prefix}input_tokens >= ({prefix}cache_read_tokens + {prefix}cache_creation_tokens) \
               THEN ({prefix}input_tokens - {prefix}cache_read_tokens - {prefix}cache_creation_tokens) \
               WHEN {prefix}app_type IN ({app_type_list}) \
+                   AND {prefix}input_token_semantics = {INPUT_TOKEN_SEMANTICS_LEGACY} \
                    AND {prefix}input_tokens >= {prefix}cache_read_tokens \
               THEN ({prefix}input_tokens - {prefix}cache_read_tokens) \
               ELSE {prefix}input_tokens END"
@@ -83,7 +97,8 @@ mod tests {
                 input_tokens INTEGER NOT NULL DEFAULT 0,
                 output_tokens INTEGER NOT NULL DEFAULT 0,
                 cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-                cache_creation_tokens INTEGER NOT NULL DEFAULT 0
+                cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                input_token_semantics INTEGER NOT NULL DEFAULT 0
             );",
         )
         .unwrap();
@@ -164,13 +179,14 @@ mod tests {
     }
 
     #[test]
-    fn fresh_input_subtracts_cache_write_when_input_covers_it() {
+    fn fresh_input_subtracts_cache_write_for_total_semantics() {
         let conn = setup_conn();
         conn.execute(
             "INSERT INTO proxy_request_logs (
-                request_id, app_type, input_tokens, cache_read_tokens, cache_creation_tokens
-             ) VALUES ('codex-total', 'codex', 1000, 300, 200)",
-            [],
+                request_id, app_type, input_tokens, cache_read_tokens,
+                cache_creation_tokens, input_token_semantics
+             ) VALUES ('codex-total', 'codex', 1000, 300, 200, ?1)",
+            [INPUT_TOKEN_SEMANTICS_TOTAL],
         )
         .unwrap();
         let expr = fresh_input_sql("l");
@@ -180,28 +196,34 @@ mod tests {
     }
 
     #[test]
-    fn fresh_input_falls_back_to_cache_read_only_for_legacy_rows() {
-        // 早期代理只把缓存命中算进输入：输入不够再扣写入时只扣命中
+    fn fresh_input_keeps_normalized_rollup_value() {
         let conn = setup_conn();
         conn.execute(
             "INSERT INTO proxy_request_logs (
-                request_id, app_type, input_tokens, cache_read_tokens, cache_creation_tokens
-             ) VALUES ('codex-legacy', 'codex', 400, 300, 200)",
-            [],
+                request_id, app_type, input_tokens, cache_read_tokens,
+                cache_creation_tokens, input_token_semantics
+             ) VALUES ('codex-fresh', 'codex', 500, 300, 200, ?1)",
+            [INPUT_TOKEN_SEMANTICS_FRESH],
         )
         .unwrap();
         let expr = fresh_input_sql("l");
         let sql = format!("SELECT {expr} FROM proxy_request_logs l");
         let value: i64 = conn.query_row(&sql, [], |row| row.get(0)).unwrap();
-        assert_eq!(value, 100);
+        assert_eq!(value, 500);
     }
 
     #[test]
     fn real_total_adds_cache_to_fresh_input() {
         let conn = setup_conn();
         conn.execute_batch(
-            "INSERT INTO proxy_request_logs VALUES ('claude-1', 'claude', 100, 200, 5000, 1000);
-             INSERT INTO proxy_request_logs VALUES ('codex-1', 'codex', 1000, 50, 600, 0);",
+            "INSERT INTO proxy_request_logs (
+                request_id, app_type, input_tokens, output_tokens,
+                cache_read_tokens, cache_creation_tokens
+             ) VALUES ('claude-1', 'claude', 100, 200, 5000, 1000);
+             INSERT INTO proxy_request_logs (
+                request_id, app_type, input_tokens, output_tokens,
+                cache_read_tokens, cache_creation_tokens
+             ) VALUES ('codex-1', 'codex', 1000, 50, 600, 0);",
         )
         .unwrap();
         let expr = real_total_tokens_sql("l");

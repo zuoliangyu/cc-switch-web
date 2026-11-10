@@ -39,6 +39,7 @@ use crate::proxy::usage::parser::TokenUsage;
 use crate::services::session_usage::{
     metadata_modified_nanos, update_byte_sync_state, SessionSyncResult,
 };
+use crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_TOTAL;
 use crate::services::usage_stats::{
     find_model_pricing, has_recent_grokbuild_proxy_activity, SESSION_PROXY_DEDUP_WINDOW_SECONDS,
 };
@@ -641,16 +642,17 @@ fn insert_grok_session_entry(
     // latency；created_at 保持首插值不动，避免行在沉降窗与 rollup 边界间漂移）。
     // WHERE 的 data_source 守卫是纵深防御：request_id 前缀命名空间已隔离，
     // 万一撞上非本导入器的行也绝不改写它。
-    // xAI 口径 inputTokens 含 cache read；Web 没有 input_token_semantics 列，
-    // 计费按 grokbuild 的缓存含入口径处理（见 CostCalculator::calculate_for_app）。
+    // input_token_semantics 显式写 TOTAL——xAI 口径 inputTokens 含 cache read，
+    // 与代理路径的 grokbuild 行（logger）保持同一语义，勿依赖列默认值。
     conn.execute(
         "INSERT INTO proxy_request_logs (
             request_id, provider_id, app_type, model, request_model,
             input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
             input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
             latency_ms, first_token_ms, status_code, error_message, session_id,
-            provider_type, is_streaming, cost_multiplier, created_at, data_source
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+            provider_type, is_streaming, cost_multiplier, created_at, data_source,
+            input_token_semantics
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
         ON CONFLICT(request_id) DO UPDATE SET
             model = excluded.model,
             input_tokens = excluded.input_tokens,
@@ -693,6 +695,7 @@ fn insert_grok_session_entry(
             "1.0",               // cost_multiplier
             created_at,
             "grok_session",      // data_source
+            INPUT_TOKEN_SEMANTICS_TOTAL,
         ],
     )
     .map_err(|e| AppError::Database(format!("插入 Grok Build 会话日志失败: {e}")))?;
@@ -765,20 +768,26 @@ mod tests {
         path
     }
 
-    /// (request_id, input, output, cache_read)
-    type GrokSessionRow = (String, u32, u32, u32);
+    /// (request_id, input, output, cache_read, input_token_semantics)
+    type GrokSessionRow = (String, u32, u32, u32, i64);
 
     fn query_rows(db: &Database) -> Result<Vec<GrokSessionRow>, AppError> {
         let conn = lock_conn!(db.conn);
         let mut stmt = conn
             .prepare(
-                "SELECT request_id, input_tokens, output_tokens, cache_read_tokens
+                "SELECT request_id, input_tokens, output_tokens, cache_read_tokens, input_token_semantics
                  FROM proxy_request_logs WHERE data_source = 'grok_session' ORDER BY request_id",
             )
             .expect("prepare");
         let rows = stmt
             .query_map([], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
             })
             .expect("query")
             .filter_map(Result::ok)
@@ -879,6 +888,8 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!((rows[0].1, rows[0].2, rows[0].3), (17294, 28, 11136));
         assert_eq!((rows[1].1, rows[1].2, rows[1].3), (17347, 56, 17280));
+        // 语义列显式为 TOTAL，与代理路径一致
+        assert!(rows.iter().all(|r| r.4 == INPUT_TOKEN_SEMANTICS_TOTAL));
 
         // 本地定价复算须与 CLI 自报 ticks 分毫不差（漂移告警在此阈值内静默）
         let costs = query_costs(&db)?;

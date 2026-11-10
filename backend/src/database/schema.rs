@@ -195,11 +195,17 @@ impl Database {
         // 10. Proxy Request Logs 表
         // data_source: 'proxy' = 由代理实时写入，'session_log'/'codex_session'/'gemini_session' = 离线 session 同步导入；
         // 7 维指纹去重依赖该字段区分两类来源（参见 services/usage_stats.rs::effective_usage_log_filter）。
+        // pricing_model = 写入时实际用于计价的模型名（pricing_model_source 解析结果），
+        // 回填按它重算；NULL 表示 v22 之前的历史行，'' 表示未计价的错误行。
+        // input_token_semantics：0 = 旧版/未知，1 = input 含缓存读写，2 = 新增输入
+        // （见 services/sql_helpers.rs）。
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_request_logs (
             request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL, model TEXT NOT NULL,
             request_model TEXT,
+            pricing_model TEXT,
             input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
             cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+            input_token_semantics INTEGER NOT NULL DEFAULT 0,
             input_cost_usd TEXT NOT NULL DEFAULT '0', output_cost_usd TEXT NOT NULL DEFAULT '0',
             cache_read_cost_usd TEXT NOT NULL DEFAULT '0', cache_creation_cost_usd TEXT NOT NULL DEFAULT '0',
             total_cost_usd TEXT NOT NULL DEFAULT '0', latency_ms INTEGER NOT NULL, first_token_ms INTEGER,
@@ -268,21 +274,27 @@ impl Database {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         // 17. Usage Daily Rollups 表 (日聚合统计)
+        // request_model 保留路由接管的「客户端别名 → 真实模型」映射维度，
+        // pricing_model 保留写入时的计价基准（request 计价模式下与 model 分叉），
+        // 否则明细被 prune 后接管计费不可审计；历史行迁移时填 ''（未知）。
         conn.execute(
             "CREATE TABLE IF NOT EXISTS usage_daily_rollups (
                 date TEXT NOT NULL,
                 app_type TEXT NOT NULL,
                 provider_id TEXT NOT NULL,
                 model TEXT NOT NULL,
+                request_model TEXT NOT NULL DEFAULT '',
+                pricing_model TEXT NOT NULL DEFAULT '',
                 request_count INTEGER NOT NULL DEFAULT 0,
                 success_count INTEGER NOT NULL DEFAULT 0,
                 input_tokens INTEGER NOT NULL DEFAULT 0,
                 output_tokens INTEGER NOT NULL DEFAULT 0,
                 cache_read_tokens INTEGER NOT NULL DEFAULT 0,
                 cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                input_token_semantics INTEGER NOT NULL DEFAULT 0,
                 total_cost_usd TEXT NOT NULL DEFAULT '0',
                 avg_latency_ms INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (date, app_type, provider_id, model)
+                PRIMARY KEY (date, app_type, provider_id, model, request_model, pricing_model)
             )",
             [],
         )
@@ -398,6 +410,8 @@ impl Database {
                 Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
             }
         }
+        // 同理补用量维度列（桌面端早已有，Web v22 才加）
+        Self::ensure_usage_dimension_columns(conn)?;
 
         // 确保 in_failover_queue 列存在（对于已存在的 v2 数据库）
         Self::add_column_if_missing(
@@ -553,6 +567,13 @@ impl Database {
                         );
                         Self::migrate_v20_to_v21(conn)?;
                         Self::set_user_version(conn, 21)?;
+                    }
+                    21 => {
+                        log::info!(
+                            "迁移数据库从 v21 到 v22（用量明细与日汇总添加计价模型与输入 Token 语义）"
+                        );
+                        Self::migrate_v21_to_v22(conn)?;
+                        Self::set_user_version(conn, 22)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1528,6 +1549,134 @@ impl Database {
         if Self::table_exists(conn, "session_log_sync")? {
             Self::add_column_if_missing(conn, "session_log_sync", "parser_state", "TEXT")?;
         }
+        Ok(())
+    }
+
+    /// v21 -> v22 迁移：`proxy_request_logs` 添加 `pricing_model`、`input_token_semantics`，
+    /// `usage_daily_rollups` 重建为带 `request_model`、`pricing_model` 维度并添加
+    /// `input_token_semantics`。对应上游 v10 -> v11 与 v12 -> v13。
+    fn migrate_v21_to_v22(conn: &Connection) -> Result<(), AppError> {
+        Self::ensure_usage_dimension_columns(conn)
+    }
+
+    /// 补齐用量明细与日汇总的计价模型、输入 Token 语义维度，幂等。
+    ///
+    /// 迁移链（v21 -> v22）和建表阶段的桌面端快照兜底共用：桌面端快照的版本号会被
+    /// 改写为 Web 当前版本、不再走迁移，但更早的桌面端库可能还没有这些列。
+    ///
+    /// 新加 `input_token_semantics` 列时按 Web 此前的展示口径回填已有行：Web 之前没有
+    /// 这一列，含缓存的应用（Codex / Gemini / Grok Build）输入够扣缓存读写时扣读写、
+    /// 否则只扣命中。所以「有缓存写入且输入够扣」的行标为 1（含缓存读写），其余保持
+    /// 0（旧版：只含命中），迁移前后统计结果一致。
+    pub(crate) fn ensure_usage_dimension_columns(conn: &Connection) -> Result<(), AppError> {
+        if Self::table_exists(conn, "proxy_request_logs")? {
+            Self::add_column_if_missing(conn, "proxy_request_logs", "pricing_model", "TEXT")?;
+            if Self::add_column_if_missing(
+                conn,
+                "proxy_request_logs",
+                "input_token_semantics",
+                "INTEGER NOT NULL DEFAULT 0",
+            )? {
+                Self::backfill_legacy_input_token_semantics(conn, "proxy_request_logs")?;
+            }
+        }
+
+        if !Self::table_exists(conn, "usage_daily_rollups")? {
+            return Ok(());
+        }
+
+        if !Self::has_column(conn, "usage_daily_rollups", "request_model")?
+            || !Self::has_column(conn, "usage_daily_rollups", "pricing_model")?
+        {
+            // SQLite 改主键必须重建表；历史行的 request_model / pricing_model 已不可知，填 ''
+            let had_semantics =
+                Self::has_column(conn, "usage_daily_rollups", "input_token_semantics")?;
+            let semantics_select = if had_semantics {
+                "input_token_semantics"
+            } else {
+                "0"
+            };
+            conn.execute_batch(&format!(
+                "ALTER TABLE usage_daily_rollups RENAME TO usage_daily_rollups_v21;
+                 CREATE TABLE usage_daily_rollups (
+                     date TEXT NOT NULL,
+                     app_type TEXT NOT NULL,
+                     provider_id TEXT NOT NULL,
+                     model TEXT NOT NULL,
+                     request_model TEXT NOT NULL DEFAULT '',
+                     pricing_model TEXT NOT NULL DEFAULT '',
+                     request_count INTEGER NOT NULL DEFAULT 0,
+                     success_count INTEGER NOT NULL DEFAULT 0,
+                     input_tokens INTEGER NOT NULL DEFAULT 0,
+                     output_tokens INTEGER NOT NULL DEFAULT 0,
+                     cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                     cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                     input_token_semantics INTEGER NOT NULL DEFAULT 0,
+                     total_cost_usd TEXT NOT NULL DEFAULT '0',
+                     avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+                     PRIMARY KEY (date, app_type, provider_id, model, request_model, pricing_model)
+                 );
+                 INSERT INTO usage_daily_rollups
+                     (date, app_type, provider_id, model, request_model, pricing_model,
+                      request_count, success_count, input_tokens, output_tokens,
+                      cache_read_tokens, cache_creation_tokens, input_token_semantics,
+                      total_cost_usd, avg_latency_ms)
+                 SELECT date, app_type, provider_id, model, '', '',
+                      request_count, success_count, input_tokens, output_tokens,
+                      cache_read_tokens, cache_creation_tokens, {semantics_select},
+                      total_cost_usd, avg_latency_ms
+                 FROM usage_daily_rollups_v21;
+                 DROP TABLE usage_daily_rollups_v21;"
+            ))
+            .map_err(|e| AppError::Database(format!("重建 usage_daily_rollups 失败: {e}")))?;
+            if !had_semantics {
+                Self::backfill_legacy_input_token_semantics(conn, "usage_daily_rollups")?;
+            }
+            log::info!("usage_daily_rollups 已保留 request_model/pricing_model 维度");
+        } else if Self::add_column_if_missing(
+            conn,
+            "usage_daily_rollups",
+            "input_token_semantics",
+            "INTEGER NOT NULL DEFAULT 0",
+        )? {
+            Self::backfill_legacy_input_token_semantics(conn, "usage_daily_rollups")?;
+        }
+        Ok(())
+    }
+
+    /// 见 [`Self::ensure_usage_dimension_columns`]：只在刚加上语义列时调用。
+    fn backfill_legacy_input_token_semantics(
+        conn: &Connection,
+        table: &str,
+    ) -> Result<(), AppError> {
+        for column in [
+            "app_type",
+            "input_tokens",
+            "cache_read_tokens",
+            "cache_creation_tokens",
+        ] {
+            if !Self::has_column(conn, table, column)? {
+                return Ok(());
+            }
+        }
+        let apps = crate::services::sql_helpers::CACHE_INCLUSIVE_APP_TYPES
+            .iter()
+            .map(|app| format!("'{app}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let total = crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_TOTAL;
+        let legacy = crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_LEGACY;
+        conn.execute(
+            &format!(
+                "UPDATE \"{table}\" SET input_token_semantics = {total}
+                 WHERE input_token_semantics = {legacy}
+                   AND app_type IN ({apps})
+                   AND cache_creation_tokens > 0
+                   AND input_tokens >= cache_read_tokens + cache_creation_tokens"
+            ),
+            [],
+        )
+        .map_err(|e| AppError::Database(format!("回填 {table} 输入 Token 语义失败: {e}")))?;
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 //! Exact counters exported by agy; absent models remain unknown (never use today's provider).
 //! Amounts are the matching Gemini API prices, like every other session-log import.
-use super::session_usage::SessionSyncResult;
+use super::{session_usage::SessionSyncResult, sql_helpers::INPUT_TOKEN_SEMANTICS_FRESH};
 use crate::proxy::usage::calculator::CostCalculator;
 use crate::proxy::usage::parser::TokenUsage;
 use crate::{
@@ -234,9 +234,9 @@ fn import_records(
             request_id,provider_id,app_type,model,request_model,input_tokens,output_tokens,
             cache_read_tokens,cache_creation_tokens,input_cost_usd,output_cost_usd,
             cache_read_cost_usd,cache_creation_cost_usd,total_cost_usd,latency_ms,first_token_ms,status_code,
-            session_id,provider_type,is_streaming,cost_multiplier,created_at,data_source
-        ) VALUES (?1,'_agy_session','agy',?2,?9,?3,?4,?5,?6,?10,?11,?12,?13,?14,?15,?16,200,?7,'agy_session',1,'1',?8,'agy_session')",
-        params![id, model, input, output, cache, write, session, agy::timestamp(row).unwrap_or(0)/1000, display, input_cost, output_cost, cache_cost, write_cost, total_cost, latency_ms, first_token_ms])?;
+            session_id,provider_type,is_streaming,cost_multiplier,created_at,data_source,input_token_semantics
+        ) VALUES (?1,'_agy_session','agy',?2,?10,?3,?4,?5,?6,?11,?12,?13,?14,?15,?16,?17,200,?7,'agy_session',1,'1',?8,'agy_session',?9)",
+        params![id, model, input, output, cache, write, session, agy::timestamp(row).unwrap_or(0)/1000, INPUT_TOKEN_SEMANTICS_FRESH, display, input_cost, output_cost, cache_cost, write_cost, total_cost, latency_ms, first_token_ms])?;
         imported += 1;
     }
     tx.commit()?;
@@ -554,21 +554,8 @@ mod tests {
             .collect::<Vec<Value>>();
         assert_eq!(import_records(&db, "fixture", &rows, None).unwrap(), (1, 0));
         let conn = db.conn.lock().unwrap();
-        // Web 尚无 input_token_semantics 列（随批次 5b 的 bc4d1a50 评估），只核对 token 数
-        let got = conn
-            .query_row(
-                "SELECT input_tokens,output_tokens,cache_read_tokens FROM proxy_request_logs",
-                [],
-                |r| {
-                    Ok((
-                        r.get::<_, i64>(0)?,
-                        r.get::<_, i64>(1)?,
-                        r.get::<_, i64>(2)?,
-                    ))
-                },
-            )
-            .unwrap();
-        assert_eq!(got, (80, 12, 20));
+        let got=conn.query_row("SELECT input_tokens,output_tokens,cache_read_tokens,input_token_semantics FROM proxy_request_logs",[],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,r.get::<_,i64>(3)?))).unwrap();
+        assert_eq!(got, (80, 12, 20, INPUT_TOKEN_SEMANTICS_FRESH));
     }
 
     #[test]

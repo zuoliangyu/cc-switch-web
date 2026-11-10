@@ -14,6 +14,8 @@ export interface RequestLog {
   appType: string;
   model: string;
   requestModel?: string;
+  /** 写入时实际用于计价的模型名；路由接管 + request 计价模式下可能与 model 不同 */
+  pricingModel?: string;
   costMultiplier: string;
   inputTokens: number;
   outputTokens: number;
@@ -166,8 +168,8 @@ export interface LogFilters {
  *
  * - `providerName` 按展示名精确匹配（与 Provider 统计列表同口径，含
  *   "Claude (Session)" 等会话占位名）；
- * - `model` 按「有效计价模型」精确匹配（Web 的请求日志没有 pricing_model 列，
- *   就是 model；与模型统计的分组口径一致）。
+ * - `model` 按「有效计价模型」匹配（pricing_model 优先、回落 model，
+ *   与模型统计的分组口径一致）。
  */
 export interface UsageScopeFilters {
   appType?: string;

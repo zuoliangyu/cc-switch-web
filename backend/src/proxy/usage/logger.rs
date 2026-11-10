@@ -4,7 +4,8 @@ use super::calculator::{CostBreakdown, CostCalculator, ModelPricing};
 use super::parser::TokenUsage;
 use crate::database::Database;
 use crate::error::AppError;
-use crate::services::usage_stats::find_model_pricing_row;
+use crate::services::sql_helpers::{INPUT_TOKEN_SEMANTICS_FRESH, INPUT_TOKEN_SEMANTICS_TOTAL};
+use crate::services::usage_stats::{find_model_pricing_row, is_placeholder_pricing_model};
 use rusqlite::OptionalExtension;
 use rust_decimal::Decimal;
 use sha2::{Digest, Sha256};
@@ -33,11 +34,12 @@ struct UsageSemantic {
     output_tokens: u32,
     cache_read_tokens: u32,
     cache_creation_tokens: u32,
+    input_token_semantics: i64,
     status_code: u16,
 }
 
 impl UsageSemantic {
-    fn from_log(log: &RequestLog) -> Self {
+    fn from_log(log: &RequestLog, input_token_semantics: i64) -> Self {
         Self {
             app_type: log.app_type.clone(),
             provider_id: log.provider_id.clone(),
@@ -46,6 +48,7 @@ impl UsageSemantic {
             output_tokens: log.usage.output_tokens,
             cache_read_tokens: log.usage.cache_read_tokens,
             cache_creation_tokens: log.usage.cache_creation_tokens,
+            input_token_semantics,
             status_code: log.status_code,
         }
     }
@@ -59,6 +62,7 @@ impl UsageSemantic {
             self.output_tokens,
             self.cache_read_tokens,
             self.cache_creation_tokens,
+            self.input_token_semantics,
             self.status_code,
         ))
         .expect("usage semantic tuple is serializable");
@@ -77,6 +81,11 @@ pub struct RequestLog {
     pub app_type: String,
     pub model: String,
     pub request_model: String,
+    /// 写入时实际用于计价的模型名（pricing_model_source 解析后的结果）。
+    /// 落库供回填使用：缺价行补价后必须按写入时的基准重算，而不是
+    /// 用 model/request_model 猜——路由接管下三者可能各不相同。
+    /// 错误行（未计价）为空字符串。
+    pub pricing_model: String,
     pub usage: TokenUsage,
     pub cost: Option<CostBreakdown>,
     pub latency_ms: u64,
@@ -133,7 +142,13 @@ impl<'a> UsageLogger<'a> {
                 0
             });
 
-        let semantic = UsageSemantic::from_log(log);
+        let input_token_semantics =
+            if crate::services::sql_helpers::is_cache_inclusive_app(log.app_type.as_str()) {
+                INPUT_TOKEN_SEMANTICS_TOTAL
+            } else {
+                INPUT_TOKEN_SEMANTICS_FRESH
+            };
+        let semantic = UsageSemantic::from_log(log, input_token_semantics);
         let existing = Self::load_existing_semantic(&conn, &log.request_id)?;
         let (request_id, replace_session_log, collision) = match existing {
             None => (log.request_id.clone(), false, false),
@@ -172,12 +187,13 @@ impl<'a> UsageLogger<'a> {
         let error_message = log.error_message.as_deref().map(bound_error_message);
         let sql = format!(
             "{insert_verb} INTO proxy_request_logs (
-                request_id, provider_id, app_type, model, request_model,
+                request_id, provider_id, app_type, model, request_model, pricing_model,
                 input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                input_token_semantics,
                 input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
                 latency_ms, first_token_ms, status_code, error_message, session_id,
                 provider_type, is_streaming, cost_multiplier, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)"
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)"
         );
 
         conn.execute(
@@ -188,10 +204,12 @@ impl<'a> UsageLogger<'a> {
                 log.app_type,
                 log.model,
                 log.request_model,
+                log.pricing_model,
                 log.usage.input_tokens,
                 log.usage.output_tokens,
                 log.usage.cache_read_tokens,
                 log.usage.cache_creation_tokens,
+                input_token_semantics,
                 input_cost,
                 output_cost,
                 cache_read_cost,
@@ -225,7 +243,7 @@ impl<'a> UsageLogger<'a> {
         request_id: &str,
     ) -> Result<Option<(Option<String>, UsageSemantic)>, AppError> {
         conn.query_row(
-            "SELECT data_source, app_type, provider_id, model,
+            "SELECT data_source, app_type, provider_id, model, input_token_semantics,
                     input_tokens, output_tokens, cache_read_tokens,
                     cache_creation_tokens, status_code
              FROM proxy_request_logs WHERE request_id = ?1",
@@ -237,11 +255,12 @@ impl<'a> UsageLogger<'a> {
                         app_type: row.get(1)?,
                         provider_id: row.get(2)?,
                         model: row.get(3)?,
-                        input_tokens: row.get::<_, i64>(4)? as u32,
-                        output_tokens: row.get::<_, i64>(5)? as u32,
-                        cache_read_tokens: row.get::<_, i64>(6)? as u32,
-                        cache_creation_tokens: row.get::<_, i64>(7)? as u32,
-                        status_code: row.get::<_, i64>(8)? as u16,
+                        input_token_semantics: row.get(4)?,
+                        input_tokens: row.get::<_, i64>(5)? as u32,
+                        output_tokens: row.get::<_, i64>(6)? as u32,
+                        cache_read_tokens: row.get::<_, i64>(7)? as u32,
+                        cache_creation_tokens: row.get::<_, i64>(8)? as u32,
+                        status_code: row.get::<_, i64>(9)? as u16,
                     },
                 ))
             },
@@ -271,6 +290,8 @@ impl<'a> UsageLogger<'a> {
             app_type,
             model,
             request_model,
+            // 错误行未经过计价，留空（回填的 has_usage 闸门也不会碰全 0 行）
+            pricing_model: String::new(),
             usage: TokenUsage::default(),
             cost: None,
             latency_ms,
@@ -310,6 +331,8 @@ impl<'a> UsageLogger<'a> {
             app_type,
             model,
             request_model,
+            // 错误行未经过计价，留空（回填的 has_usage 闸门也不会碰全 0 行）
+            pricing_model: String::new(),
             usage: TokenUsage::default(),
             cost: None,
             latency_ms,
@@ -341,6 +364,13 @@ impl<'a> UsageLogger<'a> {
 
     /// 只读取应用级计费模型来源；旧供应商倍率和来源字段仅保留兼容。
     pub async fn resolve_pricing_config(&self, app_type: &str) -> String {
+        // Claude Desktop 网关没有独立的全局计费配置（proxy_config 不含
+        // claude-desktop 行），继承 claude 的设置。
+        let app_type = if app_type == "claude-desktop" {
+            "claude"
+        } else {
+            app_type
+        };
         match self.db.get_pricing_model_source(app_type).await {
             Ok(source) if matches!(source.as_str(), "request" | "response") => source,
             _ => "response".to_string(),
@@ -366,8 +396,12 @@ impl<'a> UsageLogger<'a> {
         is_streaming: bool,
     ) -> Result<(), AppError> {
         let pricing = self.get_model_pricing(&pricing_model)?;
+        let has_usage = usage.input_tokens > 0
+            || usage.output_tokens > 0
+            || usage.cache_read_tokens > 0
+            || usage.cache_creation_tokens > 0;
 
-        if pricing.is_none() {
+        if pricing.is_none() && has_usage && !is_placeholder_pricing_model(&pricing_model) {
             log::warn!("[USG-002] 模型定价未找到，成本将记录为 0: {pricing_model}");
         }
 
@@ -384,6 +418,7 @@ impl<'a> UsageLogger<'a> {
             app_type,
             model,
             request_model,
+            pricing_model,
             usage,
             cost,
             latency_ms,
@@ -457,6 +492,7 @@ mod tests {
             app_type: "codex".to_string(),
             model: "gpt-5.6".to_string(),
             request_model: "gpt-5.6".to_string(),
+            pricing_model: "gpt-5.6".to_string(),
             usage: TokenUsage {
                 input_tokens,
                 output_tokens: 5,
@@ -523,15 +559,18 @@ mod tests {
 
         // 验证记录已插入
         let conn = crate::database::lock_conn!(db.conn);
-        let (count, request_model): (i64, String) = conn
+        let (count, request_model, pricing_model, semantics): (i64, String, String, i64) = conn
             .query_row(
-                "SELECT COUNT(*), request_model FROM proxy_request_logs WHERE request_id = 'req-123'",
+                "SELECT COUNT(*), request_model, pricing_model, input_token_semantics
+                 FROM proxy_request_logs WHERE request_id = 'req-123'",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .unwrap();
         assert_eq!(count, 1);
         assert_eq!(request_model, "req-model");
+        assert_eq!(pricing_model, "test-model");
+        assert_eq!(semantics, INPUT_TOKEN_SEMANTICS_FRESH);
         Ok(())
     }
 
@@ -645,6 +684,41 @@ mod tests {
         )?;
         assert_eq!(replaced, 10);
         assert_eq!(codex_rows, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn grokbuild_logs_total_input_token_semantics() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let logger = UsageLogger::new(&db);
+        let log = RequestLog {
+            request_id: "grok-semantics".to_string(),
+            provider_id: "grok-provider".to_string(),
+            app_type: "grokbuild".to_string(),
+            model: "grok-4.5".to_string(),
+            request_model: "grok-4.5".to_string(),
+            pricing_model: String::new(),
+            usage: TokenUsage::default(),
+            cost: None,
+            latency_ms: 1,
+            first_token_ms: None,
+            status_code: 200,
+            error_message: None,
+            session_id: None,
+            provider_type: Some("grokbuild".to_string()),
+            is_streaming: false,
+            cost_multiplier: "1".to_string(),
+        };
+
+        logger.log_request(&log)?;
+
+        let conn = crate::database::lock_conn!(db.conn);
+        let semantics: i64 = conn.query_row(
+            "SELECT input_token_semantics FROM proxy_request_logs WHERE request_id = 'grok-semantics'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(semantics, INPUT_TOKEN_SEMANTICS_TOTAL);
         Ok(())
     }
 }

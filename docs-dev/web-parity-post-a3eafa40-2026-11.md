@@ -55,6 +55,7 @@
 
 ## 4. 决策记录
 
+- 2026-11-10：用户决定在本轮批次之前先补两块上一轮因缺底层框架而排除或部分迁移的能力：框架 1，请求日志与日汇总的 `pricing_model`、`input_token_semantics` 列及其写入、计价、统计与各会话用量导入；框架 2，服务端事件推送（替代 `provider-switched`、`usage-log-recorded` 等事件的轮询）。补完后回头把上一轮因此部分迁移或不适用的项改判。
 - 沿用前一轮：不新增语言（只 zh/en/ja）；“打开目录”类功能改为显示 / 复制路径；预设按上游分组、组内 A–Z，不展示赞助 / 合作标识与置顶；主题保留 Web 的 CSS 变量；故障转移队列与卡片不做拖动排名。
 
 ## 5. 提交矩阵
@@ -173,3 +174,12 @@
 ## 6. 执行记录
 
 - 2026-11-10：`git fetch upstream --no-tags` 取到 `5e9812e0`，建立本台账；108 项初判为待迁移 86、不适用 22。
+- 2026-11-10：完成框架 1（请求日志与日汇总的计价模型、输入 Token 语义维度）。
+  - 数据库：Web 版本链 v21 → v22（对应上游 v10 → v11、v12 → v13）：`proxy_request_logs` 增加 `pricing_model`（NULL = 历史行，'' = 未计价的错误行）与 `input_token_semantics`（0 旧版 / 1 含缓存读写 / 2 新增输入）；`usage_daily_rollups` 重建为主键带 `request_model`、`pricing_model`，并增加 `input_token_semantics`。迁移与建表阶段的桌面端快照兜底共用 `ensure_usage_dimension_columns`（快照版本号会被改写为 Web 当前版本、不再走迁移）。SQL 备份导入与恢复先建表再迁移，按列名恢复，新列随之保留。
+  - Web 差异：上游 v13 起旧行一律记为 0（只扣命中）；Web 此前没有语义列，展示用的是「输入够扣读写就扣读写、否则只扣命中」的启发式。迁移时含缓存的应用（Codex / Gemini / Grok Build）中有缓存写入且输入够扣的旧行回填为 1，其余保持 0，迁移前后统计结果一致（有用例）。
+  - 写入：代理用量按 `pricing_model_source` 解析出的计价模型写 `pricing_model`，按应用写语义（含缓存的应用为 1，其余为 2）；Claude Desktop 网关的计费模式继承 Claude；只在有用量、计价模型不是占位名时才告警缺价。会话导入（Codex、Grok Build、Kimi、Antigravity、Pi / Oh My Pi、MiniMax Code、DeepSeek Harness）取上游最终版本（Grok Build 保留 Web 的符号链接用例跳过条件），DSH 前缀模型的裸名写进 `pricing_model`。`CostCalculator` 改用 `sql_helpers::is_cache_inclusive_app`。
+  - 汇总与统计：`usage_rollup` 取上游实现（按本地零点对齐的截止时间、汇总前先尝试补价、日汇总保留请求模型与计价模型维度并以新增输入入库）；`sql_helpers` 取上游按语义的归一；`usage_stats` 的有效计价模型改为 `pricing_model` 优先，Codex 跨源去重只对旧语义、写入量为 0 的代理行放行，补价改为上游实现（按写入时的计价模型重算、单个事务、精准补价按候选名匹配）。供应商统计仍按显示名 A–Z。上游归档后的 `usage-log-recorded` 通知属框架 2，暂未接入。
+  - 前端：请求详情在计价模型与模型不同时单列「计价模型」（文案已有），`RequestLog` 类型加 `pricingModel`。`docs/web-global-resources-guide-zh.md` 同步 Token 口径与模型筛选说明。
+  - 用例：迁入上游 `usage_rollup`（语义归一、两个维度、剪枝前补价）、`sql_helpers`、logger（Grok Build 语义）、9 个补价用例、筛选用例（计价模型优先）与各会话导入断言（含 DSH 前缀模型补价）；新增 v21 → v22 迁移、建表兜底与桌面端快照迁入用例、请求详情计价模型用例。
+  - 上一轮台账：6fa328f3、accc4489 由部分迁移改为已迁移（已迁移 562、部分迁移 15、不适用 181）；bc4d1a50、4bbdbcdd、a0dd3b39、258c367f 与 1c 的 11 项 Codex 会话导入更新说明。
+  - 验证：`cargo test --locked --lib` 3665 项通过、6 项忽略（PATH 去掉 `~/.bun/bin` 后运行；带着它时 `omp_search_paths_include_the_bun_global_bin` 是已知的环境性失败）；`cargo check --locked --bin cc-switch-web` 通过、无警告；Docker（rust:1-bookworm）Linux `cargo check --locked --lib --tests` 通过，警告均在未改动的文件；改动的 Rust 文件 rustfmt 干净；`tsc --noEmit` 通过；前端全量 Vitest 244 个文件 2608 项通过（需排除 `.claude/**`：同时有别的代理的 worktree 在仓库内，默认匹配会把它的用例也跑进来、加载两份 React）。

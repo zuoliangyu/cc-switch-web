@@ -1,5 +1,4 @@
-//! Import Kimi Code's committed request usage. Tokens are already normalized to fresh input
-//! (Web 尚无 input_token_semantics 列，随批次 5b 的 bc4d1a50 评估).
+//! Import Kimi Code's committed request usage. Tokens are already normalized to fresh input.
 use crate::database::{lock_conn, Database};
 use crate::error::AppError;
 use crate::kimi_session::{timestamp_ms, RequestIndex, RequestInfo};
@@ -8,6 +7,7 @@ use crate::services::{
     session_usage::{
         load_sync_cursors, metadata_modified_nanos, update_sync_state_on_conn, SessionSyncResult,
     },
+    sql_helpers::INPUT_TOKEN_SEMANTICS_FRESH,
     usage_stats::find_model_pricing,
 };
 use rusqlite::OptionalExtension;
@@ -210,10 +210,10 @@ fn sync_file(
         tx.execute("INSERT OR IGNORE INTO proxy_request_logs (
             request_id, provider_id, app_type, model, request_model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
             input_cost_usd, output_cost_usd, cache_read_cost_usd, cache_creation_cost_usd, total_cost_usd,
-            latency_ms, first_token_ms, status_code, session_id, provider_type, is_streaming, cost_multiplier, created_at, data_source
-        ) VALUES (?1, '_kimi_session', 'kimi', ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?14, ?15, 200, ?12, 'kimi_session', 1, '1', ?13, 'kimi_session')",
+            latency_ms, first_token_ms, status_code, session_id, provider_type, is_streaming, cost_multiplier, created_at, data_source, input_token_semantics
+        ) VALUES (?1, '_kimi_session', 'kimi', ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?15, ?16, 200, ?12, 'kimi_session', 1, '1', ?13, 'kimi_session', ?14)",
             rusqlite::params![request, model, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens, usage.cache_creation_tokens,
-                amounts[0], amounts[1], amounts[2], amounts[3], amounts[4], session, started.map_or(created, |start| completed_ms(start, latency, created))/1000, latency, first_token])?;
+                amounts[0], amounts[1], amounts[2], amounts[3], amounts[4], session, started.map_or(created, |start| completed_ms(start, latency, created))/1000, INPUT_TOKEN_SEMANTICS_FRESH, latency, first_token])?;
         result.imported += 1;
     }
     update_sync_state_on_conn(&tx, key, modified, bytes)?;
@@ -426,7 +426,9 @@ mod tests {
             .get_model_stats(None, None, Some("kimi"), None, None)
             .unwrap();
         assert_eq!(models.len(), 2);
-        assert!(models.iter().all(|model| model.model != "agent-loop"));
+        assert!(models
+            .iter()
+            .all(|model| model.model != "agent-loop" && model.est_speed_output_tokens > 0));
     }
 
     #[test]

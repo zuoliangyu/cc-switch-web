@@ -457,6 +457,50 @@ mod tests {
         assert!(Database::has_column(&conn, "mcp_servers", "enabled_pi").unwrap());
     }
 
+    /// 桌面端快照版本号被改写为 Web 当前版本、不再走 v21 -> v22，用量维度列仍要补上
+    #[test]
+    #[serial]
+    fn automatic_migration_adds_usage_dimensions_missing_from_desktop_snapshot() {
+        let home = tempdir().unwrap();
+        let _home = TestHome::set(home.path());
+        let source_db = create_source_database(home.path(), 20, "桌面端供应商");
+        Connection::open(&source_db)
+            .unwrap()
+            .execute_batch(
+                "ALTER TABLE proxy_request_logs DROP COLUMN pricing_model;
+                 ALTER TABLE proxy_request_logs DROP COLUMN input_token_semantics;
+                 DROP TABLE usage_daily_rollups;
+                 CREATE TABLE usage_daily_rollups (
+                     date TEXT NOT NULL, app_type TEXT NOT NULL, provider_id TEXT NOT NULL,
+                     model TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0,
+                     success_count INTEGER NOT NULL DEFAULT 0,
+                     input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+                     cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                     cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                     total_cost_usd TEXT NOT NULL DEFAULT '0', avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+                     PRIMARY KEY (date, app_type, provider_id, model)
+                 );",
+            )
+            .unwrap();
+
+        assert!(migrate_default_data_dir_if_needed().unwrap());
+
+        let conn =
+            Connection::open(home.path().join(".cc-switch-web").join(DATABASE_FILE)).unwrap();
+        for (table, column) in [
+            ("proxy_request_logs", "pricing_model"),
+            ("proxy_request_logs", "input_token_semantics"),
+            ("usage_daily_rollups", "request_model"),
+            ("usage_daily_rollups", "pricing_model"),
+            ("usage_daily_rollups", "input_token_semantics"),
+        ] {
+            assert!(
+                Database::has_column(&conn, table, column).unwrap(),
+                "{table}.{column}"
+            );
+        }
+    }
+
     #[test]
     #[serial]
     fn existing_web_directory_is_never_automatically_overwritten() {

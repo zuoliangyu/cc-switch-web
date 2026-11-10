@@ -13,6 +13,7 @@ use crate::proxy::usage::parser::TokenUsage;
 use crate::services::session_usage::{
     estimated_latency_ms, metadata_modified_nanos, update_sync_state_on_conn, SessionSyncResult,
 };
+use crate::services::sql_helpers::INPUT_TOKEN_SEMANTICS_FRESH;
 use crate::services::usage_stats::find_model_pricing;
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -1252,15 +1253,16 @@ fn insert_pi_record(
 
     conn.execute(
         "INSERT OR IGNORE INTO proxy_request_logs (
-            request_id, provider_id, app_type, model, request_model,
+            request_id, provider_id, app_type, model, request_model, pricing_model,
             input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+            input_token_semantics,
             input_cost_usd, output_cost_usd, cache_read_cost_usd,
             cache_creation_cost_usd, total_cost_usd,
             latency_ms, first_token_ms, status_code, error_message, session_id,
             provider_type, is_streaming, cost_multiplier, created_at, data_source
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-            ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+            ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26
         )",
         rusqlite::params![
             record.request_id,
@@ -1268,10 +1270,12 @@ fn insert_pi_record(
             flavor.app_type,
             record.model,
             record.request_model,
+            record.model,
             record.input_tokens,
             record.output_tokens,
             record.cache_read_tokens,
             record.cache_write_tokens,
+            INPUT_TOKEN_SEMANTICS_FRESH,
             input_cost.to_string(),
             output_cost.to_string(),
             cache_read_cost.to_string(),
@@ -1794,10 +1798,9 @@ mod tests {
             )?;
             assert_eq!(totals, (5, 37, 37, 12, 11));
 
-            // Web 的 proxy_request_logs 没有 pricing_model 列（计价模型即 model），第 4 列仍查 model
-            let assistant: (String, String, String, String, i64, String) = conn.query_row(
-                "SELECT provider_id, model, request_model, model, created_at,
-                        total_cost_usd
+            let assistant: (String, String, String, String, i64, i64, String) = conn.query_row(
+                "SELECT provider_id, model, request_model, pricing_model, created_at,
+                        input_token_semantics, total_cost_usd
                  FROM proxy_request_logs
                  WHERE provider_id = 'custom-pi' AND status_code = 200",
                 [],
@@ -1809,6 +1812,7 @@ mod tests {
                         row.get(3)?,
                         row.get(4)?,
                         row.get(5)?,
+                        row.get(6)?,
                     ))
                 },
             )?;
@@ -1817,8 +1821,9 @@ mod tests {
             assert_eq!(assistant.2, "requested-model");
             assert_eq!(assistant.3, "actual-model");
             assert_eq!(assistant.4, 1_700_000_001);
+            assert_eq!(assistant.5, INPUT_TOKEN_SEMANTICS_FRESH);
             assert_eq!(
-                Decimal::from_str(&assistant.5).expect("reported total"),
+                Decimal::from_str(&assistant.6).expect("reported total"),
                 Decimal::from_str("0.0000255").expect("expected total")
             );
 

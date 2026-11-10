@@ -1712,6 +1712,162 @@ fn migration_v20_to_v21_adds_dsh_flags_and_parser_state_preserving_cursors() {
     assert_eq!(cursor, (11, 123, None));
 }
 
+/// Web v21 形状的用量明细与日汇总（没有 pricing_model / input_token_semantics，汇总主键不含
+/// request_model / pricing_model），带几行能区分输入 Token 语义回填规则的数据。
+fn seed_v21_usage_tables(conn: &Connection) {
+    conn.execute_batch(
+        "CREATE TABLE proxy_request_logs (
+            request_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, app_type TEXT NOT NULL,
+            model TEXT NOT NULL, request_model TEXT,
+            input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+            total_cost_usd TEXT NOT NULL DEFAULT '0', latency_ms INTEGER NOT NULL,
+            status_code INTEGER NOT NULL, session_id TEXT, created_at INTEGER NOT NULL,
+            data_source TEXT NOT NULL DEFAULT 'proxy'
+        );
+        CREATE TABLE usage_daily_rollups (
+            date TEXT NOT NULL, app_type TEXT NOT NULL, provider_id TEXT NOT NULL, model TEXT NOT NULL,
+            request_count INTEGER NOT NULL DEFAULT 0, success_count INTEGER NOT NULL DEFAULT 0,
+            input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+            total_cost_usd TEXT NOT NULL DEFAULT '0', avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (date, app_type, provider_id, model)
+        );
+        INSERT INTO proxy_request_logs
+            (request_id, provider_id, app_type, model, input_tokens, cache_read_tokens,
+             cache_creation_tokens, latency_ms, status_code, created_at)
+        VALUES
+            ('codex-total', 'p', 'codex', 'gpt-5.6', 1000, 300, 200, 1, 200, 1),
+            ('codex-legacy', 'p', 'codex', 'gpt-5.6', 400, 300, 200, 1, 200, 1),
+            ('codex-no-write', 'p', 'codex', 'gpt-5.6', 1000, 300, 0, 1, 200, 1),
+            ('claude-fresh', 'p', 'claude', 'claude-sonnet-5', 100, 50, 20, 1, 200, 1);
+        INSERT INTO usage_daily_rollups
+            (date, app_type, provider_id, model, request_count, success_count,
+             input_tokens, cache_read_tokens, cache_creation_tokens, total_cost_usd)
+        VALUES
+            ('2026-10-01', 'codex', 'p', 'gpt-5.6', 3, 3, 1000, 300, 200, '0.30'),
+            ('2026-10-01', 'gemini', 'p', 'gemini-4', 2, 2, 400, 300, 200, '0.10');",
+    )
+    .expect("seed v21 usage tables");
+}
+
+/// 迁移前后按 `fresh_input_sql` 算出的新增输入与 Web 原先的展示口径一致。
+fn assert_usage_dimensions_upgraded(conn: &Connection) {
+    let pricing_model = get_column_info(conn, "proxy_request_logs", "pricing_model");
+    assert_eq!(pricing_model.r#type, "TEXT");
+    assert_eq!(pricing_model.notnull, 0);
+    let semantics = get_column_info(conn, "proxy_request_logs", "input_token_semantics");
+    assert_eq!(semantics.notnull, 1);
+    assert_eq!(normalize_default(&semantics.default).as_deref(), Some("0"));
+    for column in ["request_model", "pricing_model", "input_token_semantics"] {
+        assert_eq!(
+            get_column_info(conn, "usage_daily_rollups", column).notnull,
+            1,
+            "{column}"
+        );
+    }
+
+    let fresh = crate::services::sql_helpers::fresh_input_sql("");
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT request_id, input_token_semantics, pricing_model IS NULL, {fresh}
+             FROM proxy_request_logs ORDER BY request_id"
+        ))
+        .unwrap();
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, bool>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            ("claude-fresh".to_string(), 0, true, 100),
+            ("codex-legacy".to_string(), 0, true, 100),
+            ("codex-no-write".to_string(), 0, true, 700),
+            ("codex-total".to_string(), 1, true, 500),
+        ]
+    );
+
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT app_type, request_model, pricing_model, input_token_semantics, request_count, {fresh}
+             FROM usage_daily_rollups ORDER BY app_type"
+        ))
+        .unwrap();
+    let rollups = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(
+        rollups,
+        vec![
+            ("codex".to_string(), String::new(), String::new(), 1, 3, 500),
+            (
+                "gemini".to_string(),
+                String::new(),
+                String::new(),
+                0,
+                2,
+                100
+            ),
+        ]
+    );
+
+    // 主键带上 request_model：同一模型不同客户端别名可以并存
+    conn.execute(
+        "INSERT INTO usage_daily_rollups
+            (date, app_type, provider_id, model, request_model, request_count)
+         VALUES ('2026-10-01', 'codex', 'p', 'gpt-5.6', 'gpt-5.6-alias', 1)",
+        [],
+    )
+    .expect("same model with another request_model");
+}
+
+#[test]
+fn migration_v21_to_v22_adds_usage_dimensions_and_keeps_web_input_semantics() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    seed_v21_usage_tables(&conn);
+    Database::set_user_version(&conn, 21).expect("set user_version=21");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+    Database::apply_schema_migrations_on_conn(&conn).expect("re-apply migrations");
+
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    assert_usage_dimensions_upgraded(&conn);
+}
+
+/// 桌面端快照迁入时版本号被改写为 Web 当前版本、不再走迁移，缺的用量列由建表阶段补上。
+#[test]
+fn create_tables_patches_usage_dimensions_into_current_version_snapshots() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    seed_v21_usage_tables(&conn);
+    Database::set_user_version(&conn, SCHEMA_VERSION).expect("set current user_version");
+
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    Database::create_tables_on_conn(&conn).expect("create tables again");
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+
+    assert_usage_dimensions_upgraded(&conn);
+}
+
 /// 排序只改 `sort_index`（上游 71524045）：和删除、编辑并发时不复活删掉的行，也不盖掉别处刚存的字段。
 #[test]
 fn sort_index_updates_touch_only_existing_rows_and_the_index() {

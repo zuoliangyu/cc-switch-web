@@ -321,3 +321,28 @@ async fn copilot_sessions_stay_inside_the_session_state_root() {
     assert!(inside.exists());
     server.abort();
 }
+
+/// 绕过网页、直接保存设置关掉「搜索消息正文」时，服务端自己删掉索引文件
+#[test]
+#[serial_test::serial]
+fn saving_settings_with_content_search_off_removes_the_index_file() {
+    use crate::session_manager::search;
+
+    let fixture = crate::mode::controller::tests::Fixture::new();
+    let mut settings = crate::settings::get_settings();
+    settings.session_content_search_enabled = true;
+    crate::commands::save_settings_internal(&fixture.state, settings).unwrap();
+    let index = search::SessionIndex::open(&search::index_path()).unwrap();
+    drop(index);
+    assert!(search::index_path().exists());
+
+    // 再保存一次仍是开着：不删
+    crate::commands::save_settings_internal(&fixture.state, crate::settings::get_settings())
+        .unwrap();
+    assert!(search::index_path().exists());
+
+    let mut settings = crate::settings::get_settings();
+    settings.session_content_search_enabled = false;
+    crate::commands::save_settings_internal(&fixture.state, settings).unwrap();
+    assert!(!search::index_path().exists());
+}

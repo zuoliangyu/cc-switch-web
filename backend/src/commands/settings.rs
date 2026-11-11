@@ -39,7 +39,16 @@ pub fn save_settings_internal(
     let merged = merge_settings_for_save(settings, &existing);
     let unify_changed = merged.unify_codex_session_history != existing.unify_codex_session_history;
     let unify_enabled = merged.unify_codex_session_history;
+    let content_search_disabled =
+        existing.session_content_search_enabled && !merged.session_content_search_enabled;
     crate::settings::update_settings(merged).map_err(|e| e.to_string())?;
+    // 关掉「搜索消息正文」就删索引文件：网页在保存后还会单独调一次清理，
+    // 这里兜住绕过网页、直接 PUT 设置的情况（重复清理没有副作用）
+    if content_search_disabled {
+        if let Err(error) = crate::session_manager::search::clear() {
+            log::warn!("关闭正文搜索后删除会话正文索引失败: {error}");
+        }
+    }
     if unify_changed {
         if let Err(error) = crate::services::provider::reapply_current_codex_official_live(state) {
             let _ = crate::settings::update_settings(existing);

@@ -109,11 +109,11 @@ const hasTimelineRow = (turn: SessionTurn) =>
   turn.steps.length > 1 ||
   (turn.steps.length === 1 && isFailureStep(turn.steps[0]));
 
-/** 第 n 处命中（从 1 计）落在哪个 SearchMatch 上 */
+/** 第 n 处命中（从 1 计）落在哪个 SearchMatch 上，以及是这块内容里的第几处（从 0 计） */
 const matchAt = (matches: SearchMatch[], position: number) => {
   let remaining = position;
   for (const match of matches) {
-    if (remaining <= match.count) return match;
+    if (remaining <= match.count) return { match, occurrence: remaining - 1 };
     remaining -= match.count;
   }
   return undefined;
@@ -272,8 +272,10 @@ export function SessionReader({
 
   const findTotal = search?.total ?? 0;
   const findCurrent = findTotal ? Math.min(findIndex, findTotal) : 0;
-  const activeMatch =
+  const activeHit =
     search && findCurrent ? matchAt(search.matches, findCurrent) : undefined;
+  const activeMatch = activeHit?.match;
+  const activeOccurrence = activeHit?.occurrence ?? 0;
   const activeRowIndex = activeMatch
     ? findMatchRowIndex(rows, activeMatch)
     : -1;
@@ -311,6 +313,42 @@ export function SessionReader({
     virtualizer.scrollToIndex(activeRowIndex, { align: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findCurrent, deferredFind, activeRowIndex]);
+
+  // 命中行比可视区还高时（窄屏、长消息），把整行居中会把关键词推出可视区：
+  // 等这一行渲染出来、高亮位置连续两帧不动后，再把当前这处高亮滚到中间
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (activeRowIndex < 0 || !container) return;
+    let frame = 0;
+    let tries = 0;
+    let lastTop: number | null = null;
+    const settle = () => {
+      tries += 1;
+      const marks = container
+        .querySelector(`[data-index="${activeRowIndex}"]`)
+        ?.querySelectorAll<HTMLElement>("mark");
+      const mark = marks?.length
+        ? marks[Math.min(activeOccurrence, marks.length - 1)]
+        : undefined;
+      if (mark) {
+        const markBox = mark.getBoundingClientRect();
+        if (lastTop !== null && Math.abs(markBox.top - lastTop) < 1) {
+          const box = container.getBoundingClientRect();
+          if (markBox.top < box.top || markBox.bottom > box.bottom) {
+            const delta =
+              markBox.top - box.top - (box.height - markBox.height) / 2;
+            virtualizer.scrollToOffset(container.scrollTop + delta);
+          }
+          return;
+        }
+        lastTop = markBox.top;
+      }
+      if (tries < 60) frame = window.requestAnimationFrame(settle);
+    };
+    frame = window.requestAnimationFrame(settle);
+    return () => window.cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findCurrent, deferredFind, activeRowIndex, activeOccurrence]);
 
   const flash = useCallback((key: string) => {
     setFlashKey(key);

@@ -80,7 +80,7 @@ describe("useAppServerEvents", () => {
     expect(toastSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes the provider list and mode view on provider-switched", async () => {
+  it("refreshes the provider list, mode view and failover queue on provider-switched", async () => {
     const { invalidate, wrapper } = setup();
     renderHook(() => useAppServerEvents(), { wrapper });
     await flush();
@@ -93,6 +93,9 @@ describe("useAppServerEvents", () => {
     });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ["providers", "codex"],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["failoverQueue", "codex"],
     });
   });
 

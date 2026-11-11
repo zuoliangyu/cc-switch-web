@@ -195,7 +195,7 @@ export const WebSidebar = memo(function WebSidebar({
         type="button"
         aria-label={t("nav.menu", { defaultValue: "导航菜单" })}
         onClick={() => setMobileOpen(true)}
-        className="fixed bottom-5 left-3 z-[65] rounded-full border bg-card p-3 shadow-md md:hidden"
+        className="fixed bottom-5 left-3 z-30 rounded-full border bg-card p-3 shadow-md md:hidden"
       >
         <Menu className="h-5 w-5" />
       </button>

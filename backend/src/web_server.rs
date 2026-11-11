@@ -4297,10 +4297,26 @@ async fn switch_provider(
     State(state): State<WebApiState>,
     Path((app, id)): Path<(String, String)>,
 ) -> Result<Json<SwitchResult>, ApiError> {
-    blocking_json(move || {
+    let (event_app, event_id) = (app.clone(), id.clone());
+    let result = blocking_json(move || {
         crate::commands::switch_provider_by_name_internal(state.app_state.as_ref(), app, id)
     })
-    .await
+    .await?;
+    // 别的标签页 / 客户端也打开着时，靠这条推送刷新当前供应商（发起切换的页面自己会失效）。
+    emit_provider_changed(&event_app, &event_id, "switch");
+    Ok(result)
+}
+
+/// 手动切换、故障转移队列增删后通知所有打开的页面；前端按 `provider-switched` 失效该应用的
+/// 供应商列表、模式视图和故障转移队列。别名（如 `copilot-cli`）按规范名发。
+fn emit_provider_changed(app: &str, provider_id: &str, source: &str) {
+    let app_type = AppType::from_str(app)
+        .map(|app| app.as_str().to_string())
+        .unwrap_or_else(|_| app.to_string());
+    crate::events::emit(
+        "provider-switched",
+        json!({ "appType": app_type, "providerId": provider_id, "source": source }),
+    );
 }
 
 async fn open_provider_terminal(
@@ -4736,6 +4752,7 @@ async fn add_to_failover_queue(
         .map_err(|e| {
             ApiError::internal(format!("failed to add provider to failover queue: {e}"))
         })?;
+    emit_provider_changed(app_type.as_str(), &payload.provider_id, "failoverQueue");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -4753,6 +4770,7 @@ async fn remove_from_failover_queue(
                 "failed to remove provider from failover queue: {e}"
             ))
         })?;
+    emit_provider_changed(app_type.as_str(), &provider_id, "failoverQueue");
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -11,7 +11,8 @@ import { useEffect, useLayoutEffect, useState } from "react";
  */
 export const usageTable = {
   /** 外层：窄窗口时表格在这里横向滚动 */
-  scroller: "w-full overflow-x-auto",
+  // relative：表头说明里 sr-only 的绝对定位文字以这里为包含块，被横向滚动收住，不把整页撑宽
+  scroller: "relative w-full overflow-x-auto",
   table: "w-full border-separate border-spacing-0 text-sm tabular-nums",
   headRow:
     "h-9 bg-muted text-xs text-muted-foreground [&>th]:border-b [&>th]:border-border",

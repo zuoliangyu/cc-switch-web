@@ -40,6 +40,10 @@ export function useAppServerEvents() {
     await queryClient.invalidateQueries({
       queryKey: ["providers", event.appType],
     });
+    // 别的页面增删了故障转移队列（后端同样发这条事件）
+    await queryClient.invalidateQueries({
+      queryKey: ["failoverQueue", event.appType],
+    });
     if (event.appType === "pi" || event.appType === "omp") {
       await invalidatePiProviderCaches(queryClient, event.appType);
     }

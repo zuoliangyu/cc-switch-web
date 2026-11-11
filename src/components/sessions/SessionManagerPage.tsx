@@ -1216,7 +1216,8 @@ export function SessionManagerPage({
             readerSession && "hidden",
           )}
         >
-          <div className="flex shrink-0 items-center gap-2 px-6 pt-3.5">
+          {/* 窄屏放不下时换行，搜索框保底 12rem，不被挤到看不见输入 */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2 px-6 pt-3.5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1305,7 +1306,7 @@ export function SessionManagerPage({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="relative min-w-0 flex-1">
+            <div className="relative min-w-[12rem] flex-1">
               <SearchField
                 id="session-search"
                 ref={searchRef}

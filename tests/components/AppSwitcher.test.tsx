@@ -16,6 +16,24 @@ describe("AppSwitcher", () => {
     expect(onSwitch).toHaveBeenCalledWith("codex");
   });
 
+  it("列出全部应用，包括 Copilot CLI 等后加的应用", async () => {
+    render(<AppSwitcher activeApp="copilot" onSwitch={vi.fn()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Copilot CLI$/, expanded: false }),
+    );
+    for (const name of [
+      "Kimi Code",
+      "DeepSeek Harness",
+      "Antigravity",
+      "Oh My Pi",
+      "Copilot CLI",
+    ]) {
+      expect(
+        screen.getByRole("menuitemradio", { name: new RegExp(name) }),
+      ).toBeInTheDocument();
+    }
+  });
+
   it("空间不足时保留当前应用并把其余应用放入更多菜单", async () => {
     const onSwitch = vi.fn();
     const originalResizeObserver = globalThis.ResizeObserver;

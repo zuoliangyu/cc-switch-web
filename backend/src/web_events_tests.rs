@@ -109,3 +109,21 @@ fn profile_apply_emits_provider_switched_per_app_then_profile_applied() {
         json!({ "profileId": "profile-1", "scope": "codex" })
     );
 }
+
+/// 手动切换、队列增删从别的标签页 / 客户端发起时，打开着的页面靠这条推送刷新。
+#[test]
+#[serial_test::serial]
+fn provider_changes_emit_provider_switched_with_the_canonical_app() {
+    crate::events::take_test_events();
+    emit_provider_changed("copilot-cli", "p1", "switch");
+    emit_provider_changed("codex", "p2", "failoverQueue");
+    let events = crate::events::take_test_events();
+    let names: Vec<&str> = events.iter().map(|event| event.name.as_str()).collect();
+    assert_eq!(names, ["provider-switched", "provider-switched"]);
+    assert_eq!(
+        events[0].payload,
+        json!({ "appType": "copilot", "providerId": "p1", "source": "switch" })
+    );
+    assert_eq!(events[1].payload["appType"], "codex");
+    assert_eq!(events[1].payload["source"], "failoverQueue");
+}

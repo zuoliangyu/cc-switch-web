@@ -727,7 +727,7 @@ export const SessionReaderToolbar = memo(function SessionReaderToolbar({
                 })}
                 autoComplete="off"
                 spellCheck={false}
-                className={cn(fieldClass, "h-7 pe-2 ps-7 text-xs")}
+                className={cn(fieldClass, "h-7 w-full min-w-0 pe-2 ps-7 text-xs")}
               />
             </div>
             <span

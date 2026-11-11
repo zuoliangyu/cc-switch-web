@@ -1,6 +1,7 @@
 import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import { APP_IDS } from "@/config/appConfig";
 import { cn } from "@/lib/utils";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import {
@@ -24,18 +25,8 @@ interface AppSwitcherProps {
   visibleApps?: VisibleApps;
 }
 
-const ALL_APPS: AppId[] = [
-  "claude",
-  "claude-desktop",
-  "codex",
-  "gemini",
-  "grokbuild",
-  "opencode",
-  "openclaw",
-  "hermes",
-  "pi",
-  "mcode",
-];
+// 与侧栏同一份应用清单，新增应用时不会漏掉页头切换器
+const ALL_APPS: AppId[] = APP_IDS;
 const STORAGE_KEY = "cc-switch-last-app";
 
 export function AppSwitcher({

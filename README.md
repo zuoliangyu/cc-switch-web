@@ -91,7 +91,7 @@ docker run -d --name cc-switch-web \
 
 ## 当前版本
 
-当前仓库版本为 `3.3.1`，是 3.3.0 的修复版：修正自 3.1.0 起的 macOS 构建失败，并让 GitHub 密钥扫描跳过隐私过滤规则集里的公开示例 Key。3.3.0 完成上游 `5e9812e0..abf50589`（v4.0.29 及其后）的 Web 迁移：29 项提交中 22 项已迁移、7 项不适用（七语言维护、ko/tr/ru 文案、上游发版与 README）。新增隐私过滤（默认关闭，路由与聚合模式下脱敏个人信息与密钥）；GitHub Copilot CLI 的自带模型卡改为写进 Copilot 自己的 `providers.json`（升级时旧卡自动转换，添加后才能打开终端）；Codex 走 Anthropic 上游时默认 `max_tokens` 提到 32000；检查更新遇 GitHub 限流不再报错。Windows 验证：前端 2856 项通过；Rust 3951 项通过、10 项忽略；零编译警告。处置与验证见 [迁移台账](docs-dev/web-parity-post-5e9812e0-2026-11.md)，完整变更与升级注意见 [CHANGELOG](CHANGELOG.md)。版本号与说明已更新。
+当前仓库版本为 `3.3.2`，是 3.3.0 的修复版：修正自 3.1.0 起的 macOS 构建失败，让 GitHub 密钥扫描跳过隐私过滤规则集里的公开示例 Key，并把 macOS 打包换到 `macos-15` 运行器（`macos-14` 已被 GitHub 下线，3.3.0 / 3.3.1 因此没有发出 Release）。3.3.0 完成上游 `5e9812e0..abf50589`（v4.0.29 及其后）的 Web 迁移：29 项提交中 22 项已迁移、7 项不适用（七语言维护、ko/tr/ru 文案、上游发版与 README）。新增隐私过滤（默认关闭，路由与聚合模式下脱敏个人信息与密钥）；GitHub Copilot CLI 的自带模型卡改为写进 Copilot 自己的 `providers.json`（升级时旧卡自动转换，添加后才能打开终端）；Codex 走 Anthropic 上游时默认 `max_tokens` 提到 32000；检查更新遇 GitHub 限流不再报错。Windows 验证：前端 2856 项通过；Rust 3951 项通过、10 项忽略；零编译警告。处置与验证见 [迁移台账](docs-dev/web-parity-post-5e9812e0-2026-11.md)，完整变更与升级注意见 [CHANGELOG](CHANGELOG.md)。版本号与说明已更新。
 
 上一版本 `3.2.0` 完成上游 `a3eafa40..5e9812e0`（v4.0.26–v4.0.28 及其后）的 Web 迁移：108 项提交中 80 项已迁移、4 项部分迁移、24 项不适用；新增 GitHub Copilot CLI、会话正文全文搜索与服务端事件推送，数据库升到 schema v23。处置与验证见 [迁移台账](docs-dev/web-parity-post-a3eafa40-2026-11.md)。
 

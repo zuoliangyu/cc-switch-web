@@ -199,3 +199,205 @@ async fn compaction_is_returned_through_native_chat_and_anthropic_http_paths() {
         task.abort();
     }
 }
+
+#[tokio::test]
+#[serial_test::serial]
+async fn repeated_classifier_errors_stop_claude_requests_before_any_upstream_call() {
+    let _home = crate::mode::controller::tests::Fixture::new();
+    let reply = json!({"id":"msg","type":"message","role":"assistant","content":[],
+        "usage":{"input_tokens":1,"output_tokens":1}})
+    .to_string();
+    let (up, mut provider, task) = upstream(
+        vec![(StatusCode::OK, reply, "application/json")],
+        "anthropic",
+    )
+    .await;
+    let base = provider.settings_config["baseUrl"]
+        .as_str()
+        .unwrap()
+        .trim_end_matches("/v1")
+        .to_string();
+    provider.settings_config =
+        json!({"env":{"ANTHROPIC_BASE_URL": base, "ANTHROPIC_AUTH_TOKEN":"test-key"}});
+    let state = ProxyState::for_test(Arc::new(crate::database::Database::memory().unwrap()));
+    state.db.save_provider("claude", &provider).unwrap();
+    let mut body = json!({"model":"claude-test","max_tokens":16,
+        "tools":[{"name":"Bash","input_schema":{"type":"object"}}],
+        "messages":[{"role":"user","content":"run it"}]});
+    for n in 0..3 {
+        body["messages"].as_array_mut().unwrap().extend([
+            json!({"role":"assistant","content":[{"type":"tool_use","id":format!("tool_{n}"),"name":"Bash","input":{}}]}),
+            json!({"role":"user","content":[{"type":"tool_result","tool_use_id":format!("tool_{n}"),"is_error":true,
+                "content":"claude-opus-5[1m] is temporarily unavailable, so auto mode cannot determine the safety of Bash right now."}]}),
+        ]);
+    }
+    let forward = |body: Value| {
+        let state = state.clone();
+        let provider = provider.clone();
+        async move {
+            let ctx = RequestContext::new_with_stack(
+                &state,
+                &body,
+                &HeaderMap::new(),
+                AppType::Claude,
+                "Claude",
+                "claude",
+                Some(crate::mode::stack::StackTarget {
+                    provider,
+                    upstream_model: "claude-test".into(),
+                    original_model: "claude-test".into(),
+                }),
+            )
+            .await
+            .unwrap();
+            ctx.create_forwarder(&state)
+                .forward_with_retry(
+                    &AppType::Claude,
+                    "/v1/messages",
+                    body,
+                    HeaderMap::new(),
+                    Extensions::new(),
+                    ctx.get_providers(),
+                )
+                .await
+        }
+    };
+    for _ in 0..5 {
+        let err = forward(body.clone())
+            .await
+            .err()
+            .expect("classifier loop must be rejected");
+        assert!(matches!(err.error, super::ProxyError::InvalidRequest(_)));
+    }
+    assert_eq!(up.requests.lock().await.len(), 0);
+    body["messages"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"role":"user","content":"I fixed the mapping; continue."}));
+    assert!(
+        forward(body).await.is_ok(),
+        "a new user turn resumes the session"
+    );
+    assert_eq!(up.requests.lock().await.len(), 1);
+    task.abort();
+}
+
+/// 失败时带出映射后的上游模型名，错误日志才不会把客户端别名（claude-haiku-*）记成
+/// 「调了没配置的模型」（上游 80ad02c5）。
+#[tokio::test]
+#[serial_test::serial]
+async fn failed_request_reports_the_mapped_upstream_model() {
+    let _home = crate::mode::controller::tests::Fixture::new();
+    let error = json!({"error":{"message":"upstream failed"}}).to_string();
+    let (_up, mut provider, task) = upstream(
+        vec![
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error.clone(),
+                "application/json",
+            ),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error.clone(),
+                "application/json",
+            ),
+            (StatusCode::INTERNAL_SERVER_ERROR, error, "application/json"),
+        ],
+        "anthropic",
+    )
+    .await;
+    let base = provider.settings_config["baseUrl"]
+        .as_str()
+        .unwrap()
+        .trim_end_matches("/v1")
+        .to_string();
+    provider.settings_config = json!({"env":{
+        "ANTHROPIC_BASE_URL": base,
+        "ANTHROPIC_AUTH_TOKEN": "test-key",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "grok-4.7"
+    }});
+    let state = ProxyState::for_test(Arc::new(crate::database::Database::memory().unwrap()));
+    state.db.save_provider("claude", &provider).unwrap();
+    let body = json!({"model":"claude-haiku-4-5-20251001","max_tokens":16,
+        "messages":[{"role":"user","content":"hi"}]});
+    let ctx = RequestContext::new_with_stack(
+        &state,
+        &body,
+        &HeaderMap::new(),
+        AppType::Claude,
+        "Claude",
+        "claude",
+        Some(crate::mode::stack::StackTarget {
+            provider,
+            upstream_model: "claude-haiku-4-5-20251001".into(),
+            original_model: "claude-haiku-4-5-20251001".into(),
+        }),
+    )
+    .await
+    .unwrap();
+    let err = ctx
+        .create_forwarder(&state)
+        .stack_request(false)
+        .forward_with_retry(
+            &AppType::Claude,
+            "/v1/messages",
+            body,
+            HeaderMap::new(),
+            Extensions::new(),
+            ctx.get_providers(),
+        )
+        .await
+        .err()
+        .expect("upstream 500 must fail");
+    assert_eq!(err.outbound_model.as_deref(), Some("grok-4.7"));
+    task.abort();
+}
+
+/// Kimi For Coding 不收 `tool_choice: "none"`：压缩回合被原生 Responses 第三方以 400 拒绝后，
+/// 去掉 `tool_choice` 对同一家重试一次，工具定义保留（上游 0e49c881）。
+#[tokio::test]
+#[serial_test::serial]
+async fn compaction_rejected_for_tool_choice_none_retries_without_it() {
+    let _home = crate::mode::controller::tests::Fixture::new();
+    let rejected =
+        json!({"error":{"message":"Invalid request Error","type":"invalid_request_error"}})
+            .to_string();
+    let completed = format!(
+        "data: {}\n\n",
+        json!({"type":"response.completed","response":{"id":"r","status":"completed",
+            "output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"summary"}]}]}})
+    );
+    let (up, provider, task) = upstream(
+        vec![
+            (StatusCode::BAD_REQUEST, rejected, "application/json"),
+            (StatusCode::OK, completed, "text/event-stream"),
+        ],
+        "openai_responses",
+    )
+    .await;
+    let state = ProxyState::for_test(Arc::new(crate::database::Database::memory().unwrap()));
+    state.db.save_provider("codex", &provider).unwrap();
+    state
+        .db
+        .set_current_provider("codex", &provider.id)
+        .unwrap();
+    let body = json!({"model":"test-model","stream":true,
+        "tools":[{"type":"function","name":"shell","parameters":{"type":"object"}}],
+        "input":[{"role":"user","content":"hi"},{"type":"compaction_trigger"}]});
+    let request = axum::http::Request::builder()
+        .uri("/responses")
+        .method("POST")
+        .body(axum::body::Body::from(body.to_string()))
+        .unwrap();
+    let response = super::handlers::handle_responses(State(state), request)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let seen = up.requests.lock().await;
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[0]["tool_choice"], "none");
+    assert!(seen[1].get("tool_choice").is_none(), "{}", seen[1]);
+    assert!(seen[1].get("tools").is_some());
+    assert!(!seen[1].to_string().contains("compaction_trigger"));
+    task.abort();
+}

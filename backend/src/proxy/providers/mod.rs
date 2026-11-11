@@ -23,6 +23,7 @@ pub mod codex_oauth_auth;
 pub(crate) mod codex_responses_sse;
 pub mod copilot_auth;
 pub mod copilot_model_map;
+pub(crate) mod copilot_responses;
 mod gemini;
 pub(crate) mod gemini_schema;
 pub mod gemini_shadow;
@@ -39,6 +40,7 @@ pub mod transform;
 pub mod transform_codex_anthropic;
 pub mod transform_codex_chat;
 pub mod transform_codex_chat_moonshot_schema;
+pub mod transform_codex_responses_kimi_history;
 pub mod transform_codex_responses_namespace;
 pub mod transform_codex_responses_xai_sanitize;
 pub mod transform_gemini;
@@ -213,9 +215,12 @@ impl ProviderType {
                 // OpenClaw doesn't support proxy, but return a default type for completeness
                 ProviderType::Codex // Fallback to Codex-like type
             }
-            AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Omp => {
-                ProviderType::Codex
-            }
+            AppType::Hermes
+            | AppType::Pi
+            | AppType::Mcode
+            | AppType::Kimi
+            | AppType::Dsh
+            | AppType::Omp => ProviderType::Codex,
             // agy 的设置与 Gemini 同形（env.GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL）
             AppType::Agy => ProviderType::Gemini,
         }
@@ -279,9 +284,12 @@ pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
             // OpenClaw doesn't support proxy, fallback to Codex adapter
             Box::new(CodexAdapter::new())
         }
-        AppType::Hermes | AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Omp => {
-            Box::new(CodexAdapter::new())
-        }
+        AppType::Hermes
+        | AppType::Pi
+        | AppType::Mcode
+        | AppType::Kimi
+        | AppType::Dsh
+        | AppType::Omp => Box::new(CodexAdapter::new()),
     }
 }
 

@@ -6,6 +6,8 @@
 //! - 以 `_` 开头的字段被视为私有参数，会被递归过滤
 //! - 支持白名单机制，允许透传特定的 `_` 前缀字段
 //! - 支持嵌套对象和数组的深度过滤
+//! - JSON Schema 的 properties / patternProperties / definitions / $defs 名称
+//!   是用户定义的字段名，不按私有参数过滤
 //!
 //! ## 使用场景
 //! - `_internal_id`: 内部追踪 ID
@@ -63,50 +65,57 @@ pub fn filter_private_params(body: Value) -> Value {
 /// let output = filter_private_params_with_whitelist(input, &["_metadata"]);
 /// // output 包含 _metadata，不包含 _internal_id
 /// ```
-pub fn filter_private_params_with_whitelist(body: Value, whitelist: &[String]) -> Value {
+pub fn filter_private_params_with_whitelist(mut body: Value, whitelist: &[String]) -> Value {
     let whitelist_set: HashSet<&str> = whitelist.iter().map(|s| s.as_str()).collect();
-    filter_recursive_with_whitelist(body, &mut Vec::new(), &whitelist_set)
+    let mut removed_keys = Vec::new();
+    filter_recursive_with_whitelist(&mut body, false, &mut removed_keys, &whitelist_set);
+    if !removed_keys.is_empty() {
+        log::debug!("[BodyFilter] 过滤私有参数: {removed_keys:?}");
+    }
+    body
 }
 
 /// 递归过滤实现（支持白名单）
 fn filter_recursive_with_whitelist(
-    value: Value,
+    value: &mut Value,
+    is_schema_name_map: bool,
     removed_keys: &mut Vec<String>,
     whitelist: &HashSet<&str>,
-) -> Value {
+) {
     match value {
         Value::Object(map) => {
-            let filtered: serde_json::Map<String, Value> = map
-                .into_iter()
-                .filter_map(|(key, val)| {
-                    // 以 _ 开头且不在白名单中的字段被过滤
-                    if key.starts_with('_') && !whitelist.contains(key.as_str()) {
-                        removed_keys.push(key);
-                        None
-                    } else {
-                        Some((
-                            key,
-                            filter_recursive_with_whitelist(val, removed_keys, whitelist),
-                        ))
+            map.retain(|key, val| {
+                if key.starts_with('_') && !whitelist.contains(key.as_str()) && !is_schema_name_map
+                {
+                    if log::log_enabled!(log::Level::Debug) {
+                        removed_keys.push(key.clone());
                     }
-                })
-                .collect();
-
-            // 仅在有过滤时记录日志（避免每次请求都打印）
-            if !removed_keys.is_empty() {
-                log::debug!("[BodyFilter] 过滤私有参数: {removed_keys:?}");
-                removed_keys.clear();
-            }
-
-            Value::Object(filtered)
+                    false
+                } else {
+                    filter_recursive_with_whitelist(
+                        val,
+                        matches_schema_name_map(key),
+                        removed_keys,
+                        whitelist,
+                    );
+                    true
+                }
+            });
         }
-        Value::Array(arr) => Value::Array(
-            arr.into_iter()
-                .map(|v| filter_recursive_with_whitelist(v, removed_keys, whitelist))
-                .collect(),
-        ),
-        other => other,
+        Value::Array(arr) => {
+            for value in arr {
+                filter_recursive_with_whitelist(value, is_schema_name_map, removed_keys, whitelist);
+            }
+        }
+        _ => {}
     }
+}
+
+fn matches_schema_name_map(key: &str) -> bool {
+    matches!(
+        key,
+        "properties" | "patternProperties" | "definitions" | "$defs"
+    )
 }
 
 #[cfg(test)]
@@ -280,6 +289,33 @@ mod tests {
         assert!(data.get("_allowed").is_some());
         assert!(data.get("_forbidden").is_none());
         assert!(data.get("normal").is_some());
+    }
+
+    #[test]
+    fn test_preserves_json_schema_property_names_with_underscore() {
+        let input = json!({
+            "tools": [
+                {
+                    "name": "lookup",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "_id": {"type": "string", "_internal_note": "remove"},
+                            "_meta": {"type": "object"}
+                        },
+                        "_private_schema_note": "remove"
+                    }
+                }
+            ]
+        });
+
+        let output = filter_private_params(input);
+        let schema = &output["tools"][0]["input_schema"];
+
+        assert!(schema["properties"].get("_id").is_some());
+        assert!(schema["properties"].get("_meta").is_some());
+        assert!(schema["properties"]["_id"].get("_internal_note").is_none());
+        assert!(schema.get("_private_schema_note").is_none());
     }
 
     #[test]

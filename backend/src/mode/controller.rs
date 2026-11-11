@@ -687,6 +687,7 @@ pub async fn enter_mode(
                 rewrite_label(*rewritten)
             );
             state.mode_startup_errors.write().await.remove(app.as_str());
+            spawn_loopback_check(state, app);
         }
         Err(error) => log::error!(
             "[MODE] {} 进入{}模式失败（路由目标 {id}）: {}",
@@ -697,6 +698,39 @@ pub async fn enter_mode(
     }
     result.map(|_| ())
 }
+/// Codex、Grok Build 跟随系统代理发请求，发往本地路由的请求可能被系统代理接走、客户端只看到
+/// 空正文 502（见 [`crate::proxy::loopback_probe`]）。手动进入路由后在后台自检一次，不拦进入：
+/// 日志里留一笔，并提示界面。Web 的客户端跑在服务端这台机器上，自检代表的就是它们的处境；
+/// 服务启动时接上的路由不走这里（界面多半还没连上）。
+fn spawn_loopback_check(state: &AppState, app: &AppType) {
+    if !matches!(app, AppType::Codex | AppType::GrokBuild) {
+        return;
+    }
+    let service = state.proxy_service.clone();
+    let app = app.clone();
+    tokio::spawn(async move {
+        let Ok((origin, _)) = service.build_proxy_urls().await else {
+            return;
+        };
+        // 客户端地址改成别的机器时，CC Switch 这边走一遍代表不了客户端。
+        if !crate::proxy::http_client::is_loopback_url(&origin) {
+            return;
+        }
+        let Some(reason) = crate::proxy::loopback_probe::hijack_reason(&origin).await else {
+            return;
+        };
+        log::warn!(
+            "[MODE] {} 的本地路由 {origin} 按系统代理访问回不到 CC Switch（{reason}），\
+             客户端的请求可能被系统代理接走",
+            app.as_str()
+        );
+        crate::events::emit(
+            "proxy-loopback-hijacked",
+            serde_json::json!({ "appType": app.as_str(), "origin": origin }),
+        );
+    });
+}
+
 pub async fn exit(state: &AppState, app: &AppType) -> Result<(), AppError> {
     require_app(app)?;
     let _service = SERVICE_LOCK.lock().await;

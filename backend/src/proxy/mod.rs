@@ -6,6 +6,7 @@ pub(crate) mod body_filter;
 mod browser_guard;
 pub(crate) mod cache_injector;
 pub(crate) mod circuit_breaker;
+mod classifier_guard;
 pub(crate) mod codex_quota_protection;
 pub(crate) mod content_encoding;
 // Web 只在 Codex → Copilot 路径用请求分类与 interaction ID（Claude 路径没有接优化器）
@@ -23,6 +24,7 @@ pub(crate) mod http_client;
 pub(crate) mod hyper_client;
 pub(crate) mod json_canonical;
 pub(crate) mod log_codes;
+pub(crate) mod loopback_probe;
 pub(crate) mod media_sanitizer;
 pub(crate) mod model_mapper;
 pub(crate) mod opaque_state_rectifier;

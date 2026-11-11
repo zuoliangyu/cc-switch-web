@@ -884,7 +884,7 @@ impl ProxyService {
     }
 
     /// 构造写入 Live 的代理地址（客户端地址、0.0.0.0 / IPv6 见 [`client_origin`]）
-    async fn build_proxy_urls(&self) -> Result<(String, String), String> {
+    pub(crate) async fn build_proxy_urls(&self) -> Result<(String, String), String> {
         let config = self.load_proxy_config_view().await?;
 
         let proxy_origin = client_origin(&config.listen_address, config.listen_port);

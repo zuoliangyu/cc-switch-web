@@ -48,6 +48,8 @@ pub struct RequestContext {
     pub current_provider_id: String,
     /// 请求中的模型名称
     pub request_model: String,
+    /// 本次实际发往上游的模型（转发成功后由转发结果填入；未知时为 None）
+    pub outbound_model: Option<String>,
     /// 日志标签（如 "Claude"、"Codex"、"Gemini"）
     pub tag: &'static str,
     /// 应用类型字符串（如 "claude"、"codex"、"gemini"）
@@ -179,6 +181,7 @@ impl RequestContext {
             providers,
             current_provider_id,
             request_model,
+            outbound_model: None,
             tag,
             app_type_str,
             session_id,
@@ -265,6 +268,7 @@ impl RequestContext {
             self.optimizer_config.clone(),
         )
         .stack_request(self.is_stack)
+        .failover_chain(self.app_config.auto_failover_enabled)
     }
 
     /// 获取 Provider 列表（用于故障转移）

@@ -330,7 +330,8 @@
     "proxyReasonDesktopMapping": "uses model mapping (Claude Desktop only accepts Claude model names)",
     "proxyReasonRoutingRequired": "requires local routing to process requests",
     "removeFromConfigFailed": "Could not remove provider",
-    "openclawModelNotFound": "The selected model no longer exists. Refresh and try again."
+    "openclawModelNotFound": "The selected model no longer exists. Refresh and try again.",
+    "proxyLoopbackHijacked": "Requests from {{app}} to the local route {{origin}} will be picked up by the system proxy, so {{app}} will fail with 502 errors. Make loopback addresses connect directly in your proxy tool (for example, add IP-CIDR,127.0.0.0/8,DIRECT,no-resolve at the top of your Clash rules), then fully quit and reopen {{app}}."
   },
   "confirm": {
     "deleteProvider": "Delete Provider",

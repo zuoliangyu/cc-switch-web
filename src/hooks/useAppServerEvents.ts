@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import type { AppId } from "@/lib/api";
 import { invalidatePiProviderCaches } from "@/lib/query/pi";
 import { proxyKeys } from "@/lib/query/proxy";
@@ -22,8 +23,8 @@ interface SyncStatusUpdatedPayload {
 
 /**
  * 全局的服务端事件处理（对应上游 App.tsx 里的各个 Tauri 事件监听）：
- * 故障转移 / 应用项目等后端主动的切换、统一供应商同步、WebDAV 自动同步结果，
- * 以及断线重连后的整体重取。
+ * 故障转移 / 应用项目等后端主动的切换、统一供应商同步、WebDAV 自动同步结果、
+ * 本地路由被系统代理接走的提示，以及断线重连后的整体重取。
  */
 export function useAppServerEvents() {
   const queryClient = useQueryClient();
@@ -86,6 +87,22 @@ export function useAppServerEvents() {
         t("settings.webdavSync.autoSyncFailedToast", {
           error: statusPayload.error || t("common.unknown"),
         }),
+      );
+    },
+  );
+
+  // Codex / Grok Build 跟随系统代理发请求：发往本地路由的请求被系统代理接走时客户端只看到
+  // 空正文 502，CC Switch 这边没有日志（#9221）。进入路由时服务端自检一次，没回来就提示。
+  useServerEvent<{ appType: AppId; origin: string }>(
+    "proxy-loopback-hijacked",
+    (payload) => {
+      const app = APP_DISPLAY_NAME[payload.appType] ?? payload.appType;
+      toast.warning(
+        t("notifications.proxyLoopbackHijacked", {
+          app,
+          origin: payload.origin,
+        }),
+        { duration: 15000 },
       );
     },
   );

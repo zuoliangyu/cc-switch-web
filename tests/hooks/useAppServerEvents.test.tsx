@@ -8,7 +8,10 @@ import { proxyKeys } from "@/lib/query/proxy";
 import { emitRuntimeEvent } from "../msw/runtimeMocks";
 
 const toastError = vi.hoisted(() => vi.fn());
-vi.mock("sonner", () => ({ toast: { error: toastError } }));
+const toastWarning = vi.hoisted(() => vi.fn());
+vi.mock("sonner", () => ({
+  toast: { error: toastError, warning: toastWarning },
+}));
 
 function setup() {
   const client = new QueryClient();
@@ -48,6 +51,7 @@ describe("useAppServerEvents", () => {
   afterEach(() => {
     cleanup();
     toastError.mockReset();
+    toastWarning.mockReset();
   });
 
   it("refreshes the provider list and mode view on provider-switched", async () => {
@@ -105,6 +109,20 @@ describe("useAppServerEvents", () => {
       });
     });
     expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  it("warns when the system proxy hijacks the local route", async () => {
+    const { wrapper } = setup();
+    renderHook(() => useAppServerEvents(), { wrapper });
+    await flush();
+    await act(async () => {
+      emitRuntimeEvent("proxy-loopback-hijacked", {
+        appType: "codex",
+        origin: "http://127.0.0.1:15721",
+      });
+    });
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+    expect(toastWarning.mock.calls[0][1]).toEqual({ duration: 15000 });
   });
 
   it("invalidates everything on resync and universal provider changes", async () => {

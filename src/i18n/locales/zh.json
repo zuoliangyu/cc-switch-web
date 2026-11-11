@@ -330,7 +330,8 @@
     "proxyReasonDesktopMapping": "使用模型映射（Claude Desktop 只认 Claude 模型名）",
     "proxyReasonRoutingRequired": "需要本地路由处理请求",
     "removeFromConfigFailed": "无法移除供应商",
-    "openclawModelNotFound": "所选模型已不存在，请刷新后重试"
+    "openclawModelNotFound": "所选模型已不存在，请刷新后重试",
+    "proxyLoopbackHijacked": "{{app}} 发往本地路由 {{origin}} 的请求会被系统代理接走，{{app}} 会报 502 错误。请在代理工具里让本机地址直连（例如 Clash 规则最前面加 IP-CIDR,127.0.0.0/8,DIRECT,no-resolve），改完后彻底退出 {{app}} 再打开。"
   },
   "confirm": {
     "deleteProvider": "删除供应商",

@@ -36,7 +36,7 @@
 | 批次 | 范围 | 提交数 | 状态 |
 | --- | --- | --- | --- |
 | A | 预设/定价/图标 | 11 | 已完成（11 已迁移） |
-| B | 代理 | 22 | 待迁移 |
+| B | 代理 | 22 | 已完成（19 已迁移、1 部分迁移、2 不适用） |
 | C | 后端杂项 | 27 | 待迁移 |
 | D | Codex | 13 | 待迁移 |
 | E | 界面 | 11 | 待迁移 |
@@ -46,10 +46,10 @@
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 11 |
-| 部分迁移 | 0 |
-| 待迁移 | 75 |
-| 不适用 | 22 |
+| 已迁移 | 30 |
+| 部分迁移 | 1 |
+| 待迁移 | 53 |
+| 不适用 | 24 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
 
@@ -65,8 +65,8 @@
 | `7afceec1` | v4.0.26 | ci(release): retry xcrun stapler when CloudKit drops the connection | — | 上游发布 CI；Web 维护自有工作流 | 不适用 |
 | `51fce968` | v4.0.26 | fix(presets): refresh stale default models (grok-4.7, kimi-k3.1-pro, qwen3.7-plus) (#9193) | A 预设/定价/图标 | A：Grok Build 默认模型改 grok-4.7（前端常量、三语占位文案、表单用例；Web 的 grok_config.rs 没有 DEFAULT_MODEL 常量，无需改），xAI / Kimi / 千问预设默认模型按上游刷新；上游 PiProviderForm 用例不迁（Web 的 Pi 表单是自写版本） | 已迁移 |
 | `b8fa4199` | v4.0.26 | fix(codex): follow up on sub-agent concurrency limit review notes (#9148) | D Codex |  | 待迁移 |
-| `e217bfcb` | v4.0.26 | perf(proxy): reduce forwarding allocations and failover database reads (#9161) | B 代理 |  | 待迁移 |
-| `e7878471` | v4.0.26 | fix(proxy): stop classifier retry loops (#9201) | B 代理 |  | 待迁移 |
+| `e217bfcb` | v4.0.26 | perf(proxy): reduce forwarding allocations and failover database reads (#9161) | B 代理 | SSE 分帧换成 `SseBuffer` / `SseBlocks`（全部 `take_sse_block` 调用方）、故障转移只加载队列内供应商且端点一次批量读、常用查询 `prepare_cached`、私有参数原地过滤（顺带补上 00a789e7 遗漏的 JSON Schema 属性名保留）、规范 JSON 直接序列化；不适用：活跃连接 guard 计数（Web 没有该 guard，计数在每次尝试里累加）、按家复制请求体改 `Cow`（Web 每家都要 `apply_media_prevention`）、forwarder 改借用参数、`codex_chat_history`（Web 无该缓存） | 部分迁移 |
+| `e7878471` | v4.0.26 | fix(proxy): stop classifier retry loops (#9201) | B 代理 | 连续三轮工具结果报 auto mode 分类器不可用时 Claude / Claude Desktop 本地回 400、不发往上游，用户发新消息恢复；新增 `classifier_guard` | 已迁移 |
 | `c70d61de` | v4.0.26 | fix(linux): bump @tauri-apps/cli so the AppImage stops bundling libwayland-client (#9229) | — | Tauri CLI / AppImage 打包；Web 无桌面打包 | 不适用 |
 | `d16064bd` | v4.0.26 | fix(sessions): improve reader toolbar layout and metadata wrapping (#9109) | E 界面 |  | 待迁移 |
 | `98777515` | v4.0.26 | fix(ui): keep the remaining DB-lock-waiting sync commands off the UI thread (#9178) | C 后端杂项 |  | 待迁移 |
@@ -75,8 +75,8 @@
 | `50a51b86` | v4.0.26 | perf(runtime): defer maintenance and pause hidden-window work (#9182) | C 后端杂项 |  | 待迁移 |
 | `2186b305` | v4.0.26 | fix(apps): append actionable hint when npm install hits a bin-path collision (#9196) | C 后端杂项 |  | 待迁移 |
 | `cc4ce038` | v4.0.26 | perf(sessions): avoid transcript copies and release lightweight caches (#9183) | C 后端杂项 |  | 待迁移 |
-| `1adb3cbc` | v4.0.26 | fix(codex): stop GitHub Copilot Responses replies from showing twice (#8025) | B 代理 |  | 待迁移 |
-| `02a13641` | v4.0.26 | fix(codex): reuse the Grok compat layer for GitHub Copilot Responses (#7989) | B 代理 |  | 待迁移 |
+| `1adb3cbc` | v4.0.26 | fix(codex): stop GitHub Copilot Responses replies from showing twice (#8025) | B 代理 | Copilot 卡的原生 Responses 流按 output_index 固定首个 item ID（压缩与补参数两条流） | 已迁移 |
+| `02a13641` | v4.0.26 | fix(codex): reuse the Grok compat layer for GitHub Copilot Responses (#7989) | B 代理 | Copilot 承载 Grok 模型时按实际发出的模型复用 xAI 兼容（请求 namespace 展开与字段清洗、不回落卡片默认模型，响应还原工具名与整数参数）；`ForwardResult` / `RequestContext` 增加 `outbound_model`；xAI 改写流去掉实体头 | 已迁移 |
 | `df3a9072` | v4.0.26 | fix(webdav-sync): preserve file symlink names in skills archives (#9197) | C 后端杂项 |  | 待迁移 |
 | `78971d56` | v4.0.26 | feat(copilot): show every capped quota and label premium as Credits | E 界面 |  | 待迁移 |
 | `cf3c86fe` | v4.0.26 | feat(auth): show each account's subscription plan in the Auth Center | E 界面 |  | 待迁移 |
@@ -87,22 +87,22 @@
 | `1c2ed066` | v4.0.26 | fix(apps): explain npm bin collisions instead of echoing --force | C 后端杂项 |  | 待迁移 |
 | `65f6e682` | v4.0.26 | fix(mcp): show sign-in required instead of failed for 401 MCP endpoints | C 后端杂项 |  | 待迁移 |
 | `e6e7831e` | v4.0.26 | fix(claude-desktop): let auto-filled menu names follow model edits | E 界面 |  | 待迁移 |
-| `a990c81a` | v4.0.26 | fix(proxy): race IPv4 when IPv6 upstream addresses are unreachable | B 代理 |  | 待迁移 |
-| `7c250c42` | v4.0.26 | feat(proxy): warn when the system proxy hijacks the local route | B 代理 |  | 待迁移 |
+| `a990c81a` | v4.0.26 | fix(proxy): race IPv4 when IPv6 upstream addresses are unreachable | B 代理 | IPv6 上游地址不通时竞速 IPv4 | 已迁移 |
+| `7c250c42` | v4.0.26 | feat(proxy): warn when the system proxy hijacks the local route | B 代理 | Codex / Grok Build 手动进入路由后按系统代理自检本地路由（`loopback_probe`，`/health` 回写随机头），回不到 CC Switch 时记日志并经事件推送提示；服务启动时接上的路由不检查 | 已迁移 |
 | `62688ab3` | v4.0.26 | feat(codex): let a card keep the official Fast speed tier on GPT rows | D Codex |  | 待迁移 |
-| `80ad02c5` | v4.0.26 | fix(proxy): log the mapped upstream model on failed requests | B 代理 |  | 待迁移 |
-| `38efe109` | v4.0.26 | fix(proxy): scope the Codex chat call_id cache to the client session | B 代理 |  | 待迁移 |
-| `abf441fe` | v4.0.26 | fix(proxy): keep turn-start developer messages in place for Codex chat | B 代理 |  | 待迁移 |
+| `80ad02c5` | v4.0.26 | fix(proxy): log the mapped upstream model on failed requests | B 代理 | 失败请求日志的 `model` 记映射后实际发往上游的模型，`request_model` 记客户端原名 | 已迁移 |
+| `38efe109` | v4.0.26 | fix(proxy): scope the Codex chat call_id cache to the client session | B 代理 | Web 没有 Codex Chat 的 `CodexChatHistoryStore` 内存缓存，不存在跨会话串用 call_id 的问题 | 不适用 |
+| `abf441fe` | v4.0.26 | fix(proxy): keep turn-start developer messages in place for Codex chat | B 代理 | Codex Chat 转换保留回合开头的 developer 消息位置 | 已迁移 |
 | `1d9b448e` | v4.0.26 | fix(subscription): refresh expired Claude login for follow-login cards | C 后端杂项 |  | 待迁移 |
 | `7a0718e1` | v4.0.26 | fix(ui): stop macOS from capitalizing text typed into raw inputs | E 界面 |  | 待迁移 |
 | `0f06fed2` | v4.0.26 | fix(ui): center dialogs without translate so they stay sharp on 1x displays | E 界面 |  | 待迁移 |
 | `81a9fa79` | v4.0.26 | feat(dsh): allow overriding the DeepSeek Harness home directory | C 后端杂项 |  | 待迁移 |
 | `a5100e0e` | v4.0.26 | chore(presets): switch TeamoRouter domain from .cn to .com | A 预设/定价/图标 | A：TeamoRouter 各应用预设域名 .cn → .com；迁入上游 teamorouterClaudePresets 用例；Web 三语 README 无 TeamoRouter，不改 | 已迁移 |
-| `44c7fa9b` | v4.0.26 | fix(proxy): fill outbound_model on the classifier-loop early return | B 代理 |  | 待迁移 |
+| `44c7fa9b` | v4.0.26 | fix(proxy): fill outbound_model on the classifier-loop early return | B 代理 | 分类器循环的提前返回显式带 `outbound_model: None` | 已迁移 |
 | `8c05b622` | v4.0.26 | chore(release): v4.0.26 | — | 上游版本号与 whats-new | 不适用 |
 | `f621d421` | v4.0.26 | docs(release): add v4.0.26 release notes | — | 上游发行说明 | 不适用 |
 | `4e13413f` | v4.0.26 | docs(manual): add the Japanese FAQ for Copilot replies showing twice | — | 上游用户手册 | 不适用 |
-| `1d6efa64` | v4.0.27 | fix(stream_check): don't follow redirects in reachability checks (#9253) | B 代理 |  | 待迁移 |
+| `1d6efa64` | v4.0.27 | fix(stream_check): don't follow redirects in reachability checks (#9253) | B 代理 | Web 的流检测仍是真实流式请求，没有上游只测可达性的 `probe_reachability` 路径 | 不适用 |
 | `cb2f2389` | v4.0.27 | fix(tray): stabilize Linux quick panel rendering in lightweight mode (#9233) | — | 系统托盘 | 不适用 |
 | `158b2ba3` | v4.0.27 | feat(pricing): add search to the model pricing table (#9205) | A 预设/定价/图标 | A：定价表搜索（词首前缀匹配、精确 ID 置顶、回车编辑首条或按查询新增），按 Web 保留的定价页布局接入；编辑弹窗自动聚焦；三语文案；迁入上游用例（定价页先有计费默认表，取最后一张表） | 已迁移 |
 | `e66441d8` | v4.0.27 | fix(ui): make provider icons follow the theme (#8438) | A 预设/定价/图标 | A：近黑单墨色 SVG 换成 currentColor 跟随主题，近黑色不写死，位图 / 仍带近黑笔画的图标深色下垫白；Web 的位图图标在 @/icons/local，needsLightBacking 按它判断；卡片图标框去掉底色；迁入 themeAdapt 用例 | 已迁移 |
@@ -128,8 +128,8 @@
 | `8dab4ed4` | v4.0.27 | fix(apps): stop treating Python's pi.exe as the Pi coding agent on Windows | C 后端杂项 |  | 待迁移 |
 | `a94226b1` | v4.0.27 | fix(skills): stop showing 0 skills for repos discovery actually read | C 后端杂项 |  | 待迁移 |
 | `92ca821e` | v4.0.27 | fix(config): write through symlinked live config files | C 后端杂项 |  | 待迁移 |
-| `883382f1` | v4.0.27 | fix(proxy): name the provider in circuit breaker and skip logs | B 代理 |  | 待迁移 |
-| `4a8f113f` | v4.0.27 | fix(proxy): return the half-open probe permit when an attempt is dropped | B 代理 |  | 待迁移 |
+| `883382f1` | v4.0.27 | fix(proxy): name the provider in circuit breaker and skip logs | B 代理 | 熔断与跳过日志写明供应商名 | 已迁移 |
+| `4a8f113f` | v4.0.27 | fix(proxy): return the half-open probe permit when an attempt is dropped | B 代理 | HalfOpen 探测名额改由 `HalfOpenPermitGuard` 持有，尝试结束或请求被取消都归还，名额按轮次标记；删除 `release_permit_neutral`，记录结果不再还名额 | 已迁移 |
 | `07798d56` | v4.0.27 | fix(ci): keep the WSL2 suite on a stable test root and match UNC catalog pointers | — | 上游 WSL2 CI | 不适用 |
 | `4ed410ad` | v4.0.27 | feat(providers): add TokenPlus presets (#9296) | A 预设/定价/图标 | A：TokenPlus 预设（Claude / Desktop / Codex / Hermes / OpenClaw / OpenCode / Pi）、图标与 Pi 模型目录；推广文案按既定约束不迁（Web 不展示合作推广，TokenPlusDescription 用例不迁）；分组用例换成上游最终版 | 已迁移 |
 | `07a10b9c` | v4.0.27 | fix(dsh): name the profile file when its YAML cannot be parsed | C 后端杂项 |  | 待迁移 |
@@ -146,30 +146,30 @@
 | `c65a523c` | v4.0.28 | ci: split frontend unit tests into four shards | — | 上游 CI | 不适用 |
 | `c6a5a789` | v4.0.28 | test: stop building the shared support module as its own test binary | — | 上游集成测试目录结构；Web 无 src-tauri/tests | 不适用 |
 | `b184a88c` | v4.0.28 | fix(apps): drop unused mut in Windows WSL uninstall path | C 后端杂项 |  | 待迁移 |
-| `40b602a3` | v4.0.28 | docs(proxy): clarify supported SSE delimiter combinations (#7904) | B 代理 |  | 待迁移 |
+| `40b602a3` | v4.0.28 | docs(proxy): clarify supported SSE delimiter combinations (#7904) | B 代理 | SSE 四种分隔符组合的注释 | 已迁移 |
 | `2c5e5d2c` | v4.0.28 | feat(codex): keep moving official sessions into the shared bucket while opted in | D Codex |  | 待迁移 |
 | `c7f7caf2` | v4.0.28 | feat(codex): warn when a switch splits Codex session history | D Codex |  | 待迁移 |
 | `97e6d82a` | v4.0.28 | perf(codex): back up the state DB in a single step | D Codex |  | 待迁移 |
 | `6a0acf07` | v4.0.28 | feat(codex): notify when the background unify migration finishes | D Codex |  | 待迁移 |
-| `0e49c881` | v4.0.28 | fix(proxy): retry Codex compaction without tool_choice when rejected | B 代理 |  | 待迁移 |
-| `49f2882e` | v4.0.28 | fix(proxy): repair Kimi tool-call history on native Responses | B 代理 |  | 待迁移 |
-| `8ff9e3b5` | v4.0.28 | fix(proxy): strip ChatGPT identity headers for unmanaged Codex upstreams | B 代理 |  | 待迁移 |
+| `0e49c881` | v4.0.28 | fix(proxy): retry Codex compaction without tool_choice when rejected | B 代理 | 压缩回合被原生 Responses 第三方以 400 拒绝时去掉 `tool_choice` 对同一家重试一次 | 已迁移 |
+| `49f2882e` | v4.0.28 | fix(proxy): repair Kimi tool-call history on native Responses | B 代理 | Kimi / Moonshot 原生 Responses：删空文本 assistant 消息，把调用组内的 assistant 发言移到调用前 | 已迁移 |
+| `8ff9e3b5` | v4.0.28 | fix(proxy): strip ChatGPT identity headers for unmanaged Codex upstreams | B 代理 | 非官方、非托管 ChatGPT 账号的 Codex 上游去掉 ChatGPT 身份头（账号、组织 / 项目、x-oai-* 等），会话与客户端头保留 | 已迁移 |
 | `905c9148` | v4.0.28 | feat(codex): write third-party routes as the built-in openai provider | D Codex |  | 待迁移 |
-| `e9285cf1` | v4.0.28 | fix(proxy): map the model per target when Codex fails over across vendors | B 代理 |  | 待迁移 |
-| `71dbcfa2` | v4.0.28 | fix(proxy): repair tool-call history for DeepSeek native Responses too | B 代理 |  | 待迁移 |
+| `e9285cf1` | v4.0.28 | fix(proxy): map the model per target when Codex fails over across vendors | B 代理 | 故障转移开着时 Codex 换到不发布该模型的那家改用它自己的顶层模型 | 已迁移 |
+| `71dbcfa2` | v4.0.28 | fix(proxy): repair tool-call history for DeepSeek native Responses too | B 代理 | DeepSeek 原生 Responses 同样修复工具调用历史 | 已迁移 |
 | `5f2f527d` | v4.0.28 | fix(codex): stop writing disable_response_storage | D Codex |  | 待迁移 |
 | `e499d1f0` | v4.0.28 | refactor(codex): fold the history-split hint into the switch toast | D Codex |  | 待迁移 |
 | `b0e452ff` | v4.0.28 | feat(codex): turn quota protection on by default and add a pause for the official login | D Codex |  | 待迁移 |
 | `e6256c50` | v4.0.28 | feat(codex): move the official-login pause into the route and aggregation settings | D Codex |  | 待迁移 |
-| `cac921f5` | v4.0.28 | fix(proxy): keep image and search models when Codex fails over | B 代理 |  | 待迁移 |
+| `cac921f5` | v4.0.28 | fix(proxy): keep image and search models when Codex fails over | B 代理 | 故障转移换模型只对对话请求，图片与搜索接口保留客户端模型 | 已迁移 |
 | `3321cb9e` | v4.0.28 | chore(release): v4.0.28 | — | 上游版本号与 whats-new | 不适用 |
 | `8656ebd9` | v4.0.28 | docs(release): add v4.0.28 release notes | — | 上游发行说明 | 不适用 |
 | `5a3d7f92` | 未发布 | feat(i18n): add Korean community localization (#8794) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `cdca0984` | 未发布 | feat(i18n): add Russian community localization (#7788) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `bd487e83` | 未发布 | feat(copilot): add GitHub Copilot CLI support (#8753) | G Copilot CLI |  | 待迁移 |
 | `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 |  | 待迁移 |
-| `72e826ed` | 未发布 | fix(proxy): normalize call-less outputs for native Responses providers (#9328) | B 代理 |  | 待迁移 |
-| `5e9812e0` | 未发布 | fix(claude): omit reasoning_content for Mistral tool history (#9388) | B 代理 |  | 待迁移 |
+| `72e826ed` | 未发布 | fix(proxy): normalize call-less outputs for native Responses providers (#9328) | B 代理 | 非官方原生 Responses 上游把没有 call_id 的 function_call_output 改写成 user 消息 | 已迁移 |
+| `5e9812e0` | 未发布 | fix(claude): omit reasoning_content for Mistral tool history (#9388) | B 代理 | 上游为 api.mistral.ai 时不回放 reasoning_content | 已迁移 |
 
 ## 6. 执行记录
 
@@ -201,3 +201,14 @@
   - 用例：后端 `events`（收发、无订阅者不积压、5 次通知合并为 1 次、落后补发 resync）、`/api/events`（无密钥 401、响应头、收到真实 SSE 事件）、应用项目事件顺序与 payload；迁入上游 logger（重放只通知一次、冲突回退通知两次）、会话同步与 Codex 重建的通知用例。前端新增 SSE 解析、共享连接与退订、退避重连与 resync、`useServerEvent`、`useAppServerEvents` 用例；`useUsageAutoRefresh`、`useUsageEventBridge`、`UsageDashboard.smoke` 改回上游版本（smoke 的定价页断言保留 Web 版式），`UsageDashboard` 的扫描关闭用例改回上游。
   - 复核补正：去掉模式面板 3 秒轮询后，Web 的模式视图键 `["appMode", app]` 不在供应商列表前缀下，切换、增删卡片、改故障转移队列只失效 `["providers", app]`，直连那家 / 路由目标 / 聚合成员会停在旧值直到窗口重新聚焦。照上游把键改为 `["providers", app, "mode"]`（`src/lib/query/appModeKeys.ts`），所有失效供应商列表的操作连带重取；服务重启时按谓词失效全部应用的模式视图。新增 `tests/hooks/useAppModeQueryKey.test.tsx`；前端全量 Vitest 256 个文件全部通过。
   - 验证：`cargo test --locked --lib` 3675 项通过、6 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/usage.rs`、`failover_switch.rs`、`web_session_tests.rs` 里报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 255 个文件 2680 项通过。隔离后端（临时 HOME / USERPROFILE / APPDATA / LOCALAPPDATA，只监听 127.0.0.1:18991）上 curl 连 `/api/events` 收到响应头、一条真实的 `universal-provider-synced` 与 15 秒保活注释，停掉后确认真实 `~/.cc-switch-web` 未变。未做浏览器验收。
+- 2026-11-10：完成批次 B（代理，22 项：19 项已迁移、1 项部分迁移、2 项不适用）。
+  - 方法：上游补丁按 `src-tauri/src` → `backend/src` 映射后逐个 `git apply --3way`。forwarder / handlers / controller 与上游早已分叉，冲突里「theirs」常常带进整段上游测试或 Web 没有的代码，这些文件一律回到 Web 版本后按行为手工迁移；能干净合入的部分（新模块、`codex.rs`、`model_mapper`、`codex_compaction`、xAI 清洗等）直接合入。
+  - SSE 与热路径（e217bfcb，部分迁移）：`sse.rs` 取上游最终版，全部流转换与聚合器改用 `SseBuffer` / `SseBlocks`；故障转移只读队列内供应商、端点一次批量读；`body_filter` 原地过滤并补上 00a789e7 漏迁的 JSON Schema 属性名保留；`json_canonical` 直写序列化。活跃连接 guard、`Cow` 请求体、借用参数与 `codex_chat_history` 部分不适用。
+  - 新增：`classifier_guard`（分类器重试循环本地 400）、`copilot_responses`（Copilot 固定 item ID）、`loopback_probe`（系统代理劫持本地路由自检，`/health` 回写随机头）、`transform_codex_responses_kimi_history`（Kimi / DeepSeek 工具调用历史）。
+  - 出站模型：Web 的 `RequestForwarder` 按请求记下请求体定稿后的 `model`，放进 `ForwardResult` / `ForwardError`，handlers 写入 `RequestContext.outbound_model`；Copilot Grok 的兼容判断、失败请求日志的 `model` 都按它（上游 02a13641、80ad02c5）。
+  - 熔断：HalfOpen 名额改由 guard 持有，请求被取消也归还，按轮次防止晚到的归还放出第二个探测；`record_result` 一律不再还名额，删除 `release_permit_neutral`（4a8f113f）。
+  - 与上游不同：Web 的 xAI 改写流原样复制了上游响应头，改写后长度会变，随本批去掉实体头；Copilot 判断用 `app_type_str`（Web 的 `RequestContext` 没有 `app_type`）；压缩回合去 `tool_choice` 重试与故障转移换模型判断按 Web 的 forwarder 结构接入；系统代理自检只在手动进入路由时做（Web 服务启动时接上的路由不检查）。
+  - 不适用：38efe109（Web 没有 Codex Chat 历史缓存）、1d6efa64（Web 流检测是真实流式请求，没有可达性探测）。用户手册 docs 不迁。
+  - 用例：上游 `classifier_guard`、`loopback_probe`、`copilot_native_responses_tests`（13）、`copilot_grok_responses_tests`、熔断名额取消 / 轮次两条、`codex_failover_*`、`chatgpt_identity_*`、无 call_id 输出三条、Mistral reasoning_content、故障转移 DAO 排序用例迁入；依赖上游 forwarder 测试服务器的用例改写为 `compaction_tests` 里的转发层用例（分类器循环、失败带出映射模型、压缩去 `tool_choice` 重试）。
+  - 事件推送（变基到框架 2 之后接入）：`proxy-loopback-hijacked` 由 `mode::controller::spawn_loopback_check` 经 `crate::events::emit` 发出，`useAppServerEvents` 收到后弹 15 秒警告（三语 `notifications.proxyLoopbackHijacked`）；本批其余提交没有前端事件。
+  - 验证：`cargo test --locked --lib` 3741 项通过、6 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；Docker（rust:1-bookworm）Linux `cargo check --locked --lib --tests` 通过，警告为新版 Rust 对 `fetch_update` 的弃用提示（`circuit_breaker` 取上游写法，Web 既有的 `webdav_auto_sync` 同样）与既有 Unix 终端辅助函数 dead_code；改动的 Rust 文件 rustfmt 干净；`tsc --noEmit` 通过；前端全量 Vitest 256 个文件 2683 项通过；改动的前端文件 Prettier 通过。未做浏览器验收。

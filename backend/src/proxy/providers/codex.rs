@@ -302,8 +302,22 @@ pub fn should_convert_codex_responses_to_anthropic(provider: &Provider, endpoint
 ///
 /// 覆盖托管 xAI OAuth，以及 live 上游为 `api.x.ai` 且 `wire_api = "responses"` 的
 /// API Key Grok Provider（上游 cc-switch#6815）。
-pub fn provider_needs_responses_namespace_flatten(provider: &Provider) -> bool {
-    provider.is_xai_oauth() || provider_is_xai_native_responses(provider)
+/// 另含托管 Copilot 承载的 Grok 模型：只在原生 Responses 路径上、按实际发出的模型调用，
+/// 同一张 Copilot 卡既可能发 Grok 也可能发非 Grok 模型。
+pub fn provider_needs_responses_namespace_flatten(
+    provider: &Provider,
+    outbound_model: Option<&str>,
+) -> bool {
+    provider.is_xai_oauth()
+        || provider_is_xai_native_responses(provider)
+        || (provider.is_github_copilot()
+            && outbound_model.is_some_and(|model| {
+                model
+                    .trim()
+                    .as_bytes()
+                    .get(..5)
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"grok-"))
+            }))
 }
 
 /// 仅在排除 Chat/Anthropic 转换和 xAI 改写后的原生透传分支中使用。
@@ -1388,7 +1402,7 @@ base_url="https://relay.example.com/v1/"
             provider_type: Some("xai_oauth".to_string()),
             ..Default::default()
         });
-        assert!(provider_needs_responses_namespace_flatten(&xai));
+        assert!(provider_needs_responses_namespace_flatten(&xai, None));
 
         // 无 xai_oauth meta 的 API Key Grok Provider 同样直连 api.x.ai Responses。
         let grok_key = create_provider(json!({
@@ -1403,7 +1417,7 @@ base_url = "https://api.x.ai/v1"
 wire_api = "responses"
 "#
         }));
-        assert!(provider_needs_responses_namespace_flatten(&grok_key));
+        assert!(provider_needs_responses_namespace_flatten(&grok_key, None));
 
         // 非 xAI 的 Responses Provider 不展开。
         let other = create_provider(json!({
@@ -1414,7 +1428,11 @@ base_url = "https://api.deepseek.com"
 wire_api = "responses"
 "#
         }));
-        assert!(!provider_needs_responses_namespace_flatten(&other));
+        assert!(!provider_needs_responses_namespace_flatten(&other, None));
+        assert!(!provider_needs_responses_namespace_flatten(
+            &other,
+            Some("grok-4.7")
+        ));
     }
 
     #[test]
@@ -1976,6 +1994,38 @@ wire_api = "chat"
             assert!(!is_codex_official_provider(&provider));
             assert!(provider_needs_responses_late_arguments_repair(&provider));
         }
+    }
+
+    #[test]
+    fn copilot_namespace_compat_uses_only_the_outbound_grok_model() {
+        let mut copilot = create_copilot_provider();
+        copilot.settings_config = json!({
+            "config": "model = \"grok-4.7\"",
+            "modelCatalog": {"models": [{"model": "grok-4.7"}, {"model": "gpt-6.1-sol"}]}
+        });
+        for (model, expected) in [
+            (Some("grok-4.7"), true),
+            (Some("grok-4.5"), true),
+            (Some(" GROK-4.7-fast "), true),
+            (Some("gpt-6.1-sol"), false),
+            (Some("claude-sonnet-4.6"), false),
+            (Some("grokker"), false),
+            (Some("模型"), false),
+            (Some(""), false),
+            (None, false),
+        ] {
+            assert_eq!(
+                provider_needs_responses_namespace_flatten(&copilot, model),
+                expected,
+                "{model:?}"
+            );
+        }
+
+        copilot.meta = None;
+        assert!(!provider_needs_responses_namespace_flatten(
+            &copilot,
+            Some("grok-4.7")
+        ));
     }
 }
 

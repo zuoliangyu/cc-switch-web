@@ -10,6 +10,46 @@ pub async fn list_sessions_internal() -> Result<Vec<session_manager::SessionMeta
     Ok(sessions)
 }
 
+/// 会话正文索引进度的服务端推送事件名（对应上游 `app.emit("session-index-status", …)`）
+pub const SESSION_INDEX_STATUS_EVENT: &str = "session-index-status";
+
+/// 在后台把会话正文索引同步到当前会话列表；进度经服务端推送 `session-index-status`。
+/// 已在同步时只排一次重跑，立即返回当前进度。
+pub async fn sync_session_index_internal() -> Result<session_manager::search::IndexStatus, String> {
+    spawn_blocking(|| {
+        session_manager::search::start_sync(|status| {
+            crate::events::emit(
+                SESSION_INDEX_STATUS_EVENT,
+                serde_json::to_value(status).unwrap_or_default(),
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("Failed to sync session index: {e}"))
+}
+
+/// 在消息正文里搜索，按会话聚合；`providerIds` 为空时不按应用过滤
+pub async fn search_session_content_internal(
+    query: String,
+    providerIds: Option<Vec<String>>,
+    limit: Option<usize>,
+) -> Result<session_manager::search::ContentSearchResult, String> {
+    let limit = limit
+        .unwrap_or(session_manager::search::DEFAULT_LIMIT)
+        .min(session_manager::search::DEFAULT_LIMIT);
+    spawn_blocking(move || session_manager::search::search(&query, providerIds, limit))
+        .await
+        .map_err(|e| format!("Failed to search session content: {e}"))
+}
+
+/// 删除会话正文索引文件（关闭「搜索消息正文」时调用）
+pub async fn clear_session_index_internal() -> Result<bool, String> {
+    spawn_blocking(session_manager::search::clear)
+        .await
+        .map_err(|e| format!("Failed to clear session index: {e}"))??;
+    Ok(true)
+}
+
 /// 返回序列化好的消息数组 JSON：直接从缓存借用序列化，不先复制整份会话。
 pub async fn get_session_messages_internal(
     providerId: String,

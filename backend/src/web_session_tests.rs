@@ -101,3 +101,144 @@ async fn session_messages_endpoint_serializes_the_cached_transcript_directly() {
     assert!(chunks[2]["payloadBytes"].as_u64().unwrap() > 0);
     server.abort();
 }
+
+/// 正文搜索的命中只回会话根目录内的来源：同步只收扫描到的会话，搜索时再按读取会话
+/// 内容的同一条校验过滤，根目录外的旧行（换了配置目录、索引被改过）不外泄路径和摘录。
+#[tokio::test]
+#[serial_test::serial]
+async fn session_content_search_never_returns_sources_outside_session_roots() {
+    use crate::session_manager::search;
+
+    let _fixture = crate::mode::controller::tests::Fixture::new();
+    let mut settings = crate::settings::get_settings();
+    settings.session_content_search_enabled = true;
+    crate::settings::update_settings(settings).unwrap();
+    search::clear().unwrap();
+
+    let root = crate::config::get_claude_config_dir()
+        .join("projects")
+        .join("search");
+    std::fs::create_dir_all(&root).unwrap();
+    let inside = root.join("inside.jsonl");
+    let record = |id: &str, text: &str| {
+        json!({"type":"user", "uuid":"u1", "sessionId":id,
+            "message":{"role":"user", "content":text}})
+        .to_string()
+    };
+    std::fs::write(
+        &inside,
+        format!("{}\n", record("inside", "部署 needle 内部")),
+    )
+    .unwrap();
+    let outside = crate::config::get_home_dir().join("outside.jsonl");
+    std::fs::write(
+        &outside,
+        format!("{}\n", record("outside", "部署 needle 外部")),
+    )
+    .unwrap();
+    let inside = inside.to_string_lossy().into_owned();
+    let outside = outside.to_string_lossy().into_owned();
+
+    let app = Router::new()
+        .route("/sync", post(sync_session_index))
+        .route("/search", post(search_session_content))
+        .route("/clear", axum::routing::delete(clear_session_index));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+
+    // 与页面一样先读列表再同步；进度经服务端推送，等到收尾那一条
+    let mut events = crate::events::subscribe();
+    crate::session_manager::scan_sessions();
+    let started: Value = client
+        .post(format!("{base}/sync"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(started.get("running").is_some());
+    let finished = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        loop {
+            let event = events.recv().await.unwrap();
+            if event.name == "session-index-status" && event.payload["running"] == false {
+                return event.payload;
+            }
+        }
+    })
+    .await
+    .expect("index sync finishes");
+    assert_eq!(finished["processed"], finished["total"]);
+
+    let search = |query: &'static str| {
+        let client = client.clone();
+        let base = base.clone();
+        async move {
+            client
+                .post(format!("{base}/search"))
+                .json(&json!({"query": query, "providerIds": ["claude"]}))
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+    let result = search("needle").await;
+    let hits = result["hits"].as_array().unwrap();
+    assert_eq!(hits.len(), 1, "{result}");
+    assert_eq!(hits[0]["sourcePath"], inside.as_str());
+    assert!(hits[0]["snippets"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("needle"));
+
+    // 根目录外的来源即使在索引里有行，也不会出现在结果里
+    let mut index = search::SessionIndex::open(&search::index_path()).unwrap();
+    index
+        .replace_source(
+            "claude",
+            &outside,
+            search::StoredFingerprint {
+                modified_ns: Some(1),
+                len: 1,
+            },
+            &[(0, "部署 needle 外部".to_string())],
+        )
+        .unwrap();
+    drop(index);
+    let result = search("needle").await;
+    let paths: Vec<&str> = result["hits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|hit| hit["sourcePath"].as_str().unwrap())
+        .collect();
+    assert_eq!(paths, vec![inside.as_str()], "{result}");
+    assert!(!result.to_string().contains("外部"));
+
+    // 关掉开关后搜索不回任何命中，清理删除索引文件
+    let mut settings = crate::settings::get_settings();
+    settings.session_content_search_enabled = false;
+    crate::settings::update_settings(settings).unwrap();
+    assert!(search("needle").await["hits"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    let cleared: Value = client
+        .delete(format!("{base}/clear"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cleared, true);
+    assert!(!search::index_path().exists());
+    server.abort();
+}

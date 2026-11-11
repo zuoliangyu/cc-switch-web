@@ -452,6 +452,9 @@ pub struct AppSettings {
     /// 会话日志，仅在用户点击"立即同步"时手动扫描；代理记账不受此开关影响。
     #[serde(default = "default_true")]
     pub session_auto_sync_enabled: bool,
+    /// 会话页搜索消息正文（默认关闭，开启后在数据目录建 `session-index.db` 索引）；关闭时删除索引
+    #[serde(default)]
+    pub session_content_search_enabled: bool,
     /// User has confirmed the stream check first-run notice
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_check_confirmed: Option<bool>,
@@ -602,6 +605,7 @@ impl Default for AppSettings {
             usage_dashboard_refresh_interval_ms: None,
             usage_display: None,
             session_auto_sync_enabled: true,
+            session_content_search_enabled: false,
             stream_check_confirmed: None,
             enable_failover_toggle: false,
             show_profile_switcher: false,
@@ -1472,6 +1476,16 @@ pub fn update_webdav_sync_status(status: WebDavSyncStatus) -> Result<(), AppErro
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    #[test]
+    fn session_content_search_defaults_off_and_keeps_a_saved_choice() {
+        assert!(!AppSettings::default().session_content_search_enabled);
+        let missing: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(!missing.session_content_search_enabled);
+        let on: AppSettings =
+            serde_json::from_str(r#"{"sessionContentSearchEnabled":true}"#).unwrap();
+        assert!(on.session_content_search_enabled);
+    }
 
     #[test]
     fn codex_stack_classic_tools_default_on_and_ignore_the_old_off_key() {

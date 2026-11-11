@@ -28,6 +28,8 @@ Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前�
 
 用量页自上而下是页头（同步按钮显示最近同步时间，旁边齿轮打开「用量设置」抽屉）、范围栏（时间范围、按应用筛选、供应商 / 模型级联筛选）、概览（指标条加趋势图；时间范围选「全部」时换成热力图，可展开更早的每 53 周一段）和明细（请求日志、供应商、模型三个页签，页签上带条数）。应用筛选只列应用页设为显示的应用；供应商筛选与供应商统计按显示名 A–Z，不按请求数或金额排名。会话日志导入的用量显示为「应用 · 会话日志」。用量设置抽屉里有会话日志自动扫描与间隔（5 / 10 / 30 / 60 秒，关掉自动扫描后间隔隐藏）、「记录请求用量」的入口、Codex 用量重建、显示（币种与汇率、侧栏「今日」显示的项、请求日志的列、趋势图柱形或曲线面积）和定价入口。时间范围、页签、指标和每页条数记在浏览器本地；显示设置随 Web 设置保存。侧栏展开时「用量统计」后面显示今日数字，收起时放在悬停标题里。热力图的每一天可用键盘聚焦查看。
 
+会话页的「搜索消息正文」默认关闭，从「⋯」菜单或搜索无结果时的按钮开启（设备级设置 `sessionContentSearchEnabled`）。开启后服务端在数据目录（默认 `~/.cc-switch-web/session-index.db`）建 SQLite FTS5 索引，只收用户与 Agent 的正文，不收思考、工具参数与输出和注入内容；索引只是缓存，不进主库、不参与备份与 WebDAV 同步，关闭时连同 `-wal` / `-shm` 一起删除。每次会话列表读取成功都在后台增量同步一次（文件按修改时间与大小、SQLite 来源按会话行的散列判断，没变的不重新解析），进度经事件推送 `session-index-status`。搜索结果只包含当前会话根目录内的来源，与读取会话内容用同一条路径校验。
+
 ## 新增或调整的 API
 
 所有路径均沿用 Web 访问密钥保护，配置访问密钥时须发送 `Authorization: Bearer <key>`。
@@ -46,6 +48,9 @@ Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前�
 | `GET /api/usage/summary-by-app` | 同上的时间与供应商、模型筛选，按应用返回 `{appType, summary}`，按真实 Token 降序 |
 | `GET /api/usage/first-date` | 同上的应用、供应商、模型筛选，返回最早有用量的本地日期 `YYYY-MM-DD` 或 `null` |
 | `GET /api/usage/exchange-rates` | 返回 `{rates, fetchedAt, source}`：1 美元折多少 CNY / EUR / JPY / TWD / TRY；两个源都失败时返回错误 |
+| `POST /api/sessions/content-index/sync` | 在后台把正文索引同步到当前会话列表，立即返回 `{running, processed, total}`；已在同步时只排一次重跑；功能关闭时不碰磁盘 |
+| `POST /api/sessions/content-search` | `{query, providerIds?, limit?}`；按会话聚合返回 `{hits, status}`，每个命中带最多 3 条摘录（`messageIndex`、`text`、UTF-16 高亮范围）与命中消息数；`limit` 最多 200 |
+| `DELETE /api/sessions/content-index` | 删除正文索引文件，返回 `true` |
 
 测试使用临时目录、内存数据库、本地 HTTP 夹具和浏览器全 API mock。真实账号登录、工具安装、跨平台编译、全量测试、发布构建和 Docker 验证不包含在本轮验收内。
 
@@ -53,4 +58,4 @@ Hermes 记忆页切换两个文件时保留各自草稿，保存只针对当前�
 
 浏览器与服务端之间有一条共享的事件长连接（`GET /api/events`，SSE），代替原先的定时轮询，事件名与上游桌面端一致。访问密钥照常经 `Authorization` 头校验，所以前端用 fetch 读流，而不是浏览器自带的 EventSource。第一个订阅者出现时建连，最后一个离开时断开；断线后按 1、2、4…最长 30 秒退避重连，重连上后整体重取一次数据（断线期间的事件已经漏了），服务端判定页面跟不上时同样发 `resync`。经反向代理部署时，响应带 `X-Accel-Buffering: no` 与 `Cache-Control: no-cache`，每 15 秒发一次保活注释，代理的读超时应长于 15 秒。
 
-目前推送的事件：`usage-log-recorded`（新用量写入，用量页重读统计）、`provider-switched`（故障转移切到另一家、开启故障转移、应用项目后，供应商列表与模式视图刷新；模式视图因此不再每 3 秒轮询）、`profile-applied`（项目、MCP、Skills、代理状态与提示词面板刷新）、`universal-provider-synced`（统一供应商增删与同步）、`webdav-sync-status-updated`（WebDAV 自动同步结果，失败时提示）。
+目前推送的事件：`usage-log-recorded`（新用量写入，用量页重读统计）、`provider-switched`（故障转移切到另一家、开启故障转移、应用项目后，供应商列表与模式视图刷新；模式视图因此不再每 3 秒轮询）、`profile-applied`（项目、MCP、Skills、代理状态与提示词面板刷新）、`universal-provider-synced`（统一供应商增删与同步）、`webdav-sync-status-updated`（WebDAV 自动同步结果，失败时提示）、`session-index-status`（会话正文索引进度，会话页边建边重查）。

@@ -24,7 +24,12 @@ import type {
   OpenClawToolsConfig,
   OpenClawWriteOutcome,
 } from "@/types";
-import type { SessionMessage, SessionMeta } from "@/types";
+import type {
+  SessionContentSearchResult,
+  SessionIndexStatus,
+  SessionMessage,
+  SessionMeta,
+} from "@/types";
 import type {
   PiCurrentState,
   PiPromptFileKind,
@@ -2412,6 +2417,30 @@ export async function setWebHermesMemoryEnabled(
 
 export async function getWebSessions(): Promise<SessionMeta[]> {
   return requestJson<SessionMeta[]>("/api/sessions");
+}
+
+/** 后台同步会话正文索引；进度经服务端推送 `session-index-status` */
+export async function syncWebSessionIndex(): Promise<SessionIndexStatus> {
+  return requestWithBody<SessionIndexStatus>(
+    "/api/sessions/content-index/sync",
+    "POST",
+  );
+}
+
+export async function searchWebSessionContent(
+  query: string,
+  providerIds?: string[],
+  limit?: number,
+): Promise<SessionContentSearchResult> {
+  return requestWithBody<SessionContentSearchResult>(
+    "/api/sessions/content-search",
+    "POST",
+    { query, providerIds, limit },
+  );
+}
+
+export async function clearWebSessionIndex(): Promise<boolean> {
+  return requestWithBody<boolean>("/api/sessions/content-index", "DELETE");
 }
 
 export async function getWebSessionMessages(

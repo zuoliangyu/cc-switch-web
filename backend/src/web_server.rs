@@ -2404,6 +2404,43 @@ async fn list_sessions() -> Result<Json<Vec<crate::session_manager::SessionMeta>
     Ok(Json(sessions))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionContentSearchRequest {
+    query: String,
+    provider_ids: Option<Vec<String>>,
+    limit: Option<usize>,
+}
+
+/// 后台同步会话正文索引，立即返回当前进度；后续进度走 `/api/events` 的 `session-index-status`
+async fn sync_session_index() -> Result<Json<crate::session_manager::search::IndexStatus>, ApiError>
+{
+    crate::commands::sync_session_index_internal()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to sync session index: {e}")))
+}
+
+async fn search_session_content(
+    Json(payload): Json<SessionContentSearchRequest>,
+) -> Result<Json<crate::session_manager::search::ContentSearchResult>, ApiError> {
+    crate::commands::search_session_content_internal(
+        payload.query,
+        payload.provider_ids,
+        payload.limit,
+    )
+    .await
+    .map(Json)
+    .map_err(|e| ApiError::internal(format!("failed to search session content: {e}")))
+}
+
+async fn clear_session_index() -> Result<Json<bool>, ApiError> {
+    crate::commands::clear_session_index_internal()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to clear session index: {e}")))
+}
+
 async fn get_session_messages(
     Query(query): Query<SessionMessagesQuery>,
 ) -> Result<axum::response::Response, ApiError> {
@@ -5570,6 +5607,12 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             put(set_hermes_memory_enabled),
         )
         .route("/api/sessions", get(list_sessions).delete(delete_session))
+        .route(
+            "/api/sessions/content-index",
+            axum::routing::delete(clear_session_index),
+        )
+        .route("/api/sessions/content-index/sync", post(sync_session_index))
+        .route("/api/sessions/content-search", post(search_session_content))
         .route("/api/sessions/messages", get(get_session_messages))
         .route("/api/sessions/stream", get(stream_session_messages))
         .route("/api/sessions/usage", get(get_session_usage_summary))

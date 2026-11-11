@@ -200,6 +200,9 @@ import {
   getWebDailyMemoryFile,
   getWebSessionMessages,
   getWebSessions,
+  syncWebSessionIndex,
+  searchWebSessionContent,
+  clearWebSessionIndex,
   launchWebSessionTerminal,
   getWebModelPricing,
   getWebModelsDevSyncConfig,
@@ -979,6 +982,16 @@ export async function invoke<T>(
       )) as T;
     case "list_sessions":
       return (await getWebSessions()) as T;
+    case "sync_session_index":
+      return (await syncWebSessionIndex()) as T;
+    case "search_session_content":
+      return (await searchWebSessionContent(
+        args?.query as string,
+        args?.providerIds as string[] | undefined,
+        args?.limit as number | undefined,
+      )) as T;
+    case "clear_session_index":
+      return (await clearWebSessionIndex()) as T;
     case "get_session_messages":
       return (await getWebSessionMessages(
         args?.providerId as string,

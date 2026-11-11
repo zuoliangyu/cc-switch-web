@@ -11,6 +11,7 @@ import {
   getProviders,
   listProviders,
   listSessions,
+  searchSessionContent,
   resetProviderState,
   setCurrentProviderId,
   updateProvider,
@@ -203,6 +204,28 @@ export const handlers = [
   http.post(`${RUNTIME_ENDPOINT}/open_external`, () => success(true)),
 
   http.post(`${RUNTIME_ENDPOINT}/list_sessions`, () => success(listSessions())),
+
+  http.post(`${RUNTIME_ENDPOINT}/sync_session_index`, () => {
+    const total = listSessions().length;
+    return success({ running: false, processed: total, total });
+  }),
+
+  http.post(
+    `${RUNTIME_ENDPOINT}/search_session_content`,
+    async ({ request }) => {
+      const { query, providerIds } = await withJson<{
+        query: string;
+        providerIds?: string[];
+      }>(request);
+      const total = listSessions().length;
+      return success({
+        hits: searchSessionContent(query, providerIds),
+        status: { running: false, processed: total, total },
+      });
+    },
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/clear_session_index`, () => success(true)),
 
   http.post(`${RUNTIME_ENDPOINT}/list_profiles`, () =>
     success({

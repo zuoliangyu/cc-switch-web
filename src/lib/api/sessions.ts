@@ -1,7 +1,12 @@
 import { streamWebSession, getWebSessionImage, getWebSessionContent } from "@/lib/runtime/client/web";
 import type { ContentRef, ImageRef, TranscriptChunk } from "@/types";
 import { invoke } from "@/lib/runtime/client/core";
-import type { SessionMessage, SessionMeta } from "@/types";
+import type {
+  SessionContentSearchResult,
+  SessionIndexStatus,
+  SessionMessage,
+  SessionMeta,
+} from "@/types";
 
 export interface DeleteSessionOptions {
   providerId: string;
@@ -32,6 +37,24 @@ export const sessionsApi = {
   },
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
+  },
+
+  /** 后台同步正文索引；立即返回当前进度，之后的进度走 session-index-status 推送 */
+  async syncContentIndex(): Promise<SessionIndexStatus> {
+    return await invoke("sync_session_index");
+  },
+
+  /** 在消息正文里搜索（按会话聚合）；providerIds 为空时不按应用过滤 */
+  async searchContent(
+    query: string,
+    providerIds?: string[],
+  ): Promise<SessionContentSearchResult> {
+    return await invoke("search_session_content", { query, providerIds });
+  },
+
+  /** 删除正文索引文件（关闭「搜索消息正文」时） */
+  async clearContentIndex(): Promise<boolean> {
+    return await invoke("clear_session_index");
   },
 
   async getMessages(

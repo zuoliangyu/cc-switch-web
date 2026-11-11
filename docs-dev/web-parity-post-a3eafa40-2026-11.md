@@ -40,15 +40,15 @@
 | C | 后端杂项 | 27 | 已完成（24 已迁移、3 部分迁移） |
 | D | Codex | 13 | 已完成（13 已迁移） |
 | E | 界面 | 11 | 待迁移 |
-| F | 会话全文搜索 | 1 | 待迁移 |
+| F | 会话全文搜索 | 1 | 已完成（1 已迁移） |
 | G | Copilot CLI | 1 | 待迁移 |
 | — | 不适用 | 22 | — |
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 67 |
+| 已迁移 | 68 |
 | 部分迁移 | 4 |
-| 待迁移 | 13 |
+| 待迁移 | 12 |
 | 不适用 | 24 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
@@ -114,7 +114,7 @@
 | `cd15a164` | v4.0.27 | feat(provider): add Genesis presets for compatible clients (#9269) | A 预设/定价/图标 | A：Genesis 预设（Claude / Codex / Pi）、图标（按 Web 布局登记在 @/icons/local）、取模型按地址补 ?type=chat；迁入上游预设与取模型用例（mock 改 Web 的 runtime client），Claude 表单用例按 Web 结构改写 | 已迁移 |
 | `b9fd5d99` | v4.0.27 | feat(presets): move Mistral AI to Large 4 and unhide it | A 预设/定价/图标 | A：Mistral AI 改为 Large 4 并取消隐藏；行数断言随 4ed410ad 换成上游最终的「不丢预设」用例 | 已迁移 |
 | `2360631f` | v4.0.27 | chore(presets): align Genesis presets with the inline preset style | A 预设/定价/图标 | A：Genesis 预设改为内联写法，删除 genesisModels.ts，取模型常量内联 | 已迁移 |
-| `deb6d5a1` | v4.0.27 | feat(sessions): search message text across sessions with a local FTS5 index (#7896) | F 会话全文搜索 |  | 待迁移 |
+| `deb6d5a1` | v4.0.27 | feat(sessions): search message text across sessions with a local FTS5 index (#7896) | F 会话全文搜索 | F：会话页「搜索消息正文」（设备级 `sessionContentSearchEnabled`，默认关）：独立的 SQLite FTS5 trigram 索引放在 Web 数据目录 `session-index.db`（不进主库、不备份不同步，关闭时删除），列表每次读取成功后台增量同步，进度经服务端推送 `session-index-status`；各会话扫描报告读取失败（`ScanStatus`），扫描不完整的应用不清理旧行；Tauri 命令改为 `POST /api/sessions/content-index/sync`、`POST /api/sessions/content-search`、`DELETE /api/sessions/content-index`；命中按读取会话内容的同一条校验过滤，只回会话根目录内的来源；三语文案（提示改为「CC Switch 服务的数据目录」），样式用 Web 的 CSS 变量；ko / ru / tr / zh-TW 与上游用户手册不迁 | 已迁移 |
 | `c88d7cc1` | v4.0.27 | fix(tray): convert Linux panel coordinates across display and DPR scale (#9287) | — | 系统托盘 | 不适用 |
 | `c39db7df` | v4.0.27 | fix(ui): handle surrogate pairs and whitespace in provider icon initials fallback (#8139) | A 预设/定价/图标 | A：首字母兜底按码位切分、忽略多余空白（getProviderInitials），迁入上游用例 | 已迁移 |
 | `44e7d3ef` | v4.0.27 | fix(security): detect IPv4-compatible, SIIT, and NAT64 addresses in deep link risk classifier (#8127) | C 后端杂项 | C：深链接风险判断识别 IPv4-compatible、SIIT 与 NAT64 形式的内网地址 | 已迁移 |
@@ -231,3 +231,12 @@
   - 用例：迁入上游 `providers_tests`（3 + 1 忽略）、维护推迟两条（另 1 条忽略的基准）、npm 冲突四条、pip `pi.exe` 两条（一条仅 Windows）、排队通知、进度模块（序列化、清洗、节流、Unix 管道；mock_app 用例改为服务端事件）、Skill 哈希两条、`account_uuid_of`、agy 地址、MCP 401、DSH headless / YAML 用例、符号链接写穿、Argon 档前端用例、`RepoManagerPanelCount`、`npmBinCollision`、AppsPage 进度、`useMcpConnectivity` / `UnifiedMcpPanel` 需要登录；按 Web 结构新写：`/api/sessions/messages` 与流式接口的借用序列化、DSH 目录设置优先于 `DSH_HOME`（含默认目录）、项目与统一供应商写入等锁、omp Key 服务端检查、`useSettings` 换 DSH 目录后的失效、`useDirectorySettings` 的 DSH 目录、深链接 Claude Desktop / Pi 系八条、IPv6 嵌入地址、窗口活跃心跳。
   - 变基：先基于批次 B 完成并提交，再变基到批次 D（`ea3c128e3`）之后，无冲突；变基后重跑全部验证。
   - 验证：`cargo test --locked --lib` 3790 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/config.rs`、`commands/session_manager.rs`、`database/backup.rs`、`database/dao/skills.rs`、`web_session_tests.rs` 报的差异在 HEAD 就有，不在本批改动的行上，未动）；`tsc --noEmit` 通过；前端全量 Vitest 259 个文件 2723 项通过；改动的前端文件 Prettier 通过（`AppsPage.tsx`、`web.ts`、`useSettings.test.tsx`、`deeplinkSecurity.test.ts` 报的差异在 HEAD 就有，未动）。未做浏览器验收与 Docker Linux 检查。
+- 2026-11-11：完成批次 F（会话全文搜索，1 项已迁移）。
+  - 方法：上游 `session_manager`（`search.rs`、`search_revision.rs`、各会话扫描的 `ScanStatus`、`scan_sessions_with_status` / `scan_for_index`、删除会话时 `forget_source`）与 `settings.rs` 按 `src-tauri/src` → `backend/src` 映射后 `git apply --3way`，`providers/*` 与新模块干净合入，`mod.rs` 只冲突在 Web 没有的 `terminal` 模块声明，`settings.rs` 冲突处按 Web 结构手工补字段（Web 用 `#[serde(default)]`，不加上游的默认函数）。前端 `SessionItem`、阅读页、`turns.ts`、新 hook 与用例干净合入；`utils.ts`、`search-field.tsx`、`SessionManagerPage.tsx`、`types.ts` 冲突处保留 Web 的样式类与 `sonner`，取上游逻辑。
+  - 索引存储：上游 `~/.cc-switch/session-index.db` 换成 Web 数据目录 `config::get_app_config_dir()`（默认 `~/.cc-switch-web/session-index.db`）。表结构、trigram 分词、`user_version` 自带的格式版本都取上游；它是独立的缓存文件，不动主库 schema（仍为 v22），不进 SQL 备份、WebDAV 同步。FTS5、trigram 与 `json_each` 由现有 `rusqlite` 0.31 `bundled`（SQLite 3.45）提供，`sha2` 已有，未新增 crate，`Cargo.lock` 不变。
+  - 更新时机：同上游。设置默认关；会话列表每次读取成功（含内容没变的刷新）前端调用一次同步，后端只重建指纹变了的会话（文件按 mtime + 长度，OpenCode / Hermes / MiniMax Code 的 SQLite 来源按该会话原始行散列），已在跑时只排一次重跑；首次批量建库后整理（optimize + VACUUM）；扫描报告读取失败的应用不清理旧行；删除会话同步移除索引行；关闭开关时前端在保存成功后调清理，删除索引及 `-wal` / `-shm`。
+  - API：上游三个 Tauri 命令改为 `POST /api/sessions/content-index/sync`（立即返回进度）、`POST /api/sessions/content-search`（`{query, providerIds?, limit?}`）、`DELETE /api/sessions/content-index`，走现有访问密钥校验；前端 `sessionsApi.syncContentIndex` / `searchContent` / `clearContentIndex` 经 `core.ts` 的 invoke 分派到 `web.ts`。
+  - 与上游不同：搜索命中按 `content::validate_source`（`/api/sessions/stream`、内容分页、图片接口用的同一条校验）过滤后再截到 `limit`，根目录改了还没同步掉的旧行、被改过的索引都不会把根目录外的路径和摘录回给浏览器；`limit` 上限 200（HTTP 接口不信任调用方）；数据目录变了（测试夹具、目录覆盖）时关掉旧连接再按新路径打开；空搜索提示改为「在 CC Switch 服务的数据目录里」建索引（索引建在服务主机上，不在浏览器所在的机器）；上游借托盘菜单更新拖住开关的两个用例，Web 没有托盘，改为拖住清理索引；`SessionManagerPage` 用例把系统时间固定在正午，「刷新后再同步」那条先往前拨一秒；搜索框转圈、正文摘录、空搜索按钮、索引进度行用 Web 的 CSS 变量与按钮变体。上游用户手册、ko / ru / tr / zh-TW 文案不迁；`docs/web-global-resources-guide-zh.md` 补功能说明、三个接口与事件。
+  - 事件推送：`session-index-status` 由 `commands::sync_session_index_internal` 的回调经 `crate::events::emit` 发出（payload `running` / `processed` / `total`，开始、每 25 个会话、结束各一次）；`useSessionContentSearch` 用 `useServerEvent` 订阅，开关开着时更新进度并让搜索重查（边建边能搜到），关着时忽略。
+  - 用例：迁入上游 `search`（28，其中目录不可读那条仅 Unix）、`search_revision`（2）、`ScanStatus` 与首尾行读取（3）、Codex 压缩会话读失败、扫描复用、设置默认值，前端 `SessionContentSearchToggle`（7）、`sessionSearchUnicode`（5）、`useSessionContentSearch`（6）、`SessionManagerPage` / `SessionReader` / `turns` 新增用例与 msw 模拟；新增后端 HTTP 用例：同步经事件推送收尾、命中只有根目录内的会话、索引里塞进根目录外来源的行也不返回、关掉后搜索为空、清理删掉文件（去掉根目录过滤时该用例失败）；前端新增 `session-index-status` 推送更新进度、关着时忽略两条。
+  - 验证：`cargo test --locked --lib` 3826 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/session_manager.rs` 的 `delete_session_internal`、`providers/opencode.rs` 的 `get_opencode_db_path`、`web_session_tests.rs` 第一条用例报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 262 个文件 2786 项通过；改动的前端文件 Prettier 通过（`SessionFinalReply.tsx`、`search-field.tsx`、`sessions.ts`、`web.ts`、`SessionManagerPage.test.tsx`、`msw/state.ts` 报的差异在 HEAD 就有，不在本批改动的行上，未动）。未做浏览器验收与 Docker Linux 检查。

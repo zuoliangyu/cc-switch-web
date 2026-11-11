@@ -66,6 +66,18 @@ impl FailoverSwitchManager {
             pending.remove(&switch_key);
         }
 
+        if matches!(result, Ok(true)) {
+            // 通知前端刷新列表与模式视图（「路由中」标记跟着换到新的那家）
+            crate::events::emit(
+                "provider-switched",
+                serde_json::json!({
+                    "appType": app_type,
+                    "providerId": provider_id,
+                    "source": "failover",
+                }),
+            );
+        }
+
         result
     }
 

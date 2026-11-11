@@ -83,6 +83,21 @@ fn persist_auto_sync_error(settings: &mut WebDavSyncSettings, error: &AppError) 
     let _ = settings::update_webdav_sync_status(settings.status.clone());
 }
 
+fn emit_auto_sync_status_updated(status: &str, error: Option<&str>) {
+    let payload = match error {
+        Some(message) => serde_json::json!({
+            "source": "auto",
+            "status": status,
+            "error": message,
+        }),
+        None => serde_json::json!({
+            "source": "auto",
+            "status": status,
+        }),
+    };
+    crate::events::emit("webdav-sync-status-updated", payload);
+}
+
 async fn run_auto_sync_upload(db: &crate::database::Database) -> Result<(), AppError> {
     if !should_run_auto_sync(settings::get_webdav_sync_settings().as_ref()) {
         return Ok(());
@@ -105,9 +120,13 @@ async fn run_auto_sync_upload(db: &crate::database::Database) -> Result<(), AppE
         return Ok(());
     };
     match result {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            emit_auto_sync_status_updated("success", None);
+            Ok(())
+        }
         Err(err) => {
             persist_auto_sync_error(&mut sync_settings, &err);
+            emit_auto_sync_status_updated("error", Some(&err.to_string()));
             Err(err)
         }
     }

@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.1–v4.0.25 差异清单
 
-> 状态：已完成（2026-11-06）。758 项中已迁移 562、部分迁移 15（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」；6fa328f3、accc4489 于 2026-11-10 随框架 1 改为已迁移）、不适用 181，待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
+> 状态：已完成（2026-11-06）。758 项中已迁移 563、部分迁移 15（均为有意保留的 Web 差异，见第 8 节「收尾：部分迁移复看」；6fa328f3、accc4489 于 2026-11-10 随框架 1 改为已迁移）、不适用 180（415e8994 于 2026-11-10 随框架 2 改为已迁移），待迁移 0；浏览器视觉验收已做。需决策项已由用户确定。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 已置为 `DISABLED_READ_ONLY`）。
 > 起点：`a189980f`（v4.0.0 之后，上一轮冻结目标）；目标：`upstream/main` = `a3eafa40`（v4.0.25，2026-11-02）。
 > 范围：758 个提交（无合并提交），1097 个文件变化（+180074/−23740）。Web 起点为 `be2ba289`（3.0.0 之后）。
@@ -450,7 +450,7 @@
 | `c83cd728` | v4.0.12 | fix(presets): drop OpenCode presets for providers OpenCode ships built in | 1a 预设/定价/图标 | 1a：按上游最终状态合并预设/图标/定价数据；不展示赞助身份，列表按名称 A–Z | 已迁移 |
 | `3069b556` | v4.0.12 | fix(presets): hide Mistral AI routed presets and keep preset ids stable | 1a 预设/定价/图标 | 1a/5c1/5c2：Claude/Codex/Desktop 表单先编号再过滤 hidden，避免回查错位（未回退）；合行与版本排序的逻辑断言随 5c1；5c2 迁入上游 ProviderForm.presetRows.golden 金样（点分组选择器的行与套餐 / 地区控件后提交，断言 presetId 指回所选预设），Web 快照与上游只差 meta.commonConfigEnabled 一项（Web 仍写通用配置开关） | 已迁移 |
 | `68cb364a` | v4.0.12 | test(uninstall): widen windows path resolution timeout to avoid ci flakes (#8295) | 1d 资源/设置/工具 | 1d：卸载测试放宽 Windows 路径解析超时（随测试最终版本） | 已迁移 |
-| `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 5b2b：刷新间隔照上游去掉「关」、只剩 5 / 10 / 30 / 60 秒并持久化 usageDashboardRefreshIntervalMs，统计组件不再各自轮询；Web 没有服务端推送，用量页打开时按间隔扫描并重读统计，自动扫描关掉时间隔仍可选（文案改为「每 N 秒刷新」，只重读统计） | 已迁移 |
+| `cc81627a` | v4.0.12 | fix(usage): sync session usage at the selected auto-refresh interval (#8301) | 5b 用量/额度 UI | 5b2b：刷新间隔照上游去掉「关」、只剩 5 / 10 / 30 / 60 秒并持久化 usageDashboardRefreshIntervalMs，统计组件不再各自轮询。2026-11-10 随框架 2 收敛到上游：新用量由服务端推送的 `usage-log-recorded` 刷新（`useUsageEventBridge`），每轮扫描只刷新「上次同步」时间，自动扫描关掉时隐藏间隔、不再按间隔重读（删去 Web 的「每 N 秒刷新」文案） | 已迁移 |
 | `23dc945e` | v4.0.12 | fix(opencode): add SiliconFlow provider presets (#4878) | 5a 供应商与全局 UI | 5a2/5c1：OpenCode SiliconFlow 预设此前已是上游最终版本；limit 完整性与 SiliconFlow 预设用例随 5a2 补上；「两个区域合成一行」用例随 5c1 补回（groupPresetRows 合成 siliconflow 一行、cn/intl 两版、presetVersionLayout 为按地区的分段），与上游同名测试文件逐字一致 | 已迁移 |
 | `f7696fa8` | v4.0.12 | feat(apps): move uninstall into a per-row overflow menu | 5a 供应商与全局 UI | 5a4a：卸载移进每行末尾的「⋯」菜单（卸载中显示转圈并禁用）；Claude Desktop 的帮助提示移到接入状态旁；用例改为经菜单卸载 | 已迁移 |
 | `e5eeb166` | v4.0.12 | fix(i18n): clarify what hiding an app in the Apps page does | 5a 供应商与全局 UI | 5a4a：「显示」列帮助说明改为只是不显示、配置与应用自身文件都不动（Web 无托盘，不提托盘菜单） | 已迁移 |
@@ -547,7 +547,7 @@
 | `97daccb6` | v4.0.15 | fix(settings): keep settings when an old save left a trailing tail | 1d 资源/设置/工具 | 1d：旧版保存残留尾巴时只取开头完整对象（随 8a06838d 的最终实现一并移植） | 已迁移 |
 | `ecb449f4` | v4.0.15 | fix(terminal): give Windows provider terminals the restored user PATH | 1d 资源/设置/工具 | 1d：Windows 供应商终端使用补全后的用户 PATH | 已迁移 |
 | `eb09fbb1` | v4.0.15 | fix(tools): add missing exited_with_error to the Windows WSL uninstall candidate | 1d 资源/设置/工具 | 1d：Windows WSL 卸载候选补 exited_with_error（随最终版本） | 已迁移 |
-| `415e8994` | v4.0.15 | fix(failover): refresh the routing marker after the proxy fails over | 5a 供应商与全局 UI | 5a3b：Web 没有 provider-switched 事件推送；模式视图（路由标记）由 useAppMode 每 3 秒轮询，故障转移后自然刷新 | 不适用 |
+| `415e8994` | v4.0.15 | fix(failover): refresh the routing marker after the proxy fails over | 5a 供应商与全局 UI | 5a3b 判为不适用；2026-11-10 随框架 2（服务端事件推送）改为已迁移：故障转移切换成功后推送 `provider-switched`（`source: failover`），前端按前缀失效 `["providers", app]` 并刷新模式视图 `["appMode", app]`；`useAppMode` 照上游去掉每 3 秒轮询 | 已迁移 |
 | `ff3e33a8` | v4.0.15 | feat(hermes): declare image input per model | 5a 供应商与全局 UI | 5a2：Hermes 每个模型可声明支持图片输入（supports_vision，关掉时删键交回 Hermes 判断）；预设与元数据填充此前已迁入 | 已迁移 |
 | `93f1688a` | v4.0.15 | chore(providers): follow up on panel transition cleanup (#8260) | 5a 供应商与全局 UI | 5a3a：面板动画预设只留 none / slide-from-right；每日记忆注释整理随 d9a62313 一并处理 | 已迁移 |
 | `afbf073b` | v4.0.15 | fix(provider): prevent card stretching and overlap during drag sorting (#8315) | 5a 供应商与全局 UI | 5a3b：Web 供应商卡片没有拖动排序（无 dnd-kit 列表），无卡片拉伸问题 | 不适用 |

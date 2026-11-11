@@ -2242,8 +2242,7 @@
       "tipOff": "Auto scan is off. Click to sync now"
     },
     "refreshMenu": {
-      "label": "Scan every {{seconds}}s",
-      "refreshOnlyLabel": "Refresh every {{seconds}}s"
+      "label": "Scan every {{seconds}}s"
     },
     "display": {
       "title": "Display",

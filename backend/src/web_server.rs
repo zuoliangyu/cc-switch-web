@@ -650,6 +650,30 @@ async fn api_request_logger(request: axum::extract::Request, next: Next) -> Resp
     response
 }
 
+/// 服务端事件推送（SSE）。浏览器在这条长连接上收到 `provider-switched`、
+/// `usage-log-recorded` 等事件（对应上游 Tauri 事件），落后时收到 `resync`。
+/// 走与其他接口相同的 access key 鉴权；关掉反向代理缓冲，事件才能即时到达。
+async fn server_events() -> Response {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+    use futures::StreamExt;
+
+    let stream = crate::events::subscription_stream(crate::events::subscribe()).map(|event| {
+        let data = serde_json::to_string(&event.payload).unwrap_or_else(|_| "null".to_string());
+        Ok::<_, std::convert::Infallible>(Event::default().event(event.name).data(data))
+    });
+    let mut response = Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(std::time::Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response();
+    let headers = response.headers_mut();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    headers.insert("x-accel-buffering", HeaderValue::from_static("no"));
+    response
+}
+
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
     let (scheme, token) = value.split_once(' ')?;
@@ -782,10 +806,49 @@ async fn apply_profile(
     Json(payload): Json<ApplyProfileRequest>,
 ) -> Result<Json<Vec<String>>, ApiError> {
     let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
-    ProfileService::apply(state.app_state.as_ref(), &id, scope)
+    let applied = ProfileService::apply(state.app_state.as_ref(), &id, scope)
         .await
-        .map(Json)
-        .map_err(profile_api_error)
+        .map_err(profile_api_error)?;
+    emit_profile_apply_events(state.app_state.as_ref(), &id, scope);
+    Ok(Json(applied))
+}
+
+/// 应用项目后通知前端（同上游 `emit_profile_apply_events`）：项目所属分组内的应用各发一条
+/// `provider-switched`，再发 `profile-applied`，payload 形状与上游一致。
+fn emit_profile_apply_events(state: &AppState, profile_id: &str, scope: ProfileScope) {
+    for app_type in scope.apps() {
+        let app_str = app_type.as_str();
+        let (_, auto_failover_enabled) = state.db.get_proxy_flags_sync(app_str);
+        let proxy_enabled = crate::mode::current::is_proxy(app_type);
+        let provider_id = crate::mode::current::provider_for(
+            &state.db,
+            app_type,
+            crate::mode::current::Purpose::InUse,
+        )
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+        crate::events::emit(
+            "provider-switched",
+            json!({
+                "appType": app_str,
+                "proxyEnabled": proxy_enabled,
+                "autoFailoverEnabled": auto_failover_enabled,
+                "providerId": provider_id,
+            }),
+        );
+    }
+    crate::events::emit(
+        "profile-applied",
+        json!({ "profileId": profile_id, "scope": scope.as_str() }),
+    );
+}
+
+fn emit_universal_provider_synced(action: &str, id: &str) {
+    crate::events::emit(
+        "universal-provider-synced",
+        json!({ "action": action, "id": id }),
+    );
 }
 
 async fn get_mcp_servers(
@@ -1635,9 +1698,11 @@ async fn upsert_universal_provider(
     State(state): State<WebApiState>,
     Json(provider): Json<crate::provider::UniversalProvider>,
 ) -> Result<Json<bool>, ApiError> {
+    let id = provider.id.clone();
     let result =
         crate::commands::upsert_universal_provider_internal(state.app_state.as_ref(), provider)
             .map_err(|e| ApiError::internal(format!("failed to save universal provider: {e}")))?;
+    emit_universal_provider_synced("upsert", &id);
     Ok(Json(result))
 }
 
@@ -1645,8 +1710,10 @@ async fn delete_universal_provider(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<bool>, ApiError> {
-    let result = crate::commands::delete_universal_provider_internal(state.app_state.as_ref(), id)
-        .map_err(|e| ApiError::internal(format!("failed to delete universal provider: {e}")))?;
+    let result =
+        crate::commands::delete_universal_provider_internal(state.app_state.as_ref(), id.clone())
+            .map_err(|e| ApiError::internal(format!("failed to delete universal provider: {e}")))?;
+    emit_universal_provider_synced("delete", &id);
     Ok(Json(result))
 }
 
@@ -1654,8 +1721,10 @@ async fn sync_universal_provider(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<bool>, ApiError> {
-    let result = crate::commands::sync_universal_provider_internal(state.app_state.as_ref(), id)
-        .map_err(|e| ApiError::internal(format!("failed to sync universal provider: {e}")))?;
+    let result =
+        crate::commands::sync_universal_provider_internal(state.app_state.as_ref(), id.clone())
+            .map_err(|e| ApiError::internal(format!("failed to sync universal provider: {e}")))?;
+    emit_universal_provider_synced("sync", &id);
     Ok(Json(result))
 }
 
@@ -4631,6 +4700,15 @@ async fn set_auto_failover_enabled(
             .map_err(|e| {
                 ApiError::internal(format!("failed to switch proxy target for failover: {e}"))
             })?;
+        // 开启故障转移会把路由切到队列第一家：通知其他打开的页面刷新当前供应商
+        crate::events::emit(
+            "provider-switched",
+            json!({
+                "appType": app_type_str,
+                "providerId": provider_id,
+                "source": "failoverEnabled",
+            }),
+        );
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -4895,6 +4973,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         log::warn!("startup periodic maintenance failed: {err}");
     }
     let app_state = Arc::new(AppState::new(db));
+    crate::events::init();
     if let Err(err) = crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(
         app_state.as_ref(),
     )
@@ -4967,6 +5046,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
     let mut app = Router::new()
         .route("/api", get(root))
         .route("/api/health", get(health))
+        .route("/api/events", get(server_events))
         .route("/api/auth/status", get(web_auth_status))
         .route("/api/auth/verify", get(verify_web_access_key))
         .route("/api/config/export", get(export_config_download))
@@ -5656,6 +5736,10 @@ mod session_tests;
 #[cfg(test)]
 #[path = "web_resource_tests.rs"]
 mod resource_tests;
+
+#[cfg(test)]
+#[path = "web_events_tests.rs"]
+mod events_tests;
 
 #[cfg(all(test, unix))]
 mod open_file_limit_tests {

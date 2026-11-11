@@ -131,7 +131,7 @@ describe("Codex 聚合：目录、旧客户端与聚合设置", () => {
 
     // 目录或登录又变了：revision 变了，重新显示
     revision = "r2";
-    await client.invalidateQueries({ queryKey: ["appMode"] });
+    await client.invalidateQueries({ queryKey: ["providers"] });
     expect(
       await screen.findByText("webMode.staleClients.unverifiedTitle"),
     ).toBeInTheDocument();

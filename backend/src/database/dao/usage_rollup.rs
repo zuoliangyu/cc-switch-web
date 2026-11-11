@@ -99,6 +99,8 @@ impl Database {
                     log::info!(
                         "Rolled up and pruned {deleted} proxy_request_logs (retain={retain_days}d)"
                     );
+                    // 归档改变了明细与日汇总的分布，较早的统计可能跟着变，通知用量页重拉
+                    crate::events::notify_log_recorded();
                 }
                 Ok(deleted)
             }

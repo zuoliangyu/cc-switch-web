@@ -33,6 +33,7 @@ import {
   SettingsSwitchRow,
 } from "@/components/settings/SettingsLayout";
 import { cn } from "@/lib/utils";
+import { appModeQueryKey } from "@/lib/query/appModeKeys";
 
 /** 有故障转移与路由设置的应用；Claude Desktop 经同一个路由服务转发，但没有故障转移。 */
 const PROXY_APP_IDS = ["claude", "codex", "gemini", "grokbuild"] as const;
@@ -130,7 +131,7 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
 
   const modeQueries = useQueries({
     queries: MODE_APP_IDS.map((app) => ({
-      queryKey: ["appMode", app],
+      queryKey: appModeQueryKey(app),
       queryFn: () => proxyApi.getAppMode(app),
     })),
   });

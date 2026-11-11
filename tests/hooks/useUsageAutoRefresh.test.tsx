@@ -19,8 +19,6 @@ import { usageApi } from "@/lib/api/usage";
 import { usageKeys } from "@/lib/query/usage";
 import type { SessionSyncResult } from "@/types/usage";
 
-// 改写自上游 cc-switch tests/hooks/useUsageAutoRefresh.test.tsx：Web 没有
-// usage-log-recorded 推送，每轮结束重读整页统计（usageKeys.all），自动扫描关着时只重读
 vi.mock("@/lib/api/usage", () => ({
   usageApi: { syncSessionUsage: vi.fn() },
 }));
@@ -33,6 +31,7 @@ const syncResult: SessionSyncResult = {
   deferredFiles: 0,
   errors: [],
 };
+const lastSyncKey = [...usageKeys.all, "session-last-sync"];
 const syncMock = vi.mocked(usageApi.syncSessionUsage);
 const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 const flush = () => act(() => vi.advanceTimersByTimeAsync(0));
@@ -76,9 +75,9 @@ describe("useUsageAutoRefresh", () => {
       );
       await flush();
       expect(syncMock).toHaveBeenCalledTimes(1);
-      // 没有后端推送：扫完重读整页统计
+      // 新用量由后端事件刷新，这里只刷新「上次同步」时间
       expect(invalidate).toHaveBeenCalledTimes(1);
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: usageKeys.all });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: lastSyncKey });
       await advance(refreshIntervalMs - 1);
       expect(syncMock).toHaveBeenCalledTimes(1);
       await advance(1);
@@ -107,7 +106,7 @@ describe("useUsageAutoRefresh", () => {
     expect(syncMock).toHaveBeenCalledTimes(3);
   });
 
-  it("only re-reads statistics while session auto-sync is off", async () => {
+  it("never scans while session auto-sync is off", async () => {
     const { rerender } = renderHook(
       ({ enabled }) =>
         useUsageAutoRefresh({
@@ -116,11 +115,9 @@ describe("useUsageAutoRefresh", () => {
         }),
       { wrapper, initialProps: { enabled: false } },
     );
-    await flush();
-    expect(invalidate).toHaveBeenCalledTimes(1);
     await advance(20000);
     expect(syncMock).not.toHaveBeenCalled();
-    expect(invalidate).toHaveBeenCalledTimes(5);
+    expect(invalidate).not.toHaveBeenCalled();
     rerender({ enabled: true });
     await flush();
     expect(syncMock).toHaveBeenCalledTimes(1);
@@ -202,25 +199,21 @@ describe("useUsageAutoRefresh", () => {
       await flush();
       if (action === "disable") rerender({ enabled: false });
       else unmount();
-      // 关掉自动扫描后仍按间隔重读，但在途的那次扫描结束时不再额外重读
-      const before = invalidate.mock.calls.length;
       await act(async () => {
         finish(syncResult);
       });
-      expect(invalidate).toHaveBeenCalledTimes(before);
       await advance(60000);
+      expect(invalidate).not.toHaveBeenCalled();
       expect(syncMock).toHaveBeenCalledTimes(1);
-      if (action === "unmount") expect(invalidate).not.toHaveBeenCalled();
     },
   );
 
-  it("re-runs usage queries every minute for rolling ranges, even when paused", async () => {
+  it("re-runs usage queries every minute for rolling ranges, even with scanning off", async () => {
     const { rerender } = renderHook(
       ({ rolling }) =>
         useUsageAutoRefresh({
           refreshIntervalMs: 5000,
           sessionAutoSyncEnabled: false,
-          paused: true,
           rollingRange: rolling,
         }),
       { wrapper, initialProps: { rolling: true } },
@@ -239,7 +232,7 @@ describe("useUsageAutoRefresh", () => {
     expect(syncMock).not.toHaveBeenCalled();
   });
 
-  it("still re-reads statistics after a scan error and retries next time", async () => {
+  it("still updates the last sync time after a scan error and retries next time", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     syncMock.mockRejectedValueOnce(new Error("scan failed"));
     renderHook(
@@ -256,5 +249,23 @@ describe("useUsageAutoRefresh", () => {
     await advance(5000);
     expect(syncMock).toHaveBeenCalledTimes(2);
     expect(invalidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("pauses rolling-range queries during a usage rebuild", async () => {
+    const { rerender } = renderHook(
+      ({ paused }) =>
+        useUsageAutoRefresh({
+          refreshIntervalMs: 5000,
+          sessionAutoSyncEnabled: false,
+          rollingRange: true,
+          paused,
+        }),
+      { wrapper, initialProps: { paused: true } },
+    );
+    await advance(120_000);
+    expect(invalidate).not.toHaveBeenCalled();
+    rerender({ paused: false });
+    await advance(60_000);
+    expect(invalidate).toHaveBeenCalledTimes(1);
   });
 });

@@ -24,6 +24,7 @@ import {
   stackSubagentSettings,
   stackSubagentValue,
 } from "./StackSubagentFields";
+import { appModeQueryKey } from "@/lib/query/appModeKeys";
 
 // 原生 select 的空值：不写覆盖、用 Codex 的默认审批模型。
 const CODEX_DEFAULT_REVIEWER = "";
@@ -68,7 +69,9 @@ export function StackSettingsSheet({
     } finally {
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
       // 经典开关、审批模型会改合并目录：「Codex 还在用旧的模型列表」提示要重新算
-      await queryClient.invalidateQueries({ queryKey: ["appMode", "codex"] });
+      await queryClient.invalidateQueries({
+        queryKey: appModeQueryKey("codex"),
+      });
       setSaving(false);
     }
   };

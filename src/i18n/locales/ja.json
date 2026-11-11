@@ -2242,8 +2242,7 @@
       "tipOff": "自動スキャンはオフです。クリックして今すぐ同期"
     },
     "refreshMenu": {
-      "label": "{{seconds}} 秒ごとにスキャン",
-      "refreshOnlyLabel": "{{seconds}} 秒ごとに更新"
+      "label": "{{seconds}} 秒ごとにスキャン"
     },
     "display": {
       "title": "表示",

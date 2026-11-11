@@ -236,11 +236,19 @@ pub fn sync_all_unlocked(db: &Database) -> SessionSyncResult {
         "OpenCode",
         crate::services::session_usage_opencode::sync_opencode_usage(db),
     );
+    notify_sync_result(&result);
     LAST_SCAN_FINISHED.store(
         chrono::Utc::now().timestamp_millis(),
         std::sync::atomic::Ordering::Relaxed,
     );
     result
+}
+
+/// 导入了新行时通知用量页刷新（同上游）。
+pub(crate) fn notify_sync_result(result: &SessionSyncResult) {
+    if result.imported > 0 {
+        crate::events::notify_log_recorded();
+    }
 }
 
 /// 数据来源分布
@@ -1429,6 +1437,18 @@ pub fn get_data_source_breakdown(db: &Database) -> Result<Vec<DataSourceSummary>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sync_result_notification_is_coalesced_to_one_call() {
+        crate::events::take_test_notify_count();
+        notify_sync_result(&SessionSyncResult::default());
+        let result = SessionSyncResult {
+            imported: 25,
+            ..SessionSyncResult::default()
+        };
+        notify_sync_result(&result);
+        assert_eq!(crate::events::take_test_notify_count(), 1);
+    }
 
     fn pricing_test_message(model: &str) -> ParsedAssistantUsage {
         ParsedAssistantUsage {

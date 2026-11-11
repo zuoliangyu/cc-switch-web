@@ -211,36 +211,35 @@ export function UsageSettingsSheet({
                   <li>{t("usage.sources.unsupported")}</li>
                 </ul>
                 <div className="flex items-center justify-between gap-3">
-                  {/* Web 的服务端不推送「有新用量」：自动扫描关着时，用量页仍按这个间隔重读统计，
-                      所以间隔一直可选，只是文案从「扫描」换成「刷新」 */}
-                  <Select
-                    value={String(refreshIntervalMs)}
-                    onValueChange={(next) => {
-                      const ms = Number(next);
-                      if (refreshIntervalOptions.includes(ms)) {
-                        onRefreshIntervalChange(ms);
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-7 w-auto min-w-[120px] text-sm"
-                      aria-label={t("usage.refreshInterval")}
+                  {sessionAutoSyncEnabled ? (
+                    <Select
+                      value={String(refreshIntervalMs)}
+                      onValueChange={(next) => {
+                        const ms = Number(next);
+                        if (refreshIntervalOptions.includes(ms)) {
+                          onRefreshIntervalChange(ms);
+                        }
+                      }}
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {refreshIntervalOptions.map((ms) => (
-                        <SelectItem key={ms} value={String(ms)}>
-                          {t(
-                            sessionAutoSyncEnabled
-                              ? "usage.refreshMenu.label"
-                              : "usage.refreshMenu.refreshOnlyLabel",
-                            { seconds: ms / 1000 },
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger
+                        className="h-7 w-auto min-w-[120px] text-sm"
+                        aria-label={t("usage.refreshInterval")}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {refreshIntervalOptions.map((ms) => (
+                          <SelectItem key={ms} value={String(ms)}>
+                            {t("usage.refreshMenu.label", {
+                              seconds: ms / 1000,
+                            })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span />
+                  )}
                   <Button
                     type="button"
                     variant="outline"

@@ -2242,8 +2242,7 @@
       "tipOff": "自动扫描已关闭，点击立即同步"
     },
     "refreshMenu": {
-      "label": "每 {{seconds}} 秒扫描",
-      "refreshOnlyLabel": "每 {{seconds}} 秒刷新"
+      "label": "每 {{seconds}} 秒扫描"
     },
     "display": {
       "title": "显示",

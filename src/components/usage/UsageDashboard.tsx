@@ -51,6 +51,7 @@ import {
 import { useSettingsQuery } from "@/lib/query";
 import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import { useUsageAutoRefresh } from "@/hooks/useUsageAutoRefresh";
+import { useUsageEventBridge } from "@/hooks/useUsageEventBridge";
 import { usageApi } from "@/lib/api/usage";
 import { getUsageRangePresetLabel, resolveUsageRange } from "@/lib/usageRange";
 import { cn } from "@/lib/utils";
@@ -361,6 +362,9 @@ export function UsageDashboard({
     setScopeMenuOpen(false);
   };
 
+  // 后端写入新日志时推送 `usage-log-recorded`，立刻 invalidate 所有 usage 查询
+  useUsageEventBridge();
+
   const changeRefreshInterval = async (next: number) => {
     const normalized = normalizeRefreshInterval(next);
     const previous = refreshIntervalMs;
@@ -447,8 +451,8 @@ export function UsageDashboard({
   }, [locale, range, resolvedRange.endDate, resolvedRange.startDate, t]);
 
   // 筛选下拉的选项池：供应商列表只跟应用/时间范围走（不受自身选中值影响），
-  // 模型列表随所选供应商级联。所有查询（含子组件）都不轮询：Web 的服务端不推送
-  // 「有新用量」事件，由 useUsageAutoRefresh 按所选间隔扫描会话日志并重读整页统计。
+  // 模型列表随所选供应商级联。所有查询（含子组件）都不轮询：会话用量由
+  // useUsageAutoRefresh 按间隔导入，导入或路由写入后由 useUsageEventBridge 刷新。
   const refetch = {
     refetchInterval: false as const,
   };

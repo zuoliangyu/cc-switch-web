@@ -571,8 +571,7 @@ describe("UsageDashboard", () => {
     expect(usageApiMock.syncSessionUsage).not.toHaveBeenCalled();
   });
 
-  // Web：自动扫描关着时用量页仍按间隔重读统计，间隔留着，文案换成「刷新」
-  it("keeps the sync button about sync time when scanning is off, and keeps the refresh interval", async () => {
+  it("keeps the sync button about sync time when scanning is off, and hides the scan interval", async () => {
     const user = userEvent.setup();
     renderDashboard({ sessionAutoSyncEnabled: false });
 
@@ -582,8 +581,8 @@ describe("UsageDashboard", () => {
     await openSettings(user);
     await screen.findByRole("switch", { name: "usage.sources.scanTitle" });
     expect(
-      screen.getByRole("combobox", { name: "usage.refreshInterval" }),
-    ).toHaveTextContent("usage.refreshMenu.refreshOnlyLabel");
+      screen.queryByRole("combobox", { name: "usage.refreshInterval" }),
+    ).not.toBeInTheDocument();
     expect(usageApiMock.syncSessionUsage).not.toHaveBeenCalled();
   });
 

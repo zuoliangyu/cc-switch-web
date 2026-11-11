@@ -7,6 +7,7 @@ import type {
   AppProxyConfig,
   ProxyTakeoverStatus,
 } from "@/types/proxy";
+import { isAppModeQueryKey } from "./appModeKeys";
 
 export const proxyKeys = {
   status: ["proxyStatus"] as const,
@@ -180,11 +181,14 @@ export function useRestartProxyService() {
   return useMutation({
     mutationFn: (config: GlobalProxyConfig) => proxyApi.restartService(config),
     onSettled: async () => {
-      await Promise.all(
-        ["globalProxyConfig", "proxyStatus", "appMode"].map((key) =>
+      await Promise.all([
+        ...["globalProxyConfig", "proxyStatus"].map((key) =>
           client.invalidateQueries({ queryKey: [key] }),
         ),
-      );
+        client.invalidateQueries({
+          predicate: (query) => isAppModeQueryKey(query.queryKey),
+        }),
+      ]);
     },
   });
 }

@@ -196,43 +196,48 @@ impl<'a> UsageLogger<'a> {
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)"
         );
 
-        conn.execute(
-            &sql,
-            rusqlite::params![
-                request_id,
-                log.provider_id,
-                log.app_type,
-                log.model,
-                log.request_model,
-                log.pricing_model,
-                log.usage.input_tokens,
-                log.usage.output_tokens,
-                log.usage.cache_read_tokens,
-                log.usage.cache_creation_tokens,
-                input_token_semantics,
-                input_cost,
-                output_cost,
-                cache_read_cost,
-                cache_creation_cost,
-                total_cost,
-                log.latency_ms as i64,
-                log.first_token_ms.map(|v| v as i64),
-                log.status_code as i64,
-                error_message,
-                log.session_id,
-                log.provider_type,
-                log.is_streaming as i64,
-                log.cost_multiplier,
-                created_at,
-            ],
-        )
-        .map_err(|e| AppError::Database(format!("记录请求日志失败: {e}")))?;
+        let affected_rows = conn
+            .execute(
+                &sql,
+                rusqlite::params![
+                    request_id,
+                    log.provider_id,
+                    log.app_type,
+                    log.model,
+                    log.request_model,
+                    log.pricing_model,
+                    log.usage.input_tokens,
+                    log.usage.output_tokens,
+                    log.usage.cache_read_tokens,
+                    log.usage.cache_creation_tokens,
+                    input_token_semantics,
+                    input_cost,
+                    output_cost,
+                    cache_read_cost,
+                    cache_creation_cost,
+                    total_cost,
+                    log.latency_ms as i64,
+                    log.first_token_ms.map(|v| v as i64),
+                    log.status_code as i64,
+                    error_message,
+                    log.session_id,
+                    log.provider_type,
+                    log.is_streaming as i64,
+                    log.cost_multiplier,
+                    created_at,
+                ],
+            )
+            .map_err(|e| AppError::Database(format!("记录请求日志失败: {e}")))?;
 
         if collision {
             log::warn!(
                 "usage request_id collision: primary={}, fallback={request_id}",
                 log.request_id
             );
+        }
+        // 真写入了新行（重放同一条 INSERT OR IGNORE 不算）才通知用量页刷新
+        if affected_rows > 0 {
+            crate::events::notify_log_recorded();
         }
 
         Ok(())
@@ -607,6 +612,7 @@ mod tests {
     fn identical_replay_is_idempotent() -> Result<(), AppError> {
         let db = Database::memory()?;
         let logger = UsageLogger::new(&db);
+        crate::events::take_test_notify_count();
         let log = request_log("stable-id", 10);
 
         logger.log_request(&log)?;
@@ -619,6 +625,8 @@ mod tests {
             |row| row.get(0),
         )?;
         assert_eq!(count, 1);
+        // 重放同一条不算新行，只通知一次（同上游）
+        assert_eq!(crate::events::take_test_notify_count(), 1);
         Ok(())
     }
 
@@ -626,6 +634,7 @@ mod tests {
     fn semantic_collision_uses_deterministic_fallback() -> Result<(), AppError> {
         let db = Database::memory()?;
         let logger = UsageLogger::new(&db);
+        crate::events::take_test_notify_count();
         let first = request_log("shared-id", 10);
         let second = request_log("shared-id", 20);
 
@@ -644,6 +653,7 @@ mod tests {
         assert_eq!(rows[0], ("shared-id".to_string(), 10));
         assert!(rows[1].0.starts_with("shared-id:collision:"));
         assert_eq!(rows[1].1, 20);
+        assert_eq!(crate::events::take_test_notify_count(), 2);
         Ok(())
     }
 

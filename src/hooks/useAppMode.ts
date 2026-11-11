@@ -4,6 +4,7 @@ import type { AppId } from "@/lib/api";
 import type { AppMode, RouteSwitchResult } from "@/types/proxy";
 import { proxyApi } from "@/lib/api/proxy";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { appModeQueryKey } from "@/lib/query/appModeKeys";
 
 export const supportsAppMode = (app: AppId) =>
   ["claude", "claude-desktop", "codex", "gemini", "grokbuild"].includes(app);
@@ -23,7 +24,7 @@ type Action =
  */
 export function useAppModeView(app: AppId) {
   return useQuery({
-    queryKey: ["appMode", app],
+    queryKey: appModeQueryKey(app),
     queryFn: () => proxyApi.getAppMode(app),
     enabled: supportsAppMode(app),
     retry: false,
@@ -33,10 +34,12 @@ export function useAppModeView(app: AppId) {
 export function useAppMode(app: AppId) {
   const client = useQueryClient();
   const query = useQuery({
-    queryKey: ["appMode", app],
+    queryKey: appModeQueryKey(app),
     queryFn: () => proxyApi.getAppMode(app),
     enabled: supportsAppMode(app),
-    refetchInterval: 3000,
+    // 不定时轮询（同上游）：键在 ["providers", app] 下，进出模式、切换与供应商改动随列表失效
+    // 刷新，故障转移与应用项目由服务端推送的 provider-switched 刷新（见 useAppServerEvents），
+    // 其余随窗口重新聚焦重取
   });
   const mutation = useMutation({
     mutationFn: (action: Action): Promise<RouteSwitchResult | void> => {
@@ -59,7 +62,6 @@ export function useAppMode(app: AppId) {
     onSettled: async () => {
       await Promise.all(
         [
-          "appMode",
           "providers",
           "proxyStatus",
           "proxyTakeoverStatus",

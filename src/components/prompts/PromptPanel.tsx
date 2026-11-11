@@ -1,5 +1,6 @@
 import { PromptCopyDialog } from "./PromptCopyDialog";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useServerEvent } from "@/hooks/useServerEvent";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileText, Search } from "lucide-react";
@@ -70,6 +71,11 @@ const PromptPanel = React.forwardRef<PromptPanelHandle, PromptPanelProps>(
       return () =>
         window.removeEventListener("prompt-imported", handlePromptImported);
     }, [appId, open, reload]);
+
+    // 应用项目会改写提示词（同上游）：面板开着时重读
+    useServerEvent("profile-applied", () => {
+      if (open) void reload();
+    });
 
     const handleAdd = () => {
       setEditingId(null);

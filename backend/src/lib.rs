@@ -18,6 +18,7 @@ mod config;
 mod dsh_config;
 mod database;
 mod error;
+mod events;
 mod gemini_config;
 mod gemini_mcp;
 mod grok_config;

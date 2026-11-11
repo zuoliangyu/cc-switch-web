@@ -16,13 +16,11 @@ interface UsageAutoRefreshOptions {
 const ROLLING_RANGE_REFRESH_MS = 60_000;
 
 /**
- * 用量页打开期间按所选间隔刷新：打开即刷一次，之后每隔一段刷一次，
- * 窗口隐藏时停、重新显示时立刻补刷。后台只有 10 分钟一次的兜底扫描。
- *
- * 自动扫描开着时每轮先扫描会话日志。和上游桌面端不同，Web 的服务端不推送
- * `usage-log-recorded` 事件，所以每轮结束都重读整页统计（会话导入和路由记账
- * 都靠这一下出现）；自动扫描关着时只重读、不扫描。
- * 范围随时间移动时另有每分钟一次的重查，否则跨过午夜「今天」还停在昨天。
+ * 用量页打开期间按所选间隔扫描会话日志：打开即扫一次，之后每隔一段扫一次，
+ * 窗口隐藏时停、重新显示时立刻补扫。后台只有 10 分钟一次的兜底扫描。
+ * 导入新用量后后端会发 `usage-log-recorded`，统计由 useUsageEventBridge 刷新；
+ * 这里每轮只刷新「上次同步」时间，没有新数据时不重读整页。
+ * 范围随时间移动时另有每分钟一次的重查，否则没有新用量时跨过午夜「今天」还停在昨天。
  */
 export function useUsageAutoRefresh({
   refreshIntervalMs,
@@ -44,34 +42,34 @@ export function useUsageAutoRefresh({
   }, []);
 
   useEffect(() => {
-    if (refreshIntervalMs <= 0 || paused) return;
+    if (!sessionAutoSyncEnabled || refreshIntervalMs <= 0 || paused) return;
     let disposed = false;
 
-    const refresh = async () => {
+    const scan = async () => {
       if (!focusManager.isFocused() || pendingSync.current) return;
-      if (sessionAutoSyncEnabled) {
-        try {
-          const result = await syncSessionUsage();
-          if (result.errors.length > 0) {
-            console.warn(
-              "[UsageDashboard] Session auto-sync errors",
-              result.errors,
-            );
-          }
-        } catch (error) {
-          // 静默扫描失败不弹提示，下一轮继续重试
-          console.warn("[UsageDashboard] Session auto-sync failed", error);
+      try {
+        const result = await syncSessionUsage();
+        if (result.errors.length > 0) {
+          console.warn(
+            "[UsageDashboard] Session auto-sync errors",
+            result.errors,
+          );
         }
+      } catch (error) {
+        // 静默扫描失败不弹提示，下一轮继续重试
+        console.warn("[UsageDashboard] Session auto-sync failed", error);
       }
       if (!disposed) {
-        await queryClient.invalidateQueries({ queryKey: usageKeys.all });
+        await queryClient.invalidateQueries({
+          queryKey: [...usageKeys.all, "session-last-sync"],
+        });
       }
     };
 
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), refreshIntervalMs);
+    void scan();
+    const timer = window.setInterval(() => void scan(), refreshIntervalMs);
     const unsubscribe = focusManager.subscribe((focused) => {
-      if (focused) void refresh();
+      if (focused) void scan();
     });
     return () => {
       disposed = true;
@@ -87,14 +85,14 @@ export function useUsageAutoRefresh({
   ]);
 
   useEffect(() => {
-    if (!rollingRange) return;
+    if (!rollingRange || paused) return;
     const timer = window.setInterval(() => {
       if (focusManager.isFocused()) {
         void queryClient.invalidateQueries({ queryKey: usageKeys.all });
       }
     }, ROLLING_RANGE_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [queryClient, rollingRange]);
+  }, [paused, queryClient, rollingRange]);
 
   return { syncSessionUsage };
 }

@@ -47,7 +47,7 @@ impl ProfileScope {
         }
     }
 
-    fn apps(self) -> &'static [AppType] {
+    pub(crate) fn apps(self) -> &'static [AppType] {
         match self {
             Self::Claude => &[AppType::Claude],
             Self::ClaudeDesktop => &[AppType::ClaudeDesktop],

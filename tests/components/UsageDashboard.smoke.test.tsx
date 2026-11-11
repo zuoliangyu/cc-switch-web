@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UsageDashboard } from "@/components/usage/UsageDashboard";
+import { emitRuntimeEvent as emitTauriEvent } from "../msw/runtimeMocks";
 
 /**
  * 不 mock 子组件，把整页（指标、趋势图、四个页签）真渲染一遍，接口用假数据。
@@ -139,8 +140,7 @@ describe("UsageDashboard (smoke)", () => {
     vi.useRealTimers();
   });
 
-  // Web 的服务端不推送「有新用量」事件：每轮扫描结束都重读整页统计，导入的用量这样出现
-  it("scans session logs on open and shows imported usage after the scan", async () => {
+  it("scans session logs on open and shows imported usage via the backend event", async () => {
     vi.useFakeTimers();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -149,6 +149,8 @@ describe("UsageDashboard (smoke)", () => {
       usageApiMock.getUsageSummaryByApp.mockResolvedValue([
         { appType: "claude", summary: { ...summary, totalCost: "43.1" } },
       ]);
+      // 真实后端扫完、防抖 200ms 后才发这个事件，那时监听早已挂上
+      setTimeout(() => emitTauriEvent("usage-log-recorded", null), 200);
       return { imported: 1, filesScanned: 1, errors: [] };
     });
     render(
@@ -158,11 +160,13 @@ describe("UsageDashboard (smoke)", () => {
     );
     await act(() => vi.advanceTimersByTimeAsync(10));
     expect(usageApiMock.syncSessionUsage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("$42.10")).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(200));
     expect(screen.getByText("$43.10")).toBeInTheDocument();
     client.clear();
   });
 
-  it("scans at the interval and re-reads statistics after every scan", async () => {
+  it("scans at the interval and re-runs statistics only once a minute for rolling ranges", async () => {
     vi.useFakeTimers();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -189,16 +193,18 @@ describe("UsageDashboard (smoke)", () => {
     const counts = queries.map((query) => query.mock.calls.length);
     // 三个页签的计数都查，没打开的页签也有数字
     expect(counts.every((count) => count > 0)).toBe(true);
-    // Web 没有推送：每轮扫描后整页统计都重读一次（上游没有新用量时不重查）
-    await act(() => vi.advanceTimersByTimeAsync(5000));
+    // 没有新用量：扫描不触发重查，只有「今天」这类范围每分钟重算一次
+    await act(() => vi.advanceTimersByTimeAsync(59000));
+    expect(queries.map((query) => query.mock.calls.length)).toEqual(counts);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(queries.map((query) => query.mock.calls.length)).toEqual(
       counts.map((count) => count + 1),
     );
-    expect(usageApiMock.syncSessionUsage).toHaveBeenCalledTimes(2);
+    expect(usageApiMock.syncSessionUsage).toHaveBeenCalledTimes(13);
     client.clear();
   });
 
-  it("never scans while auto scanning is off but still re-reads statistics", async () => {
+  it("hides the scan interval and never scans while auto scanning is off", async () => {
     vi.useFakeTimers();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -211,14 +217,11 @@ describe("UsageDashboard (smoke)", () => {
         />
       </QueryClientProvider>,
     );
-    await act(() => vi.advanceTimersByTimeAsync(10));
-    const before = usageApiMock.getUsageSummaryByApp.mock.calls.length;
-    await act(() => vi.advanceTimersByTimeAsync(5000));
+    await act(() => vi.advanceTimersByTimeAsync(60000));
     expect(usageApiMock.syncSessionUsage).not.toHaveBeenCalled();
-    // 关掉自动扫描后 Web 仍按间隔重读统计（服务端不推送，这是唯一的刷新来源）
-    expect(usageApiMock.getUsageSummaryByApp.mock.calls.length).toBe(
-      before + 1,
-    );
+    expect(
+      screen.queryByRole("button", { name: /usage\.refreshInterval/ }),
+    ).not.toBeInTheDocument();
     client.clear();
   });
 

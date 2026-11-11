@@ -2829,6 +2829,26 @@ export async function restartWebProxyService(
 
 export const manageWebTools = <T>(path: "versions" | "installations" | "action" | "uninstall-plan", payload: Record<string, unknown>): Promise<T> => requestWithBody<T>(`/api/tools/${path}`, "POST", payload);
 
+/**
+ * 打开服务端事件推送（SSE）长连接。浏览器的 EventSource 带不了 Authorization 头，
+ * 所以用 fetch 读流；401 时与其他接口一样清掉访问密钥并要求重新输入。
+ */
+export async function openWebServerEventStream(
+  signal: AbortSignal,
+): Promise<Response> {
+  const response = await fetch(`${getWebApiBase()}/api/events`, {
+    headers: webRequestHeaders("text/event-stream"),
+    cache: "no-store",
+    signal,
+  });
+  handleUnauthorized(response);
+  if (!response.ok) {
+    const fallback = `HTTP ${response.status} for GET /api/events`;
+    throw new Error(await getErrorMessage(response, fallback));
+  }
+  return response;
+}
+
 /** Stream and image bytes bypass debug body logging. */
 export async function streamWebSession(providerId: string, sourcePath: string, onChunk: (chunk: import("@/types").TranscriptChunk) => void): Promise<void> {
   const query = new URLSearchParams({ providerId, sourcePath });

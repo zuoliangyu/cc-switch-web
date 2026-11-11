@@ -48,6 +48,7 @@ import {
 } from "@/hooks/useHermes";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
+import { useAppServerEvents } from "@/hooks/useAppServerEvents";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import {
   extractErrorMessage,
@@ -225,6 +226,8 @@ function App() {
   const { hasUpdate } = useUpdate();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  // 服务端推送的切换、同步等事件（对应上游 App.tsx 的 Tauri 事件监听）
+  useAppServerEvents();
 
   const [activeApp, setActiveApp] = useState<AppId>(getInitialApp);
   const [currentView, setCurrentView] = useState<View>(getInitialView);

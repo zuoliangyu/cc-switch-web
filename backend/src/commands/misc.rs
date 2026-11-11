@@ -1829,10 +1829,14 @@ fn env_launch_command(
             .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
             .take(32)
             .collect();
+        // 同一毫秒里的两次启动（同一张卡连点、并行的用例）靠进程内序号区分，否则
+        // `create_new` 会因文件已存在而失败。
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let env_file = std::env::temp_dir().join(format!(
-            "cc_switch_{program}_env_{safe_id}_{}_{}.sh",
+            "cc_switch_{program}_env_{safe_id}_{}_{}_{}.sh",
             std::process::id(),
-            chrono::Utc::now().timestamp_millis()
+            chrono::Utc::now().timestamp_millis(),
+            SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let mut content = String::new();
         for (key, value) in env {

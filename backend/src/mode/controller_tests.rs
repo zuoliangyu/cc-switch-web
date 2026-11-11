@@ -1317,13 +1317,14 @@ async fn codex_adopting_the_catalog_drops_the_route_rows_own_pointer() {
         !row_config.contains("model_catalog_json") && row_config.contains("model_verbosity"),
         "{row_config}"
     );
-    // cc-switch 接管指针时写绝对路径（严格重读的 Codex 只认绝对形态）。
+    // cc-switch 接管指针时写绝对路径（严格重读的 Codex 只认绝对形态）；服务跑在容器里时
+    // 仍写裸文件名，期望值走同一个判断。
+    let catalog_path = crate::codex_config::get_codex_model_catalog_path();
     assert_eq!(
         codex_doc()["model_catalog_json"].as_str(),
         Some(
-            crate::codex_config::get_codex_model_catalog_path()
-                .to_string_lossy()
-                .as_ref()
+            crate::live::project::codex::catalog_pointer_value(catalog_path.parent().unwrap())
+                .as_str()
         )
     );
     assert!(codex_catalog_rows()

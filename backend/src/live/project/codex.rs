@@ -580,7 +580,7 @@ fn is_cc_switch_catalog(value: &str) -> bool {
 /// Web 版另有一种例外：服务跑在容器里时，配置目录是挂载进来的（如宿主
 /// `~/.codex` → 容器 `/data/.codex`），容器里看到的绝对路径宿主上的 Codex 找不到，
 /// 同样保留裸文件名。
-fn catalog_pointer_value(config_dir: &Path) -> String {
+pub(crate) fn catalog_pointer_value(config_dir: &Path) -> String {
     catalog_pointer_value_for(config_dir, running_in_container())
 }
 

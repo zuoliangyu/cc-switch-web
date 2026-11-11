@@ -41,7 +41,9 @@ jobs:
             dockerfile: Dockerfile.arm64
             platform: ""
           - name: macos-universal
-            os: macos-14
+            # macos-14 已于 2026-11-02 被 GitHub 下线（任务一启动就被终止，发布 Release 也随之跳过）。
+            # 构建只用 rustup 的两个 apple-darwin 目标再 lipo 合并，不依赖特定 Xcode。
+            os: macos-15
             artifact_name: cc-switch-web-macos-universal
             archive_name: cc-switch-web-macos-universal.zip
 

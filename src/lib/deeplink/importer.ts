@@ -1,7 +1,15 @@
 import { mcpApi, promptsApi, providersApi, skillsApi } from "@/lib/api";
 import type { AppId } from "@/lib/api";
 import { providerRuntimeApi } from "@/lib/api/providerRuntime";
-import type { McpServer, Provider, ProviderMeta, UsageScript } from "@/types";
+import { piApi } from "@/lib/api/pi";
+import type {
+  ClaudeDesktopModelRoute,
+  McpServer,
+  Provider,
+  ProviderMeta,
+  UsageScript,
+} from "@/types";
+import { CLAUDE_DESKTOP_ROLE_ROUTE_IDS } from "@/config/claudeDesktopProviderPresets";
 import { decodeBase64Utf8 } from "@/lib/utils/base64";
 import { TEMPLATE_TYPES } from "@/config/constants";
 import { detectCodingPlanProviderForApp } from "@/config/codingPlanProviders";
@@ -48,13 +56,22 @@ const randomSuffix = () =>
     ? crypto.randomUUID().replace(/-/g, "")
     : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 
+/** 原生键有 slug 规则的应用（DeepSeek Harness 只收小写连字符 id，MCode 只收 ASCII 字母数字） */
+const SLUG_ID_APPS = new Set<AppId>([
+  "opencode",
+  "mcode",
+  "kimi",
+  "dsh",
+  "omp",
+]);
+
 /**
- * 供应商 ID。显示名可以是中文等 Unicode，但新的 OpenCode ID 要能通过编辑器的
+ * 供应商 ID。显示名可以是中文等 Unicode，但新的 OpenCode 等 ID 要能通过编辑器的
  * `^[a-z0-9]+(-[a-z0-9]+)*$` 校验，所以只取 ASCII 字母数字片段，后缀换成随机值，
  * 同一毫秒内重复导入也不会撞 ID。
  */
 const getProviderId = (app: AppId, name: string) => {
-  if (app !== "opencode") return getTimestampId(name);
+  if (!SLUG_ID_APPS.has(app)) return getTimestampId(name);
   const slug = name
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
@@ -170,11 +187,91 @@ const buildUsageScript = (
   };
 };
 
+/** 和后端 `is_claude_safe_model_id`、Desktop 表单的 `isClaudeSafeRoute` 同一条规则 */
+const isClaudeSafeModelId = (model: string) => {
+  const normalized = model.trim().toLowerCase();
+  if (normalized.includes("[1m]")) return false;
+  const tail = normalized.startsWith("anthropic/claude-")
+    ? normalized.slice("anthropic/claude-".length)
+    : normalized.startsWith("claude-")
+      ? normalized.slice("claude-".length)
+      : "";
+  return ["sonnet-", "opus-", "haiku-", "fable-"].some(
+    (prefix) => tail.startsWith(prefix) && tail.length > prefix.length,
+  );
+};
+
+/**
+ * Claude Desktop 只认 `claude-*` 模型名，按链接里的模型名分成两种卡：Anthropic 格式、模型全是
+ * Claude 名字（或没写模型）的导成直连卡；有别的名字或别的格式的导成模型映射卡，经本地路由转发，
+ * 和在 Desktop 页面手动新建的映射卡一样占满四档，没单独写模型的档用链接的主模型。
+ */
+const claudeDesktopMeta = (
+  request: DeepLinkImportRequest,
+  apiFormat: DeepLinkApiFormat | undefined,
+): ProviderMeta => {
+  const trimmed = (value: string | undefined) => value?.trim() || undefined;
+  const format = apiFormat ?? "anthropic";
+  const models = [
+    request.model,
+    request.sonnetModel,
+    request.opusModel,
+    request.haikuModel,
+  ]
+    .map(trimmed)
+    .filter((model): model is string => Boolean(model));
+
+  if (format === "anthropic" && models.every(isClaudeSafeModelId)) {
+    return {
+      claudeDesktopMode: "direct",
+      apiFormat: "anthropic",
+      claudeDesktopModelRoutes: Object.fromEntries(
+        models.map((model) => [model, { model }]),
+      ),
+    };
+  }
+
+  const primary = models[0];
+  if (!primary) {
+    throw new Error(
+      "使用非 Anthropic apiFormat 的 Claude Desktop 链接需要模型，请在链接里加上 model 参数",
+    );
+  }
+  const tiers: Record<keyof typeof CLAUDE_DESKTOP_ROLE_ROUTE_IDS, string> = {
+    sonnet: trimmed(request.sonnetModel) ?? primary,
+    opus: trimmed(request.opusModel) ?? primary,
+    haiku: trimmed(request.haikuModel) ?? primary,
+    fable: primary,
+  };
+  const routes: Record<string, ClaudeDesktopModelRoute> = {};
+  for (const role of ["sonnet", "opus", "haiku", "fable"] as const) {
+    const upstream = tiers[role];
+    routes[CLAUDE_DESKTOP_ROLE_ROUTE_IDS[role]] = {
+      model: upstream,
+      labelOverride: upstream,
+    };
+  }
+  return {
+    claudeDesktopMode: "proxy",
+    apiFormat: nativeProtocol(
+      "claude-desktop",
+      format,
+    ) as ProviderMeta["apiFormat"],
+    claudeDesktopModelRoutes: routes,
+  };
+};
+
 const buildProviderMeta = (
   request: DeepLinkImportRequest,
   apiFormat: DeepLinkApiFormat | undefined,
 ): ProviderMeta | undefined => {
   const usageScript = buildUsageScript(request);
+  if (request.app === "claude-desktop") {
+    return {
+      ...(usageScript ? { usage_script: usageScript } : {}),
+      ...claudeDesktopMeta(request, apiFormat),
+    };
+  }
   // Claude Code、Codex、Grok Build 的格式记在 meta 上：非原生格式的卡片会带「需要路由」，
   // 切过去时由本地路由转换。链接没写时不加这个字段，和旧链接导入的行一致。
   const routed = request.app
@@ -265,6 +362,42 @@ context_window = ${GROK_DEFAULT_CONTEXT_WINDOW}
   };
 };
 
+/**
+ * 链接的主模型。Pi 系这几家的节点没有模型就选不到任何模型，解析时已要求链接带上；
+ * 从 `config` 合并来的请求、直接构造的请求再查一次。
+ */
+const requiredLinkModel = (request: DeepLinkImportRequest) => {
+  const model = request.model?.trim();
+  if (!model) {
+    throw new Error(
+      `${String(request.app)} 供应商需要模型，请在链接里加上 model 参数`,
+    );
+  }
+  return model;
+};
+
+/**
+ * 链接导入的 Kimi Code 模型的上下文窗口。Kimi 自己要求每个模型都带正数
+ * `max_context_size`（缺了拒绝运行），链接里没有这个字段。取偏小的 128K：Kimi 按它决定何时压缩，
+ * 报大了长会话会被上游拒绝，报小了只是早一点压缩。用户可在编辑器里改。
+ */
+const KIMI_LINK_CONTEXT_SIZE = 131_072;
+
+/**
+ * Kimi Code 的模型表是全局的，键和别家供应商撞了写入会被拒，所以键写成 `<供应商 id>/<模型>`，
+ * 和预设一致。
+ */
+const namespaceKimiModels = (settings: Record<string, unknown>, id: string) => {
+  const models = settings.models;
+  if (!models || typeof models !== "object" || Array.isArray(models)) return;
+  settings.models = Object.fromEntries(
+    Object.entries(models as Record<string, unknown>).map(([key, model]) => [
+      `${id}/${key}`,
+      model,
+    ]),
+  );
+};
+
 const buildProviderSettings = (
   request: DeepLinkImportRequest,
   apiFormat: DeepLinkApiFormat | undefined,
@@ -273,6 +406,7 @@ const buildProviderSettings = (
 
   switch (request.app) {
     case "claude":
+    case "claude-desktop":
       return {
         env: {
           ANTHROPIC_AUTH_TOKEN: request.apiKey ?? "",
@@ -367,6 +501,48 @@ const buildProviderSettings = (
         models: [{ id: model, name: model }],
       };
     }
+    case "mcode":
+    case "dsh": {
+      // MiniMax Code、DeepSeek Harness 的自定义供应商节点，两家是同一种形状。模型只写名字：
+      // 两家客户端都接受，上下文窗口等留给用户在编辑器里补
+      const model = requiredLinkModel(request);
+      return {
+        name: request.name ?? "",
+        kind: "custom",
+        enabled: true,
+        api: nativeProtocol(request.app, apiFormat),
+        options: { baseURL: endpoint, apiKey: request.apiKey ?? "" },
+        models: { [model]: { name: model } },
+      };
+    }
+    case "kimi": {
+      // 模型键先用模型名，定下供应商 id 后由 `namespaceKimiModels` 加前缀
+      const model = requiredLinkModel(request);
+      return {
+        provider: {
+          type: nativeProtocol("kimi", apiFormat),
+          base_url: endpoint,
+          api_key: request.apiKey ?? "",
+        },
+        models: {
+          [model]: {
+            model,
+            max_context_size: KIMI_LINK_CONTEXT_SIZE,
+            capabilities: ["tool_use"],
+          },
+        },
+      };
+    }
+    case "omp": {
+      // Oh My Pi 的 models.yml 节点：和 Pi 一样只写一个模型，但没有 `name` 字段（显示名在 CC Switch）
+      const model = requiredLinkModel(request);
+      return {
+        baseUrl: endpoint,
+        apiKey: request.apiKey ?? "",
+        api: nativeProtocol("omp", apiFormat),
+        models: [{ id: model, name: model }],
+      };
+    }
     default:
       throw new Error(`不支持的 provider app：${String(request.app)}`);
   }
@@ -382,10 +558,15 @@ export const buildProviderFromRequest = (
   const apiFormat = linkApiFormat(request);
   // 前端组件可以直接构造请求、不经过解析器：构建时还要再查一次
   checkLinkValues(request);
+  const id = getProviderId(request.app, request.name);
+  const settingsConfig = buildProviderSettings(request, apiFormat);
+  if (request.app === "kimi") {
+    namespaceKimiModels(settingsConfig, id);
+  }
   return {
-    id: getProviderId(request.app, request.name),
+    id,
     name: request.name,
-    settingsConfig: buildProviderSettings(request, apiFormat),
+    settingsConfig,
     websiteUrl: request.homepage,
     notes: request.notes,
     meta: buildProviderMeta(request, apiFormat),
@@ -408,6 +589,13 @@ const importProvider = async (
   const app = request.app;
   const provider = buildProviderFromRequest(request);
   const providerId = provider.id;
+  // omp 先把 Key 当环境变量名查（服务端进程的环境和 `.env`）：此刻就能解析成别的值的，
+  // 导入后会把那个值发到链接给的地址
+  if (app === "omp" && (await piApi.isOmpApiKeyReference(request.apiKey))) {
+    throw new Error(
+      "链接的 apiKey 会被 omp 当成环境变量名解析成本机的值，不能从链接导入，请手动添加供应商",
+    );
+  }
 
   // `enabled` 是确认框里「导入后立即切换 / 添加到应用」开关的值（链接里的 `enabled` 只是它的
   // 初始值）。累加式应用（OpenCode、OpenClaw、Hermes、Pi）没有「切换」：开关决定这家要不要

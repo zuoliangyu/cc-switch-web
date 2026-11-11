@@ -271,6 +271,7 @@ import {
   upsertWebUniversalProvider,
   deleteWebUniversalProvider,
   getWebPiState,
+  isWebOmpApiKeyReference,
   updateWebPiProviderUsageScript,
   getWebPiPromptFile,
   saveWebPiPromptFile,
@@ -1007,6 +1008,8 @@ export async function invoke<T>(
       return (await getWebPiState("pi")) as T;
     case "get_omp_current_state":
       return (await getWebPiState("omp")) as T;
+    case "omp_api_key_is_reference":
+      return (await isWebOmpApiKeyReference(String(args?.value ?? ""))) as T;
     case "update_pi_provider_usage_script":
       return (await updateWebPiProviderUsageScript(
         args?.app as "pi" | "omp",

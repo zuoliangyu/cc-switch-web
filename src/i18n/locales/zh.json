@@ -813,6 +813,7 @@
     "browsePlaceholderHermes": "例如：/home/<你的用户名>/.hermes",
     "browsePlaceholderPi": "例如：/home/<你的用户名>/.pi/agent",
     "browsePlaceholderOmp": "例如：/home/<你的用户名>/.omp/agent",
+    "browsePlaceholderDsh": "例如：/home/<你的用户名>/.dsh",
     "browseDirectory": "浏览目录",
     "resetDefault": "恢复默认目录（需保存后生效）",
     "updateTo": "更新到 v{{version}}",
@@ -912,6 +913,7 @@
     "toolActionDone": "{{count}} 个工具{{action}}完成",
     "toolActionPartial": "{{succeeded}} 个{{action}}成功，{{failed}} 个失败",
     "toolActionFailed": "安装/升级命令执行失败",
+    "toolActionBinCollision": "{{path}} 已经有一个同名文件，多半来自另一种安装方式，npm 不会覆盖它。请先确认它是什么，改名备份后再重试；不要用 npm 的 --force，它会直接覆盖这个文件。",
     "toolActionInProgress": "应用操作仍在进行中",
     "toolActionInProgressDetail": "{{tool}} 已有安装、升级或卸载任务正在后台处理，请等待完成，无需重复操作。",
     "toolNotRunnable": "已安装但无法运行（未探测到版本）",
@@ -3929,6 +3931,7 @@
     "agyThirdParty": "Claude/GPT",
     "agyGeminiFiveHour": "Gemini 5 小时",
     "agyGeminiWeekly": "Gemini 每周",
+    "agyGeminiArgonWeekly": "Argon 每周",
     "agyThirdPartyFiveHour": "Claude/GPT 5 小时",
     "agyThirdPartyWeekly": "Claude/GPT 每周",
     "copilotPremium": "高级请求",
@@ -4259,6 +4262,7 @@
     "connection": {
       "unchecked": "未检查",
       "connected": "连接成功",
+      "authRequired": "服务器可连接，但要求登录授权（如 OAuth）。CC Switch 检测时不带客户端自己的登录凭据：客户端里已登录即可正常使用；如果在请求头里配置了令牌，请确认它仍然有效",
       "disconnected": "连接失败",
       "checking": "正在检查连接",
       "disabled": "未启用"
@@ -4290,6 +4294,8 @@
     "notRunnable": "无法运行",
     "updateNeedsNode": "新版本 {{version}} 要求 Node {{required}}，这处安装用的是 Node {{current}}，需要先升级 Node。",
     "otherInstalls": "另有 {{count}} 处安装",
+    "toolQueued": "排队中，等前一个应用完成",
+    "toolElapsed": "已用 {{time}}",
     "installsFound": "检测到 {{count}} 处安装",
     "wslFlag": "标志",
     "installHint": {

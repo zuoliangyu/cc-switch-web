@@ -57,6 +57,7 @@ const DIRECTORY_SETTINGS_KEYS = [
   "hermesConfigDir",
   "piConfigDir",
   "ompConfigDir",
+  "dshConfigDir",
 ] as const;
 
 const sanitizeDir = (value?: string | null): string | undefined => {
@@ -130,6 +131,7 @@ export function useSettings(): UseSettingsResult {
       sanitizeDir(data?.hermesConfigDir),
       sanitizeDir(data?.piConfigDir),
       sanitizeDir(data?.ompConfigDir),
+      sanitizeDir(data?.dshConfigDir),
     );
     setRequiresRestart(false);
   }, [
@@ -167,6 +169,7 @@ export function useSettings(): UseSettingsResult {
         const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
         const sanitizedPiDir = sanitizeDir(mergedSettings.piConfigDir);
         const sanitizedOmpDir = sanitizeDir(mergedSettings.ompConfigDir);
+        const sanitizedDshDir = sanitizeDir(mergedSettings.dshConfigDir);
         const { webdavSync: _ignoredWebdavSync, ...restSettings } =
           mergedSettings;
 
@@ -181,6 +184,7 @@ export function useSettings(): UseSettingsResult {
           hermesConfigDir: sanitizedHermesDir,
           piConfigDir: sanitizedPiDir,
           ompConfigDir: sanitizedOmpDir,
+          dshConfigDir: sanitizedDshDir,
           language: mergedSettings.language,
         };
 
@@ -306,8 +310,10 @@ export function useSettings(): UseSettingsResult {
         );
         const sanitizedHermesDir = sanitizeDir(mergedSettings.hermesConfigDir);
         const sanitizedOmpDir = sanitizeDir(mergedSettings.ompConfigDir);
+        const sanitizedDshDir = sanitizeDir(mergedSettings.dshConfigDir);
         const previousAppDir = initialAppConfigDir;
         const previousOmpDir = sanitizeDir(data?.ompConfigDir);
+        const previousDshDir = sanitizeDir(data?.dshConfigDir);
         const previousClaudeDir = sanitizeDir(data?.claudeConfigDir);
         const previousCodexDir = sanitizeDir(data?.codexConfigDir);
         const previousGeminiDir = sanitizeDir(data?.geminiConfigDir);
@@ -326,6 +332,7 @@ export function useSettings(): UseSettingsResult {
           openclawConfigDir: sanitizedOpenclawDir,
           hermesConfigDir: sanitizedHermesDir,
           ompConfigDir: sanitizedOmpDir,
+          dshConfigDir: sanitizedDshDir,
           language: mergedSettings.language,
         };
 
@@ -437,6 +444,21 @@ export function useSettings(): UseSettingsResult {
         // Oh My Pi 换了目录：供应商状态、技能和会话都换了来源
         if (sanitizedOmpDir !== previousOmpDir) {
           await invalidatePiDirectoryCaches(queryClient, "omp");
+        }
+
+        // DeepSeek Harness 换了主目录：配置档、技能、会话与官方登录都跟着换了来源
+        if (sanitizedDshDir !== previousDshDir) {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["providers", "dsh"] }),
+            queryClient.invalidateQueries({
+              queryKey: ["skills", "installed"],
+            }),
+            queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+            // DSH_ACCOUNT_STATUS_KEY：登录凭据也在 DSH 主目录里，不刷新会显示旧目录的账号
+            queryClient.invalidateQueries({
+              queryKey: ["dsh-account-status"],
+            }),
+          ]);
         }
 
         const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);

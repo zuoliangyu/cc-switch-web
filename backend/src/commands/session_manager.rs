@@ -10,13 +10,16 @@ pub async fn list_sessions_internal() -> Result<Vec<session_manager::SessionMeta
     Ok(sessions)
 }
 
+/// 返回序列化好的消息数组 JSON：直接从缓存借用序列化，不先复制整份会话。
 pub async fn get_session_messages_internal(
     providerId: String,
     sourcePath: String,
-) -> Result<Vec<session_manager::SessionMessage>, String> {
-    let provider_id = providerId.clone();
-    let source_path = sourcePath.clone();
-    spawn_blocking(move || session_manager::load_transcript(&provider_id, &source_path).map(|loaded| loaded.transcript.messages.clone()))
+) -> Result<Vec<u8>, String> {
+    spawn_blocking(move || {
+        session_manager::load_transcript(&providerId, &sourcePath).and_then(|loaded| {
+            serde_json::to_vec(&loaded.transcript.messages).map_err(|e| e.to_string())
+        })
+    })
     .await
     .map_err(|e| format!("Failed to load session messages: {e}"))?
 }

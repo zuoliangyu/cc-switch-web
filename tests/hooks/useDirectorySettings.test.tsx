@@ -60,6 +60,7 @@ describe("useDirectorySettings", () => {
       if (app === "codex") return "/remote/codex";
       if (app === "gemini") return "/remote/gemini";
       if (app === "grokbuild") return "/remote/grokbuild";
+      if (app === "dsh") return "/remote/dsh";
       return "/remote/opencode";
     });
     getDefaultConfigDirMock.mockImplementation(async (app: string) => {
@@ -67,6 +68,7 @@ describe("useDirectorySettings", () => {
       if (app === "codex") return "/default/codex";
       if (app === "gemini") return "/default/gemini";
       if (app === "grokbuild") return "/default/grokbuild";
+      if (app === "dsh") return "/default/dsh";
       return "/default/opencode";
     });
   });
@@ -92,6 +94,7 @@ describe("useDirectorySettings", () => {
       hermes: "/remote/opencode",
       pi: "/remote/opencode",
       omp: "/remote/opencode",
+      dsh: "/remote/dsh",
     });
   });
 
@@ -105,6 +108,7 @@ describe("useDirectorySettings", () => {
     ["hermes", "hermesConfigDir"],
     ["pi", "piConfigDir"],
     ["omp", "ompConfigDir"],
+    ["dsh", "dshConfigDir"],
   ] as const)(
     "syncs the %s display when form drafts are discarded",
     async (app, field) => {

@@ -14,6 +14,8 @@ function stopHeartbeat() {
 }
 
 function setWindowActive(active: boolean) {
+  // 状态没变（如 focus 与 visibilitychange 先后到达）时不重启心跳。
+  if (document.documentElement.dataset.windowActive === String(active)) return;
   document.documentElement.dataset.windowActive = String(active);
   stopHeartbeat();
   if (!active) return;

@@ -14,6 +14,7 @@ import {
   MCP_LINK_APPS,
   PROMPT_LINK_APPS,
   PROVIDER_LINK_APPS,
+  MODEL_REQUIRED_LINK_APPS,
   checkApiFormat,
   checkLinkValues,
 } from "./linkRules";
@@ -333,11 +334,18 @@ const mergeAdditiveConfig = (
   request: DeepLinkImportRequest,
   config: Record<string, unknown>,
 ) => {
+  // MCode / DeepSeek Harness 的节点把 Key 放在 `options` 下，Kimi Code 放在 `provider` 下
+  const options = config.options as Record<string, unknown> | undefined;
+  const provider = config.provider as Record<string, unknown> | undefined;
   if (!request.apiKey) {
     if (typeof config.apiKey === "string") {
       request.apiKey = config.apiKey;
     } else if (typeof config.api_key === "string") {
       request.apiKey = config.api_key;
+    } else if (typeof options?.apiKey === "string") {
+      request.apiKey = options.apiKey;
+    } else if (typeof provider?.api_key === "string") {
+      request.apiKey = provider.api_key;
     }
   }
   if (!request.endpoint) {
@@ -345,11 +353,10 @@ const mergeAdditiveConfig = (
       request.endpoint = config.baseUrl;
     } else if (typeof config.base_url === "string") {
       request.endpoint = config.base_url;
-    } else {
-      const options = config.options as Record<string, unknown> | undefined;
-      if (typeof options?.baseURL === "string") {
-        request.endpoint = options.baseURL;
-      }
+    } else if (typeof options?.baseURL === "string") {
+      request.endpoint = options.baseURL;
+    } else if (typeof provider?.base_url === "string") {
+      request.endpoint = provider.base_url;
     }
   }
 };
@@ -361,6 +368,7 @@ const mergeProviderConfig = (
   const merged = { ...request };
   switch (merged.app) {
     case "claude":
+    case "claude-desktop":
       mergeClaudeConfig(merged, payload.value);
       break;
     case "codex":
@@ -379,6 +387,10 @@ const mergeProviderConfig = (
     case "openclaw":
     case "hermes":
     case "pi":
+    case "mcode":
+    case "kimi":
+    case "dsh":
+    case "omp":
       mergeAdditiveConfig(merged, payload.value);
       // 从 config 里补来的地址和 Key 同样要查，让确认框当场报错
       checkLinkValues(merged);
@@ -499,9 +511,14 @@ export const parseDeepLinkUrl = (urlString: string): DeepLinkImportRequest => {
           .filter(Boolean)
           .forEach((item, index) => ensureHttpUrl(item, `endpoint[${index}]`));
       }
-      // Pi 的节点没有模型就选不到任何模型
-      if (request.app === "pi" && !request.model?.trim()) {
-        throw new Error("Pi 供应商需要模型，请在链接里加上 model 参数");
+      // Pi 系这几家的节点没有模型就选不到任何模型
+      if (
+        MODEL_REQUIRED_LINK_APPS.includes(request.app) &&
+        !request.model?.trim()
+      ) {
+        throw new Error(
+          `${request.app} 供应商需要模型，请在链接里加上 model 参数`,
+        );
       }
       // 在解析阶段就核对，用户当场看到「这个应用不支持这种接口」，而不是确认导入之后才失败
       const apiFormatRaw = url.searchParams.get("apiFormat");

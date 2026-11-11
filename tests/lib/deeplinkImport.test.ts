@@ -30,6 +30,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
 vi.mock("@/lib/api/providerRuntime", () => ({
   providerRuntimeApi: { addCustomEndpoint: vi.fn(async () => undefined) },
 }));
+const piApiMock = vi.hoisted(() => ({
+  isOmpApiKeyReference: vi.fn(async (_value: string) => false),
+}));
+vi.mock("@/lib/api/pi", () => ({ piApi: piApiMock }));
 
 import {
   buildProviderFromRequest,
@@ -749,6 +753,216 @@ describe("导入时的生效开关", () => {
         expect(ids.has(provider.id)).toBe(false);
         ids.add(provider.id);
       }
+    }
+  });
+});
+
+describe("Claude Desktop 与 Pi 系应用的供应商链接", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    piApiMock.isOmpApiKeyReference.mockResolvedValue(false);
+  });
+
+  const desktopLink = (params: Record<string, string>) => {
+    const url = new URL("ccswitch://v1/import");
+    url.searchParams.set("resource", "provider");
+    url.searchParams.set("app", "claude-desktop");
+    url.searchParams.set("name", "Relay");
+    url.searchParams.set("endpoint", "https://api.example.com");
+    url.searchParams.set("apiKey", "sk-test");
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+    return buildProviderFromRequest(parseDeepLinkUrl(url.toString()));
+  };
+
+  it("mcode、kimi、dsh、omp 链接带模型时可以解析，没模型时当场拒绝", () => {
+    for (const app of ["mcode", "kimi", "dsh", "omp"]) {
+      expect(parseDeepLinkUrl(providerLink(app)).app).toBe(app);
+      const url = new URL(providerLink(app));
+      url.searchParams.delete("model");
+      expect(() => parseDeepLinkUrl(url.toString())).toThrow("model");
+    }
+  });
+
+  it("Claude 模型名的 Desktop 链接导成直连卡", () => {
+    const provider = desktopLink({
+      model: "claude-sonnet-4-6",
+      haikuModel: "anthropic/claude-haiku-4-5",
+    });
+    expect(provider.settingsConfig).toMatchObject({
+      env: { ANTHROPIC_MODEL: "claude-sonnet-4-6" },
+    });
+    expect(provider.meta?.claudeDesktopMode).toBe("direct");
+    expect(provider.meta?.apiFormat).toBe("anthropic");
+    expect(
+      Object.keys(provider.meta?.claudeDesktopModelRoutes ?? {}).sort(),
+    ).toEqual(["anthropic/claude-haiku-4-5", "claude-sonnet-4-6"]);
+
+    const bare = desktopLink({});
+    expect(bare.meta?.claudeDesktopMode).toBe("direct");
+    expect(bare.meta?.claudeDesktopModelRoutes).toEqual({});
+  });
+
+  it("别的模型名或格式导成占满四档的映射卡", () => {
+    const provider = desktopLink({
+      model: "glm-5",
+      opusModel: "glm-5-plus",
+    });
+    expect(provider.meta?.claudeDesktopMode).toBe("proxy");
+    expect(provider.meta?.apiFormat).toBe("anthropic");
+    expect(provider.meta?.claudeDesktopModelRoutes).toEqual({
+      "claude-sonnet-5": { model: "glm-5", labelOverride: "glm-5" },
+      "claude-opus-5": { model: "glm-5-plus", labelOverride: "glm-5-plus" },
+      "claude-haiku-4-5": { model: "glm-5", labelOverride: "glm-5" },
+      "claude-fable-5": { model: "glm-5", labelOverride: "glm-5" },
+    });
+
+    const chat = desktopLink({
+      model: "claude-sonnet-4-6",
+      apiFormat: "openai_chat",
+    });
+    expect(chat.meta?.claudeDesktopMode).toBe("proxy");
+    expect(chat.meta?.apiFormat).toBe("openai_chat");
+
+    expect(() => desktopLink({ apiFormat: "openai_chat" })).toThrow("model");
+  });
+
+  it("Pi 系链接生成各家最小的节点", () => {
+    expect(buildFromLink("mcode").settingsConfig).toEqual({
+      name: "Example",
+      kind: "custom",
+      enabled: true,
+      api: "openai-completions",
+      options: { baseURL: "https://api.example.com/v1", apiKey: "sk-test" },
+      models: { "example-model": { name: "example-model" } },
+    });
+    expect(
+      buildFromLink("omp", { apiFormat: "anthropic" }).settingsConfig,
+    ).toEqual({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "sk-test",
+      api: "anthropic-messages",
+      models: [{ id: "example-model", name: "example-model" }],
+    });
+    expect(
+      buildFromLink("dsh", { apiFormat: "openai_responses" }).settingsConfig
+        .api,
+    ).toBe("openai-responses");
+    expect(() =>
+      parseDeepLinkUrl(providerLink("mcode", { apiFormat: "gemini_native" })),
+    ).toThrow("apiFormat");
+
+    for (const [format, expected] of [
+      [undefined, "openai"],
+      ["anthropic", "anthropic"],
+      ["openai_responses", "openai_responses"],
+      ["gemini_native", "google-genai"],
+    ] as const) {
+      const provider = buildFromLink(
+        "kimi",
+        format ? { apiFormat: format } : {},
+      );
+      const config = provider.settingsConfig as {
+        provider: { type: string };
+        models: Record<string, Record<string, unknown>>;
+      };
+      expect(config.provider.type).toBe(expected);
+      // Kimi 的模型表是全局的：键带上供应商 id
+      expect(Object.keys(config.models)).toEqual([
+        `${provider.id}/example-model`,
+      ]);
+      const model = config.models[`${provider.id}/example-model`];
+      expect(model.model).toBe("example-model");
+      expect(model.max_context_size).toBeGreaterThan(0);
+    }
+  });
+
+  it("Pi 系链接的 ID 是 ASCII slug", () => {
+    for (const app of ["mcode", "kimi", "dsh", "omp"]) {
+      const provider = buildProviderFromRequest({
+        ...parseDeepLinkUrl(providerLink(app)),
+        name: "Relay 中转",
+      });
+      expect(provider.id).toMatch(/^relay-[a-z0-9]+$/);
+    }
+  });
+
+  it("拒绝 omp 会当成命令或环境变量名的 Key，普通 Key 照常导入", () => {
+    for (const value of [
+      "!printf review-fixture",
+      "ANTHROPIC_API_KEY",
+      "TOKEN",
+    ]) {
+      expect(() =>
+        parseDeepLinkUrl(providerLink("omp", { apiKey: value })),
+      ).toThrow("apiKey");
+    }
+    for (const [app, param, value] of [
+      ["mcode", "apiKey", "{env:ANTHROPIC_API_KEY}"],
+      ["dsh", "apiKey", "${OPENAI_API_KEY}"],
+      ["kimi", "endpoint", "https://attacker.example/${GITHUB_TOKEN}"],
+    ]) {
+      expect(() =>
+        parseDeepLinkUrl(providerLink(app, { [param]: value })),
+      ).toThrow(param);
+    }
+    for (const value of ["sk-abc123", "a1b2c3d4e5f60718293a4b5c6d7e8f90"]) {
+      expect(() =>
+        parseDeepLinkUrl(providerLink("omp", { apiKey: value })),
+      ).not.toThrow();
+    }
+  });
+
+  it("服务端能把 omp 的 Key 解析成别的值时拒绝导入", async () => {
+    piApiMock.isOmpApiKeyReference.mockResolvedValueOnce(true);
+    const request = parseDeepLinkUrl(
+      providerLink("omp", { apiKey: "ccswitch_link_probe_secret" }),
+    );
+    await expect(importFromDeepLink(request)).rejects.toThrow("apiKey");
+    expect(piApiMock.isOmpApiKeyReference).toHaveBeenCalledWith(
+      "ccswitch_link_probe_secret",
+    );
+    expect(providersApiMock.add).not.toHaveBeenCalled();
+
+    await importFromDeepLink(request);
+    expect(providersApiMock.add).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "omp",
+      true,
+    );
+  });
+
+  it("内联 config 按各家的原生字段补上地址和 Key", async () => {
+    for (const [app, config] of [
+      [
+        "mcode",
+        {
+          options: {
+            baseURL: "https://config.example.com/v1",
+            apiKey: "sk-from-config",
+          },
+        },
+      ],
+      [
+        "kimi",
+        {
+          provider: {
+            base_url: "https://config.example.com/v1",
+            api_key: "sk-from-config",
+          },
+        },
+      ],
+    ] as const) {
+      const url = new URL(providerLink(app));
+      url.searchParams.delete("apiKey");
+      url.searchParams.delete("endpoint");
+      url.searchParams.set("config", encodeBase64Utf8(JSON.stringify(config)));
+      const merged = await mergeDeepLinkConfig(
+        parseDeepLinkUrl(url.toString()),
+      );
+      expect(merged.apiKey).toBe("sk-from-config");
+      expect(merged.endpoint).toBe("https://config.example.com/v1");
     }
   });
 });

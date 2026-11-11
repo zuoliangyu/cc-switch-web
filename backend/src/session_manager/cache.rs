@@ -34,10 +34,7 @@ pub struct Transcript {
 
 impl Transcript {
     pub fn new(messages: Vec<SessionMessage>) -> Self {
-        let message_bytes: Vec<usize> = messages
-            .iter()
-            .map(|message| serde_json::to_vec(message).map(|v| v.len()).unwrap_or(0))
-            .collect();
+        let message_bytes: Vec<usize> = messages.iter().map(serialized_message_len).collect();
         let approx_bytes = message_bytes.iter().sum();
         let turns = build_turns(&messages);
         Self {
@@ -47,6 +44,26 @@ impl Transcript {
             message_bytes,
         }
     }
+}
+
+// Count the actual wire representation (including escaped strings and omitted
+// content) without allocating and discarding another full JSON message.
+fn serialized_message_len(message: &SessionMessage) -> usize {
+    #[derive(Default)]
+    struct ByteCounter(usize);
+    impl io::Write for ByteCounter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = ByteCounter::default();
+    serde_json::to_writer(&mut counter, message)
+        .map(|()| counter.0)
+        .unwrap_or(0)
 }
 
 /// 源的指纹：修改时间 + 长度。目录 / SQLite 源取多个文件的合成值。
@@ -408,25 +425,35 @@ pub fn build_turns(messages: &[SessionMessage]) -> Vec<TurnIndex> {
 }
 
 fn question_preview(message: &SessionMessage) -> String {
-    let text_blocks: Vec<&str> = message
-        .blocks
-        .iter()
-        .filter_map(|block| match block {
-            SessionBlock::Text { text, .. } => Some(text.as_str()),
-            _ => None,
-        })
-        .collect();
-    let source = if text_blocks.is_empty() {
-        message.content.clone()
-    } else {
-        text_blocks.join(" ")
-    };
-    let collapsed = source.split_whitespace().collect::<Vec<_>>().join(" ");
-    if collapsed.chars().count() <= QUESTION_PREVIEW_CHARS {
-        return collapsed;
+    let text_blocks = message.blocks.iter().filter_map(|block| match block {
+        SessionBlock::Text { text, .. } => Some(text.as_str()),
+        _ => None,
+    });
+    let has_text = text_blocks.clone().next().is_some();
+    let sources = text_blocks.chain((!has_text).then_some(message.content.as_str()));
+    let mut out = String::with_capacity(QUESTION_PREVIEW_CHARS);
+    let mut count = 0;
+    let mut space = false;
+    // Only inspect enough text to produce the preview, rather than joining and
+    // normalizing the entire question (which may contain a pasted document).
+    for ch in sources.flat_map(|text| text.chars().chain(std::iter::once(' '))) {
+        if ch.is_whitespace() {
+            space = count > 0;
+            continue;
+        }
+        if space && count < QUESTION_PREVIEW_CHARS {
+            out.push(' ');
+            count += 1;
+        }
+        if count == QUESTION_PREVIEW_CHARS {
+            out.pop();
+            out.push('…');
+            return out;
+        }
+        out.push(ch);
+        count += 1;
+        space = false;
     }
-    let mut out: String = collapsed.chars().take(QUESTION_PREVIEW_CHARS - 1).collect();
-    out.push('…');
     out
 }
 
@@ -442,6 +469,111 @@ mod tests {
             approx_bytes: bytes,
             ..Transcript::default()
         }
+    }
+
+    #[test]
+    fn message_sizes_match_serialized_wire_fixtures() {
+        for fixture in [
+            include_str!("../../../tests/fixtures/sessions/claude.messages.json"),
+            include_str!("../../../tests/fixtures/sessions/codex.messages.json"),
+            include_str!("../../../tests/fixtures/sessions/gemini.messages.json"),
+            include_str!("../../../tests/fixtures/sessions/pi.messages.json"),
+            include_str!("../../../tests/fixtures/sessions/opencode.messages.json"),
+        ] {
+            let messages: Vec<SessionMessage> = serde_json::from_str(fixture).unwrap();
+            let expected: Vec<_> = messages
+                .iter()
+                .map(|m| serde_json::to_vec(m).unwrap().len())
+                .collect();
+            let transcript = Transcript::new(messages);
+            assert_eq!(transcript.message_bytes, expected);
+            assert_eq!(transcript.approx_bytes, expected.iter().sum::<usize>());
+        }
+        let escaped = SessionMessage {
+            content: "\"\\\n\t\0中文😀".repeat(10_000),
+            ..SessionMessage::default()
+        };
+        assert_eq!(
+            serialized_message_len(&escaped),
+            serde_json::to_vec(&escaped).unwrap().len()
+        );
+    }
+
+    #[test]
+    fn question_preview_preserves_whitespace_and_unicode_boundaries() {
+        fn previous(message: &SessionMessage) -> String {
+            let texts: Vec<_> = message
+                .blocks
+                .iter()
+                .filter_map(|block| match block {
+                    SessionBlock::Text { text, .. } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            let source = if texts.is_empty() {
+                message.content.clone()
+            } else {
+                texts.join(" ")
+            };
+            let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+            if normalized.chars().count() <= QUESTION_PREVIEW_CHARS {
+                normalized
+            } else {
+                normalized
+                    .chars()
+                    .take(QUESTION_PREVIEW_CHARS - 1)
+                    .chain(std::iter::once('…'))
+                    .collect()
+            }
+        }
+        for text in ["", "a", "  中文\t😀\ntext  ", "\u{2003}\u{a0}"] {
+            for count in [0, 1, 79, 80, 81, 5000] {
+                let content = text.repeat(count);
+                let legacy = SessionMessage {
+                    content: content.clone(),
+                    ..SessionMessage::default()
+                };
+                assert_eq!(question_preview(&legacy), previous(&legacy));
+                let structured = SessionMessage::from_blocks(
+                    "user",
+                    None,
+                    vec![
+                        SessionBlock::Text {
+                            text: content,
+                            full: None,
+                        },
+                        SessionBlock::Text {
+                            text: " tail\n ".into(),
+                            full: None,
+                        },
+                    ],
+                );
+                assert_eq!(question_preview(&structured), previous(&structured));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual serialization benchmark"]
+    fn benchmark_message_sizing() {
+        let message = SessionMessage {
+            content: "a".repeat(8 * 1024 * 1024),
+            ..SessionMessage::default()
+        };
+        let start = std::time::Instant::now();
+        for _ in 0..20 {
+            std::hint::black_box(serde_json::to_vec(&message).unwrap().len());
+        }
+        let materialized = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..20 {
+            std::hint::black_box(serialized_message_len(&message));
+        }
+        eprintln!(
+            "message_sizing 8MiB x20 materialized_ms={} counted_ms={}",
+            materialized.as_millis(),
+            start.elapsed().as_millis()
+        );
     }
 
     fn key(name: &str) -> CacheKey {

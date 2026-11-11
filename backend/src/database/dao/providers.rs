@@ -4,6 +4,10 @@ use crate::provider::{Provider, ProviderMeta};
 use indexmap::IndexMap;
 use rusqlite::params;
 
+#[cfg(test)]
+#[path = "providers_tests.rs"]
+mod tests;
+
 type OmoProviderRow = (
     String,
     String,
@@ -173,6 +177,7 @@ impl Database {
             let (id, mut provider) = provider_res.map_err(|e| AppError::Database(e.to_string()))?;
             provider.id = id.clone();
             if let Some(meta) = &mut provider.meta {
+                // 端点表说了算，表里没有端点时也一样。
                 meta.custom_endpoints.clear();
             }
             providers.insert(id, provider);
@@ -320,20 +325,40 @@ impl Database {
 
         let mut meta_clone = provider.meta.clone().unwrap_or_default();
         let endpoints = std::mem::take(&mut meta_clone.custom_endpoints);
+        let mut meta_json = serde_json::to_string(&meta_clone)
+            .map_err(|e| AppError::Database(format!("Failed to serialize meta: {e}")))?;
 
-        let existing: Option<(bool, bool)> = tx
+        let existing: Option<(bool, bool, String)> = tx
             .query_row(
-                "SELECT is_current, in_failover_queue FROM providers WHERE id = ?1 AND app_type = ?2",
+                "SELECT is_current, in_failover_queue, meta FROM providers WHERE id = ?1 AND app_type = ?2",
                 params![provider.id, app_type],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .ok();
 
         let is_update = existing.is_some();
-        let (is_current, in_failover_queue) =
-            existing.unwrap_or((false, provider.in_failover_queue));
+        let (is_current, in_failover_queue) = match existing {
+            Some((current, queued, stored_meta)) => {
+                // meta 里有 HashMap（请求头、模型路由），每次读出后键序都可能变。等价时沿用库里的
+                // JSON，免得下面「无变化不更新」的条件被键序误判；字节不同才解析，平常的刷新不多花。
+                if meta_json != stored_meta
+                    && matches!(
+                        (
+                            serde_json::from_str::<serde_json::Value>(&meta_json),
+                            serde_json::from_str::<serde_json::Value>(&stored_meta),
+                        ),
+                        (Ok(new), Ok(old)) if new == old
+                    )
+                {
+                    meta_json = stored_meta;
+                }
+                (current, queued)
+            }
+            None => (false, provider.in_failover_queue),
+        };
 
         if is_update {
+            // 原生供应商列表刷新也走这里：没变的行不能弄脏数据库、也不能触发云同步。
             tx.execute(
                 "UPDATE providers SET
                     name = ?1,
@@ -348,7 +373,13 @@ impl Database {
                     meta = ?10,
                     is_current = ?11,
                     in_failover_queue = ?12
-                WHERE id = ?13 AND app_type = ?14",
+                WHERE id = ?13 AND app_type = ?14
+                  AND (name IS NOT ?1 OR settings_config IS NOT ?2
+                       OR website_url IS NOT ?3 OR category IS NOT ?4
+                       OR created_at IS NOT ?5 OR sort_index IS NOT ?6
+                       OR notes IS NOT ?7 OR icon IS NOT ?8 OR icon_color IS NOT ?9
+                       OR meta IS NOT ?10 OR is_current IS NOT ?11
+                       OR in_failover_queue IS NOT ?12)",
                 params![
                     provider.name,
                     serde_json::to_string(&provider.settings_config).map_err(|e| {
@@ -361,9 +392,7 @@ impl Database {
                     provider.notes,
                     provider.icon,
                     provider.icon_color,
-                    serde_json::to_string(&meta_clone).map_err(|e| AppError::Database(format!(
-                        "Failed to serialize meta: {e}"
-                    )))?,
+                    meta_json,
                     is_current,
                     in_failover_queue,
                     provider.id,
@@ -390,8 +419,7 @@ impl Database {
                     provider.notes,
                     provider.icon,
                     provider.icon_color,
-                    serde_json::to_string(&meta_clone)
-                        .map_err(|e| AppError::Database(format!("Failed to serialize meta: {e}")))?,
+                    meta_json,
                     is_current,
                     in_failover_queue,
                 ],

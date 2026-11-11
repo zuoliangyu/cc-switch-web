@@ -38,4 +38,44 @@ describe("deeplink 安全边界", () => {
       }),
     ).toBe("not-base64");
   });
+
+  it("看穿 IPv4-mapped、IPv4-compatible、SIIT 与 NAT64 形式的 IPv6 主机", () => {
+    // `new URL()` 把 `[::ffff:127.0.0.1]` 归一成十六进制 `[::ffff:7f00:1]`
+    expect(classifyEndpoint("http://[::ffff:127.0.0.1]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[::ffff:169.254.169.254]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[::ffff:8.8.8.8]/")).toBeNull();
+
+    // IPv4-compatible IPv6 (RFC 4291)
+    expect(classifyEndpoint("http://[::127.0.0.1]/")).toBe("privateEndpoint");
+    expect(classifyEndpoint("http://[::169.254.169.254]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[::10.0.0.1]/")).toBe("privateEndpoint");
+    expect(classifyEndpoint("http://[::8.8.8.8]/")).toBeNull();
+
+    // SIIT IPv4-translated (RFC 6052 / RFC 7915)
+    expect(classifyEndpoint("http://[::ffff:0:127.0.0.1]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[::ffff:0:169.254.169.254]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[::ffff:0:8.8.8.8]/")).toBeNull();
+
+    // NAT64 well-known prefix & local prefix (RFC 6052 / RFC 8215)
+    expect(classifyEndpoint("http://[64:ff9b::127.0.0.1]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[64:ff9b::169.254.169.254]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[64:ff9b:1::192.168.1.1]/")).toBe(
+      "privateEndpoint",
+    );
+    expect(classifyEndpoint("http://[64:ff9b::8.8.8.8]/")).toBeNull();
+  });
 });

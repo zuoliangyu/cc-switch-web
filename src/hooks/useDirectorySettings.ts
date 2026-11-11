@@ -14,7 +14,8 @@ type DirectoryKey =
   | "openclaw"
   | "hermes"
   | "pi"
-  | "omp";
+  | "omp"
+  | "dsh";
 
 export interface ResolvedDirectories {
   appConfig: string;
@@ -27,6 +28,7 @@ export interface ResolvedDirectories {
   hermes: string;
   pi: string;
   omp: string;
+  dsh: string;
 }
 
 type AppDirectoryKey = Exclude<DirectoryKey, "appConfig">;
@@ -44,6 +46,7 @@ const DIRECTORY_KEY_TO_SETTINGS_FIELD: Record<
   hermes: "hermesConfigDir",
   pi: "piConfigDir",
   omp: "ompConfigDir",
+  dsh: "dshConfigDir",
 };
 
 const APP_DIRECTORY_KEYS = Object.keys(
@@ -83,6 +86,7 @@ export interface UseDirectorySettingsResult {
     hermesDir?: string,
     piDir?: string,
     ompDir?: string,
+    dshDir?: string,
   ) => void;
 }
 
@@ -115,6 +119,7 @@ export function useDirectorySettings({
     hermes: "",
     pi: "",
     omp: "",
+    dsh: "",
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -129,6 +134,7 @@ export function useDirectorySettings({
     hermes: "",
     pi: "",
     omp: "",
+    dsh: "",
   });
   const initialAppConfigDirRef = useRef<string | undefined>(undefined);
 
@@ -151,6 +157,7 @@ export function useDirectorySettings({
           hermesDir,
           piDir,
           ompDir,
+          dshDir,
           defaultAppConfig,
           defaultClaudeDir,
           defaultCodexDir,
@@ -161,6 +168,7 @@ export function useDirectorySettings({
           defaultHermesDir,
           defaultPiDir,
           defaultOmpDir,
+          defaultDshDir,
         ] = await Promise.all([
           settingsApi.getAppConfigDirOverride(),
           settingsApi.getAppConfigDir(),
@@ -173,6 +181,7 @@ export function useDirectorySettings({
           settingsApi.getConfigDir("hermes"),
           settingsApi.getConfigDir("pi"),
           settingsApi.getConfigDir("omp"),
+          settingsApi.getConfigDir("dsh"),
           settingsApi.getDefaultAppConfigDir(),
           settingsApi.getDefaultConfigDir("claude"),
           settingsApi.getDefaultConfigDir("codex"),
@@ -183,6 +192,7 @@ export function useDirectorySettings({
           settingsApi.getDefaultConfigDir("hermes"),
           settingsApi.getDefaultConfigDir("pi"),
           settingsApi.getDefaultConfigDir("omp"),
+          settingsApi.getDefaultConfigDir("dsh"),
         ]);
 
         if (!active) return;
@@ -200,6 +210,7 @@ export function useDirectorySettings({
           hermes: defaultHermesDir ?? "",
           pi: defaultPiDir ?? "",
           omp: defaultOmpDir ?? "",
+          dsh: defaultDshDir ?? "",
         };
 
         setAppConfigDir(normalizedOverride);
@@ -219,6 +230,7 @@ export function useDirectorySettings({
           hermes: hermesDir || defaultsRef.current.hermes,
           pi: piDir || defaultsRef.current.pi,
           omp: ompDir || defaultsRef.current.omp,
+          dsh: dshDir || defaultsRef.current.dsh,
         });
       } catch (error) {
         console.error(
@@ -354,7 +366,9 @@ export function useDirectorySettings({
                       ? "hermes"
                       : app === "omp"
                         ? "omp"
-                        : "pi",
+                        : app === "dsh"
+                          ? "dsh"
+                          : "pi",
         value,
       );
     },
@@ -399,7 +413,9 @@ export function useDirectorySettings({
                       ? "hermes"
                       : app === "omp"
                         ? "omp"
-                        : "pi";
+                        : app === "dsh"
+                          ? "dsh"
+                          : "pi";
       if (!defaultsRef.current[key]) {
         try {
           const fallback = await settingsApi.getDefaultConfigDir(app);
@@ -448,6 +464,7 @@ export function useDirectorySettings({
       hermesDir?: string,
       piDir?: string,
       ompDir?: string,
+      dshDir?: string,
     ) => {
       for (const key of APP_DIRECTORY_KEYS) bumpRevision(key);
       setAppConfigDir(initialAppConfigDirRef.current);
@@ -463,6 +480,7 @@ export function useDirectorySettings({
         hermes: hermesDir ?? defaultsRef.current.hermes,
         pi: piDir ?? defaultsRef.current.pi,
         omp: ompDir ?? defaultsRef.current.omp,
+        dsh: dshDir ?? defaultsRef.current.dsh,
       });
     },
     [],

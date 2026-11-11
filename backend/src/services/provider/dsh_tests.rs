@@ -109,6 +109,38 @@ fn dsh_provider_lifecycle_preserves_native_plugins_and_reusable_profiles() {
 
 #[test]
 #[serial]
+fn dsh_directory_setting_takes_precedence_over_dsh_home() {
+    let home = DshHome::new();
+    let previous = crate::settings::get_settings();
+    let configured = home.directory.path().join("configured-dsh");
+    crate::settings::update_settings(crate::settings::AppSettings {
+        dsh_config_dir: Some(configured.to_string_lossy().into_owned()),
+        ..previous.clone()
+    })
+    .unwrap();
+    let state = create_test_state();
+
+    let result = ProviderService::add(&state, AppType::Dsh, provider("draft"), true);
+    let default_dir = crate::commands::get_default_config_dir_internal("dsh".into());
+    let resolved_dir = crate::commands::get_config_dir_internal("dsh".into());
+    crate::settings::update_settings(previous).unwrap();
+    result.unwrap();
+
+    let written = configured.join("profiles/web/cordis.patch.yml");
+    assert!(fs::read_to_string(&written)
+        .unwrap()
+        .contains("https://example.com/v1"));
+    assert!(!home.config().exists());
+    // 设置页：当前目录是设置里的，「恢复默认」回到 DSH_HOME
+    assert_eq!(resolved_dir.unwrap(), configured.to_string_lossy());
+    assert_eq!(
+        default_dir.unwrap(),
+        home.directory.path().to_string_lossy()
+    );
+}
+
+#[test]
+#[serial]
 fn dsh_mcp_failure_leaves_native_file_and_managed_flags_unchanged() {
     let home = DshHome::new();
     let state = create_test_state();

@@ -12,11 +12,19 @@ import {
 } from "lucide-react";
 import { settingsApi } from "@/lib/api";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
-import type { DiscoverableSkill, SkillRepo } from "@/lib/api/skills";
+import type {
+  DiscoverableSkill,
+  SkillRepo,
+  SkillRepoFailure,
+} from "@/lib/api/skills";
+import { skillErrorReason } from "@/lib/errors/skillErrorParser";
+import { repoFailureKey } from "./repoFailures";
 
 interface RepoManagerPanelProps {
   repos: SkillRepo[];
   skills: DiscoverableSkill[];
+  /** 本次发现没读到的仓库：显示「读取失败」而不是「识别到 0 个」 */
+  failures?: SkillRepoFailure[];
   onAdd: (repo: SkillRepo) => Promise<void>;
   onRemove: (owner: string, name: string) => Promise<void>;
   /** 勾掉 = 停用（不参与发现），不删除 */
@@ -24,30 +32,71 @@ interface RepoManagerPanelProps {
   onClose: () => void;
 }
 
+/**
+ * 发现结果里的 `repoBranch` 是实际下载成功的分支，不一定等于配置的分支：
+ * 后端依次试「配置分支 → main → master」（`HEAD` / 空串表示默认分支，直接从
+ * main 开始试，见 `try_repo_branches`）。所以按同一张候选表匹配，否则配成 HEAD
+ * 或默认分支是 master 的仓库会显示 0 个（#9273）。
+ */
+function resolvableBranches(branch: string | undefined): string[] {
+  const configured = branch ?? "";
+  const branches =
+    configured && configured.toUpperCase() !== "HEAD" ? [configured] : [];
+  for (const fallback of ["main", "master"]) {
+    if (!branches.includes(fallback)) branches.push(fallback);
+  }
+  return branches;
+}
+
 /** 这个仓库（含分支）在发现结果里有几个 Skill */
 export function countRepoSkills(skills: DiscoverableSkill[], repo: SkillRepo) {
+  const branches = resolvableBranches(repo.branch);
   return skills.filter(
     (skill) =>
       skill.repoOwner === repo.owner &&
       skill.repoName === repo.name &&
-      (skill.repoBranch || "main") === (repo.branch || "main"),
+      branches.includes(skill.repoBranch || "main"),
   ).length;
 }
 
 export function RepoManagerPanel({
   repos,
   skills,
+  failures = [],
   onAdd,
   onRemove,
   onToggle,
   onClose,
 }: RepoManagerPanelProps) {
   const { t } = useTranslation();
+  const failureByRepo = new Map(
+    failures.map((failure) => [repoFailureKey(failure), failure]),
+  );
   const [repoUrl, setRepoUrl] = useState("");
   const [branch, setBranch] = useState("");
   const [error, setError] = useState("");
 
   const getSkillCount = (repo: SkillRepo) => countRepoSkills(skills, repo);
+  // 发现没读到的仓库显示「读取失败」及原因，而不是「识别到 0 个」
+  const renderSkillCount = (repo: SkillRepo) => {
+    const failure = repo.enabled
+      ? failureByRepo.get(repoFailureKey(repo))
+      : undefined;
+    return failure ? (
+      <span
+        className="inline-flex items-center rounded-full px-3 py-1 text-[hsl(var(--warning-soft-foreground))]"
+        title={skillErrorReason(failure.error, t)}
+      >
+        {t("skillsPage.repos.readFailed")}
+      </span>
+    ) : (
+      <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1">
+        {t("skills.repo.skillCount", {
+          count: getSkillCount(repo),
+        })}
+      </span>
+    );
+  };
 
   const parseRepoUrl = (
     url: string,
@@ -244,11 +293,7 @@ export function RepoManagerPanel({
                           <GitBranch className="mr-1.5 h-3 w-3" />
                           {repo.branch || "main"}
                         </span>
-                        <span className="theme-chip-primary inline-flex items-center rounded-full px-3 py-1">
-                          {t("skills.repo.skillCount", {
-                            count: getSkillCount(repo),
-                          })}
-                        </span>
+                        {renderSkillCount(repo)}
                       </div>
                     </div>
                     <div className="flex gap-2">

@@ -94,6 +94,7 @@ export function useSettingsForm(): UseSettingsFormResult {
       hermesConfigDir: sanitizeDir(data.hermesConfigDir),
       piConfigDir: sanitizeDir(data.piConfigDir),
       ompConfigDir: sanitizeDir(data.ompConfigDir),
+      dshConfigDir: sanitizeDir(data.dshConfigDir),
       language: normalizedLanguage,
     };
 
@@ -159,6 +160,7 @@ export function useSettingsForm(): UseSettingsFormResult {
         hermesConfigDir: sanitizeDir(serverData.hermesConfigDir),
         piConfigDir: sanitizeDir(serverData.piConfigDir),
         ompConfigDir: sanitizeDir(serverData.ompConfigDir),
+        dshConfigDir: sanitizeDir(serverData.dshConfigDir),
         language: normalizedLanguage,
       };
 

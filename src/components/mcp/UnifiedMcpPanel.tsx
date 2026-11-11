@@ -916,11 +916,13 @@ const UnifiedMcpPanel: React.FC<UnifiedMcpPanelProps> = ({
                                     "h-2 w-2 shrink-0 rounded-full",
                                     connection === "connected"
                                       ? "bg-emerald-500"
-                                      : connection === "disconnected"
-                                        ? "bg-destructive"
-                                        : connection === "checking"
-                                          ? "animate-pulse bg-muted-foreground/50"
-                                          : "bg-muted-foreground/30",
+                                      : connection === "authRequired"
+                                        ? "bg-amber-500"
+                                        : connection === "disconnected"
+                                          ? "bg-destructive"
+                                          : connection === "checking"
+                                            ? "animate-pulse bg-muted-foreground/50"
+                                            : "bg-muted-foreground/30",
                                   )}
                                 />
                                 <span

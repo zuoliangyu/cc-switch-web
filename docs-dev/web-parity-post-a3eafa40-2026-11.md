@@ -37,7 +37,7 @@
 | --- | --- | --- | --- |
 | A | 预设/定价/图标 | 11 | 已完成（11 已迁移） |
 | B | 代理 | 22 | 已完成（19 已迁移、1 部分迁移、2 不适用） |
-| C | 后端杂项 | 27 | 待迁移 |
+| C | 后端杂项 | 27 | 已完成（24 已迁移、3 部分迁移） |
 | D | Codex | 13 | 已完成（13 已迁移） |
 | E | 界面 | 11 | 待迁移 |
 | F | 会话全文搜索 | 1 | 待迁移 |
@@ -46,9 +46,9 @@
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 43 |
-| 部分迁移 | 1 |
-| 待迁移 | 40 |
+| 已迁移 | 67 |
+| 部分迁移 | 4 |
+| 待迁移 | 13 |
 | 不适用 | 24 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
@@ -69,23 +69,23 @@
 | `e7878471` | v4.0.26 | fix(proxy): stop classifier retry loops (#9201) | B 代理 | 连续三轮工具结果报 auto mode 分类器不可用时 Claude / Claude Desktop 本地回 400、不发往上游，用户发新消息恢复；新增 `classifier_guard` | 已迁移 |
 | `c70d61de` | v4.0.26 | fix(linux): bump @tauri-apps/cli so the AppImage stops bundling libwayland-client (#9229) | — | Tauri CLI / AppImage 打包；Web 无桌面打包 | 不适用 |
 | `d16064bd` | v4.0.26 | fix(sessions): improve reader toolbar layout and metadata wrapping (#9109) | E 界面 |  | 待迁移 |
-| `98777515` | v4.0.26 | fix(ui): keep the remaining DB-lock-waiting sync commands off the UI thread (#9178) | C 后端杂项 |  | 待迁移 |
-| `fc9b17cb` | v4.0.26 | perf(db): batch provider endpoint reads and skip unchanged saves (#9180) | C 后端杂项 |  | 待迁移 |
+| `98777515` | v4.0.26 | fix(ui): keep the remaining DB-lock-waiting sync commands off the UI thread (#9178) | C 后端杂项 | C：项目写入（新建 / 改 / 删 / 清除当前 / 应用）与统一供应商增删同步各用一把模块级锁串行（`PROFILE_LOCK` / `UNIVERSAL_LOCK`），连同项目列表放到阻塞线程池，参数先解析、非法输入不等锁；不迁：其余约 40 个命令改 async（Web 是 axum 多线程运行时，没有会被冻结的 UI 主线程），托盘的两个项目入口（Web 无托盘） | 部分迁移 |
+| `fc9b17cb` | v4.0.26 | perf(db): batch provider endpoint reads and skip unchanged saves (#9180) | C 后端杂项 | C：保存供应商时内容没变不发 UPDATE（不弄脏库、不触发 WebDAV 自动同步），meta 键序不同但等价时沿用库里的 JSON；端点批量读取 Web 已随 e217bfcb 做过；迁入上游 `providers_tests` | 已迁移 |
 | `ca58c031` | v4.0.26 | perf(ui): lazy-load secondary pages and provider editors (#9181) | E 界面 |  | 待迁移 |
-| `50a51b86` | v4.0.26 | perf(runtime): defer maintenance and pause hidden-window work (#9182) | C 后端杂项 |  | 待迁移 |
-| `2186b305` | v4.0.26 | fix(apps): append actionable hint when npm install hits a bin-path collision (#9196) | C 后端杂项 |  | 待迁移 |
-| `cc4ce038` | v4.0.26 | perf(sessions): avoid transcript copies and release lightweight caches (#9183) | C 后端杂项 |  | 待迁移 |
+| `50a51b86` | v4.0.26 | perf(runtime): defer maintenance and pause hidden-window work (#9182) | C 后端杂项 | C：打开数据库不再做日志归档 / 清理 / 回收空间，统一由维护任务在启动恢复之后、阻塞线程池里做，备份失败也照常清理；Web 此前只在启动时同步维护一次，按上游补上每日维护定时器（`spawn_periodic_maintenance`，休眠不补跑）；窗口活跃状态不变时不重启心跳；用量页的推送失效与滚动范围暂停已在框架 2 取上游版本；Tauri 窗口显隐事件不适用（浏览器按 visibilitychange，React Query 默认按页面可见性） | 已迁移 |
+| `2186b305` | v4.0.26 | fix(apps): append actionable hint when npm install hits a bin-path collision (#9196) | C 后端杂项 | C：npm 全局安装撞上 bin 路径冲突（EEXIST + File exists）时在错误详情后追加可操作提示 | 已迁移 |
+| `cc4ce038` | v4.0.26 | perf(sessions): avoid transcript copies and release lightweight caches (#9183) | C 后端杂项 | C：消息字节数改为计数写入、问题预览只看需要的前缀、整份消息与流式分包按借用序列化不复制（`/api/sessions/messages` 直接返回序列化字节）；不迁：轻量模式释放会话缓存（Web 没有轻量模式） | 部分迁移 |
 | `1adb3cbc` | v4.0.26 | fix(codex): stop GitHub Copilot Responses replies from showing twice (#8025) | B 代理 | Copilot 卡的原生 Responses 流按 output_index 固定首个 item ID（压缩与补参数两条流） | 已迁移 |
 | `02a13641` | v4.0.26 | fix(codex): reuse the Grok compat layer for GitHub Copilot Responses (#7989) | B 代理 | Copilot 承载 Grok 模型时按实际发出的模型复用 xAI 兼容（请求 namespace 展开与字段清洗、不回落卡片默认模型，响应还原工具名与整数参数）；`ForwardResult` / `RequestContext` 增加 `outbound_model`；xAI 改写流去掉实体头 | 已迁移 |
-| `df3a9072` | v4.0.26 | fix(webdav-sync): preserve file symlink names in skills archives (#9197) | C 后端杂项 |  | 待迁移 |
+| `df3a9072` | v4.0.26 | fix(webdav-sync): preserve file symlink names in skills archives (#9197) | C 后端杂项 | C：WebDAV 同步打包 Skills 时文件符号链接保留原名（按原路径命名、读取解析后的目标） | 已迁移 |
 | `78971d56` | v4.0.26 | feat(copilot): show every capped quota and label premium as Credits | E 界面 |  | 待迁移 |
 | `cf3c86fe` | v4.0.26 | feat(auth): show each account's subscription plan in the Auth Center | E 界面 |  | 待迁移 |
 | `626f0226` | v4.0.26 | feat(providers): show the plan on official provider cards | E 界面 |  | 待迁移 |
 | `3cf79926` | v4.0.26 | fix(claude-desktop): point the official card at claude.com/download | A 预设/定价/图标 | A：Claude Desktop 官方卡地址改为 claude.com/download（预设、claude_desktop_config；上游 providers_seed 在 Web 对应 mode/controller 的官方卡补建） | 已迁移 |
-| `51b464bd` | v4.0.26 | feat(deeplink): import providers for Claude Desktop and the Pi-family apps | C 后端杂项 |  | 待迁移 |
-| `420646d8` | v4.0.26 | fix(dsh): let headless profiles read keys CC Switch stores | C 后端杂项 |  | 待迁移 |
-| `1c2ed066` | v4.0.26 | fix(apps): explain npm bin collisions instead of echoing --force | C 后端杂项 |  | 待迁移 |
-| `65f6e682` | v4.0.26 | fix(mcp): show sign-in required instead of failed for 401 MCP endpoints | C 后端杂项 |  | 待迁移 |
+| `51b464bd` | v4.0.26 | feat(deeplink): import providers for Claude Desktop and the Pi-family apps | C 后端杂项 | C：Web 的深链接在前端解析导入，照上游放开 Claude Desktop 与 MiniMax Code / Kimi Code / DeepSeek Harness / Oh My Pi：Desktop 按模型名导成直连卡或占满四档的映射卡，Pi 系四家要求 `model` 并生成各自的最小节点（Kimi 带 128K 窗口、模型键加供应商 id 前缀），ID 用 ASCII slug，内联 config 补 `options.apiKey` 与 Kimi 的 `provider.*`；omp 的 `!` / 变量名形状前端拒绝，「此刻能解析成别的值」那条经新增的 `POST /api/omp/api-key-reference` 问服务端 | 已迁移 |
+| `420646d8` | v4.0.26 | fix(dsh): let headless profiles read keys CC Switch stores | C 后端杂项 | C：写进 headless 配置档的供应商有存储的 Key 时补上 `- id: credentials` / `disabled: false`，用户自己写过的不动 | 已迁移 |
+| `1c2ed066` | v4.0.26 | fix(apps): explain npm bin collisions instead of echoing --force | C 后端杂项 | C：截尾前保留 EEXIST 与 File exists 两行，前端换成三语的冲突提示（不建议 `--force`） | 已迁移 |
+| `65f6e682` | v4.0.26 | fix(mcp): show sign-in required instead of failed for 401 MCP endpoints | C 后端杂项 | C：MCP 端点回 401 时显示「需要登录」而不是失败；状态灯用 Web 现有色板（amber），三语文案；Web 轮询结果类型同步改为 `status` | 已迁移 |
 | `e6e7831e` | v4.0.26 | fix(claude-desktop): let auto-filled menu names follow model edits | E 界面 |  | 待迁移 |
 | `a990c81a` | v4.0.26 | fix(proxy): race IPv4 when IPv6 upstream addresses are unreachable | B 代理 | IPv6 上游地址不通时竞速 IPv4 | 已迁移 |
 | `7c250c42` | v4.0.26 | feat(proxy): warn when the system proxy hijacks the local route | B 代理 | Codex / Grok Build 手动进入路由后按系统代理自检本地路由（`loopback_probe`，`/health` 回写随机头），回不到 CC Switch 时记日志并经事件推送提示；服务启动时接上的路由不检查 | 已迁移 |
@@ -93,10 +93,10 @@
 | `80ad02c5` | v4.0.26 | fix(proxy): log the mapped upstream model on failed requests | B 代理 | 失败请求日志的 `model` 记映射后实际发往上游的模型，`request_model` 记客户端原名 | 已迁移 |
 | `38efe109` | v4.0.26 | fix(proxy): scope the Codex chat call_id cache to the client session | B 代理 | Web 没有 Codex Chat 的 `CodexChatHistoryStore` 内存缓存，不存在跨会话串用 call_id 的问题 | 不适用 |
 | `abf441fe` | v4.0.26 | fix(proxy): keep turn-start developer messages in place for Codex chat | B 代理 | Codex Chat 转换保留回合开头的 developer 消息位置 | 已迁移 |
-| `1d9b448e` | v4.0.26 | fix(subscription): refresh expired Claude login for follow-login cards | C 后端杂项 |  | 待迁移 |
+| `1d9b448e` | v4.0.26 | fix(subscription): refresh expired Claude login for follow-login cards | C 后端杂项 | C：跟随本地登录的 Claude 官方卡令牌过期时在默认槽位跑 `claude -p /usage` 读缓存额度，改了配置目录时不跑 | 已迁移 |
 | `7a0718e1` | v4.0.26 | fix(ui): stop macOS from capitalizing text typed into raw inputs | E 界面 |  | 待迁移 |
 | `0f06fed2` | v4.0.26 | fix(ui): center dialogs without translate so they stay sharp on 1x displays | E 界面 |  | 待迁移 |
-| `81a9fa79` | v4.0.26 | feat(dsh): allow overriding the DeepSeek Harness home directory | C 后端杂项 |  | 待迁移 |
+| `81a9fa79` | v4.0.26 | feat(dsh): allow overriding the DeepSeek Harness home directory | C 后端杂项 | C：设备级 `dsh_config_dir`（优先于 `DSH_HOME`），WSL 路径让 DSH 的检测与安装走那个发行版；应用配置页加 DSH 目录，保存后刷新 DSH 供应商、Skills、会话与官方账号；Web 的「恢复默认」取后端默认目录，新增 `native_data_dir` 让它不含设置覆盖 | 已迁移 |
 | `a5100e0e` | v4.0.26 | chore(presets): switch TeamoRouter domain from .cn to .com | A 预设/定价/图标 | A：TeamoRouter 各应用预设域名 .cn → .com；迁入上游 teamorouterClaudePresets 用例；Web 三语 README 无 TeamoRouter，不改 | 已迁移 |
 | `44c7fa9b` | v4.0.26 | fix(proxy): fill outbound_model on the classifier-loop early return | B 代理 | 分类器循环的提前返回显式带 `outbound_model: None` | 已迁移 |
 | `8c05b622` | v4.0.26 | chore(release): v4.0.26 | — | 上游版本号与 whats-new | 不适用 |
@@ -117,35 +117,35 @@
 | `deb6d5a1` | v4.0.27 | feat(sessions): search message text across sessions with a local FTS5 index (#7896) | F 会话全文搜索 |  | 待迁移 |
 | `c88d7cc1` | v4.0.27 | fix(tray): convert Linux panel coordinates across display and DPR scale (#9287) | — | 系统托盘 | 不适用 |
 | `c39db7df` | v4.0.27 | fix(ui): handle surrogate pairs and whitespace in provider icon initials fallback (#8139) | A 预设/定价/图标 | A：首字母兜底按码位切分、忽略多余空白（getProviderInitials），迁入上游用例 | 已迁移 |
-| `44e7d3ef` | v4.0.27 | fix(security): detect IPv4-compatible, SIIT, and NAT64 addresses in deep link risk classifier (#8127) | C 后端杂项 |  | 待迁移 |
+| `44e7d3ef` | v4.0.27 | fix(security): detect IPv4-compatible, SIIT, and NAT64 addresses in deep link risk classifier (#8127) | C 后端杂项 | C：深链接风险判断识别 IPv4-compatible、SIIT 与 NAT64 形式的内网地址 | 已迁移 |
 | `13af7fc9` | v4.0.27 | fix(codex): write an absolute model_catalog_json pointer for native config dirs | D Codex | D：`model_catalog_json` 在原生绝对目录写绝对路径（新版 Codex 严格重读只认绝对形态），UNC / WSL 形态与相对路径保留裸文件名；Web 另加一条：服务跑在容器里（`/.dockerenv`、`/run/.containerenv`）时也保留裸文件名，挂载目录在容器内外路径不同；迁入上游用例并补容器用例 | 已迁移 |
 | `7d10364b` | v4.0.27 | test(codex): expect the absolute catalog pointer in tests added since the PR | D Codex | D：上游补改测试里的指针断言；Web 对应的 `codex_adopting_the_catalog_drops_the_route_rows_own_pointer` 改为断言绝对路径；golden 用例 Web 没有 | 已迁移 |
-| `5bfca714` | v4.0.27 | fix(skill): ignore Python bytecode in directory hash | C 后端杂项 |  | 待迁移 |
-| `747b1327` | v4.0.27 | fix(skill): migrate legacy cached hashes when upstream ships bytecode | C 后端杂项 |  | 待迁移 |
-| `66e4362b` | v4.0.27 | fix(skill): keep updated_at when migrating a legacy cached hash | C 后端杂项 |  | 待迁移 |
+| `5bfca714` | v4.0.27 | fix(skill): ignore Python bytecode in directory hash | C 后端杂项 | C：目录哈希忽略 `__pycache__/` 与 `*.pyc` | 已迁移 |
+| `747b1327` | v4.0.27 | fix(skill): migrate legacy cached hashes when upstream ships bytecode | C 后端杂项 | C：上游仓库自带字节码时识别按旧算法缓存的哈希并迁移，不误报有更新 | 已迁移 |
+| `66e4362b` | v4.0.27 | fix(skill): keep updated_at when migrating a legacy cached hash | C 后端杂项 | C：迁移旧缓存哈希时保留 `updated_at` | 已迁移 |
 | `05218b11` | v4.0.27 | fix(ui): disable WebView default context menu | — | WebView 默认右键菜单；Web 运行在普通浏览器里，保留浏览器菜单 | 不适用 |
 | `f3c88da9` | v4.0.27 | fix(pricing): give the models.dev fetch time to finish reading the body | A 预设/定价/图标 | A：models.dev 拉取给读取响应体留足时间 | 已迁移 |
-| `8dab4ed4` | v4.0.27 | fix(apps): stop treating Python's pi.exe as the Pi coding agent on Windows | C 后端杂项 |  | 待迁移 |
-| `a94226b1` | v4.0.27 | fix(skills): stop showing 0 skills for repos discovery actually read | C 后端杂项 |  | 待迁移 |
-| `92ca821e` | v4.0.27 | fix(config): write through symlinked live config files | C 后端杂项 |  | 待迁移 |
+| `8dab4ed4` | v4.0.27 | fix(apps): stop treating Python's pi.exe as the Pi coding agent on Windows | C 后端杂项 | C：Windows 上 Python `Scripts` 目录里的 `pi.exe` 不当作 Pi | 已迁移 |
+| `a94226b1` | v4.0.27 | fix(skills): stop showing 0 skills for repos discovery actually read | C 后端杂项 | C：仓库管理按「配置分支 → main → master」候选表计数，发现失败的仓库显示「读取失败」及原因；上游 `useImportSkillsFromApps` 清缓存标记那部分 Web 无对应（发现查询没有本地已验证标记，失效后下次挂载照常重取） | 已迁移 |
+| `92ca821e` | v4.0.27 | fix(config): write through symlinked live config files | C 后端杂项 | C：原子写入先解析符号链接链，写穿到真实目标、保留链接 | 已迁移 |
 | `883382f1` | v4.0.27 | fix(proxy): name the provider in circuit breaker and skip logs | B 代理 | 熔断与跳过日志写明供应商名 | 已迁移 |
 | `4a8f113f` | v4.0.27 | fix(proxy): return the half-open probe permit when an attempt is dropped | B 代理 | HalfOpen 探测名额改由 `HalfOpenPermitGuard` 持有，尝试结束或请求被取消都归还，名额按轮次标记；删除 `release_permit_neutral`，记录结果不再还名额 | 已迁移 |
 | `07798d56` | v4.0.27 | fix(ci): keep the WSL2 suite on a stable test root and match UNC catalog pointers | — | 上游 WSL2 CI | 不适用 |
 | `4ed410ad` | v4.0.27 | feat(providers): add TokenPlus presets (#9296) | A 预设/定价/图标 | A：TokenPlus 预设（Claude / Desktop / Codex / Hermes / OpenClaw / OpenCode / Pi）、图标与 Pi 模型目录；推广文案按既定约束不迁（Web 不展示合作推广，TokenPlusDescription 用例不迁）；分组用例换成上游最终版 | 已迁移 |
-| `07a10b9c` | v4.0.27 | fix(dsh): name the profile file when its YAML cannot be parsed | C 后端杂项 |  | 待迁移 |
+| `07a10b9c` | v4.0.27 | fix(dsh): name the profile file when its YAML cannot be parsed | C 后端杂项 | C：DSH 配置档 YAML 解析失败时报出文件路径与原因 | 已迁移 |
 | `f3c6774c` | v4.0.27 | test: skip WSL-share-only failures in the WSL2 lib suite | — | 上游 WSL2 CI | 不适用 |
 | `2aeb27d8` | v4.0.27 | chore(release): v4.0.27 | — | 上游版本号与 whats-new | 不适用 |
 | `26629ff4` | v4.0.27 | docs(release): add v4.0.27 release notes | — | 上游发行说明 | 不适用 |
-| `506f3cf8` | v4.0.28 | fix(usage): verify Codex forks on file systems without file IDs | C 后端杂项 |  | 待迁移 |
-| `4aa554ad` | v4.0.28 | fix(agy): add Weekly Argon quota limit line (#8913) | C 后端杂项 |  | 待迁移 |
-| `e1f8acf6` | v4.0.28 | test(usage): skip same-size replacement checks where files have no IDs | C 后端杂项 |  | 待迁移 |
-| `810775eb` | v4.0.28 | feat(apps): show queue state and live progress for tool installs | C 后端杂项 |  | 待迁移 |
-| `6f9fa06d` | v4.0.28 | perf(db): batch table creation and pricing seed in savepoints | C 后端杂项 |  | 待迁移 |
+| `506f3cf8` | v4.0.28 | fix(usage): verify Codex forks on file systems without file IDs | C 后端杂项 | C：没有文件 ID 的文件系统（如 `\\wsl.localhost`）上 Codex 分叉校验退回比较修改时间与大小 | 已迁移 |
+| `4aa554ad` | v4.0.28 | fix(agy): add Weekly Argon quota limit line (#8913) | C 后端杂项 | C：Antigravity 识别 Argon 每周额度（卡片并入 Gemini 组，下拉与账号页单列），三语文案；Web 的 `subscription.short` 没有 agy 各档短名（卡片按组合并），不加 | 已迁移 |
+| `e1f8acf6` | v4.0.28 | test(usage): skip same-size replacement checks where files have no IDs | C 后端杂项 | C：同大小替换的用例在没有文件 ID 的文件系统上跳过 | 已迁移 |
+| `810775eb` | v4.0.28 | feat(apps): show queue state and live progress for tool installs | C 后端杂项 | C：安装 / 升级 / 卸载上报排队、开始与命令最新一行输出（`tool_lifecycle_progress`，按行读取、去控制序列、150ms 节流），经服务端事件推送 `tool-lifecycle-progress`；应用页忙碌行显示「排队中」或已用时间与最新输出 | 已迁移 |
+| `6f9fa06d` | v4.0.28 | perf(db): batch table creation and pricing seed in savepoints | C 后端杂项 | C：建表与内置定价写入放进 SAVEPOINT，一次提交 | 已迁移 |
 | `62de0f3e` | v4.0.28 | build: drop unused staticlib/cdylib crate types | — | 上游 crate 类型；Web 后端构建配置独立 | 不适用 |
 | `b3594905` | v4.0.28 | ci: cut wall-clock and cache waste | — | 上游 CI | 不适用 |
 | `c65a523c` | v4.0.28 | ci: split frontend unit tests into four shards | — | 上游 CI | 不适用 |
 | `c6a5a789` | v4.0.28 | test: stop building the shared support module as its own test binary | — | 上游集成测试目录结构；Web 无 src-tauri/tests | 不适用 |
-| `b184a88c` | v4.0.28 | fix(apps): drop unused mut in Windows WSL uninstall path | C 后端杂项 |  | 待迁移 |
+| `b184a88c` | v4.0.28 | fix(apps): drop unused mut in Windows WSL uninstall path | C 后端杂项 | C：WSL 卸载路径去掉多余的 `mut` | 已迁移 |
 | `40b602a3` | v4.0.28 | docs(proxy): clarify supported SSE delimiter combinations (#7904) | B 代理 | SSE 四种分隔符组合的注释 | 已迁移 |
 | `2c5e5d2c` | v4.0.28 | feat(codex): keep moving official sessions into the shared bucket while opted in | D Codex | D：勾选迁入既有会话后每次服务启动都迁，state DB 里没有 openai 线程就跳过（读不到 state DB 时退回按目录只迁一次），新增 `count_threads_with_model_provider`；开启弹窗默认勾选迁入；三语开关与确认框文案按上游改写（Web 不写备份目录路径）；迁入上游后端与前端用例 | 已迁移 |
 | `c7f7caf2` | v4.0.28 | feat(codex): warn when a switch splits Codex session history | D Codex | D：切换 Codex 前后各读一次 live 的会话组，跨 openai ↔ custom、统一关着且旧组有线程时 `SwitchResult.codexHistorySplit` 带锁住的线程数；按上游最终形态（e499d1f0）接入，「不再提示」设置与命令、「开启统一」按钮不迁；迁入上游用例 | 已迁移 |
@@ -167,7 +167,7 @@
 | `5a3d7f92` | 未发布 | feat(i18n): add Korean community localization (#8794) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `cdca0984` | 未发布 | feat(i18n): add Russian community localization (#7788) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `bd487e83` | 未发布 | feat(copilot): add GitHub Copilot CLI support (#8753) | G Copilot CLI |  | 待迁移 |
-| `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 |  | 待迁移 |
+| `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 | C：账号额度接口改用 agy 自己的 `daily-cloudcode-pa`；不迁：Ultra 5x / 20x 套餐名区分，依赖 Web 尚无的 `code_assist_plan`（套餐显示属批次 E 的 cf3c86fe / 626f0226），随 E 补 | 部分迁移 |
 | `72e826ed` | 未发布 | fix(proxy): normalize call-less outputs for native Responses providers (#9328) | B 代理 | 非官方原生 Responses 上游把没有 call_id 的 function_call_output 改写成 user 消息 | 已迁移 |
 | `5e9812e0` | 未发布 | fix(claude): omit reasoning_content for Mistral tool history (#9388) | B 代理 | 上游为 api.mistral.ai 时不回放 reasoning_content | 已迁移 |
 
@@ -219,3 +219,15 @@
   - 事件推送：`codex-unify-migration-finished` 由 `commands::settings::run_codex_unify_migration_and_notify` 经 `crate::events::emit` 发出（payload `migratedStateRows` / `migratedJsonlFiles` / `error`，跳过时不发）；`useAppServerEvents` 收到后弹提示（迁了 0 个不提示）。本批其余提交没有前端事件。
   - 用例：迁入上游 `providerConfigUtils.codex`（并发上限）、`card_can_keep_official_speed_tiers_on_native_gpt_rows`、目录指针五条（另补容器一条）、统一迁移三条、分组提示两条、额度保护默认开迁移、`codexHistorySplitHint`（mock 改 `sonner`）、`CodexAuthSettings` 统一开关四条；按 Web 结构新写第三方路由写成内置 openai / 保留 custom 表 / 暂停官方登录三条 controller 用例、暂停错误响应、迁入完成 payload、`useAppServerEvents` 迁入提示、`CodexFormFields` Fast 档开关、`SwitchModePanel.settings` 暂停提示与开关三条；`CodexQuotaProtectionSettings` 默认值用例改为默认开。
   - 验证：`cargo test --locked --lib` 3759 项通过、6 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/provider.rs`、`web_session_tests.rs` 报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 257 个文件 2701 项通过；改动的前端文件 Prettier 通过。未做浏览器验收与 Docker Linux 检查。
+- 2026-11-11：完成批次 C（后端杂项，27 项：24 项已迁移、3 项部分迁移）。
+  - 方法：上游补丁按 `src-tauri/src` → `backend/src` 映射后逐个 `git apply --3way`；上游 `commands/misc.rs` 的工具安装部分在 Web 是 `commands/tool_management.rs`，再映射一次后大多能带上下文合入（`--reject` 后手工补被拒的块）。`skill.rs`、`subscription.rs`、`agy_account/quota.rs`、三语 locale 与若干前端文件冲突时回到 Web 版本按行为手工迁移；`webdav_sync/archive.rs`、`dsh_config.rs`、`config.rs`、`session_usage_codex.rs`、`schema.rs`、`mcp_connectivity` 干净合入。
+  - 并发与维护（98777515、50a51b86、fc9b17cb、6f9fa06d）：Web 新增 `run_db_task`（阻塞线程池）与 `PROFILE_LOCK` / `UNIVERSAL_LOCK`，项目与统一供应商的写入串行，桌面端靠主线程排队，Web 的请求本来就并发，这两把锁补上的是同一类读-改-写竞态；其余命令仍在 axum 工作线程上执行（部分迁移）。打开数据库不再做日志维护，改由 `web_server::spawn_periodic_maintenance` 在启动恢复之后执行，之后每天一次（Web 此前没有每日定时器）；供应商保存无变化不发 UPDATE，WebDAV 自动同步不会被列表刷新触发；建表与定价写入各包一个 SAVEPOINT。
+  - 工具安装（2186b305、1c2ed066、8dab4ed4、810775eb、b184a88c）：bin 冲突提示（后端追加英文提示、保留关键两行，前端换成三语文案）、Python `Scripts\pi.exe` 不算 Pi、排队与实时进度。进度模块 `tool_lifecycle_progress.rs` 取上游实现，`from_app` 换成 `for_events`。
+  - 会话（cc4ce038）：字节数计数、问题预览、借用序列化取上游；`/api/sessions/messages` 改为直接回序列化好的字节，流式分包借用缓存里的消息。轻量模式释放缓存不迁（部分迁移）。
+  - 深链接（51b464bd、44e7d3ef）：Web 的深链接在前端（`src/lib/deeplink`），按上游 Rust 逻辑改写：可导入应用加 Claude Desktop 与 mcode / kimi / dsh / omp，Desktop 直连卡 / 映射卡判定、Pi 系四家最小节点、Kimi 模型键前缀与上下文窗口、slug ID、内联 config 字段、omp Key 形状检查；上游用 omp 自己的解析规则判断「此刻能解析成别的值」，浏览器看不到服务端环境，新增 `POST /api/omp/api-key-reference`（`omp_config::resolve_usage_api_key`）在导入前询问。前端 `ADDITIVE_APPS` 补上 kimi / dsh / omp，与后端 `is_additive_mode` 一致。风险判断识别 IPv4-compatible、SIIT 与 NAT64。
+  - DSH（420646d8、81a9fa79、07a10b9c）：headless 配置档补 credentials 行、YAML 解析失败报路径、设备级 `dsh_config_dir`。与上游不同：Web 的目录设置「恢复默认」显示后端给的默认目录，上游的默认值同样走 `data_dir()`（含覆盖），Web 新增 `dsh_config::native_data_dir` 给默认目录用；Web 的 `wsl_distro_for_tool` 里 omp 仍是 `None`（沿用原注释，不在本批）。
+  - 其余：MCP 401 显示需要登录（状态灯用 Web 色板 amber，Web 轮询结果类型同步改 `status`）；跟随本地登录的 Claude 官方卡过期时跑 `claude -p /usage`（Web 的 `claude_quota_from` 不返回 `Result`，`spawn_blocking` 失败时退回直接查询结果）；Skill 目录哈希忽略字节码并迁移旧缓存、保留 `updated_at`；仓库管理计数按候选分支、显示读取失败（上游清缓存标记那部分 Web 无对应）；写穿符号链接；DSH YAML 报错；Codex 分叉在无文件 ID 的文件系统上校验；Antigravity 的 Argon 每周档与 `daily-cloudcode-pa` 地址（Ultra 5x / 20x 依赖批次 E 的套餐显示，部分迁移）；窗口活跃状态不变时不重启心跳。
+  - 事件推送：`tool-lifecycle-progress` 由 `ToolLifecycleProgress::for_events` 经 `crate::events::emit` 发出（payload `tools` / `stage` / `line`，与上游一致）；`useToolManagement` 用 `@/lib/runtime/client/event` 的 `listen` 订阅（模块级，一次订阅跟随页面会话，只记给忙碌中的工具）。本批其余提交没有前端事件。
+  - 用例：迁入上游 `providers_tests`（3 + 1 忽略）、维护推迟两条（另 1 条忽略的基准）、npm 冲突四条、pip `pi.exe` 两条（一条仅 Windows）、排队通知、进度模块（序列化、清洗、节流、Unix 管道；mock_app 用例改为服务端事件）、Skill 哈希两条、`account_uuid_of`、agy 地址、MCP 401、DSH headless / YAML 用例、符号链接写穿、Argon 档前端用例、`RepoManagerPanelCount`、`npmBinCollision`、AppsPage 进度、`useMcpConnectivity` / `UnifiedMcpPanel` 需要登录；按 Web 结构新写：`/api/sessions/messages` 与流式接口的借用序列化、DSH 目录设置优先于 `DSH_HOME`（含默认目录）、项目与统一供应商写入等锁、omp Key 服务端检查、`useSettings` 换 DSH 目录后的失效、`useDirectorySettings` 的 DSH 目录、深链接 Claude Desktop / Pi 系八条、IPv6 嵌入地址、窗口活跃心跳。
+  - 变基：先基于批次 B 完成并提交，再变基到批次 D（`ea3c128e3`）之后，无冲突；变基后重跑全部验证。
+  - 验证：`cargo test --locked --lib` 3790 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/config.rs`、`commands/session_manager.rs`、`database/backup.rs`、`database/dao/skills.rs`、`web_session_tests.rs` 报的差异在 HEAD 就有，不在本批改动的行上，未动）；`tsc --noEmit` 通过；前端全量 Vitest 259 个文件 2723 项通过；改动的前端文件 Prettier 通过（`AppsPage.tsx`、`web.ts`、`useSettings.test.tsx`、`deeplinkSecurity.test.ts` 报的差异在 HEAD 就有，未动）。未做浏览器验收与 Docker Linux 检查。

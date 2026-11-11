@@ -10,6 +10,10 @@
 //!
 //! 没有使用资格的号（如 Google 判定未满 18 岁）同样回 403「没有有效许可」，这时再问一次
 //! `loadCodeAssist`，把 Google 给的不合格原因原样显示，免得看着像 CC Switch 的问题。
+//!
+//! 接口地址必须和 agy 用的一致：agy（1.5 起，见 `~/.gemini/antigravity-cli/log`）所有请求都发往
+//! `daily-cloudcode-pa`，Gemini 那组的用量也记在那边；`cloudcode-pa` 回的 Gemini 桶是另一份
+//! （重置时间、剩余比例都对不上，11-07 实测同一个号 0.94 对 1.0），Claude/GPT 那组两边相同。
 
 use std::time::Duration;
 
@@ -20,7 +24,8 @@ use tokio::sync::OnceCell;
 use crate::services::subscription::QuotaTier;
 use crate::services::subscription_agy::collect_tiers;
 
-const API_BASE: &str = "https://cloudcode-pa.googleapis.com/v1internal";
+/// agy 自己用的地址（不是 Gemini CLI 用的 `cloudcode-pa`），额度才和 agy 的 `/usage` 一致
+const API_BASE: &str = "https://daily-cloudcode-pa.googleapis.com/v1internal";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_BODY: usize = 256 * 1024;
 /// 本机读不到 agy 版本时写进 UA 的版本（实测过的发行版；服务端要 1.2.0 起才回 Gemini 那组）
@@ -307,6 +312,11 @@ mod tests {
             br#"{"currentTier":{"id":"free-tier"},"ineligibleTiers":[{"reasonMessage":"x"}]}"#;
         assert_eq!(parse_ineligible_reason(eligible), None);
         assert_eq!(parse_ineligible_reason(b"{}"), None);
+    }
+
+    #[test]
+    fn quota_is_read_from_the_endpoint_agy_uses() {
+        assert!(API_BASE.starts_with("https://daily-cloudcode-pa.googleapis.com/"));
     }
 
     #[test]

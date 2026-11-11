@@ -87,3 +87,73 @@ async fn resource_resync_http_reports_failures_and_preserves_unmanaged_files() {
     assert!(scanned.is_some_and(|value| value > 0));
     server.abort();
 }
+
+#[tokio::test]
+#[serial_test::serial]
+async fn omp_api_key_reference_reports_keys_omp_would_resolve() {
+    let _fixture = crate::mode::controller::tests::Fixture::new();
+    let probe = |value: &str| {
+        omp_api_key_is_reference(Json(OmpApiKeyReferenceRequest {
+            value: value.to_string(),
+        }))
+    };
+    let previous = std::env::var_os("ccswitch_link_probe_secret");
+    std::env::set_var("ccswitch_link_probe_secret", "real-secret");
+    let resolved = probe("ccswitch_link_probe_secret").await.ok().unwrap().0;
+    match previous {
+        Some(value) => std::env::set_var("ccswitch_link_probe_secret", value),
+        None => std::env::remove_var("ccswitch_link_probe_secret"),
+    }
+    assert!(resolved, "omp 会把环境里的值发到链接给的地址");
+    assert!(probe("!printf secret").await.ok().unwrap().0);
+    assert!(!probe("sk-literal-key").await.ok().unwrap().0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial_test::serial]
+async fn profile_and_universal_mutations_wait_for_their_serial_locks() {
+    let fixture = crate::mode::controller::tests::Fixture::new();
+    let state = Arc::new(fixture.state.clone());
+    let web = WebApiState {
+        app_state: state.clone(),
+        copilot_auth_state: state.copilot_auth_state.clone(),
+        codex_oauth_state: state.codex_oauth_state.clone(),
+        xai_oauth_state: state.xai_oauth_state.clone(),
+        access_key: WebAccessKey::new(None).unwrap(),
+    };
+
+    // 非法参数不用等锁就拒绝
+    let held = PROFILE_LOCK.lock().await;
+    let rejected = create_profile(
+        State(web.clone()),
+        Json(CreateProfileRequest {
+            name: "x".into(),
+            scope: "not-a-scope".into(),
+        }),
+    )
+    .await;
+    assert!(rejected.is_err());
+
+    let create = tokio::spawn(create_profile(
+        State(web.clone()),
+        Json(CreateProfileRequest {
+            name: "Serial".into(),
+            scope: "claude".into(),
+        }),
+    ));
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(!create.is_finished(), "项目写入要等前一个写入结束");
+    drop(held);
+    let created = create.await.unwrap().ok().unwrap().0;
+    assert_eq!(created.name, "Serial");
+
+    let held = UNIVERSAL_LOCK.lock().await;
+    let delete = tokio::spawn(delete_universal_provider(
+        State(web.clone()),
+        Path("missing".to_string()),
+    ));
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(!delete.is_finished(), "统一供应商写入要等前一个写入结束");
+    drop(held);
+    let _ = delete.await.unwrap();
+}

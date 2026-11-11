@@ -1259,10 +1259,7 @@ pub async fn get_claude_account_quota(
         return Ok(with_plan(direct));
     }
 
-    let account_uuid = account
-        .split_once(':')
-        .map_or(account.as_str(), |(uuid, _)| uuid)
-        .to_string();
+    let account_uuid = account_uuid_of(&account).to_string();
     let profile = slot.global_config();
     let config_dir = match &slot {
         snapshot::store::Slot::Default { .. } => None,
@@ -1283,6 +1280,33 @@ pub async fn get_claude_account_quota(
         cached,
         now_millis(),
     )))
+}
+
+/// 跟随本地登录的 Claude 官方卡：按 `~/.claude` 现在的登录查额度。令牌过期了（几个小时没用
+/// Claude Code 就会这样）和绑号卡一样，在默认槽位里跑一次 `claude -p /usage`，读它缓存的额度。
+async fn get_local_claude_quota() -> SubscriptionQuota {
+    use crate::services::claude_account::{snapshot, usage};
+
+    let direct = claude_quota_from(read_claude_credentials()).await;
+    // 改了配置目录时登录不一定在 ~/.claude，在那里跑会拿到别的号的额度
+    if !needs_cli_usage(&direct) || crate::settings::get_claude_override_dir().is_some() {
+        return direct;
+    }
+    let cached = tokio::task::spawn_blocking(|| {
+        let slot = snapshot::store::Slot::default_slot();
+        let account = snapshot::default_owner(&slot)?;
+        usage::refresh_via_cli(&account, None);
+        usage::read_cached(&slot.global_config(), account_uuid_of(&account))
+    })
+    .await
+    .ok()
+    .flatten();
+    account_quota_with_cache(direct, cached, now_millis())
+}
+
+/// 账号 key（`<accountUuid>:<organizationUuid>`）里的 `accountUuid`。
+fn account_uuid_of(account: &str) -> &str {
+    account.split_once(':').map_or(account, |(uuid, _)| uuid)
 }
 
 /// 绑号卡的额度，带上这个号的套餐（凭据里记的；读不到时缺省）。
@@ -1331,7 +1355,7 @@ fn account_quota_with_cache(
 
 pub async fn get_subscription_quota(tool: &str) -> Result<SubscriptionQuota, String> {
     match tool {
-        "claude" => Ok(claude_quota_from(read_claude_credentials()).await),
+        "claude" => Ok(get_local_claude_quota().await),
         "codex" => {
             let (token, account_id, status, message) = read_codex_credentials();
             match status {
@@ -1488,6 +1512,13 @@ mod tests {
 
         let none = account_quota_with_cache(expired_claude_quota(), None, now);
         assert!(!none.success);
+    }
+
+    #[test]
+    fn account_uuid_is_the_part_before_the_organization() {
+        assert_eq!(account_uuid_of("acc-1:org-1"), "acc-1");
+        assert_eq!(account_uuid_of("acc-1:"), "acc-1");
+        assert_eq!(account_uuid_of("acc-1"), "acc-1");
     }
 
     #[test]

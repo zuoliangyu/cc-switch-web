@@ -2453,6 +2453,10 @@ export const getWebPiState = (
   app: "pi" | "omp" = "pi",
 ): Promise<PiCurrentState> => requestJson<PiCurrentState>(`/api/${app}/state`);
 
+/** omp 会不会把这个 apiKey 解析成服务端环境或 `.env` 里的值（深链接导入前检查） */
+export const isWebOmpApiKeyReference = (value: string): Promise<boolean> =>
+  requestWithBody<boolean>("/api/omp/api-key-reference", "POST", { value });
+
 /** 只改 Pi / Oh My Pi 供应商的用量脚本（元数据），不重写原生配置文件 */
 export const updateWebPiProviderUsageScript = (
   app: "pi" | "omp",
@@ -2911,7 +2915,10 @@ export async function startWebMcpConnectivityChecks(
 }
 
 export async function pollWebMcpConnectivityChecks(batchId: string): Promise<{
-  results: { serverId: string; connected: boolean }[];
+  results: {
+    serverId: string;
+    status: "connected" | "authRequired" | "failed";
+  }[];
   done: boolean;
 }> {
   return requestJson(`/api/mcp/connectivity/${encodeURIComponent(batchId)}`);

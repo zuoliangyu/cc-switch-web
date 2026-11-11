@@ -227,6 +227,37 @@ describe("useSettings hook", () => {
     expect(syncCurrentProvidersLiveMock).not.toHaveBeenCalled();
   });
 
+  it("refreshes DeepSeek Harness data when its home directory changes", async () => {
+    settingsFormMock = createSettingsFormMock({
+      settings: {
+        ...serverSettings,
+        dshConfigDir: "  /wsl/dsh  ",
+        language: "zh",
+      },
+    });
+    invalidateQueriesMock.mockReset();
+
+    const { result } = renderHook(() => useSettings());
+    await act(async () => {
+      await result.current.saveSettings();
+    });
+
+    const payload = mutateAsyncMock.mock.calls[0][0] as Settings;
+    expect(payload.dshConfigDir).toBe("/wsl/dsh");
+    const keys = invalidateQueriesMock.mock.calls.map(
+      ([filters]) => (filters as { queryKey: unknown[] }).queryKey,
+    );
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        ["providers", "dsh"],
+        ["skills", "installed"],
+        ["sessions"],
+        ["dsh-account-status"],
+      ]),
+    );
+    expect(syncCurrentProvidersLiveMock).not.toHaveBeenCalled();
+  });
+
   it("resets form, language and directories using server data", () => {
     serverSettings = {
       ...serverSettings,
@@ -268,6 +299,7 @@ describe("useSettings hook", () => {
       undefined, // hermesConfigDir
       undefined, // piConfigDir
       undefined, // ompConfigDir
+      undefined, // dshConfigDir
     );
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
   });

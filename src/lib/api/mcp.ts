@@ -14,7 +14,8 @@ export interface McpAppSyncOutcome {
 }
 export interface McpConnectivityResult {
   serverId: string;
-  connected: boolean;
+  /** `authRequired`: the server answered 401 and wants the client's own sign-in. */
+  status: "connected" | "authRequired" | "failed";
 }
 
 /** 结果轮询间隔：每个检查最长 30 秒，0.5 秒足够及时又不频繁 */

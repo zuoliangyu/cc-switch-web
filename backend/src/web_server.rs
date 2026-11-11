@@ -719,30 +719,74 @@ fn profile_api_error(error: crate::error::AppError) -> ApiError {
     }
 }
 
+/// 要等数据库连接锁的处理放到阻塞线程池里跑（同上游 98777515 的 `run_db_task`）：会话同步
+/// 占着连接锁时（大会话文件一次 30–40 秒）不占住 async 工作线程。参数先在外面解析，非法输入
+/// 不用等锁就能拒绝。
+async fn run_db_task<T, F>(state: &WebApiState, task: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce(&AppState) -> Result<T, ApiError> + Send + 'static,
+{
+    let app_state = state.app_state.clone();
+    tokio::task::spawn_blocking(move || task(app_state.as_ref()))
+        .await
+        .map_err(|error| ApiError::internal(format!("数据库任务失败: {error}")))?
+}
+
+/// 项目的写入口互相串行（上游 98777515 的 `PROFILE_LOCK`）：桌面端靠主线程排队，Web 的请求
+/// 本来就并发。`apply` 收尾才写当前项目指针、自动保存会整行回写旧项目，期间的清除 / 重命名 /
+/// 删除会被盖掉；新建的快照会拍到切到一半的状态。
+static PROFILE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// 统一供应商的增删与同步是「读-改-写」，同样互相串行（上游 `UNIVERSAL_LOCK`）：
+/// 两个并发的保存会互相覆盖。
+static UNIVERSAL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+async fn profile_mutation<T, F>(state: &WebApiState, task: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce(&AppState) -> Result<T, ApiError> + Send + 'static,
+{
+    let _serial = PROFILE_LOCK.lock().await;
+    run_db_task(state, task).await
+}
+
+async fn universal_mutation<T, F>(state: &WebApiState, task: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce(&AppState) -> Result<T, ApiError> + Send + 'static,
+{
+    let _serial = UNIVERSAL_LOCK.lock().await;
+    run_db_task(state, task).await
+}
+
 async fn list_profiles(
     State(state): State<WebApiState>,
 ) -> Result<Json<ProfilesResponse>, ApiError> {
-    let profiles = ProfileService::list(state.app_state.as_ref())
-        .map_err(profile_api_error)?
-        .into_iter()
-        .map(ProfileDto::from)
-        .collect();
-    let db = &state.app_state.db;
-    let current_ids = CurrentProfileIds {
-        claude: db
-            .get_current_profile_id(ProfileScope::Claude.as_str())
-            .map_err(profile_api_error)?,
-        claude_desktop: db
-            .get_current_profile_id(ProfileScope::ClaudeDesktop.as_str())
-            .map_err(profile_api_error)?,
-        codex: db
-            .get_current_profile_id(ProfileScope::Codex.as_str())
-            .map_err(profile_api_error)?,
-    };
-    Ok(Json(ProfilesResponse {
-        profiles,
-        current_ids,
-    }))
+    run_db_task(&state, |app_state| {
+        let profiles = ProfileService::list(app_state)
+            .map_err(profile_api_error)?
+            .into_iter()
+            .map(ProfileDto::from)
+            .collect();
+        let db = &app_state.db;
+        let current_ids = CurrentProfileIds {
+            claude: db
+                .get_current_profile_id(ProfileScope::Claude.as_str())
+                .map_err(profile_api_error)?,
+            claude_desktop: db
+                .get_current_profile_id(ProfileScope::ClaudeDesktop.as_str())
+                .map_err(profile_api_error)?,
+            codex: db
+                .get_current_profile_id(ProfileScope::Codex.as_str())
+                .map_err(profile_api_error)?,
+        };
+        Ok(Json(ProfilesResponse {
+            profiles,
+            current_ids,
+        }))
+    })
+    .await
 }
 
 async fn create_profile(
@@ -750,10 +794,13 @@ async fn create_profile(
     Json(payload): Json<CreateProfileRequest>,
 ) -> Result<Json<ProfileDto>, ApiError> {
     let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
-    ProfileService::create(state.app_state.as_ref(), &payload.name, scope)
-        .map(ProfileDto::from)
-        .map(Json)
-        .map_err(profile_api_error)
+    profile_mutation(&state, move |app_state| {
+        ProfileService::create(app_state, &payload.name, scope)
+            .map(ProfileDto::from)
+            .map(Json)
+            .map_err(profile_api_error)
+    })
+    .await
 }
 
 async fn update_profile(
@@ -767,23 +814,29 @@ async fn update_profile(
         .map(ProfileScope::parse)
         .transpose()
         .map_err(profile_api_error)?;
-    ProfileService::update(
-        state.app_state.as_ref(),
-        &id,
-        payload.name,
-        payload.resnapshot.unwrap_or(false),
-        scope,
-    )
-    .map(ProfileDto::from)
-    .map(Json)
-    .map_err(profile_api_error)
+    profile_mutation(&state, move |app_state| {
+        ProfileService::update(
+            app_state,
+            &id,
+            payload.name,
+            payload.resnapshot.unwrap_or(false),
+            scope,
+        )
+        .map(ProfileDto::from)
+        .map(Json)
+        .map_err(profile_api_error)
+    })
+    .await
 }
 
 async fn delete_profile(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    ProfileService::delete(state.app_state.as_ref(), &id).map_err(profile_api_error)?;
+    profile_mutation(&state, move |app_state| {
+        ProfileService::delete(app_state, &id).map_err(profile_api_error)
+    })
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -792,11 +845,13 @@ async fn clear_current_profile(
     Path(scope): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let scope = ProfileScope::parse(&scope).map_err(profile_api_error)?;
-    state
-        .app_state
-        .db
-        .set_current_profile_id(scope.as_str(), None)
-        .map_err(profile_api_error)?;
+    profile_mutation(&state, move |app_state| {
+        app_state
+            .db
+            .set_current_profile_id(scope.as_str(), None)
+            .map_err(profile_api_error)
+    })
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -806,6 +861,8 @@ async fn apply_profile(
     Json(payload): Json<ApplyProfileRequest>,
 ) -> Result<Json<Vec<String>>, ApiError> {
     let scope = ProfileScope::parse(&payload.scope).map_err(profile_api_error)?;
+    // 和其余项目写入串行；切换供应商已在 `ProfileService::apply` 里放到阻塞线程池
+    let _serial = PROFILE_LOCK.lock().await;
     let applied = ProfileService::apply(state.app_state.as_ref(), &id, scope)
         .await
         .map_err(profile_api_error)?;
@@ -1088,6 +1145,24 @@ async fn get_omp_state(
     crate::commands::get_omp_current_state_internal(state.app_state.as_ref())
         .map(Json)
         .map_err(|error| ApiError::internal(format!("failed to load Oh My Pi state: {error}")))
+}
+
+#[derive(Deserialize)]
+struct OmpApiKeyReferenceRequest {
+    value: String,
+}
+
+/// 深链接导入 Oh My Pi 供应商前的检查：omp 会先把 `apiKey` 当环境变量名查（本机环境和 `.env`），
+/// 此刻就能解析成别的值的 Key 导入后会把那个值发到链接给的地址（上游 51b464bd 的
+/// `is_omp_key_reference` 第三条）。`!` 开头与形似变量名的值前端按形状直接拒绝。
+async fn omp_api_key_is_reference(
+    Json(payload): Json<OmpApiKeyReferenceRequest>,
+) -> Result<Json<bool>, ApiError> {
+    let value = payload.value;
+    blocking_json(move || {
+        Ok::<_, String>(crate::omp_config::resolve_usage_api_key(&value) != value)
+    })
+    .await
 }
 
 async fn get_pi_prompt_file(
@@ -1699,9 +1774,11 @@ async fn upsert_universal_provider(
     Json(provider): Json<crate::provider::UniversalProvider>,
 ) -> Result<Json<bool>, ApiError> {
     let id = provider.id.clone();
-    let result =
-        crate::commands::upsert_universal_provider_internal(state.app_state.as_ref(), provider)
-            .map_err(|e| ApiError::internal(format!("failed to save universal provider: {e}")))?;
+    let result = universal_mutation(&state, move |app_state| {
+        crate::commands::upsert_universal_provider_internal(app_state, provider)
+            .map_err(|e| ApiError::internal(format!("failed to save universal provider: {e}")))
+    })
+    .await?;
     emit_universal_provider_synced("upsert", &id);
     Ok(Json(result))
 }
@@ -1710,9 +1787,12 @@ async fn delete_universal_provider(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<bool>, ApiError> {
-    let result =
-        crate::commands::delete_universal_provider_internal(state.app_state.as_ref(), id.clone())
-            .map_err(|e| ApiError::internal(format!("failed to delete universal provider: {e}")))?;
+    let task_id = id.clone();
+    let result = universal_mutation(&state, move |app_state| {
+        crate::commands::delete_universal_provider_internal(app_state, task_id)
+            .map_err(|e| ApiError::internal(format!("failed to delete universal provider: {e}")))
+    })
+    .await?;
     emit_universal_provider_synced("delete", &id);
     Ok(Json(result))
 }
@@ -1721,9 +1801,12 @@ async fn sync_universal_provider(
     State(state): State<WebApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<bool>, ApiError> {
-    let result =
-        crate::commands::sync_universal_provider_internal(state.app_state.as_ref(), id.clone())
-            .map_err(|e| ApiError::internal(format!("failed to sync universal provider: {e}")))?;
+    let task_id = id.clone();
+    let result = universal_mutation(&state, move |app_state| {
+        crate::commands::sync_universal_provider_internal(app_state, task_id)
+            .map_err(|e| ApiError::internal(format!("failed to sync universal provider: {e}")))
+    })
+    .await?;
     emit_universal_provider_synced("sync", &id);
     Ok(Json(result))
 }
@@ -2323,12 +2406,14 @@ async fn list_sessions() -> Result<Json<Vec<crate::session_manager::SessionMeta>
 
 async fn get_session_messages(
     Query(query): Query<SessionMessagesQuery>,
-) -> Result<Json<Vec<crate::session_manager::SessionMessage>>, ApiError> {
-    let messages =
-        crate::commands::get_session_messages_internal(query.provider_id, query.source_path)
-            .await
-            .map_err(|e| ApiError::internal(format!("failed to load session messages: {e}")))?;
-    Ok(Json(messages))
+) -> Result<axum::response::Response, ApiError> {
+    let body = crate::commands::get_session_messages_internal(query.provider_id, query.source_path)
+        .await
+        .map_err(|e| ApiError::internal(format!("failed to load session messages: {e}")))?;
+    Ok(axum::response::Response::builder()
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap())
 }
 
 #[derive(Deserialize)]
@@ -2353,7 +2438,8 @@ async fn stream_session_messages(
     use crate::session_manager::{self, cache::chunk_ranges, model::TranscriptChunk};
     let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(2);
     tokio::task::spawn_blocking(move || {
-        let send = |chunk: TranscriptChunk| -> Result<(), String> {
+        // 缓存里的消息只借用到序列化完成，不必每包都复制一份。
+        let send = |chunk: TranscriptChunk<'_>| -> Result<(), String> {
             let mut bytes = serde_json::to_vec(&chunk).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
             tx.blocking_send(bytes)
@@ -2363,14 +2449,14 @@ async fn stream_session_messages(
         {
             Ok(loaded) => loaded,
             Err(message) => {
-                let _ = send(TranscriptChunk::Error { message });
+                let _ = send(TranscriptChunk::Error { message: &message });
                 return;
             }
         };
         let transcript = loaded.transcript;
         if send(TranscriptChunk::Header {
             total: transcript.messages.len(),
-            turns: transcript.turns.clone(),
+            turns: &transcript.turns,
             cached: loaded.cached,
             parse_ms: loaded.parse_ms,
         })
@@ -2381,7 +2467,7 @@ async fn stream_session_messages(
         for (start, end) in chunk_ranges(&transcript.message_bytes) {
             if send(TranscriptChunk::Messages {
                 start,
-                messages: transcript.messages[start..end].to_vec(),
+                messages: &transcript.messages[start..end],
             })
             .is_err()
             {
@@ -4957,6 +5043,27 @@ pub(crate) fn raise_open_file_limit() {
     }
 }
 
+/// 备份与日志维护（归档、清理、回收空间）可能长时间占着数据库连接：不在启动路径上同步做，
+/// 也不占 async 工作线程。第一次 tick 立即执行即启动维护，之后每天一次；休眠唤醒后不补跑。
+fn spawn_periodic_maintenance(db: Arc<Database>) {
+    const PERIODIC_MAINTENANCE_INTERVAL_SECS: u64 = 24 * 60 * 60;
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+            PERIODIC_MAINTENANCE_INTERVAL_SECS,
+        ));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let db = db.clone();
+            match tokio::task::spawn_blocking(move || db.periodic_backup_if_needed()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => log::warn!("periodic maintenance failed: {e}"),
+                Err(e) => log::warn!("periodic maintenance task failed: {e}"),
+            }
+        }
+    });
+}
+
 pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<(), String> {
     #[cfg(unix)]
     raise_open_file_limit();
@@ -4972,11 +5079,9 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             log::warn!("startup default skill repository init failed: {err}");
         }
     }
-    if let Err(err) = db.periodic_backup_if_needed() {
-        log::warn!("startup periodic maintenance failed: {err}");
-    }
     let app_state = Arc::new(AppState::new(db));
     crate::events::init();
+    spawn_periodic_maintenance(app_state.db.clone());
     if let Err(err) = crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(
         app_state.as_ref(),
     )
@@ -5527,6 +5632,7 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route("/api/prompts/:app/:id/enable", post(enable_prompt))
         .route("/api/pi/state", get(get_pi_state))
         .route("/api/omp/state", get(get_omp_state))
+        .route("/api/omp/api-key-reference", post(omp_api_key_is_reference))
         .route(
             "/api/dsh/account",
             get(get_dsh_account_status).delete(sign_out_dsh_account),

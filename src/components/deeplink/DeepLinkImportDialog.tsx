@@ -579,7 +579,8 @@ export function DeepLinkImportDialog() {
                   {request.model && (
                     <InfoRow
                       label={t(
-                        request.app === "claude"
+                        request.app === "claude" ||
+                          request.app === "claude-desktop"
                           ? "deeplink.multiModel"
                           : "deeplink.model",
                       )}

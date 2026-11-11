@@ -32,6 +32,9 @@ export type PiSessionDiscovery =
 export const piApi = {
   getCurrentState: (app: PiFamilyAppId = "pi") =>
     invoke<PiCurrentState>(`get_${app}_current_state`),
+  /** omp 会不会把这个 apiKey 当环境变量名（服务端环境、omp 的 `.env`）解析成别的值 */
+  isOmpApiKeyReference: (value: string) =>
+    invoke<boolean>("omp_api_key_is_reference", { value }),
   updateProviderUsageScript: (
     id: string,
     usageScript: UsageScript,

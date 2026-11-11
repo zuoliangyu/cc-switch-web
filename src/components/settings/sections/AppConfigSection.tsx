@@ -28,6 +28,7 @@ export type DirectoryAppId = Extract<
   | "hermes"
   | "pi"
   | "omp"
+  | "dsh"
 >;
 
 const DIRECTORY_FIELD: Record<DirectoryAppId, keyof Settings> = {
@@ -40,6 +41,7 @@ const DIRECTORY_FIELD: Record<DirectoryAppId, keyof Settings> = {
   hermes: "hermesConfigDir",
   pi: "piConfigDir",
   omp: "ompConfigDir",
+  dsh: "dshConfigDir",
 };
 
 const DIRECTORY_PLACEHOLDER: Record<DirectoryAppId, string> = {
@@ -52,6 +54,7 @@ const DIRECTORY_PLACEHOLDER: Record<DirectoryAppId, string> = {
   hermes: "settings.browsePlaceholderHermes",
   pi: "settings.browsePlaceholderPi",
   omp: "settings.browsePlaceholderOmp",
+  dsh: "settings.browsePlaceholderDsh",
 };
 
 export const DIRECTORY_APPS: DirectoryAppId[] = [
@@ -64,6 +67,7 @@ export const DIRECTORY_APPS: DirectoryAppId[] = [
   "hermes",
   "pi",
   "omp",
+  "dsh",
 ];
 
 export const isDirectoryApp = (app: AppId): app is DirectoryAppId =>

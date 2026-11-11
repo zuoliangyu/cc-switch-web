@@ -39,9 +39,9 @@ pub struct ToolVersion {
     update_blocked_by_node: Option<tool_node_requirement::NodeRequirementGap>,
 }
 
-const VALID_TOOLS: [&str; 13] = [
+const VALID_TOOLS: [&str; 14] = [
     "claude", "codex", "gemini", "grok", "opencode", "openclaw", "hermes", "pi", "mcode", "kimi",
-    "dsh", "agy", "omp",
+    "dsh", "agy", "omp", "copilot",
 ];
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -547,6 +547,7 @@ fn tool_display_name(tool: &str) -> &'static str {
         "kimi" => "Kimi Code",
         "dsh" => "DeepSeek Harness",
         "agy" => "Antigravity CLI",
+        "copilot" => "GitHub Copilot CLI",
         _ => "Unknown",
     }
 }
@@ -766,6 +767,7 @@ fn npm_install_command_for(tool: &str) -> Option<&'static str> {
         "openclaw" => Some("npm i -g openclaw@latest"),
         "pi" => Some("npm i -g @earendil-works/pi-coding-agent@latest"),
         "kimi" => Some("npm i -g @moonshot-ai/kimi-code@latest"),
+        "copilot" => Some("npm i -g @github/copilot@latest"),
         "dsh" => Some("npm i -g @deepseek-ai/dsh@latest --engine-strict"),
         "mcode" => Some(
             "npm i -g @minimax-ai/code@latest --ignore-scripts=false --include=optional \"--allow-scripts=@minimax-ai/code,better-sqlite3\"",
@@ -1175,6 +1177,7 @@ async fn get_single_tool_version_impl(
         "dsh" => fetch_npm_latest_for_tool(&client, "@deepseek-ai/dsh", tool, local).await,
         "agy" => fetch_agy_latest_version(&client).await,
         "omp" => fetch_npm_latest_for_tool(&client, "@oh-my-pi/pi-coding-agent", tool, local).await,
+        "copilot" => fetch_npm_latest_for_tool(&client, "@github/copilot", tool, local).await,
         _ => None,
     };
 
@@ -3083,6 +3086,7 @@ fn npm_package_for(tool: &str) -> Option<&'static str> {
         "mcode" => Some("@minimax-ai/code"),
         "kimi" => Some("@moonshot-ai/kimi-code"),
         "omp" => Some("@oh-my-pi/pi-coding-agent"),
+        "copilot" => Some("@github/copilot"),
         "dsh" => Some("@deepseek-ai/dsh"),
         _ => None,
     }

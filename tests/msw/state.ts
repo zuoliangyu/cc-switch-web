@@ -78,6 +78,7 @@ const createDefaultProviders = (): ProvidersByApp => ({
   dsh: {},
   agy: {},
   omp: {},
+  copilot: {},
 });
 
 const createDefaultCurrent = (): CurrentProviderState => ({
@@ -95,6 +96,7 @@ const createDefaultCurrent = (): CurrentProviderState => ({
   dsh: "",
   agy: "",
   omp: "",
+  copilot: "",
 });
 
 let providers = createDefaultProviders();

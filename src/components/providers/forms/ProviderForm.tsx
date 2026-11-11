@@ -102,6 +102,7 @@ import { AgyAccountSelect, useAgyAccountSupported } from "./AgyOAuthSection";
 import { ClaudeAccountSelect } from "./ClaudeOfficialSection";
 import { usesGeminiStyleForm } from "@/config/appConfig";
 import { KimiProviderForm } from "./KimiProviderForm";
+import { CopilotProviderForm } from "./CopilotProviderForm";
 import { OmoFormFields } from "./OmoFormFields";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
 import { ProviderAdvancedConfig } from "./ProviderAdvancedConfig";
@@ -2907,6 +2908,7 @@ export function ProviderForm(props: ProviderFormProps) {
   if (props.appId === "mcode" || props.appId === "dsh")
     return <McodeProviderForm {...props} />;
   if (props.appId === "kimi") return <KimiProviderForm {...props} />;
+  if (props.appId === "copilot") return <CopilotProviderForm {...props} />;
   if (props.appId === "pi" || props.appId === "omp") {
     return <PiProviderForm {...props} />;
   }

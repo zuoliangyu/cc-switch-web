@@ -39,6 +39,7 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
     dsh: "~/.dsh/AGENTS.md",
     agy: "~/.gemini/config/AGENTS.md",
     omp: "~/.omp/agent/AGENTS.md",
+    copilot: "~/.copilot/copilot-instructions.md",
   };
   const filename = filenameMap[appId];
   const [name, setName] = useState("");

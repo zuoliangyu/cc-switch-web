@@ -257,6 +257,7 @@
       "isolationTitle": "This terminal is isolated",
       "isolationBody": "It stays on \"{{name}}\": switching providers in CC Switch later won't affect it, and it won't change the provider CC Switch is currently using.",
       "isolationBodyAgy": "The key and endpoint of \"{{name}}\" go only to agy in this terminal and are never written to a file; running agy directly in another terminal still uses your Google sign-in.",
+      "isolationBodyCopilot": "The endpoint, key and model of \"{{name}}\" go only to copilot in this terminal and are never written to a file; running copilot directly in another terminal still uses your GitHub sign-in.",
       "dirLabel": "Folder",
       "dirPlaceholder": "e.g. /home/me/project or D:\\work\\project",
       "dirHint": "The terminal opens on the computer running the CC Switch service, so enter a folder path on that computer.",
@@ -1004,6 +1005,7 @@
     "mcode": "MiniMax Code",
     "agy": "Antigravity",
     "omp": "Oh My Pi",
+    "copilot": "Copilot CLI",
     "kimi": "Kimi Code",
     "dsh": "DeepSeek Harness"
   },
@@ -1138,6 +1140,7 @@
     "deleteEllipsis": "Delete",
     "selectSessionLabel": "Select {{title}}",
     "agyDeleteHint": "Delete this session in Antigravity to also remove its runtime state",
+    "copilotDeleteHint": "Delete this session in GitHub Copilot CLI so its session store stays consistent",
     "mcodeDeleteHint": "Delete it in MiniMax Code",
     "groupMeta": "{{count}} sessions · {{time}}",
     "bucketToday": "Today",
@@ -1634,6 +1637,28 @@
     "deploymentGitHubCom": "GitHub.com",
     "deploymentEnterprise": "GitHub Enterprise Server",
     "enterpriseDomainPlaceholder": "e.g. company.ghe.com",
+    "form": {
+      "officialTitle": "Uses Copilot CLI's GitHub sign-in",
+      "officialHint": "Open Terminal starts copilot with this card's model. Bind an Auth Center account to start it with that account.",
+      "byokTitle": "Only applies in terminals opened from this card",
+      "byokHint": "Copilot CLI reads custom models only from its environment, so nothing is written to Copilot's own files.",
+      "apiFormat": "API format",
+      "baseUrl": "API endpoint",
+      "baseUrlHint": "OpenAI-compatible endpoints usually end in /v1 (e.g. Ollama http://localhost:11434/v1); Anthropic uses the host only (https://api.anthropic.com).",
+      "model": "Model",
+      "officialModelHint": "Leave empty to use Copilot's current model. Passed as --model for this session only; /model in copilot still works.",
+      "byokModelHint": "The model ID your endpoint expects (COPILOT_MODEL).",
+      "reasoningEffort": "Reasoning effort",
+      "reasoningEffortDefault": "Copilot default",
+      "reasoningEffortHint": "Passed as --reasoning-effort when the terminal opens. With none, Copilot doesn't send reasoning.summary on Responses requests, which some relays reject.",
+      "maxPromptTokens": "Max prompt tokens",
+      "maxOutputTokens": "Max output tokens",
+      "envJsonHint": "Advanced: any COPILOT_PROVIDER_* variable (for example COPILOT_PROVIDER_MODEL_ID or COPILOT_PROVIDER_BEARER_TOKEN) is passed to copilot as-is."
+    },
+    "quota": {
+      "accountNotInAuthCenter": "The Auth Center has no account for {{login}}, which Copilot CLI is signed in with. Add it in the Auth Center, or bind an account on this card.",
+      "notSignedIn": "Copilot CLI isn't signed in on the computer running the CC Switch service. Run copilot there and use /login, or bind an Auth Center account on this card."
+    },
     "automaticFormat": "Selected automatically by routing",
     "automaticFormatHint": "Routing selects the Copilot upstream format per model; manual format settings are ignored."
   },
@@ -4327,6 +4352,7 @@
       "pi": "Installs with npm",
       "mcode": "Installs with the official script, falls back to npm",
       "agy": "Installs with the official script",
+      "copilot": "Installs with npm",
       "omp": "Installs with the official script"
     }
   },

@@ -1039,6 +1039,7 @@ describe("UnifiedSkillsPanel", () => {
           kimi: false,
           dsh: false,
           agy: false,
+          copilot: false,
         },
       },
     ]);

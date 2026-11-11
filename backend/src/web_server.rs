@@ -3795,6 +3795,31 @@ async fn get_copilot_usage_for_account(
     Ok(Json(usage))
 }
 
+/// Copilot CLI 当前登录的账号（`~/.copilot/config.json` 的 `lastLoggedInUser`），以及授权中心里
+/// 按用户名和域名对上的账号 ID。官方 Copilot CLI 卡没绑账号时，额度跟着它查。没登录时为 `null`。
+async fn get_copilot_cli_signed_in_account(
+    State(state): State<WebApiState>,
+) -> Result<Json<Option<crate::copilot_config::CopilotCliSignedInAccount>>, ApiError> {
+    let login = tokio::task::spawn_blocking(crate::copilot_config::cli_login)
+        .await
+        .map_err(|e| ApiError::internal(format!("后台任务失败: {e}")))?;
+    let Some((login, github_domain)) = login else {
+        return Ok(Json(None));
+    };
+    let accounts = state
+        .copilot_auth_state
+        .read()
+        .await
+        .get_status()
+        .await
+        .accounts;
+    Ok(Json(Some(crate::copilot_config::match_signed_in_account(
+        login,
+        github_domain,
+        &accounts,
+    ))))
+}
+
 async fn get_subscription_quota(
     Path(tool): Path<String>,
 ) -> Result<Json<crate::services::subscription::SubscriptionQuota>, ApiError> {
@@ -5363,6 +5388,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/copilot/accounts/:account_id/usage",
             get(get_copilot_usage_for_account),
+        )
+        .route(
+            "/api/copilot/cli-signed-in-account",
+            get(get_copilot_cli_signed_in_account),
         )
         .route("/api/subscription/codex-oauth", get(get_codex_oauth_quota))
         .route("/api/subscription/xai-oauth", get(get_xai_oauth_quota))

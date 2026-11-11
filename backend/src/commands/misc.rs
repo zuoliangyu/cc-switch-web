@@ -1280,6 +1280,7 @@ pub(crate) fn open_provider_terminal_internal(
         AppType::Agy => "agy",
         AppType::Codex => "codex",
         AppType::GrokBuild => "grok",
+        AppType::Copilot => "copilot",
         _ => "claude",
     };
     let user_args = terminal_user_args(program, skip_permissions, extra_args)?;
@@ -1303,6 +1304,14 @@ pub(crate) fn open_provider_terminal_internal(
 
     if app_type == AppType::GrokBuild {
         open_grok_terminal(state, provider, &user_args, launch_cwd.as_deref())?;
+        return Ok(true);
+    }
+
+    if app_type == AppType::Copilot {
+        let account = futures::executor::block_on(copilot_bound_account(state, provider))?;
+        let command = copilot_launch_command(provider, account, &user_args)?;
+        launch_terminal_command(&command, launch_cwd.as_deref(), None)
+            .map_err(|e| format!("启动终端失败: {e}"))?;
         return Ok(true);
     }
 
@@ -1355,11 +1364,13 @@ pub(crate) fn open_provider_terminal_internal(
     Ok(true)
 }
 
-/// 跳过权限确认的参数：Claude Code 和 agy 同名，Codex 跳过确认的同时也关掉沙箱；Grok Build 用自己的。
+/// 跳过权限确认的参数：Claude Code 和 agy 同名，Codex 跳过确认的同时也关掉沙箱；Grok Build 用自己的；
+/// Copilot CLI 的 `--allow-all` 放开工具、路径和 URL 三类确认。
 fn skip_permissions_flag(program: &str) -> &'static str {
     match program {
         "codex" => "--dangerously-bypass-approvals-and-sandbox",
         "grok" => "--always-approve",
+        "copilot" => "--allow-all",
         _ => "--dangerously-skip-permissions",
     }
 }
@@ -1546,6 +1557,88 @@ fn grok_launch_command(
         user_args,
         &[("GROK_HOME", Some(grok_home))],
     )
+}
+
+/// 官方卡绑定的授权中心 GitHub 账号的 Token 和域名；没绑时为 `None`，跟着 Copilot CLI 自己的
+/// 登录走。卡片从库里按应用与 ID 读出（不信任浏览器传来的配置），绑定的账号必须还在授权中心里。
+async fn copilot_bound_account(
+    state: &AppState,
+    provider: &crate::provider::Provider,
+) -> Result<Option<(String, String)>, String> {
+    let Some(account_id) = crate::services::provider::copilot_direct::bound_account_id(provider)
+    else {
+        return Ok(None);
+    };
+    let credentials = state
+        .copilot_auth_state
+        .read()
+        .await
+        .github_credentials_for_account(&account_id)
+        .await;
+    match credentials {
+        Some(credentials) => Ok(Some(credentials)),
+        None => Err(crate::error::AppError::localized(
+            "copilot.account.bound_missing",
+            format!(
+                "「{}」绑定的 GitHub 账号不在授权中心里：请先在授权中心添加它，或编辑这张卡改选账号",
+                provider.name
+            ),
+            format!(
+                "The GitHub account bound to \"{}\" is not in the Auth Center. Add it there, or edit the card to choose another account.",
+                provider.name
+            ),
+        )
+        .to_string()),
+    }
+}
+
+/// GitHub Copilot CLI 的「打开终端」（上游 copilot_terminal_launch 的 Web 版）：官方卡跑
+/// `copilot`，卡上设了模型就加 `--model`；绑了授权中心账号时经 `COPILOT_GITHUB_TOKEN` 只给这
+/// 一个进程。自带模型卡的 Key、地址和模型只经环境变量传入（`env_launch_command` 写进 0600 的
+/// 临时文件、读完即删，Windows 写进自删的启动 .bat），不进命令行参数、不写常驻文件。
+/// 官方卡清掉全部 `COPILOT_PROVIDER_*`，自带模型卡清掉没填的同名变量，免得 rc 里 export 的值混进来。
+fn copilot_launch_command(
+    provider: &crate::provider::Provider,
+    account: Option<(String, String)>,
+    user_args: &[String],
+) -> Result<String, String> {
+    let launch = crate::services::provider::copilot_direct::terminal_launch(provider)
+        .map_err(|e| e.to_string())?;
+    let mut env = launch.env;
+    if !launch.byok {
+        if let Some((token, domain)) = account {
+            env.push(("COPILOT_GITHUB_TOKEN", Some(token)));
+            env.push(("COPILOT_GH_HOST", Some(domain)));
+        }
+    }
+    // npm 装的是 copilot.cmd，要 `call`；`call` 会把 `%` 再展开一遍、把引号里的 `^` 加倍，cmd
+    // 也不认 `\"`，所以模型名里有这些字符时不在 Windows 上启动。
+    if cfg!(target_os = "windows")
+        && launch
+            .model
+            .as_deref()
+            .is_some_and(|model| model.contains(['"', '%', '^']))
+    {
+        return Err(format!(
+            "「{}」的模型名里有 Windows 终端传不过去的字符（\" % ^）",
+            provider.name
+        ));
+    }
+    let mut args = Vec::new();
+    if let Some(model) = launch.model {
+        args.push(format!("--model={model}"));
+    }
+    // 只会是 copilot_config::REASONING_EFFORTS 里的小写单词（已校验）。
+    if let Some(effort) = launch.reasoning_effort {
+        args.push(format!("--reasoning-effort={effort}"));
+    }
+    args.extend(user_args.iter().cloned());
+    let program = if cfg!(target_os = "windows") {
+        "call copilot"
+    } else {
+        "copilot"
+    };
+    env_launch_command(program, &provider.id, &args, &env)
 }
 
 /// `-c` 参数：卡要覆盖的配置项，再接用户参数。
@@ -2847,6 +2940,177 @@ mod tests {
             .is_empty());
         let grok = super::terminal_user_args("grok", true, Vec::new()).unwrap();
         assert_eq!(grok, vec!["--always-approve"]);
+        let copilot = super::terminal_user_args("copilot", true, Vec::new()).unwrap();
+        assert_eq!(copilot, vec!["--allow-all"]);
+    }
+
+    fn copilot_card(settings: serde_json::Value, official: bool) -> crate::provider::Provider {
+        let mut row =
+            crate::provider::Provider::with_id("relay".into(), "Relay".into(), settings, None);
+        if official {
+            row.category = Some("official".into());
+        }
+        row
+    }
+
+    fn copilot_byok_card() -> crate::provider::Provider {
+        copilot_card(
+            serde_json::json!({"env":{
+                "COPILOT_PROVIDER_BASE_URL":"https://relay.test/v1",
+                "COPILOT_PROVIDER_API_KEY":"fixture-key",
+                "COPILOT_PROVIDER_WIRE_API":"responses",
+                "COPILOT_MODEL":"gpt-5.4"
+            },"reasoningEffort":"none"}),
+            false,
+        )
+    }
+
+    /// macOS / Linux：命令里只有 0600 临时文件的路径，取出它的内容后删掉。
+    #[cfg(not(target_os = "windows"))]
+    fn take_env_file(command: &str) -> String {
+        let env_file = command
+            .strip_prefix(". '")
+            .and_then(|rest| rest.split('\'').next())
+            .expect("env file path");
+        let content = std::fs::read_to_string(env_file).unwrap();
+        let _ = std::fs::remove_file(env_file);
+        content
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn copilot_byok_launch_passes_the_provider_only_through_the_environment() {
+        let args =
+            super::terminal_user_args("copilot", true, vec!["--add-dir".into(), "/tmp/a b".into()])
+                .unwrap();
+        // 自带模型卡不带授权中心账号的令牌。
+        let command = super::copilot_launch_command(
+            &copilot_byok_card(),
+            Some(("gho_fixture".into(), "github.com".into())),
+            &args,
+        )
+        .unwrap();
+        assert!(
+            command.ends_with(
+                "; copilot '--reasoning-effort=none' '--allow-all' '--add-dir' '/tmp/a b'"
+            ),
+            "{command}"
+        );
+        assert!(!command.contains("fixture-key"), "{command}");
+        assert!(!command.contains("gho_fixture"), "{command}");
+        let env = take_env_file(&command);
+        assert!(env.contains("export COPILOT_PROVIDER_API_KEY='fixture-key'"));
+        assert!(env.contains("export COPILOT_MODEL='gpt-5.4'"));
+        assert!(env.contains("unset COPILOT_PROVIDER_BEARER_TOKEN"));
+        assert!(!env.contains("gho_fixture"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn copilot_official_launch_uses_the_model_flag_and_bound_account() {
+        let card = copilot_card(
+            serde_json::json!({"env":{"COPILOT_MODEL":"claude-sonnet-4.6"}}),
+            true,
+        );
+        let command = super::copilot_launch_command(&card, None, &[]).unwrap();
+        assert!(
+            command.ends_with("; copilot '--model=claude-sonnet-4.6'"),
+            "{command}"
+        );
+        let env = take_env_file(&command);
+        assert!(env.contains("unset COPILOT_PROVIDER_BASE_URL"));
+        assert!(!env.contains("COPILOT_GITHUB_TOKEN"));
+
+        let command = super::copilot_launch_command(
+            &card,
+            Some(("gho_fixture".into(), "github.com".into())),
+            &[],
+        )
+        .unwrap();
+        assert!(!command.contains("gho_fixture"), "{command}");
+        let env = take_env_file(&command);
+        assert!(env.contains("export COPILOT_GITHUB_TOKEN='gho_fixture'"));
+        assert!(env.contains("export COPILOT_GH_HOST='github.com'"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn copilot_byok_launch_passes_the_provider_only_through_the_environment() {
+        let args = super::terminal_user_args("copilot", true, Vec::new()).unwrap();
+        let command = super::copilot_launch_command(
+            &copilot_byok_card(),
+            Some(("gho_fixture".into(), "github.com".into())),
+            &args,
+        )
+        .unwrap();
+        let (env, launch) = command.rsplit_once("\r\n").unwrap();
+        // Key 只在 `set` 行（启动 .bat 跑完即删），不进 copilot 的命令行参数。
+        assert_eq!(
+            launch,
+            "call copilot \"--reasoning-effort=none\" \"--allow-all\""
+        );
+        assert!(env.contains("set \"COPILOT_PROVIDER_API_KEY=fixture-key\""));
+        assert!(env.contains("set \"COPILOT_MODEL=gpt-5.4\""));
+        assert!(env.contains("set \"COPILOT_PROVIDER_BEARER_TOKEN=\""));
+        assert!(!command.contains("gho_fixture"), "{command}");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn copilot_official_launch_uses_the_model_flag_and_bound_account() {
+        let card = copilot_card(
+            serde_json::json!({"env":{"COPILOT_MODEL":"claude-sonnet-4.6"}}),
+            true,
+        );
+        let command = super::copilot_launch_command(
+            &card,
+            Some(("gho_fixture".into(), "github.com".into())),
+            &[],
+        )
+        .unwrap();
+        let (env, launch) = command.rsplit_once("\r\n").unwrap();
+        assert_eq!(launch, "call copilot \"--model=claude-sonnet-4.6\"");
+        assert!(env.contains("set \"COPILOT_PROVIDER_BASE_URL=\""));
+        assert!(env.contains("set \"COPILOT_GITHUB_TOKEN=gho_fixture\""));
+        assert!(!launch.contains("gho_fixture"));
+
+        let unsafe_model = copilot_card(serde_json::json!({"env":{"COPILOT_MODEL":"a%b"}}), true);
+        assert!(super::copilot_launch_command(&unsafe_model, None, &[]).is_err());
+    }
+
+    /// 绑定的账号已不在授权中心：报错，不退回 Copilot CLI 自己的登录。
+    #[test]
+    #[serial_test::serial]
+    fn copilot_bound_account_must_still_be_in_the_auth_center() {
+        let home = tempfile::tempdir().unwrap();
+        let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+        std::env::set_var("CC_SWITCH_TEST_HOME", home.path());
+        let state = crate::store::AppState::new(std::sync::Arc::new(
+            crate::database::Database::memory().unwrap(),
+        ));
+        match previous {
+            Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+            None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+        }
+        let mut card = copilot_card(serde_json::json!({"env":{}}), true);
+        assert_eq!(
+            futures::executor::block_on(super::copilot_bound_account(&state, &card)).unwrap(),
+            None
+        );
+        card.meta = Some(
+            serde_json::from_value(serde_json::json!({"authBinding":{
+                "source":"managed_account","authProvider":"github_copilot","accountId":"missing"
+            }}))
+            .unwrap(),
+        );
+        assert!(futures::executor::block_on(super::copilot_bound_account(&state, &card)).is_err());
+        // 自带模型卡不看绑定。
+        let mut byok = copilot_byok_card();
+        byok.meta = card.meta.clone();
+        assert_eq!(
+            futures::executor::block_on(super::copilot_bound_account(&state, &byok)).unwrap(),
+            None
+        );
     }
 
     #[cfg(target_os = "windows")]

@@ -24,6 +24,7 @@ pub(crate) mod session_usage_codex;
 pub(crate) mod session_usage_gemini;
 pub(crate) mod session_usage_grokbuild;
 pub mod session_usage_agy;
+pub mod session_usage_copilot;
 pub mod session_usage_dsh;
 pub mod session_usage_omp;
 pub mod session_usage_kimi;

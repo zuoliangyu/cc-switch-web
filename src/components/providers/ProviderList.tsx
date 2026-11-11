@@ -379,7 +379,7 @@ export function ProviderList({
         queue: switchMode.queue.filter((id) => known.has(id)),
       });
     }
-    if (appId === "agy") {
+    if (appId === "agy" || appId === "copilot") {
       return buildLaunchSections({
         app: appId,
         t,
@@ -565,10 +565,10 @@ export function ProviderList({
   }
 
   // 「当前」只用来决定官方订阅 / OAuth 额度自动刷新：Pi 没有当前项，OMO / Hermes 各看自己的当前项；
-  // Antigravity 没有「启用」，每张卡都随时能打开，额度一律照常显示
+  // Antigravity、Copilot CLI 没有「启用」，每张卡都随时能打开，额度一律照常显示
   const isCurrentFor = (provider: Provider) => {
     if (appId === "pi" || appId === "omp") return false;
-    if (appId === "agy") return true;
+    if (appId === "agy" || appId === "copilot") return true;
     if (provider.category === "omo") return provider.id === currentOmoId;
     if (provider.category === "omo-slim")
       return provider.id === currentOmoSlimId;
@@ -588,8 +588,10 @@ export function ProviderList({
       onDuplicate={onDuplicate}
       onConfigureUsage={onConfigureUsage ?? (() => undefined)}
       onOpenWebsite={onOpenWebsite}
-      // Antigravity 的「打开终端」已经是主按钮，不再重复
-      onOpenTerminal={appId === "agy" ? undefined : onOpenTerminal}
+      // Antigravity、Copilot CLI 的「打开终端」已经是主按钮，不再重复
+      onOpenTerminal={
+        appId === "agy" || appId === "copilot" ? undefined : onOpenTerminal
+      }
       onTest={handleTest}
       isTesting={isChecking(provider.id)}
     />

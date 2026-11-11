@@ -326,6 +326,7 @@ function App() {
     dsh: true,
     agy: true,
     omp: true,
+    copilot: true,
   };
 
   // 默认打开的应用跟应用页拖出来的顺序走
@@ -466,6 +467,7 @@ function App() {
     activeApp !== "dsh" &&
     activeApp !== "agy" &&
     activeApp !== "omp" &&
+    activeApp !== "copilot" &&
     (takeoverStatus?.[activeApp] || false);
 
   const { data, isLoading, refetch } = useProvidersQuery(activeApp, {
@@ -995,7 +997,8 @@ function App() {
                           activeApp === "claude" ||
                           activeApp === "codex" ||
                           activeApp === "agy" ||
-                          activeApp === "grokbuild"
+                          activeApp === "grokbuild" ||
+                          activeApp === "copilot"
                             ? handleOpenTerminal
                             : undefined,
                         onCreate: () => openAddProvider(currentModeView),

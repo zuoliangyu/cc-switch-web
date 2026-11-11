@@ -67,6 +67,7 @@ export function AppSwitcher({
     dsh: "deepseek",
     agy: "antigravity",
     omp: "omp",
+    copilot: "githubcopilot",
   };
   const appDisplayName: Record<AppId, string> = {
     claude: "Claude",
@@ -83,6 +84,7 @@ export function AppSwitcher({
     dsh: "DeepSeek Harness",
     agy: "Antigravity",
     omp: "Oh My Pi",
+    copilot: "Copilot CLI",
   };
 
   // Filter apps based on visibility settings (default all visible)

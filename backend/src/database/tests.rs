@@ -1854,6 +1854,130 @@ fn migration_v21_to_v22_adds_usage_dimensions_and_keeps_web_input_semantics() {
     assert_usage_dimensions_upgraded(&conn);
 }
 
+/// Web v22 -> v23（上游 v24 -> v25）：mcp_servers、skills 补上 `enabled_copilot`，默认关，
+/// 其余应用的开关原样保留；重复执行迁移不改动已经打开的开关。
+#[test]
+fn migration_v22_to_v23_adds_copilot_flags_without_changing_dsh_state() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    conn.execute_batch(
+        "ALTER TABLE mcp_servers DROP COLUMN enabled_copilot;
+         ALTER TABLE skills DROP COLUMN enabled_copilot;
+         INSERT INTO mcp_servers (id, name, server_config, enabled_dsh)
+         VALUES ('shared', 'Shared MCP', '{}', 1);
+         INSERT INTO skills (id, name, directory, enabled_dsh)
+         VALUES ('skill', 'Skill', 'skill', 1);",
+    )
+    .expect("rewind to v22 shape");
+    Database::set_user_version(&conn, 22).expect("set user_version=22");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("upgrade v22 database");
+    assert_eq!(Database::get_user_version(&conn).unwrap(), 23);
+    assert_eq!(SCHEMA_VERSION, 23);
+    for table in ["mcp_servers", "skills"] {
+        let flags: (bool, bool) = conn
+            .query_row(
+                &format!("SELECT enabled_dsh, enabled_copilot FROM {table}"),
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read migrated flags");
+        assert_eq!(flags, (true, false), "{table}");
+    }
+
+    conn.execute("UPDATE skills SET enabled_copilot = 1", [])
+        .unwrap();
+    Database::apply_schema_migrations_on_conn(&conn).expect("reopen migrated database");
+    assert!(conn
+        .query_row("SELECT enabled_copilot FROM skills", [], |row| row
+            .get::<_, bool>(0))
+        .unwrap());
+}
+
+/// 全新安装：先建表，再从 user_version=0 跑迁移，两张表都有 DSH 与 Copilot 的开关列。
+#[test]
+fn fresh_install_has_both_dsh_and_copilot_flags_at_current_version() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+    assert_eq!(Database::get_user_version(&conn).unwrap(), SCHEMA_VERSION);
+    for table in ["mcp_servers", "skills"] {
+        for column in ["enabled_dsh", "enabled_copilot"] {
+            assert!(
+                Database::has_column(&conn, table, column).expect("inspect column"),
+                "{table}.{column} missing on fresh install"
+            );
+        }
+    }
+}
+
+/// 桌面端快照（版本号被改写为 Web 当前版本、不再走迁移）缺 `enabled_copilot` 时由建表阶段补上，
+/// 已有的开关不受影响，读写 MCP / Skills 不报 `no such column`。
+#[test]
+fn create_tables_patches_copilot_flags_into_current_version_snapshots() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    conn.execute_batch(
+        "ALTER TABLE mcp_servers DROP COLUMN enabled_copilot;
+         ALTER TABLE skills DROP COLUMN enabled_copilot;
+         INSERT INTO mcp_servers (id, name, server_config, enabled_kimi)
+         VALUES ('m', 'm', '{}', 1);
+         INSERT INTO skills (id, name, directory, enabled_claude)
+         VALUES ('s', 's', 's', 1);",
+    )
+    .expect("desktop snapshot without copilot flags");
+    Database::set_user_version(&conn, SCHEMA_VERSION).expect("set current user_version");
+
+    Database::create_tables_on_conn(&conn).expect("create tables");
+    Database::apply_schema_migrations_on_conn(&conn).expect("apply migrations");
+
+    for (table, flag) in [
+        ("mcp_servers", "enabled_kimi"),
+        ("skills", "enabled_claude"),
+    ] {
+        assert!(Database::has_column(&conn, table, "enabled_copilot").unwrap());
+        let flags: (bool, bool) = conn
+            .query_row(
+                &format!("SELECT {flag}, enabled_copilot FROM {table}"),
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(flags, (true, false), "{table}");
+    }
+}
+
+/// MCP 与 Skills 的 Copilot 开关在库里各自独立保存（上游 copilot_clean_database 用例）。
+#[test]
+fn copilot_clean_database_persists_mcp_and_skill_flags_independently() {
+    let db = Database::memory().unwrap();
+    let server = serde_json::from_value(json!({
+        "id": "m", "name": "m", "server": {"command": "echo"},
+        "apps": {"copilot": true, "kimi": true}
+    }))
+    .unwrap();
+    db.save_mcp_server(&server).unwrap();
+    db.update_mcp_server_app_enabled("m", &crate::app_config::AppType::Copilot, false)
+        .unwrap();
+    let saved = db.get_all_mcp_servers().unwrap();
+    assert!(!saved["m"].apps.copilot);
+    assert!(saved["m"].apps.kimi);
+
+    let skill = serde_json::from_value(json!({
+        "id": "s", "name": "s", "description": "", "directory": "s",
+        "apps": {"copilot": true, "claude": true}, "installedAt": 0
+    }))
+    .unwrap();
+    db.save_skill(&skill).unwrap();
+    let saved = db.get_installed_skill("s").unwrap().unwrap();
+    assert!(saved.apps.copilot && saved.apps.claude);
+    let mut apps = saved.apps.clone();
+    apps.copilot = false;
+    db.update_skill_apps("s", &apps).unwrap();
+    let saved = db.get_all_installed_skills().unwrap();
+    assert!(!saved["s"].apps.copilot && saved["s"].apps.claude);
+}
+
 /// 桌面端快照迁入时版本号被改写为 Web 当前版本、不再走迁移，缺的用量列由建表阶段补上。
 #[test]
 fn create_tables_patches_usage_dimensions_into_current_version_snapshots() {

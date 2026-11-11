@@ -505,6 +505,20 @@ impl CopilotAuthManager {
 
     // ==================== 多账号管理方法 ====================
 
+    /// 指定账号的 GitHub OAuth Token 和域名，给 Copilot CLI 的 `COPILOT_GITHUB_TOKEN` 用。
+    /// 只在打开终端时经子进程环境传出，不写进命令行、日志，也不回传浏览器。Web 的授权中心
+    /// 只登录 github.com，域名固定。
+    pub async fn github_credentials_for_account(
+        &self,
+        account_id: &str,
+    ) -> Option<(String, String)> {
+        let _ = self.ensure_migration_complete().await;
+        let accounts = self.accounts.read().await;
+        accounts
+            .get(account_id)
+            .map(|account| (account.github_token.clone(), default_github_domain()))
+    }
+
     /// 移除指定账号
     pub async fn remove_account(&self, account_id: &str) -> Result<(), CopilotAuthError> {
         log::info!("[CopilotAuth] 移除账号: {account_id}");

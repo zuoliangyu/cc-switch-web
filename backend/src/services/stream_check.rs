@@ -232,6 +232,17 @@ impl StreamCheckService {
             return Self::check_once_without_adapter(app_type, provider, config, start).await;
         }
 
+        // GitHub Copilot CLI：官方卡走 Copilot 自己的 GitHub 登录，没有可检测的端点（上游同样
+        // 拒绝）；自带模型卡按 `COPILOT_PROVIDER_*` 的协议直接检测那个地址。
+        if matches!(app_type, AppType::Copilot) {
+            if crate::services::provider::copilot_direct::is_official(provider) {
+                return Err(AppError::Message(
+                    "Official providers do not expose a reachability-check target".to_string(),
+                ));
+            }
+            return Self::check_once_without_adapter(app_type, provider, config, start).await;
+        }
+
         // DeepSeek Harness 没有代理适配器，上游同样不做连通检测。
         if matches!(app_type, AppType::Dsh) {
             return Err(AppError::InvalidInput(
@@ -341,6 +352,9 @@ impl StreamCheckService {
             }
             AppType::Dsh => {
                 unreachable!("DeepSeek Harness 在入口处已拒绝")
+            }
+            AppType::Copilot => {
+                unreachable!("Copilot CLI 已通过 check_once_without_adapter 处理")
             }
         };
 
@@ -767,6 +781,16 @@ impl StreamCheckService {
                 )
                 .await
             }
+            AppType::Copilot => {
+                Self::check_copilot_stream(
+                    &client,
+                    provider,
+                    &model_to_test,
+                    test_prompt,
+                    request_timeout,
+                )
+                .await
+            }
             // Oh My Pi 的 models.yml 节点与 Pi 的 models.json 同形（baseUrl、apiKey、api）
             AppType::Pi | AppType::Omp => {
                 Self::check_openclaw_stream(
@@ -1033,6 +1057,77 @@ impl StreamCheckService {
             .get("authHeader")
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
+    }
+
+    /// Copilot CLI 自带模型卡：`COPILOT_PROVIDER_TYPE` / `COPILOT_PROVIDER_WIRE_API` 决定协议，
+    /// `COPILOT_PROVIDER_HEADERS`（每行 `名称: 值`，或字面量 `\n` 分隔）作附加请求头。
+    /// Azure OpenAI 的地址按部署名和 api-version 拼，这里不做检测。
+    async fn check_copilot_stream(
+        client: &Client,
+        provider: &Provider,
+        model: &str,
+        test_prompt: &str,
+        timeout: std::time::Duration,
+    ) -> Result<(u16, String), AppError> {
+        let env = provider.settings_config.get("env");
+        let get = |key: &str| {
+            env.and_then(|env| env.get(key))
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        };
+        let base_url = get(crate::copilot_config::BASE_URL_ENV)
+            .ok_or_else(|| AppError::Message("COPILOT_PROVIDER_BASE_URL is empty".to_string()))?
+            .to_string();
+        let api_key = get(crate::copilot_config::API_KEY_ENV)
+            .or_else(|| get(crate::copilot_config::BEARER_TOKEN_ENV))
+            .unwrap_or_default()
+            .to_string();
+        let headers = Self::copilot_headers(get(crate::copilot_config::HEADERS_ENV));
+        let extra_headers = (!headers.is_empty()).then_some(&headers);
+        let (format, strategy) = match (
+            get(crate::copilot_config::TYPE_ENV).unwrap_or("openai"),
+            get(crate::copilot_config::WIRE_API_ENV).unwrap_or("completions"),
+        ) {
+            ("anthropic", _) => ("anthropic", AuthStrategy::ClaudeAuth),
+            ("azure", _) => {
+                return Err(AppError::Message(
+                    "Stream checks are not supported for Azure OpenAI Copilot CLI providers"
+                        .to_string(),
+                ))
+            }
+            (_, "responses") => ("openai_responses", AuthStrategy::Bearer),
+            _ => ("openai_chat", AuthStrategy::Bearer),
+        };
+        Self::check_claude_stream(
+            client,
+            &base_url,
+            &AuthInfo::new(api_key, strategy),
+            model,
+            test_prompt,
+            timeout,
+            provider,
+            Some(format),
+            extra_headers,
+        )
+        .await
+    }
+
+    fn copilot_headers(text: Option<&str>) -> serde_json::Map<String, serde_json::Value> {
+        let mut headers = serde_json::Map::new();
+        for line in text
+            .unwrap_or_default()
+            .split(['\n', '\r'])
+            .flat_map(|line| line.split("\\n"))
+        {
+            if let Some((name, value)) = line.split_once(':') {
+                let name = name.trim();
+                if !name.is_empty() {
+                    headers.insert(name.to_string(), serde_json::json!(value.trim()));
+                }
+            }
+        }
+        headers
     }
 
     fn extract_openclaw_headers(
@@ -1372,6 +1467,10 @@ impl StreamCheckService {
             .unwrap_or_else(|| config.codex_model.clone()),
             AppType::Gemini | AppType::Agy => Self::extract_env_model(provider, "GEMINI_MODEL")
                 .unwrap_or_else(|| config.gemini_model.clone()),
+            AppType::Copilot => Self::extract_env_model(provider, "COPILOT_MODEL")
+                .or_else(|| Self::extract_env_model(provider, "COPILOT_PROVIDER_MODEL_ID"))
+                .or_else(|| Self::extract_env_model(provider, "COPILOT_PROVIDER_WIRE_MODEL"))
+                .unwrap_or_else(|| config.codex_model.clone()),
             AppType::OpenCode => {
                 // OpenCode uses models map in settings_config
                 // Try to extract first model from the models object
@@ -1721,6 +1820,31 @@ mod tests {
         assert_eq!(config.timeout_secs, 45);
         assert_eq!(config.max_retries, 2);
         assert_eq!(config.degraded_threshold_ms, 6000);
+    }
+
+    /// Copilot CLI：官方卡没有可检测的端点；自带模型卡的模型与请求头取自 `COPILOT_*` 环境变量。
+    #[tokio::test]
+    async fn test_copilot_checks_only_byok_endpoints() {
+        let config = StreamCheckConfig::default();
+        let login = make_provider(serde_json::json!({ "env": { "COPILOT_MODEL": "auto" } }));
+        let error =
+            StreamCheckService::check_once(&AppType::Copilot, &login, &config, None, None, None)
+                .await
+                .unwrap_err();
+        assert!(error.to_string().contains("Official providers"), "{error}");
+
+        let custom = make_provider(serde_json::json!({ "env": {
+            "COPILOT_PROVIDER_BASE_URL": "https://relay.example/v1",
+            "COPILOT_PROVIDER_MODEL_ID": "relay-model"
+        } }));
+        assert_eq!(
+            StreamCheckService::resolve_test_model(&AppType::Copilot, &custom, &config),
+            "relay-model"
+        );
+        let headers = StreamCheckService::copilot_headers(Some("X-A: 1\\nX-B: two words\n\nbad"));
+        assert_eq!(headers.len(), 2);
+        assert_eq!(headers["X-A"], "1");
+        assert_eq!(headers["X-B"], "two words");
     }
 
     #[test]

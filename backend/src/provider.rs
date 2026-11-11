@@ -196,6 +196,17 @@ impl Provider {
                     .unwrap_or_default();
                 (base_url, api_key)
             }
+            // Copilot CLI BYOK keeps its endpoint and key in `COPILOT_PROVIDER_*` env vars.
+            AppType::Copilot => {
+                let env = settings.get("env");
+                (
+                    str_at(env.and_then(|e| e.get("COPILOT_PROVIDER_BASE_URL"))),
+                    first_non_empty(
+                        env,
+                        &["COPILOT_PROVIDER_API_KEY", "COPILOT_PROVIDER_BEARER_TOKEN"],
+                    ),
+                )
+            }
             // Hermes (config.yaml) flattens credentials at the top level, snake_case.
             AppType::Hermes => (
                 str_at(settings.get("base_url")),

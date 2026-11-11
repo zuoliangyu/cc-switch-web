@@ -242,3 +242,82 @@ async fn session_content_search_never_returns_sources_outside_session_roots() {
     assert!(!search::index_path().exists());
     server.abort();
 }
+
+/// Copilot CLI 的会话只能从 `COPILOT_HOME/session-state` 里读：根目录内的能读出正文，
+/// 根目录外的（直接给路径、或用 `..` 跳出去）一律拒绝；删除交给 Copilot CLI 自己。
+#[tokio::test]
+#[serial_test::serial]
+async fn copilot_sessions_stay_inside_the_session_state_root() {
+    let _fixture = crate::mode::controller::tests::Fixture::new();
+    let copilot_home = crate::config::get_home_dir().join(".copilot");
+    struct Restore(Option<std::ffi::OsString>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(value) => std::env::set_var("COPILOT_HOME", value),
+                None => std::env::remove_var("COPILOT_HOME"),
+            }
+        }
+    }
+    let _restore = Restore(std::env::var_os("COPILOT_HOME"));
+    std::env::set_var("COPILOT_HOME", &copilot_home);
+
+    let events = [
+        json!({"type":"session.start","timestamp":"2026-10-10T09:07:56.748Z","data":{"sessionId":"s1","context":{"cwd":"/work"}}}),
+        json!({"type":"user.message","timestamp":"2026-10-10T09:08:00.043Z","data":{"content":"copilot fixture","messageId":"u1"}}),
+    ]
+    .iter()
+    .map(|event| format!("{event}\n"))
+    .collect::<String>();
+    let inside_dir = copilot_home.join("session-state").join("s1");
+    std::fs::create_dir_all(&inside_dir).unwrap();
+    let inside = inside_dir.join("events.jsonl");
+    std::fs::write(&inside, &events).unwrap();
+    let outside_dir = crate::config::get_home_dir().join("outside");
+    std::fs::create_dir_all(&outside_dir).unwrap();
+    let outside = outside_dir.join("events.jsonl");
+    std::fs::write(&outside, &events).unwrap();
+    let escaped = copilot_home
+        .join("session-state")
+        .join("..")
+        .join("..")
+        .join("outside")
+        .join("events.jsonl");
+
+    let app = Router::new()
+        .route("/messages", get(get_session_messages))
+        .route("/delete", post(delete_session));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let messages = |source: std::path::PathBuf| {
+        let request = client.get(format!("{base}/messages")).query(&[
+            ("providerId", "copilot".to_string()),
+            ("sourcePath", source.to_string_lossy().into_owned()),
+        ]);
+        async move { request.send().await.unwrap() }
+    };
+
+    let response = messages(inside.clone()).await;
+    assert!(response.status().is_success());
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body[0]["blocks"][0]["text"], "copilot fixture");
+    for source in [outside.clone(), escaped] {
+        let response = messages(source.clone()).await;
+        assert!(!response.status().is_success(), "{}", source.display());
+        assert!(!response.text().await.unwrap().contains("copilot fixture"));
+    }
+
+    let response = client
+        .post(format!("{base}/delete"))
+        .json(&json!({"providerId":"copilot","sessionId":"s1","sourcePath":inside}))
+        .send()
+        .await
+        .unwrap();
+    assert!(!response.status().is_success());
+    assert!(inside.exists());
+    server.abort();
+}

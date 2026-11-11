@@ -41,14 +41,14 @@
 | D | Codex | 13 | 已完成（13 已迁移） |
 | E | 界面 | 11 | 已完成（10 已迁移、1 部分迁移） |
 | F | 会话全文搜索 | 1 | 已完成（1 已迁移） |
-| G | Copilot CLI | 1 | 待迁移 |
+| G | Copilot CLI | 1 | 已完成（1 已迁移） |
 | — | 不适用 | 22 | — |
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 79 |
+| 已迁移 | 80 |
 | 部分迁移 | 4 |
-| 待迁移 | 1 |
+| 待迁移 | 0 |
 | 不适用 | 24 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
@@ -166,7 +166,7 @@
 | `8656ebd9` | v4.0.28 | docs(release): add v4.0.28 release notes | — | 上游发行说明 | 不适用 |
 | `5a3d7f92` | 未发布 | feat(i18n): add Korean community localization (#8794) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `cdca0984` | 未发布 | feat(i18n): add Russian community localization (#7788) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
-| `bd487e83` | 未发布 | feat(copilot): add GitHub Copilot CLI support (#8753) | G Copilot CLI |  | 待迁移 |
+| `bd487e83` | 未发布 | feat(copilot): add GitHub Copilot CLI support (#8753) | G Copilot CLI | G：新增受管应用 `copilot`（AppType、侧栏 / 应用页 / 路由、图标 githubcopilot）；卡片只有「打开终端」（官方卡跑 `copilot --model`，可绑授权中心 GitHub 账号经 `COPILOT_GITHUB_TOKEN` 只给这个进程；自带模型卡的 `COPILOT_PROVIDER_*` 只经进程环境传入，按 Web 的 `env_launch_command`），推理强度 `--reasoning-effort`、跳过确认 `--allow-all`；MCP（`mcp-config.json`，停用时记下 tools / timeout）、Skills、提示词 `copilot-instructions.md`、会话（登记会话根目录）、用量导入、深链接（前端解析器）、工具安装 / 卸载、额度（`GET /api/copilot/cli-signed-in-account`）、连通性检查（Web 为真实流式请求）；schema v22 → v23 加 `enabled_copilot`（含建表补列）；表单与预设取上游，三语文案；托盘、ko / ru / tr / zh-TW 不迁 | 已迁移 |
 | `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 | C：账号额度接口改用 agy 自己的 `daily-cloudcode-pa`；Ultra 5x / 20x 套餐名区分（按 `paidTier.id` 补档位，名字里已带时不重复）依赖套餐显示，随批次 E（cf3c86fe / 626f0226）补上，迁入上游用例 | 已迁移 |
 | `72e826ed` | 未发布 | fix(proxy): normalize call-less outputs for native Responses providers (#9328) | B 代理 | 非官方原生 Responses 上游把没有 call_id 的 function_call_output 改写成 user 消息 | 已迁移 |
 | `5e9812e0` | 未发布 | fix(claude): omit reasoning_content for Mistral tool history (#9388) | B 代理 | 上游为 api.mistral.ai 时不回放 reasoning_content | 已迁移 |
@@ -248,3 +248,12 @@
   - 用例：迁入上游 `copilotQuota`、`accountPlans`、`ClaudeDesktopProviderForm`、`OpenTerminalDialog`、`UnifiedSkillsPanel`（「打开目录」一条改为复制路径）、各授权区块的套餐 mock、后端 `codex_plan_label`、`grok_plan`、`plan_prefers_the_paid_tier_name`、`ultra_plans_show_their_5x_or_20x_variant`；按 Web 结构新写 Grok 终端启动命令与 `--always-approve`、`ProviderCard` 副标题套餐三条、App「编辑器未打开不挂载」、`interfacePrefs`（密度与 tailwind-merge 覆盖）、设置页密度切换。
   - 变基：先基于批次 D 之后的 main（`3a6d7e310`）完成并提交，再变基到批次 F（`c4af3ccda`）之后；三语 locale 自动合并（F 的 `sessionManager` 十个正文搜索键与本批的键都在），只有本台账第 3、6 节冲突，统计按两批合计重算；变基后重跑全部验证。
   - 验证（变基后）：`cargo test --locked --lib` 3831 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/xai_oauth.rs` 报的差异在 HEAD 就有，不在本批改动的行上，未动）；`tsc --noEmit` 通过；前端全量 Vitest 266 个文件 2811 项通过；改动的前端文件 Prettier 通过（`SessionReaderHeader.tsx`、`button.tsx`、`input.tsx`、`index.css`、`lib/api/copilot.ts`、`tailwind.config.cjs`、`App.test.tsx` 报的差异在 HEAD 就有，未动）。未做浏览器验收与 Docker Linux 检查。
+- 2026-11-11：完成批次 G（GitHub Copilot CLI，1 项已迁移）。
+  - 方法：先快进到 `b6b6fa66b`。上游补丁按 `src-tauri/src` → `backend/src` 映射后逐个 `git apply --check`，新文件（`copilot_config.rs`、`mcp/copilot.rs`、`copilot_direct.rs`、`session_usage_copilot.rs`、`session_manager/providers/copilot.rs`、`CopilotProviderForm`、`CopilotCliQuotaFooter`、`copilotProviderPresets` 及用例）与 `OpenTerminalDialog`、`CopilotQuotaFooter`、`UnifiedMcpPanel`、`SessionItem`、`AppGlyph` 等小改动干净合入；`app_config`、`schema`、`dao`、`services/mcp`、`provider/live`、`provider/mod`、`skill`、`session_manager` 与 Web 分叉，三方合并冲突太大，回到 Web 版本后加上 `AppType::Copilot` 由编译器逐处列出未覆盖的分支，照上游行为手工补；上游 `commands/misc.rs` 的工具安装部分在 Web 的 `commands/tool_management.rs`，终端部分照 Web 的 `env_launch_command` 重写。
+  - 接入面：AppId 与 `AppType`（别名 `copilot-cli`、`github-copilot`、`github-copilot-cli`）、应用配置 / 侧栏 / 应用页 / 可见性（图标 githubcopilot，配色用 Web 的 `theme-chip-neutral`）；MCP（`~/.copilot/mcp-config.json`，stdio 写 `local`，停用记下 `tools` / `timeout` 到 Web 数据目录的 `copilot-mcp-options.json`，与数据库同提交、失败回滚；导入按 `disabledMcpServers` 记未启用）；Skills（`~/.copilot/skills`，同 Kimi / agy 的原生目录保护）；提示词 `copilot-instructions.md`；会话（扫描、阅读、恢复 `copilot --resume=<id>`，删除拒绝）；用量导入 `session.usage_record`（用量页显示「Copilot CLI (Session)」）；工具安装 / 升级 / 卸载（npm `@github/copilot`，macOS 的 Homebrew cask `copilot-cli`）；深链接（Web 的前端解析器：供应商 `apiFormat` 换算、`config` 只取地址 / Key / 模型、只导入不启用、确认框隐藏启用开关；提示词与 MCP 的 `apps=copilot`）；额度（官方卡 Credits，没绑账号时按服务主机上 Copilot CLI 当前登录的账号在授权中心找，新增 `GET /api/copilot/cli-signed-in-account`）；连通性检查。卡片没有「启用」，只有「打开终端」（`buildLaunchSections`，同 Antigravity），官方卡可在「配置用量查询」里开关 Copilot 额度。
+  - 终端与密钥：浏览器只发应用、卡片 ID、目录、是否跳过确认与附加参数，服务端从库里读卡片，不接受浏览器传来的配置。Copilot 没有「当前供应商」（与上游一致，每张卡都能打开），因此不做 Grok Build 那样的「必须是当前在用的那家」检查；绑定的授权中心账号必须还在，否则报错，不退回 Copilot 自己的登录。官方卡跑 `copilot`（`--model` / `--reasoning-effort`），清掉全部 `COPILOT_PROVIDER_*`，绑了账号时 `COPILOT_GITHUB_TOKEN` / `COPILOT_GH_HOST` 只给这个进程（新增 `CopilotAuthManager::github_credentials_for_account`，Web 授权中心只有 github.com）；自带模型卡的地址、Key、模型只经环境传入，没填的同名变量清掉，绑定账号不生效。macOS / Linux 写进 0600 临时文件、读入即删，Windows 写进自删的启动 `.bat` 的 `set` 行并用 `call copilot`；令牌与 Key 不进命令行参数、不写常驻文件、不进日志、不回传浏览器。跳过确认 `--allow-all`。模型名含 `"`、`%`、`^` 时 Windows 上拒绝启动。
+  - 数据库：Web 版本链 v22 → v23（对应上游 v24 → v25），`mcp_servers`、`skills` 加 `enabled_copilot`（默认 0），建表语句、桌面端快照的建表阶段补列表、`dao/mcp.rs`、`dao/skills.rs` 读写同步更新；Web 的 skills 表没有 pi / omp 列，以 Web 为准。
+  - 与上游不同：会话根目录登记进 `provider_roots`，读取、正文搜索、删除走同一条 `content::validate_source`；连通性检查是 Web 的真实流式请求（按 `COPILOT_PROVIDER_TYPE` / `WIRE_API` 选 Chat / Responses / Anthropic，带 `COPILOT_PROVIDER_HEADERS`，Azure OpenAI 不检测），上游是只测可达性的 `resolve_base_url`；`COPILOT_GH_HOST` 固定 github.com；Windows 启动 `.bat` 没有上游的 `setlocal` 段（沿用 Web 的 `env_launch_command`，变量只在那个终端的 cmd 会话里），模型名不经批处理变量转交，含 cmd 特殊字符直接拒绝；没有目录覆盖，「应用配置」不列 Copilot（目录跟随服务进程的 `COPILOT_HOME`）；官方卡判定在 `isOfficialAccount` 里补上「没有自带模型地址即官方」；额度未登录提示改为「CC Switch 服务所在电脑上的 Copilot CLI」；`docs/copilot-cli-integration-zh.md` 按 Web 改写。不迁：托盘、ko / ru / tr / zh-TW 文案、README（主线程统一处理）。
+  - 事件推送：本批没有新增服务端事件，上游提交也没有 `app.emit` / `listen`。
+  - 用例：迁入上游 `copilot_config`（6）与 `commands/copilot.rs` 的账号匹配（1，并入 `copilot_config`，另补当前登录读取 1）、`mcp/copilot`（6）、`copilot_direct`（2）、`session_manager/providers/copilot`（3）、`session_usage_copilot`（2 + 1 忽略的真实目录冒烟）、`tests/copilot_commands.rs` 三条改写为 `services/provider/copilot_tests.rs`、数据库迁移 / 全新安装 / 双开关独立保存，前端 `copilotProviderPresets`（4）、`CopilotProviderForm`（8）、`CopilotCliQuotaFooter`（4）；按 Web 结构新写：v22 → v23 迁移、建表阶段补 `enabled_copilot`、终端启动（Unix / Windows 各两条：Key 与令牌只在环境文件或 `set` 行、不进命令行文本，自带模型卡不带令牌，官方卡清 BYOK 变量，Windows 拒绝 `%`）、绑定账号已删时报错、Copilot 会话不越出 `session-state`（直接给根目录外路径、`..` 跳出都拒绝，删除接口拒绝）、Copilot 连通性检查（官方卡拒绝、模型与请求头解析）、深链接四条、`OpenTerminalDialog` 一条；`AppsPage` 的版本探测次数随工具数改为 14。
+  - 验证：`cargo test --locked --lib` 3864 项通过、10 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告（`--lib --tests` 的两条 dead_code 警告在 HEAD 就有）；改动的 Rust 文件 rustfmt 干净（`lib.rs`、`services/mod.rs` 的模块顺序，`commands/config.rs` 的 Agy / Omp 两行，`dao/skills.rs`、`mcp/mod.rs`、`web_session_tests.rs` 第一条用例报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 269 个文件 2832 项通过；改动的前端文件 Prettier 通过（`AppSwitcher.tsx`、`UsageScriptModal.tsx`、`EditProviderDialog.tsx`、`ProviderList.tsx`、`SessionReaderHeader.tsx`、`appConfig.tsx`、`lib/api/copilot.ts`、`managedAccountUsage.ts`、`web.ts`、`SessionManagerPage.test.tsx`、`msw/state.ts` 报的差异在 HEAD 就有，不在本批改动的行上，未动）。未做浏览器验收、真实 Copilot CLI 冒烟与 Docker Linux 检查。

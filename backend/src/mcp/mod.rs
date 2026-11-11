@@ -56,6 +56,7 @@ pub(crate) fn merge_imported_server(
                 agy: false,
                 omp: false,
                 dsh: false,
+                copilot: false,
             },
             description: None,
             homepage: None,
@@ -84,6 +85,7 @@ pub(crate) use opencode::{
 };
 
 pub(crate) mod agy;
+pub(crate) mod copilot;
 pub(crate) mod dsh;
 pub(crate) mod kimi;
 pub(crate) mod mcode;

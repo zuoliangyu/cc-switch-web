@@ -45,7 +45,7 @@ const provider = {
 function renderDialog(
   onClose = vi.fn(),
   target: Provider = provider,
-  appId: "claude" | "codex" | "agy" | "grokbuild" = "claude",
+  appId: "claude" | "codex" | "agy" | "grokbuild" | "copilot" = "claude",
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -374,5 +374,36 @@ describe("OpenTerminalDialog", () => {
     expect(
       screen.queryByText("provider.openTerminalDialog.isolationTitle"),
     ).not.toBeInTheDocument();
+  });
+
+  // Copilot CLI：没有「启用」，每张卡都能打开；只有自带模型卡隔离（Key 只给这个 copilot 进程）
+  it("offers Copilot CLI terminals for every card and isolates only bring-your-own-model cards", () => {
+    const byok = {
+      id: "relay",
+      name: "Relay",
+      settingsConfig: {
+        env: {
+          COPILOT_PROVIDER_BASE_URL: "https://relay.example.com/v1",
+          COPILOT_PROVIDER_API_KEY: "sk-relay",
+          COPILOT_MODEL: "gpt-5.4",
+        },
+      },
+    } as Provider;
+    const official = {
+      id: "github",
+      name: "GitHub Copilot",
+      category: "official",
+      settingsConfig: { env: { COPILOT_MODEL: "claude-sonnet-4.6" } },
+    } as Provider;
+    expect(terminalAvailable(byok, "copilot", false)).toBe(true);
+    expect(terminalAvailable(official, "copilot", false)).toBe(true);
+    expect(terminalIsIsolated(byok, "copilot")).toBe(true);
+    expect(terminalIsIsolated(official, "copilot")).toBe(false);
+
+    renderDialog(vi.fn(), byok, "copilot");
+    expect(screen.getByText("--allow-all")).toBeInTheDocument();
+    expect(
+      screen.getByText("provider.openTerminalDialog.isolationBodyCopilot"),
+    ).toBeInTheDocument();
   });
 });

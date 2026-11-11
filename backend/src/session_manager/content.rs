@@ -658,8 +658,8 @@ fn project_dir_for(source: &ValidatedSource) -> Option<PathBuf> {
     }
 
     use super::providers::{
-        agy, claude, codex, dsh, gemini, grokbuild, hermes, kimi, mcode, omp, openclaw, opencode,
-        pi,
+        agy, claude, codex, copilot, dsh, gemini, grokbuild, hermes, kimi, mcode, omp, openclaw,
+        opencode, pi,
     };
     let sessions = match source.provider_id.as_str() {
         "codex" => codex::scan_sessions(),
@@ -673,6 +673,7 @@ fn project_dir_for(source: &ValidatedSource) -> Option<PathBuf> {
         "mcode" => mcode::scan_sessions(),
         "kimi" => kimi::scan_sessions(),
         "agy" => agy::scan_sessions(),
+        "copilot" => copilot::scan_sessions(),
         "omp" => omp::scan_sessions(),
         "dsh" => dsh::scan_sessions(),
         _ => return None,

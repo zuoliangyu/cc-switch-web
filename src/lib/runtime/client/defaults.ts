@@ -22,6 +22,7 @@ const visibleApps: VisibleApps = {
   dsh: true,
   agy: true,
   omp: true,
+  copilot: true,
 };
 
 export const getDefaultSettings = (): Settings => ({

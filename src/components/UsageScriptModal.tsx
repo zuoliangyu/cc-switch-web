@@ -6,7 +6,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Provider, UsageScript, UsageData } from "@/types";
 import { usageApi, settingsApi, type AppId } from "@/lib/api";
 import { subscriptionApi } from "@/lib/api/subscription";
-import { copilotGetUsage, copilotGetUsageForAccount } from "@/lib/api/copilot";
+import {
+  copilotCliSignedInAccount,
+  copilotGetUsage,
+  copilotGetUsageForAccount,
+} from "@/lib/api/copilot";
+import { isCopilotByok } from "@/config/copilotProviderPresets";
 import { useSettingsQuery } from "@/lib/query";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { extractCodexBaseUrl } from "@/utils/providerConfigUtils";
@@ -316,9 +321,28 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
       : null;
   // 绑了账号的官方卡（Codex / Claude）只用官方订阅额度模板，没保存过开关时默认开
   const isBoundOfficial = isBoundCodexOfficial || Boolean(claudeBoundAccountId);
+  // Copilot CLI 官方卡：只有 Copilot 额度一种查询；没设置过时，绑了授权中心账号的卡默认打开
+  // （和卡片上的显示一致）。
+  const isCopilotCliOfficial =
+    appId === "copilot" && !isCopilotByok(provider.settingsConfig);
+  const copilotBoundAccountId = resolveManagedAccountId(
+    provider.meta,
+    PROVIDER_TYPES.GITHUB_COPILOT,
+  );
 
   const [script, setScript] = useState<UsageScript>(() => {
     const savedScript = provider.meta?.usage_script;
+    if (isCopilotCliOfficial) {
+      return {
+        language: "javascript",
+        code: "",
+        timeout: 10,
+        autoQueryInterval: 5,
+        ...savedScript,
+        templateType: TEMPLATE_TYPES.GITHUB_COPILOT,
+        enabled: savedScript?.enabled ?? Boolean(copilotBoundAccountId),
+      };
+    }
     if (isBoundOfficial) {
       return {
         enabled: savedScript?.enabled ?? true,
@@ -427,7 +451,10 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
     () => {
       const existingScript = provider.meta?.usage_script;
       // Copilot 供应商默认使用 Copilot 模板
-      if (provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT) {
+      if (
+        isCopilotCliOfficial ||
+        provider.meta?.providerType === PROVIDER_TYPES.GITHUB_COPILOT
+      ) {
         return TEMPLATE_TYPES.GITHUB_COPILOT;
       }
       if (isBoundOfficial) {
@@ -598,10 +625,23 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
 
       // Copilot 模板使用专用 API
       if (selectedTemplate === TEMPLATE_TYPES.GITHUB_COPILOT) {
-        const accountId = resolveManagedAccountId(
-          provider.meta,
-          PROVIDER_TYPES.GITHUB_COPILOT,
-        );
+        let accountId = copilotBoundAccountId;
+        if (isCopilotCliOfficial && !accountId) {
+          // 没绑账号的 Copilot CLI 官方卡跟着 CLI 当前登录的账号查，和卡片一致。
+          const signedIn = await copilotCliSignedInAccount();
+          if (!signedIn?.accountId) {
+            toast.error(
+              signedIn
+                ? t("copilot.quota.accountNotInAuthCenter", {
+                    login: signedIn.login,
+                  })
+                : t("copilot.quota.notSignedIn"),
+              { duration: 5000 },
+            );
+            return;
+          }
+          accountId = signedIn.accountId;
+        }
         const usage = accountId
           ? await copilotGetUsageForAccount(accountId)
           : await copilotGetUsage();
@@ -861,6 +901,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
               {Object.keys(PRESET_TEMPLATES)
                 .filter((name) => {
                   const isCopilotProvider =
+                    isCopilotCliOfficial ||
                     provider.meta?.providerType === "github_copilot";
                   if (isCopilotProvider) {
                     return name === TEMPLATE_TYPES.GITHUB_COPILOT;

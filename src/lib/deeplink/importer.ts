@@ -446,6 +446,27 @@ const buildProviderSettings = (
       };
     case "grokbuild":
       return buildGrokbuildSettings(request);
+    case "copilot": {
+      // Copilot CLI 自带模型的环境变量：接口格式换算成 COPILOT_PROVIDER_TYPE 与
+      // COPILOT_PROVIDER_WIRE_API（上游 build_copilot_settings）；Key 只在打开的终端里传给 copilot
+      const wire = nativeProtocol("copilot", apiFormat);
+      const model = request.model?.trim();
+      return {
+        env: {
+          COPILOT_PROVIDER_BASE_URL: endpoint,
+          ...(request.apiKey
+            ? { COPILOT_PROVIDER_API_KEY: request.apiKey }
+            : {}),
+          ...(wire === "anthropic"
+            ? { COPILOT_PROVIDER_TYPE: "anthropic" }
+            : {
+                COPILOT_PROVIDER_TYPE: "openai",
+                COPILOT_PROVIDER_WIRE_API: wire,
+              }),
+          ...(model ? { COPILOT_MODEL: model } : {}),
+        },
+      };
+    }
     case "opencode":
       return {
         npm: nativeProtocol("opencode", apiFormat),
@@ -602,9 +623,10 @@ const importProvider = async (
   // 写进应用的配置文件；旧链接没写时照旧写进去。切换式应用开关关闭时只存进列表：`add` 在
   // 还没有当前供应商时会让这家直接生效，所以走不写客户端配置的路径。
   const additive = isAdditiveLinkApp(app);
-  // Antigravity 没有「启用」（卡片只用来打开终端），只导入
+  // Antigravity、Copilot CLI 没有「启用」（卡片只用来打开终端），只导入
   const activate =
     app !== "agy" &&
+    app !== "copilot" &&
     (additive ? (request.enabled ?? true) : (request.enabled ?? false));
 
   if (additive) {
@@ -676,6 +698,7 @@ const mergeMcpApps = (apps: string | undefined) => {
     agy: targets.includes("agy"),
     kimi: targets.includes("kimi"),
     omp: targets.includes("omp"),
+    copilot: targets.includes("copilot"),
   };
 };
 
@@ -722,6 +745,7 @@ const importMcp = async (
               kimi: Boolean(current.apps.kimi) || targetApps.kimi,
               omp: Boolean(current.apps.omp) || targetApps.omp,
               agy: Boolean(current.apps.agy) || targetApps.agy,
+              copilot: Boolean(current.apps.copilot) || targetApps.copilot,
             },
           }
         : {

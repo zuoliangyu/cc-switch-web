@@ -498,6 +498,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => return Err("该应用不支持代理功能".to_string()),
         };
 
@@ -766,6 +767,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => {}
         }
 
@@ -864,6 +866,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => return Err("该应用不支持代理功能".to_string()),
         };
 
@@ -1238,6 +1241,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => return Err("该应用不支持代理功能".to_string()),
         }
 
@@ -1305,6 +1309,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => {}
         }
 
@@ -1443,6 +1448,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => Err("该应用不支持代理功能".to_string()),
         }
     }
@@ -1483,6 +1489,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => false,
         }
     }
@@ -1556,6 +1563,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => Ok(()),
         }
     }
@@ -1880,6 +1888,7 @@ impl ProxyService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
+            | AppType::Copilot
             | AppType::Omp => {
                 return Err(format!("未知的应用类型: {app_type}"));
             }

@@ -122,6 +122,16 @@ export function isOfficialAccount(
   provider: Pick<Provider, "id" | "category" | "meta" | "settingsConfig">,
 ): boolean {
   if (appId === "kimi") return isKimiOfficialAccount(provider);
+  // Copilot CLI：没填自带模型地址的卡就是 Copilot 自己的 GitHub 登录（与后端 copilot_direct 一致）
+  if (appId === "copilot") {
+    const env = (provider.settingsConfig as { env?: Record<string, unknown> })
+      ?.env;
+    const baseUrl = env?.COPILOT_PROVIDER_BASE_URL;
+    return (
+      provider.category === "official" ||
+      !(typeof baseUrl === "string" && baseUrl.trim())
+    );
+  }
   return (
     provider.category === "official" ||
     resolveCodexOfficialIdentity(appId, provider) !== null

@@ -30,6 +30,7 @@ export const APP_IDS: AppId[] = [
   "dsh",
   "agy",
   "omp",
+  "copilot",
 ];
 
 /** Claude Desktop、OpenClaw 不由 CC Switch 管理 MCP；Pi 1.0 起内置 MCP（`~/.pi/agent/mcp.json`） */
@@ -46,6 +47,7 @@ export const MCP_APP_IDS = [
   "dsh",
   "agy",
   "omp",
+  "copilot",
 ] as const satisfies readonly AppId[];
 export type McpAppId = (typeof MCP_APP_IDS)[number];
 
@@ -66,6 +68,7 @@ export const SKILLS_APP_IDS = [
   "agy",
   "pi",
   "omp",
+  "copilot",
 ] as const satisfies readonly AppId[];
 
 export function getAppLabel(appId: string): string {
@@ -173,9 +176,22 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
     activeClass: "theme-chip-tertiary",
     badgeClass: "theme-chip-tertiary border-0 gap-1.5",
   },
+  copilot: {
+    label: "Copilot CLI",
+    icon: (
+      <ProviderIcon
+        icon="githubcopilot"
+        name="GitHub Copilot CLI"
+        size={14}
+        showFallback={false}
+      />
+    ),
+    activeClass: "theme-chip-neutral",
+    badgeClass: "theme-chip-neutral border-0 gap-1.5",
+  },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, dsh: true, agy: true, omp: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, dsh: true, agy: true, omp: true, copilot: true };
 
 /**
  * 应用页和侧栏的应用顺序：先按用户拖出来的顺序（`settings.appOrder`，不认识的 ID 忽略），

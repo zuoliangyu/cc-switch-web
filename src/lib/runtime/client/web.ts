@@ -726,6 +726,14 @@ export async function getWebCopilotUsageForAccount(
   );
 }
 
+export async function getWebCopilotCliSignedInAccount(): Promise<
+  import("@/lib/api/copilot").CopilotCliSignedInAccount | null
+> {
+  return requestJson<
+    import("@/lib/api/copilot").CopilotCliSignedInAccount | null
+  >("/api/copilot/cli-signed-in-account");
+}
+
 export async function getWebSubscriptionQuota(
   tool: string,
 ): Promise<import("@/types/subscription").SubscriptionQuota> {

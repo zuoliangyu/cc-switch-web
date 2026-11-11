@@ -291,6 +291,28 @@ const mergeGeminiConfig = (
   }
 };
 
+/**
+ * Copilot CLI 的 config：`{ env: {...} }` 或扁平的 `COPILOT_*` 键；只取地址、Key、模型，其余
+ * 环境变量不从链接导入。URL 参数优先（上游 merge_copilot_config）。
+ */
+const mergeCopilotConfig = (
+  request: DeepLinkImportRequest,
+  config: Record<string, unknown>,
+) => {
+  const env = (
+    config.env && typeof config.env === "object" && !Array.isArray(config.env)
+      ? config.env
+      : config
+  ) as Record<string, unknown>;
+  const get = (key: string) => {
+    const value = env[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  request.apiKey ||= get("COPILOT_PROVIDER_API_KEY");
+  request.endpoint ||= get("COPILOT_PROVIDER_BASE_URL");
+  request.model ||= get("COPILOT_MODEL");
+};
+
 /** agy 的 config：`{ env, config }` 或直接是 env；模型优先 URL，其次 config.model.name，再 GEMINI_MODEL */
 const mergeAgyConfig = (
   request: DeepLinkImportRequest,
@@ -379,6 +401,9 @@ const mergeProviderConfig = (
       break;
     case "agy":
       mergeAgyConfig(merged, payload.value);
+      break;
+    case "copilot":
+      mergeCopilotConfig(merged, payload.value);
       break;
     case "grokbuild":
       mergeGrokbuildConfig(merged, payload);

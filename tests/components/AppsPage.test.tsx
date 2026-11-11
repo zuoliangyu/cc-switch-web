@@ -1428,7 +1428,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     const { AppsPage } = await import("@/components/apps/AppsPage");
     const view = mountApps(AppsPage);
     await waitFor(() =>
-      expect(mocks.getManagedToolVersions).toHaveBeenCalledTimes(13),
+      expect(mocks.getManagedToolVersions).toHaveBeenCalledTimes(14),
     );
     view.unmount();
     const remounted = await renderApps();

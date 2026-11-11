@@ -380,6 +380,7 @@ fn settings_contain_common_config(app_type: &AppType, settings: &Value, snippet:
         | AppType::Kimi
         | AppType::Dsh
         | AppType::Agy
+        | AppType::Copilot
         | AppType::Omp => false,
     }
 }
@@ -459,6 +460,7 @@ pub(crate) fn remove_common_config_from_settings(
         | AppType::Kimi
         | AppType::Dsh
         | AppType::Agy
+        | AppType::Copilot
         | AppType::Omp => Ok(settings.clone()),
     }
 }
@@ -523,6 +525,7 @@ fn apply_common_config_to_settings(
         | AppType::Kimi
         | AppType::Dsh
         | AppType::Agy
+        | AppType::Copilot
         | AppType::Omp => Ok(settings.clone()),
     }
 }
@@ -972,6 +975,11 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
                 "Oh My Pi providers use the Oh My Pi provider service".to_string(),
             ));
         }
+        AppType::Copilot => {
+            return Err(AppError::Config(
+                "GitHub Copilot CLI cards only launch terminals and never write live config".into(),
+            ));
+        }
     }
     Ok(())
 }
@@ -1082,10 +1090,16 @@ pub fn sync_current_to_live(state: &AppState) -> Result<(), AppError> {
     for app_type in AppType::all() {
         // MiniMax Code / Kimi Code 的原生配置由各自维护，不做全量回写（上游 06082e18、e4873bc8）；
         // Antigravity 的卡只作用于它打开的终端，全量同步不写真实 settings.json；
-        // Oh My Pi 的 models.yml 只经它自己的供应商服务改动（上游同样跳过）。
+        // Oh My Pi 的 models.yml 只经它自己的供应商服务改动（上游同样跳过）；
+        // GitHub Copilot CLI 同 Antigravity，卡片只用来打开终端。
         if matches!(
             app_type,
-            AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Agy | AppType::Omp
+            AppType::Mcode
+                | AppType::Kimi
+                | AppType::Dsh
+                | AppType::Agy
+                | AppType::Omp
+                | AppType::Copilot
         ) {
             continue;
         }
@@ -1235,6 +1249,7 @@ pub fn read_live_settings(app_type: AppType) -> Result<Value, AppError> {
         AppType::Agy => crate::agy_config::read_live_settings(),
         AppType::Omp => Ok(json!(crate::omp_config::get_providers()?)),
         AppType::Dsh => Ok(json!(crate::dsh_config::get_providers()?)),
+        AppType::Copilot => crate::copilot_config::read_live_settings(),
     }
 }
 
@@ -1344,6 +1359,18 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
             }
             live
         }
+        AppType::Copilot => {
+            // 刚装好、还没在 Copilot 里选过模型时没有 settings.json：同样没什么可导入，不报错。
+            if !crate::copilot_config::settings_path().exists() {
+                return Ok(false);
+            }
+            let live = crate::copilot_config::read_live_settings()?;
+            // Copilot 首次启动写出的 settings.json 没有模型，不是用户的供应商，不导入。
+            if !crate::copilot_config::has_managed_content(&live) {
+                return Ok(false);
+            }
+            live
+        }
         // Additive mode apps are handled by the early return above.
         AppType::OpenCode
         | AppType::OpenClaw
@@ -1363,15 +1390,21 @@ pub fn import_default_config(state: &AppState, app_type: AppType) -> Result<bool
         settings_config,
         None,
     );
-    // agy 的 Key 只在进程环境里，从不落盘：从 live 导入的一定是 agy 自己的登录。
+    // agy、Copilot CLI 的 Key 只在进程环境里，从不落盘：从 live 导入的一定是客户端自己的登录。
     provider.category = Some(
-        if matches!(app_type, AppType::Agy) {
+        if matches!(app_type, AppType::Agy | AppType::Copilot) {
             "official"
         } else {
             "custom"
         }
         .to_string(),
     );
+    if matches!(app_type, AppType::Copilot) {
+        // 导入的是 Copilot 自己的登录：和预设里的官方卡用同一套名称和图标。
+        provider.name = "GitHub Copilot".to_string();
+        provider.icon = Some("githubcopilot".to_string());
+        provider.website_url = Some("https://github.com/features/copilot/cli".to_string());
+    }
 
     state.db.save_provider(app_type.as_str(), &provider)?;
     state

@@ -17,6 +17,9 @@ mod codex_runtime_tests;
 pub(crate) mod codex_terminal;
 #[cfg(test)]
 mod common_config_tests;
+pub(crate) mod copilot_direct;
+#[cfg(test)]
+mod copilot_tests;
 mod desktop;
 #[cfg(test)]
 mod desktop_tests;
@@ -2167,8 +2170,8 @@ impl ProviderService {
         if app_type == AppType::Omp {
             return omp::add(state, provider, add_to_live);
         }
-        // Antigravity 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
-        if app_type == AppType::Agy {
+        // Antigravity、Copilot CLI 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
+        if matches!(app_type, AppType::Agy | AppType::Copilot) {
             Self::validate_provider_settings(&app_type, &provider)?;
             state.db.save_provider(app_type.as_str(), &provider)?;
             return Ok(true);
@@ -2433,12 +2436,17 @@ impl ProviderService {
             }
             return Self::save_gemini(state, provider, None, false);
         }
-        // Antigravity 的卡只用来打开终端：编辑只存行，不写任何文件。
-        if app_type == AppType::Agy {
+        // Antigravity、Copilot CLI 的卡只用来打开终端：编辑只存行，不写任何文件。
+        if matches!(app_type, AppType::Agy | AppType::Copilot) {
             if original_id.is_some_and(|id| id != provider.id) {
-                return Err(AppError::Message(
-                    "Antigravity provider ID cannot be changed".into(),
-                ));
+                return Err(AppError::Message(format!(
+                    "{} provider ID cannot be changed",
+                    if app_type == AppType::Agy {
+                        "Antigravity"
+                    } else {
+                        "GitHub Copilot CLI"
+                    }
+                )));
             }
             Self::validate_provider_settings(&app_type, &provider)?;
             state.db.save_provider(app_type.as_str(), &provider)?;
@@ -2802,8 +2810,8 @@ impl ProviderService {
             return Ok(());
         }
 
-        // Antigravity 的卡没有「启用」（只用来打开终端），旧版留下的当前指针不拦删除。
-        if app_type == AppType::Agy {
+        // Antigravity、Copilot CLI 的卡没有「启用」（只用来打开终端），旧版留下的当前指针不拦删除。
+        if matches!(app_type, AppType::Agy | AppType::Copilot) {
             return state.db.delete_provider(app_type.as_str(), id);
         }
 
@@ -2978,7 +2986,9 @@ impl ProviderService {
             // 规则拒绝：什么都没改。
             Err(error @ AppError::Localized { key, .. })
                 if *key == "provider.switch.official_blocked_by_proxy"
-                    || *key == "switch.desktop_needs_routing" =>
+                    || *key == "switch.desktop_needs_routing"
+                    || *key == "agy.switch.unsupported"
+                    || *key == "copilot.switch.unsupported" =>
             {
                 log::info!("[SWITCH] {app} 拒绝切到 {id}: {error}");
             }
@@ -3007,6 +3017,14 @@ impl ProviderService {
                 "agy.switch.unsupported",
                 "Antigravity 的卡片不需要启用，用「打开终端」启动即可",
                 "Antigravity cards are not enabled; use Open terminal to start one",
+            ));
+        }
+        // Copilot CLI 同理：自带模型只能经进程环境传入（见 copilot_config 模块说明）。
+        if app_type == AppType::Copilot {
+            return Err(AppError::localized(
+                "copilot.switch.unsupported",
+                "GitHub Copilot CLI 的卡片不需要启用，用「打开终端」启动即可",
+                "GitHub Copilot CLI cards are not enabled; use Open terminal to start one",
             ));
         }
         let _service = if crate::mode::controller::PROXY_APPS.contains(&app_type) {
@@ -3819,7 +3837,8 @@ impl ProviderService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
-            | AppType::Omp => Ok(String::new()),
+            | AppType::Omp
+            | AppType::Copilot => Ok(String::new()),
         }
     }
 
@@ -3843,7 +3862,8 @@ impl ProviderService {
             | AppType::Kimi
             | AppType::Dsh
             | AppType::Agy
-            | AppType::Omp => Ok(String::new()),
+            | AppType::Omp
+            | AppType::Copilot => Ok(String::new()),
         }
     }
 
@@ -4363,6 +4383,9 @@ impl ProviderService {
                 use crate::gemini_config::validate_gemini_settings;
                 validate_gemini_settings(&provider.settings_config)?
             }
+            AppType::Copilot => {
+                crate::copilot_config::validate_settings(&provider.settings_config)?
+            }
             AppType::GrokBuild => {
                 let settings = provider.settings_config.as_object().ok_or_else(|| {
                     AppError::localized(
@@ -4592,6 +4615,27 @@ impl ProviderService {
                     .cloned()
                     .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_string());
 
+                Ok((api_key, base_url))
+            }
+            AppType::Copilot => {
+                let env = provider.settings_config.get("env");
+                let get = |key: &str| {
+                    env.and_then(|env| env.get(key))
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                };
+                let api_key = get(crate::copilot_config::API_KEY_ENV)
+                    .or_else(|| get(crate::copilot_config::BEARER_TOKEN_ENV))
+                    .unwrap_or_default();
+                let base_url = get(crate::copilot_config::BASE_URL_ENV).ok_or_else(|| {
+                    AppError::localized(
+                        "copilot.missing_base_url",
+                        "缺少 COPILOT_PROVIDER_BASE_URL",
+                        "Missing COPILOT_PROVIDER_BASE_URL",
+                    )
+                })?;
                 Ok((api_key, base_url))
             }
             AppType::GrokBuild => {

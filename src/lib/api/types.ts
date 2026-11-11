@@ -13,4 +13,5 @@ export type AppId =
   | "kimi"
   | "dsh"
   | "agy"
-  | "omp";
+  | "omp"
+  | "copilot";

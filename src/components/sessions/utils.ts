@@ -5,7 +5,7 @@ import type { SessionMeta, SessionTextRange } from "@/types";
 
 export const UNKNOWN_PROJECT_DIR_KEY = "__unknown_project_dir__";
 
-/** 会话来源：9 个应用（Claude Desktop 没有自己的会话记录，用 Claude Code 的）。 */
+/** 会话来源：14 个应用（Claude Desktop 没有自己的会话记录，用 Claude Code 的）。 */
 export const SESSION_APP_IDS = [
   "claude",
   "codex",
@@ -20,6 +20,7 @@ export const SESSION_APP_IDS = [
   "kimi",
   "dsh",
   "agy",
+  "copilot",
 ] as const satisfies readonly AppId[];
 
 export type SessionAppId = (typeof SESSION_APP_IDS)[number];
@@ -44,12 +45,13 @@ export const SESSION_SOURCE_PATHS: Record<SessionAppId, string[]> = {
   agy: [
     "~/.gemini/antigravity-cli/brain/<conversation>/.system_generated/logs",
   ],
+  copilot: ["~/.copilot/session-state/<session>/events.jsonl"],
 };
 
-/** MiniMax Code、Antigravity、DeepSeek Harness 的会话只能在它们自己里删（后端也会拒绝）。 */
+/** MiniMax Code、Antigravity、DeepSeek Harness、Copilot CLI 的会话只能在它们自己里删（后端也会拒绝）。 */
 export const canDeleteSession = (session: SessionMeta) =>
   Boolean(session.sourcePath) &&
-  !["mcode", "agy", "dsh"].includes(session.providerId);
+  !["mcode", "agy", "dsh", "copilot"].includes(session.providerId);
 
 export interface SessionProjectGroup {
   key: string;

@@ -1044,6 +1044,8 @@ impl SkillService {
             AppType::Omp => {
                 return Ok(crate::omp_config::get_omp_agent_dir()?.join("skills"));
             }
+            // Copilot CLI 的个人 Skills：`~/.copilot/skills`（跟随 `COPILOT_HOME`）
+            AppType::Copilot => return Ok(crate::copilot_config::skills_dir()),
         }
 
         // 默认路径：回退到用户主目录下的标准位置
@@ -1063,6 +1065,7 @@ impl SkillService {
             AppType::Dsh => crate::dsh_config::data_dir().join("skills"),
             AppType::Agy => home.join(".gemini").join("config").join("skills"),
             AppType::Omp => crate::omp_config::get_omp_agent_dir()?.join("skills"),
+            AppType::Copilot => crate::copilot_config::skills_dir(),
         })
     }
 
@@ -2006,6 +2009,7 @@ impl SkillService {
                         | AppType::Kimi
                         | AppType::Dsh
                         | AppType::Agy
+                        | AppType::Copilot
                         | AppType::Omp
                 ) || !apps.is_enabled_for(&app)
                     || exists_in_app
@@ -2240,12 +2244,12 @@ impl SkillService {
             .map(|skill| (skill.directory.to_lowercase(), skill))
             .collect();
 
-        // Unselected MCode / Kimi / DSH / agy directories may have been installed outside CC Switch.
-        // Explicit disable/uninstall handles removal of managed deployments.
+        // Unselected MCode / Kimi / DSH / agy / Copilot CLI directories may have been installed
+        // outside CC Switch. Explicit disable/uninstall handles removal of managed deployments.
         if app_dir.exists()
             && !matches!(
                 app,
-                AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Agy
+                AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Agy | AppType::Copilot
             )
         {
             for entry in fs::read_dir(&app_dir)? {
@@ -2924,6 +2928,7 @@ impl SkillService {
                 || (matches!(app, AppType::Kimi) && !skill.apps.kimi)
                 || (matches!(app, AppType::Dsh) && !skill.apps.dsh)
                 || (matches!(app, AppType::Agy) && !skill.apps.agy)
+                || (matches!(app, AppType::Copilot) && !skill.apps.copilot)
             {
                 continue;
             }
@@ -4114,6 +4119,7 @@ mod tests {
                     agy: false,
                     omp: false,
                     dsh: false,
+                    copilot: false,
                 },
             }],
         )
@@ -4179,6 +4185,7 @@ mod tests {
                 agy: false,
                 omp: false,
                 dsh: false,
+                copilot: false,
             },
             installed_at: 0,
             content_hash: Some("disabled-hash".to_string()),
@@ -4331,6 +4338,7 @@ mod tests {
                 agy: false,
                 omp: false,
                 dsh: false,
+                copilot: false,
             },
             installed_at: 123,
             content_hash: Some("backup-hash".to_string()),
@@ -4399,6 +4407,7 @@ mod tests {
                 agy: false,
                 omp: false,
                 dsh: false,
+                copilot: false,
             },
             installed_at: 456,
             content_hash: Some("restore-hash".to_string()),
@@ -4477,6 +4486,7 @@ mod tests {
                 agy: false,
                 omp: false,
                 dsh: false,
+                copilot: false,
             },
             installed_at: 789,
             content_hash: Some("delete-backup-hash".to_string()),

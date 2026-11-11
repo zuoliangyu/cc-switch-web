@@ -90,7 +90,18 @@ impl McpService {
             || previous.as_ref().is_some_and(|saved| {
                 mcp::omp::is_disabled_managed(&saved.id, &saved.server).unwrap_or(false)
             });
-        // MCode / Pi / Kimi / Oh My Pi 的文件和数据库一起提交：任一步失败都恢复原样
+        // MCode / Pi / Kimi / Oh My Pi / Copilot CLI 的文件和数据库一起提交：任一步失败都恢复原样
+        let save_with_copilot = || {
+            if server.apps.copilot || prev_apps.copilot {
+                mcp::copilot::sync_and_commit(
+                    &server.id,
+                    server.apps.copilot.then_some(&server.server),
+                    || state.db.save_mcp_server(&server),
+                )
+            } else {
+                state.db.save_mcp_server(&server)
+            }
+        };
         let save_with_omp = || {
             if managed_omp {
                 mcp::omp::sync_and_commit(
@@ -103,10 +114,10 @@ impl McpService {
                             .unwrap_or(&server.server),
                         server.apps.omp,
                     ),
-                    || state.db.save_mcp_server(&server),
+                    save_with_copilot,
                 )
             } else {
-                state.db.save_mcp_server(&server)
+                save_with_copilot()
             }
         };
         let save_with_dsh = || {
@@ -192,11 +203,18 @@ impl McpService {
         let server = state.db.get_all_mcp_servers()?.shift_remove(id);
 
         if let Some(server) = server {
+            let delete_with_copilot = || {
+                if server.apps.copilot {
+                    mcp::copilot::delete_and_commit(id, || state.db.delete_mcp_server(id))
+                } else {
+                    mcp::copilot::forget_options_and_commit(id, || state.db.delete_mcp_server(id))
+                }
+            };
             let delete_with_dsh = || {
                 if server.apps.dsh {
-                    mcp::dsh::sync_and_commit(id, None, || state.db.delete_mcp_server(id))
+                    mcp::dsh::sync_and_commit(id, None, delete_with_copilot)
                 } else {
-                    state.db.delete_mcp_server(id)
+                    delete_with_copilot()
                 }
             };
             let delete_with_kimi = || {
@@ -290,6 +308,7 @@ impl McpService {
                 | AppType::Kimi
                 | AppType::Dsh
                 | AppType::Agy
+                | AppType::Copilot
                 | AppType::Omp
         ) {
             if let Some(server) = state.db.get_all_mcp_servers()?.get(server_id) {
@@ -305,6 +324,8 @@ impl McpService {
                     mcp::kimi::sync_and_commit(server_id, spec, commit)?;
                 } else if app == AppType::Dsh {
                     mcp::dsh::sync_and_commit(server_id, spec, commit)?;
+                } else if app == AppType::Copilot {
+                    mcp::copilot::sync_and_commit(server_id, spec, commit)?;
                 } else if app == AppType::Agy {
                     mcp::agy::sync_and_commit(
                         server_id,
@@ -353,6 +374,7 @@ impl McpService {
                     | AppType::Kimi
                     | AppType::Dsh
                     | AppType::Agy
+                    | AppType::Copilot
                     | AppType::Omp
             ) {
                 continue; // Already written before saving the managed state.
@@ -407,6 +429,7 @@ impl McpService {
             AppType::Kimi => mcp::kimi::sync(&server.id, Some(&server.server))?,
             AppType::Dsh => mcp::dsh::sync(&server.id, Some(&server.server))?,
             AppType::Agy => mcp::agy::sync(&server.id, Some(&server.server))?,
+            AppType::Copilot => mcp::copilot::sync(&server.id, Some(&server.server))?,
             AppType::Omp => mcp::omp::sync_single_server_to_omp(&server.id, &server.server)?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 同步
@@ -431,6 +454,7 @@ impl McpService {
                     | AppType::Kimi
                     | AppType::Dsh
                     | AppType::Agy
+                    | AppType::Copilot
                     | AppType::Omp
             ) {
                 continue; // Already removed before deleting the managed record.
@@ -468,6 +492,7 @@ impl McpService {
             AppType::Kimi => mcp::kimi::sync(id, None)?,
             AppType::Dsh => mcp::dsh::sync(id, None)?,
             AppType::Agy => mcp::agy::sync(id, None)?,
+            AppType::Copilot => mcp::copilot::sync(id, None)?,
             AppType::Omp => mcp::omp::remove_server_from_omp(id)?,
             AppType::ClaudeDesktop => {
                 // C-Phase0：claude-desktop 运行时尚未实现，跳过 MCP 移除
@@ -531,6 +556,7 @@ impl McpService {
                     | AppType::Kimi
                     | AppType::Dsh
                     | AppType::Agy
+                    | AppType::Copilot
                     | AppType::Omp
             ) {
                 Self::remove_server_from_app(state, &server.id, app)
@@ -647,6 +673,7 @@ impl McpService {
             ("dsh", mcp::dsh::import(state)),
             ("agy", mcp::agy::import(state)),
             ("omp", Self::import_from_omp(state)),
+            ("copilot", mcp::copilot::import(state)),
         ];
         let mut total = 0;
         let mut failures = Vec::new();

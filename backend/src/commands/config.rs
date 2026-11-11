@@ -89,6 +89,7 @@ pub(crate) fn get_config_dir_internal(app: String) -> Result<String, String> {
         AppType::Dsh => crate::dsh_config::data_dir(),
         AppType::Agy => crate::agy_config::agy_dir(),
         AppType::Omp => crate::omp_config::get_omp_agent_dir().map_err(|e| e.to_string())?,
+        AppType::Copilot => crate::copilot_config::copilot_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())
@@ -115,6 +116,8 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::Omp => {
             crate::omp_config::get_omp_native_agent_dir().map_err(|e| e.to_string())?
         }
+        // Copilot CLI 没有设备级目录覆盖，默认目录即 `COPILOT_HOME` 或 `~/.copilot`。
+        AppType::Copilot => crate::copilot_config::copilot_dir(),
     };
 
     Ok(dir.to_string_lossy().to_string())

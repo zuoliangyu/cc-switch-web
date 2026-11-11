@@ -55,6 +55,8 @@ pub struct VisibleApps {
     pub omp: bool,
     #[serde(default = "default_true")]
     pub dsh: bool,
+    #[serde(default = "default_true")]
+    pub copilot: bool,
 }
 
 impl Default for VisibleApps {
@@ -73,6 +75,7 @@ impl Default for VisibleApps {
             agy: true,
             omp: true,
             dsh: true,
+            copilot: true,
         }
     }
 }
@@ -548,6 +551,9 @@ pub struct AppSettings {
     /// 当前 Antigravity 供应商（本地存储；只决定「打开终端」默认用哪张卡）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current_provider_agy: Option<String>,
+    /// 当前 GitHub Copilot CLI 供应商（本地存储；卡片只用于打开终端，保持结构一致）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_provider_copilot: Option<String>,
 
     // ===== Skill 同步设置 =====
     /// Skill 同步方式：auto（默认，优先 symlink）、symlink、copy
@@ -638,6 +644,7 @@ impl Default for AppSettings {
             current_provider_opencode: None,
             current_provider_openclaw: None,
             current_provider_agy: None,
+            current_provider_copilot: None,
             skill_sync_method: SyncMethod::default(),
             skill_storage_location: SkillStorageLocation::default(),
             webdav_sync: None,
@@ -1310,6 +1317,7 @@ pub fn get_current_provider(app_type: &AppType) -> Option<String> {
         AppType::OpenCode => settings.current_provider_opencode.clone(),
         AppType::OpenClaw => settings.current_provider_openclaw.clone(),
         AppType::Agy => settings.current_provider_agy.clone(),
+        AppType::Copilot => settings.current_provider_copilot.clone(),
         AppType::Hermes => None,
         AppType::Pi | AppType::Mcode | AppType::Kimi | AppType::Dsh | AppType::Omp => None,
     }
@@ -1333,6 +1341,7 @@ pub fn set_current_provider(app_type: &AppType, id: Option<&str>) -> Result<(), 
         AppType::OpenCode => settings.current_provider_opencode = id.map(|s| s.to_string()),
         AppType::OpenClaw => settings.current_provider_openclaw = id.map(|s| s.to_string()),
         AppType::Agy => settings.current_provider_agy = id.map(|s| s.to_string()),
+        AppType::Copilot => settings.current_provider_copilot = id.map(|s| s.to_string()),
         AppType::Hermes
         | AppType::Pi
         | AppType::Mcode

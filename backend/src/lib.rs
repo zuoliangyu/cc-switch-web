@@ -15,6 +15,7 @@ mod codex_state_db;
 mod codex_history_migration;
 mod commands;
 mod config;
+mod copilot_config;
 mod dsh_config;
 mod database;
 mod error;

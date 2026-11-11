@@ -37,7 +37,10 @@ import {
   linkCodingPlanProvider,
   usageWillBeEnabled,
 } from "@/lib/deeplink/importer";
-import { isAdditiveLinkApp } from "@/lib/deeplink/linkRules";
+import {
+  isAdditiveLinkApp,
+  isLaunchOnlyLinkApp,
+} from "@/lib/deeplink/linkRules";
 import type {
   DeepLinkApiFormat,
   DeepLinkImportRequest,
@@ -61,6 +64,10 @@ const API_FORMAT_LABELS: Record<DeepLinkApiFormat, string> = {
  * 一直是写进去的，初始值保持打开；切换式应用和提示词默认关闭。
  */
 const initialActivation = (request: DeepLinkImportRequest): boolean => {
+  // Antigravity、Copilot CLI 的卡没有「启用」，只导入（导入时同样忽略 enabled）
+  if (request.resource === "provider" && isLaunchOnlyLinkApp(request.app)) {
+    return false;
+  }
   if (request.resource === "provider" && isAdditiveLinkApp(request.app)) {
     return request.enabled ?? true;
   }
@@ -139,6 +146,27 @@ const buildProviderConfigPreview = (
       return Object.keys(parsedConfig).length > 0
         ? { kind: "gemini", env: parsedConfig }
         : { kind: "generic", raw: parsedConfig };
+    case "copilot": {
+      // `{env:{…}}` 或扁平的 COPILOT_*：只预览会导入的地址、Key、模型
+      const source =
+        parsedConfig.env &&
+        typeof parsedConfig.env === "object" &&
+        !Array.isArray(parsedConfig.env)
+          ? (parsedConfig.env as Record<string, unknown>)
+          : parsedConfig;
+      const env = Object.fromEntries(
+        [
+          "COPILOT_PROVIDER_BASE_URL",
+          "COPILOT_PROVIDER_API_KEY",
+          "COPILOT_MODEL",
+        ]
+          .filter((key) => typeof source[key] === "string")
+          .map((key) => [key, source[key]]),
+      );
+      return Object.keys(env).length > 0
+        ? { kind: "gemini", env }
+        : { kind: "generic", raw: parsedConfig };
+    }
     default:
       return { kind: "generic", raw: parsedConfig };
   }
@@ -791,20 +819,23 @@ export function DeepLinkImportDialog() {
                     导入后是否立即生效由用户决定，链接里的 enabled 只是初始值。切换式应用打开后
                     会立即切到这家，客户端流量随之改走链接里的地址，所以打开时要给出提示。
                   */}
-                  <ActivationSwitch
-                    id="deeplink-activate-after-import"
-                    label={
-                      additiveApp && request.app
-                        ? request.app === "pi"
-                          ? t("deeplink.enableInPiAfterImport")
-                          : t("deeplink.addToAppAfterImport", {
-                              app: getAppLabel(request.app),
-                            })
-                        : t("deeplink.switchAfterImport")
-                    }
-                    checked={activateAfterImport}
-                    onCheckedChange={setActivateAfterImport}
-                  />
+                  {/* Antigravity、Copilot CLI 的卡没有「启用」，只导入，不给这个开关 */}
+                  {!isLaunchOnlyLinkApp(request.app) && (
+                    <ActivationSwitch
+                      id="deeplink-activate-after-import"
+                      label={
+                        additiveApp && request.app
+                          ? request.app === "pi"
+                            ? t("deeplink.enableInPiAfterImport")
+                            : t("deeplink.addToAppAfterImport", {
+                                app: getAppLabel(request.app),
+                              })
+                          : t("deeplink.switchAfterImport")
+                      }
+                      checked={activateAfterImport}
+                      onCheckedChange={setActivateAfterImport}
+                    />
+                  )}
                   {activateAfterImport && !additiveApp && (
                     <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300">
                       {t("deeplink.providerEnabledWarning")}

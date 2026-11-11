@@ -220,7 +220,8 @@ impl ProviderType {
             | AppType::Mcode
             | AppType::Kimi
             | AppType::Dsh
-            | AppType::Omp => ProviderType::Codex,
+            | AppType::Omp
+            | AppType::Copilot => ProviderType::Codex,
             // agy 的设置与 Gemini 同形（env.GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL）
             AppType::Agy => ProviderType::Gemini,
         }
@@ -289,7 +290,8 @@ pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
         | AppType::Mcode
         | AppType::Kimi
         | AppType::Dsh
-        | AppType::Omp => Box::new(CodexAdapter::new()),
+        | AppType::Omp
+        | AppType::Copilot => Box::new(CodexAdapter::new()),
     }
 }
 

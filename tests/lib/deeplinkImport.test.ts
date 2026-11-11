@@ -966,3 +966,89 @@ describe("Claude Desktop 与 Pi 系应用的供应商链接", () => {
     }
   });
 });
+
+describe("GitHub Copilot CLI 的供应商链接", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("按接口格式写 COPILOT_PROVIDER_TYPE 与 WIRE_API", () => {
+    expect(buildFromLink("copilot").settingsConfig).toEqual({
+      env: {
+        COPILOT_PROVIDER_BASE_URL: "https://api.example.com/v1",
+        COPILOT_PROVIDER_API_KEY: "sk-test",
+        COPILOT_PROVIDER_TYPE: "openai",
+        COPILOT_PROVIDER_WIRE_API: "completions",
+        COPILOT_MODEL: "example-model",
+      },
+    });
+    expect(
+      buildFromLink("copilot", { apiFormat: "openai_responses" })
+        .settingsConfig,
+    ).toMatchObject({ env: { COPILOT_PROVIDER_WIRE_API: "responses" } });
+    const anthropic = buildFromLink("copilot", { apiFormat: "anthropic" })
+      .settingsConfig as { env: Record<string, string> };
+    expect(anthropic.env.COPILOT_PROVIDER_TYPE).toBe("anthropic");
+    expect(anthropic.env.COPILOT_PROVIDER_WIRE_API).toBeUndefined();
+    expect(() =>
+      parseDeepLinkUrl(providerLink("copilot", { apiFormat: "gemini_native" })),
+    ).toThrow();
+  });
+
+  it("config 只补地址、Key 和模型，URL 参数优先", async () => {
+    const url = new URL(providerLink("copilot"));
+    url.searchParams.delete("apiKey");
+    url.searchParams.delete("model");
+    url.searchParams.set(
+      "config",
+      encodeBase64Utf8(
+        JSON.stringify({
+          env: {
+            COPILOT_PROVIDER_BASE_URL: "https://config.example.com/v1",
+            COPILOT_PROVIDER_API_KEY: "sk-from-config",
+            COPILOT_MODEL: "config-model",
+            COPILOT_PROVIDER_HEADERS: "X-Extra: 1",
+          },
+        }),
+      ),
+    );
+    const merged = await mergeDeepLinkConfig(parseDeepLinkUrl(url.toString()));
+    expect(merged.endpoint).toBe("https://api.example.com/v1");
+    expect(merged.apiKey).toBe("sk-from-config");
+    expect(merged.model).toBe("config-model");
+    const env = (
+      buildProviderFromRequest(merged).settingsConfig as {
+        env: Record<string, string>;
+      }
+    ).env;
+    expect(env.COPILOT_PROVIDER_HEADERS).toBeUndefined();
+  });
+
+  it("卡片没有「启用」：链接带 enabled=true 也只保存", async () => {
+    const request = parseDeepLinkUrl(providerLink("copilot"));
+    await importFromDeepLink({ ...request, enabled: true });
+    expect(providersApiMock.addWithoutSwitching).toHaveBeenCalledWith(
+      expect.anything(),
+      "copilot",
+    );
+    expect(providersApiMock.add).not.toHaveBeenCalled();
+    expect(providersApiMock.switch).not.toHaveBeenCalled();
+  });
+
+  it("提示词与 MCP 链接接受 copilot", async () => {
+    const prompt = parseDeepLinkUrl(
+      `ccswitch://v1/import?resource=prompt&app=copilot&name=P&content=${encodeBase64Utf8("hi")}`,
+    );
+    expect(prompt.app).toBe("copilot");
+    const config = encodeBase64Utf8('{"mcpServers":{"a":{"command":"x"}}}');
+    await importFromDeepLink(
+      parseDeepLinkUrl(
+        `ccswitch://v1/import?resource=mcp&apps=copilot&config=${config}`,
+      ),
+    );
+    const saved = mcpApiMock.upsertUnifiedServer.mock.calls.at(-1)?.[0] as {
+      apps: Record<string, boolean>;
+    };
+    expect(saved.apps).toMatchObject({ copilot: true, claude: false });
+  });
+});

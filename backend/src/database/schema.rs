@@ -104,7 +104,8 @@ impl Database {
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_agy BOOLEAN NOT NULL DEFAULT 0,
             enabled_omp BOOLEAN NOT NULL DEFAULT 0,
-            enabled_dsh BOOLEAN NOT NULL DEFAULT 0
+            enabled_dsh BOOLEAN NOT NULL DEFAULT 0,
+            enabled_copilot BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -138,6 +139,7 @@ impl Database {
             enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_agy BOOLEAN NOT NULL DEFAULT 0,
             enabled_dsh BOOLEAN NOT NULL DEFAULT 0,
+            enabled_copilot BOOLEAN NOT NULL DEFAULT 0,
             installed_at INTEGER NOT NULL DEFAULT 0,
             content_hash TEXT,
             updated_at INTEGER NOT NULL DEFAULT 0
@@ -436,6 +438,8 @@ impl Database {
             ("mcp_servers", "enabled_omp"),
             ("mcp_servers", "enabled_dsh"),
             ("skills", "enabled_dsh"),
+            ("mcp_servers", "enabled_copilot"),
+            ("skills", "enabled_copilot"),
         ] {
             if Self::table_exists(conn, table)? {
                 Self::add_column_if_missing(conn, table, column, "BOOLEAN NOT NULL DEFAULT 0")?;
@@ -605,6 +609,13 @@ impl Database {
                         );
                         Self::migrate_v21_to_v22(conn)?;
                         Self::set_user_version(conn, 22)?;
+                    }
+                    22 => {
+                        log::info!(
+                            "迁移数据库从 v22 到 v23（Skills/MCP 添加 GitHub Copilot CLI 支持）"
+                        );
+                        Self::migrate_v22_to_v23(conn)?;
+                        Self::set_user_version(conn, 23)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1588,6 +1599,22 @@ impl Database {
     /// `input_token_semantics`。对应上游 v10 -> v11 与 v12 -> v13。
     fn migrate_v21_to_v22(conn: &Connection) -> Result<(), AppError> {
         Self::ensure_usage_dimension_columns(conn)
+    }
+
+    /// v22 -> v23 迁移：为 mcp_servers、skills 添加 enabled_copilot 列（GitHub Copilot CLI 的
+    /// MCP 与 Skills 开关）。上游 bd487e83，上游编号 v24 -> v25
+    fn migrate_v22_to_v23(conn: &Connection) -> Result<(), AppError> {
+        for table in ["mcp_servers", "skills"] {
+            if Self::table_exists(conn, table)? {
+                Self::add_column_if_missing(
+                    conn,
+                    table,
+                    "enabled_copilot",
+                    "BOOLEAN NOT NULL DEFAULT 0",
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// 补齐用量明细与日汇总的计价模型、输入 Token 语义维度，幂等。

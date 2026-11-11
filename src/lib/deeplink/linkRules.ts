@@ -12,6 +12,7 @@ export const PROVIDER_LINK_APPS: readonly AppId[] = [
   "codex",
   "gemini",
   "agy",
+  "copilot",
   "grokbuild",
   "opencode",
   "openclaw",
@@ -44,6 +45,7 @@ export const PROMPT_LINK_APPS: readonly AppId[] = [
   "hermes",
   "pi",
   "mcode",
+  "copilot",
 ];
 
 /** MCP 链接 `apps` 里可以出现的应用 */
@@ -60,6 +62,7 @@ export const MCP_LINK_APPS: readonly AppId[] = [
   "kimi",
   "mcode",
   "omp",
+  "copilot",
 ];
 
 /** 累加式应用：没有「切换」，开关决定写不写进应用的配置文件（同后端 `is_additive_mode`） */
@@ -76,6 +79,10 @@ const ADDITIVE_APPS = new Set<AppId>([
 
 export const isAdditiveLinkApp = (app: AppId | undefined): boolean =>
   !!app && ADDITIVE_APPS.has(app);
+
+/** 卡片只用来打开终端、没有「启用」的应用：链接只导入，忽略 `enabled` */
+export const isLaunchOnlyLinkApp = (app: AppId | undefined): boolean =>
+  app === "agy" || app === "copilot";
 
 const API_FORMAT_VALUES: readonly DeepLinkApiFormat[] = [
   "anthropic",
@@ -118,6 +125,12 @@ const NATIVE_VALUES: Partial<
   },
   gemini: { gemini_native: "gemini_native" },
   agy: { gemini_native: "gemini_native" },
+  // Copilot CLI：Anthropic 只写 COPILOT_PROVIDER_TYPE；OpenAI 两种接口写 COPILOT_PROVIDER_WIRE_API
+  copilot: {
+    anthropic: "anthropic",
+    openai_chat: "completions",
+    openai_responses: "responses",
+  },
   opencode: {
     anthropic: "@ai-sdk/anthropic",
     openai_chat: "@ai-sdk/openai-compatible",

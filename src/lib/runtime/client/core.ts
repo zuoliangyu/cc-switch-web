@@ -37,6 +37,7 @@ import {
   getWebCopilotTokenForAccount,
   getWebCopilotUsage,
   getWebCopilotUsageForAccount,
+  getWebCopilotCliSignedInAccount,
   getWebCodingPlanQuota,
   getWebCodexOauthQuota,
   getWebXaiOauthQuota,
@@ -795,6 +796,8 @@ export async function invoke<T>(
       return (await getWebCopilotUsageForAccount(
         args?.accountId as string,
       )) as T;
+    case "copilot_cli_signed_in_account":
+      return (await getWebCopilotCliSignedInAccount()) as T;
     case "get_subscription_quota":
       return (await getWebSubscriptionQuota(args?.tool as string)) as T;
     case "get_codex_oauth_quota":

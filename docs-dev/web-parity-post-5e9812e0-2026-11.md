@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.29 及其后差异清单
 
-> 状态：已完成（2026-11-11 建立并完成；29 项均已处置：已迁移 22、不适用 7）。
+> 状态：已完成（2026-11-11 建立并完成；29 项均已处置：已迁移 22、不适用 7；随 3.3.0 发版）。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 为 `DISABLED_READ_ONLY`）。`remote.upstream.tagOpt = --no-tags`：取上游永远不带 tag；2026-11-11 已删掉本地 80 个上游 tag（名单在当时的临时目录），本地只留 Web 自己的 tag。
 > 起点：`5e9812e0`（上一轮冻结目标）；目标：`upstream/main` = `abf50589`（v4.0.29 之后，2026-11-11）。
 > 范围：29 个提交（无合并提交），113 个文件变化（+14535/−1463）。Web 起点为 `a26a99b8`（3.2.0 之后）。
@@ -82,3 +82,4 @@
 - 2026-11-11 批次 C（隐私过滤）：见第 5 节 `32365a54`。验证：Rust 3901 项通过、10 项忽略（新增 30 项隐私过滤用例），`cargo check --bin cc-switch-web` 零警告；前端 270 个文件 2835 项通过，tsc 通过。上游对请求体大小没有单独上限（靠关键词预筛与线性正则，在请求任务里同步执行），Web 照搬。
 - 2026-11-11：批次 A 完成（12 已迁移、1 不适用）。另查出上一轮 `4aa554ad`（Argon 周额度）只迁了 `subscription_agy.rs`，`agy_account/quota.rs` 的测试样本漏了 Argon 一档，本批补上。Windows 验证：Rust 3901 项通过、10 项忽略，`cargo check --bin cc-switch-web` 零警告；前端 269 个文件 2835 项通过；tsc 通过。
 - 2026-11-11：批次 B 完成（9 已迁移）。旧数据升级：库里旧版环境变量形状的自带模型卡在列表时就地转成新形状并写回（`convert_legacy_settings`，标为未添加），点「添加」后写进 providers.json；转换前流式检测、凭据提取、打开终端都兜底转换；官方卡不转换。Windows 验证：Rust 3951 项通过、10 项忽略，`cargo check --bin cc-switch-web` 零警告；前端 270 个文件 2856 项通过；tsc 通过。
+- 2026-11-11：整仓 Prettier（`fdc8cf91e`）与 rustfmt（`bfbbf4717`）统一格式；版本升至 `3.3.0`（package.json、Cargo.toml、Cargo.lock），CHANGELOG 的 Unreleased 定为 `[3.3.0] - 2026-11-11`，三语 README「当前版本」改为 3.3.0、能力清单补隐私过滤并更正 Copilot 一条；打 tag `v3.3.0` 并推送（触发 Web Package 工作流）。

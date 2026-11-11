@@ -93,10 +93,19 @@ describe("Codex 官方额度保护设置", () => {
     expect(screen.getByRole("button", { name: key("save") })).toBeEnabled();
   });
 
-  it("默认关闭，打开时用 95% / 98% 的默认阈值", async () => {
+  it("默认开启（95% / 98%），可以关掉再打开", async () => {
     const save = setup({});
     const toggle = screen.getByRole("switch", { name: key("title") });
-    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("spinbutton", { name: key("fiveHour") }),
+    ).toHaveValue(95);
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(save).toHaveBeenLastCalledWith({
+      codexQuotaProtection: { ...ENABLED, enabled: false },
+    });
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     await act(async () => {
       fireEvent.click(toggle);

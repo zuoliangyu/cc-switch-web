@@ -21,10 +21,23 @@ export interface ProviderSortUpdate {
   sortIndex: number;
 }
 
+/**
+ * Codex 切换让新会话换了组（openai ↔ custom），统一会话历史又关着：
+ * 新版 Codex 只能继续当前组的会话，切换前那组从此只读。
+ */
+export interface CodexHistorySplitHint {
+  /** 切换前新会话记的 provider id（"openai" 或 "custom"） */
+  previousBucket: string;
+  currentBucket: string;
+  /** 记在切换前那组、现在只能查看的会话数 */
+  lockedThreads: number;
+}
+
 export interface SwitchResult {
   warnings: string[];
   /** 这次选的是本地路由的目标时才有 */
   route?: RouteSwitchResult;
+  codexHistorySplit?: CodexHistorySplitHint;
 }
 
 export interface OpenTerminalOptions {

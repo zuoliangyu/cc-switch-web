@@ -3116,6 +3116,9 @@ async fn save_settings(
     crate::commands::resync_codex_stack_settings(state.app_state.as_ref(), &existing)
         .await
         .map_err(ApiError::internal)?;
+    crate::commands::resync_codex_proxy_settings(state.app_state.as_ref(), &existing)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(saved)
 }
 
@@ -5024,6 +5027,9 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
             ),
             Err(error) => log::warn!("Codex 旧版官方路由桶迁移失败: {error}"),
         }
+        // 统一会话开关的官方历史迁移：开关开着且勾选了迁入既有会话时，每次启动都把留在
+        // openai 桶的会话迁进 custom（新版 Codex 会把它们锁成只读）；函数内部自门控，
+        // state DB 里没有 openai 线程时直接跳过。
         match crate::codex_history_migration::maybe_migrate_codex_official_history() {
             Ok(outcome) if outcome.skipped_reason.is_none() => log::info!(
                 "Codex 官方历史迁移完成: files={}, rows={}",

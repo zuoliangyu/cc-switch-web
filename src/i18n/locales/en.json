@@ -331,7 +331,14 @@
     "proxyReasonRoutingRequired": "requires local routing to process requests",
     "removeFromConfigFailed": "Could not remove provider",
     "openclawModelNotFound": "The selected model no longer exists. Refresh and try again.",
-    "proxyLoopbackHijacked": "Requests from {{app}} to the local route {{origin}} will be picked up by the system proxy, so {{app}} will fail with 502 errors. Make loopback addresses connect directly in your proxy tool (for example, add IP-CIDR,127.0.0.0/8,DIRECT,no-resolve at the top of your Clash rules), then fully quit and reopen {{app}}."
+    "proxyLoopbackHijacked": "Requests from {{app}} to the local route {{origin}} will be picked up by the system proxy, so {{app}} will fail with 502 errors. Make loopback addresses connect directly in your proxy tool (for example, add IP-CIDR,127.0.0.0/8,DIRECT,no-resolve at the top of your Clash rules), then fully quit and reopen {{app}}.",
+    "codexHistorySplit": {
+      "hint": "{{count}} sessions from {{previous}} are now read-only",
+      "officialBucket": "the official subscription",
+      "thirdPartyBucket": "third-party providers",
+      "migrationFinished": "Migrated {{count}} old sessions. Restart Codex to continue them.",
+      "migrationFailed": "Failed to migrate old sessions: {{error}}. CC Switch will retry the next time the service starts."
+    }
   },
   "confirm": {
     "deleteProvider": "Delete Provider",
@@ -362,21 +369,21 @@
     },
     "unifyCodexHistory": {
       "title": "Unify Codex session history",
-      "message": "The Codex CLI resume list will show official-account and third-party Provider sessions together (the Codex desktop app can show all sessions since a recent update and is unaffected). Resuming a session across Providers may fail when another backend cannot decrypt its encrypted_content.\n\nYou can also migrate existing official sessions; every changed item is backed up first.",
+      "message": "When enabled, the official subscription runs under the shared \"custom\" provider id, so official and third-party sessions share one group: newer Codex can continue both, and the CLI resume list shows them together.\n\nYou can also migrate your existing official sessions; if you do, CC Switch also moves any official sessions left behind on every launch (backed up first; you can restore them when turning this off). Sessions you don't migrate stay read-only in newer Codex. Restart Codex after the migration.\n\nNote: resuming an old session across providers may fail because the other backend cannot decrypt its encrypted_content reasoning.",
       "migrateExisting": "Also migrate existing official session history",
       "confirm": "I understand, enable"
     },
     "unifyCodexHistoryOff": {
       "title": "Turn off unified session history",
-      "message": "The Codex CLI goes back to separate session lists for official accounts and third-party Providers (the desktop app still shows all sessions). Sessions created while unified cannot be attributed reliably and will remain in the unified history.",
-      "restoreBackup": "Restore previously migrated official sessions from the migration backup",
+      "message": "When turned off, official and third-party sessions split into two groups again: newer Codex can only continue the current provider's group, and the other group becomes read-only. Sessions created while this was on can't be told apart, so they stay in the third-party group.",
+      "restoreBackup": "Restore the migrated official sessions to the official group (exact restore from backup)",
       "confirm": "Turn off"
     }
   },
   "settings": {
     "title": "Settings",
     "unifyCodexSessionHistory": "Unify Codex session history",
-    "unifyCodexSessionHistoryDescription": "Affects the Codex CLI only: its resume list shows only the current provider's sessions; when enabled, official-account and third-party Provider sessions appear in one list. The Codex desktop app can show all sessions since a recent update, so desktop-only users don't need this. Existing official sessions can optionally be migrated, with backup-based restore when turning it off.",
+    "unifyCodexSessionHistoryDescription": "Official subscriptions run under the same \"custom\" provider id as third-party providers, so all sessions share one group. Newer Codex (desktop 26.1103 / CLI 0.167 and later) can only continue sessions in the current provider's group; the other group becomes read-only, and the CLI resume list only shows the current group. Turn this on if you switch between official and third-party providers. You can optionally migrate official sessions into the shared group (backed up first) and restore them from backup when you turn it off. Note: resuming an old session across providers may fail because its encrypted_content reasoning can only be decrypted by the backend that created it.",
     "codexSessionCompression": "Compress old Codex sessions",
     "codexSessionCompressionDescription": "When on, Codex compresses session files that haven't changed for 7 days in the background each time it starts, which saves a lot of disk space. Codex decompresses a session automatically when you continue it. CC Switch still lists and counts compressed sessions; the list just doesn't show a preview of their last reply. This is a Codex feature still under development: Codex shows a notice on every start while it's on. Requires a recent Codex version and takes effect after restarting Codex. Turning it off stops compressing; sessions already compressed stay as they are.",
     "codexSessionCompressionUsage": "Sessions currently use {{size}}",
@@ -939,6 +946,14 @@
       "reset": "Restore defaults",
       "hint": "Pause at either cutoff. Defaults: 95% / 98%. Saved changes apply to new requests immediately.",
       "invalid": "Enter whole numbers from 1 to 99."
+    },
+    "codexPauseOfficialLogin": {
+      "title": "Pause the official login",
+      "description": "Turn this on when the official quota is used up and Codex has locked the send button; third-party models in Aggregation and Routing keep working. Fully quit and reopen Codex after turning it on or off.",
+      "help": "Turn this on when the official quota is used up and Codex has locked the send button (even third-party models can't be sent). Codex then stops using the official login, so it no longer locks the send button over the official quota, and third-party models in Aggregation and Routing keep working. The login stays saved on this computer; you are not signed out. Applies only in Routing or Aggregation mode; Direct is unaffected. While it's on: official models can't be used and you'll be asked to pick a third-party model; Codex hides account and usage info and may show its onboarding questions on the first launch; your existing threads under Projects in the sidebar are hidden for now (not lost; they come back when you turn this off); new sessions are recorded under the custom group and become view-only after you switch back to official. Turn it off once the official quota is back. Fully quit and reopen Codex after turning it on or off.",
+      "pausedToast": "Official login paused. Fully quit and reopen Codex for it to take effect",
+      "resumedToast": "Official login resumed. Fully quit and reopen Codex for it to take effect",
+      "saveFailed": "Failed to save: {{error}}"
     },
     "codexStackClassicSubagents": "Classic sub-agent tools in aggregation",
     "codexStackClassicSubagentsDescription": "Must be on when the main agent and a sub-agent use different providers, or the sub-agent cannot receive its task.",
@@ -1718,7 +1733,7 @@
     "subagentModelHint": "The model and reasoning effort Codex sub-agents use by default. Empty follows the main agent; a model alone uses its own default effort. Ignored in Aggregation mode, where the sub-agent model in the app mode panel's Aggregation settings applies instead.",
     "subagentModelNotInCatalog": "This model is not in the model list: Codex can't get its context window, and when routing converts requests to Chat / Anthropic it is replaced by the default model.",
     "agentMaxThreadsLabel": "Sub-agent concurrency limit",
-    "agentMaxThreadsHint": "How many sub-agents (not counting the main agent) one Codex session can run at the same time. This is a Codex-wide setting written to [agents] max_threads in config.toml, and it stays the same when you switch providers. Leave empty for the Codex default: 6 with the classic sub-agent tools, 3 with the new ones. Codex has no unlimited option and the minimum is 1; more sub-agents use up quota faster. Takes effect after reopening Codex.",
+    "agentMaxThreadsHint": "How many sub-agents (not counting the main agent) one Codex session can run at the same time; it stays the same when you switch providers. Leave empty for the Codex default (6 with the classic sub-agent tools, 3 with the new ones); the minimum is 1 and there is no unlimited option. Applies to new conversations.",
     "agentMaxThreadsPlaceholder": "Leave empty for the Codex default",
     "agentMaxThreadsV2Override": "[features.multi_agent_v2] in config.toml sets a total of {{total}} (including the main agent), which applies when the new sub-agent tools are used.",
     "autoReviewModelLabel": "Auto Review model",
@@ -1726,6 +1741,8 @@
     "autoReviewModelCodexDefault": "Codex default (codex-auto-review)",
     "autoReviewModelMainDefault": "Main model reviews itself (default)",
     "autoReviewModelNoList": "This card has no model list: Codex reviews approvals with the official codex-auto-review, which only some relays that forward to ChatGPT accounts accept; the rest return 404. Add models to the list above to pick one.",
+    "officialSpeedTiersLabel": "Keep official Fast tier",
+    "officialSpeedTiersHint": "Keeps the official Fast speed tier on GPT models in the model list, so choosing Fast in Codex sends service_tier=priority. Only relays that forward to official ChatGPT accounts (such as CPA) accept it, and it uses quota faster; other upstreams may reject it or bill it at a higher price. Once on, a Fast choice you made under the official card takes effect on this provider right away. Not used in aggregation mode. Restart Codex after changing it.",
     "reasoningLevelsNotSet": "Not set",
     "defaultReasoningLevelTip": "Default level: {{level}}",
     "reasoningLevelsSearch": "Search reasoning levels...",
@@ -4822,7 +4839,10 @@
     },
     "notice": {
       "serviceDown": "{{app}} is in {{mode}} mode but the routing service isn't running, so requests will fail.",
-      "backToDirect": "Back to direct"
+      "backToDirect": "Back to direct",
+      "officialLoginPaused": "Codex official login is paused",
+      "officialLoginPausedBody": "Official models can't be used, and your existing threads under Projects in the Codex sidebar are hidden for now. Once the official quota is back, click “Resume official login”, then fully quit and reopen Codex.",
+      "resumeOfficialLogin": "Resume official login"
     },
     "dialog": {
       "routeTitle": "Use routing for {{app}}?",

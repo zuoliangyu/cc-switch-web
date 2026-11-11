@@ -67,6 +67,10 @@ pub enum ProxyError {
     #[error("Codex 官方额度保护 (quota protection): {0}")]
     CodexQuotaProtection(String),
 
+    /// 「暂停使用官方登录」开着：Codex 不带官方登录，官方请求在本地拒绝。
+    #[error("已暂停使用 Codex 官方登录，官方请求不会发出。请在模型菜单换成第三方模型；官方额度恢复后，在 CC Switch 的 Codex 页面点「恢复官方登录」，然后重启 Codex。 (The Codex official login is paused, so official requests are not sent. Pick a third-party model in the model menu; once the official quota is back, click \"Resume official login\" on the Codex page in CC Switch, then restart Codex.)")]
+    CodexOfficialLoginPaused,
+
     #[error("内部错误: {0}")]
     Internal(String),
 }
@@ -142,7 +146,7 @@ impl IntoResponse for ProxyError {
                     ProxyError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
                     ProxyError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, self.to_string()),
                     ProxyError::AuthError(_) => (StatusCode::UNAUTHORIZED, self.to_string()),
-                    ProxyError::CodexQuotaProtection(_) => {
+                    ProxyError::CodexQuotaProtection(_) | ProxyError::CodexOfficialLoginPaused => {
                         (StatusCode::FORBIDDEN, self.to_string())
                     }
                     ProxyError::Internal(_) => {
@@ -161,8 +165,15 @@ impl IntoResponse for ProxyError {
                     }
                 });
                 // 本地暂停官方请求：带上专用错误码，客户端和日志能和上游 403 区分开。
-                if matches!(self, ProxyError::CodexQuotaProtection(_)) {
-                    error_body["error"]["code"] = json!("cc_switch_codex_quota_protection");
+                match &self {
+                    ProxyError::CodexQuotaProtection(_) => {
+                        error_body["error"]["code"] = json!("cc_switch_codex_quota_protection");
+                    }
+                    ProxyError::CodexOfficialLoginPaused => {
+                        error_body["error"]["code"] =
+                            json!("cc_switch_codex_official_login_paused");
+                    }
+                    _ => {}
                 }
 
                 (http_status, error_body)
@@ -236,6 +247,24 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body["error"]["code"], "cc_switch_codex_quota_protection");
         assert_eq!(body["error"]["type"], "proxy_error");
+    }
+
+    #[tokio::test]
+    async fn paused_official_login_is_a_local_forbidden_that_says_how_to_resume() {
+        use http_body_util::BodyExt;
+
+        let response = ProxyError::CodexOfficialLoginPaused.into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            body["error"]["code"],
+            "cc_switch_codex_official_login_paused"
+        );
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Resume official login"));
     }
 
     #[test]

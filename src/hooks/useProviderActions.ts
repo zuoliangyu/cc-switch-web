@@ -25,6 +25,7 @@ import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/
 import { openclawKeys } from "@/hooks/useOpenClaw";
 import { getRoutingReason } from "@/utils/routingReason";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
+import { codexHistorySplitToastExtras } from "@/utils/codexHistorySplitHint";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -231,11 +232,16 @@ export function useProviderActions(
           }
         }
 
+        // Codex 会话分组的提醒并进「切换成功」那条，不另弹
+        const splitExtras = result?.codexHistorySplit
+          ? codexHistorySplitToastExtras(result.codexHistorySplit, t)
+          : undefined;
+
         // 根据供应商类型显示不同的成功提示
         if (result?.route) {
           toast.success(
             routeSwitchNotification(result.route, activeApp, provider.name, t),
-            { closeButton: true },
+            { closeButton: true, ...splitExtras },
           );
         } else if (
           activeApp === "claude" &&
@@ -281,6 +287,7 @@ export function useProviderActions(
 
           toast.success(t(messageKey, { defaultValue: defaultMessage }), {
             closeButton: true,
+            ...splitExtras,
           });
         }
       } catch {

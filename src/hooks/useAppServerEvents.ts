@@ -7,6 +7,11 @@ import { invalidatePiProviderCaches } from "@/lib/query/pi";
 import { proxyKeys } from "@/lib/query/proxy";
 import { SERVER_EVENT_RESYNC } from "@/lib/runtime/client/serverEvents";
 import type { SubscriptionQuota } from "@/types/subscription";
+import {
+  CODEX_UNIFY_MIGRATION_FINISHED_EVENT,
+  showCodexUnifyMigrationFinished,
+  type CodexUnifyMigrationFinished,
+} from "@/utils/codexHistorySplitHint";
 import { useServerEvent } from "./useServerEvent";
 
 interface ProviderSwitchEvent {
@@ -24,7 +29,7 @@ interface SyncStatusUpdatedPayload {
 /**
  * 全局的服务端事件处理（对应上游 App.tsx 里的各个 Tauri 事件监听）：
  * 故障转移 / 应用项目等后端主动的切换、统一供应商同步、WebDAV 自动同步结果、
- * 本地路由被系统代理接走的提示，以及断线重连后的整体重取。
+ * 本地路由被系统代理接走的提示、Codex 统一会话历史的后台迁入结果，以及断线重连后的整体重取。
  */
 export function useAppServerEvents() {
   const queryClient = useQueryClient();
@@ -105,6 +110,13 @@ export function useAppServerEvents() {
         { duration: 15000 },
       );
     },
+  );
+
+  // 开启统一会话历史后的后台迁入跑完了：提示用户现在可以重启 Codex。放在 App 级，
+  // 迁入期间离开设置页也能看到。
+  useServerEvent<CodexUnifyMigrationFinished>(
+    CODEX_UNIFY_MIGRATION_FINISHED_EVENT,
+    (payload) => showCodexUnifyMigrationFinished(payload, t),
   );
 
   // 断线期间可能漏了事件（或服务端判定落后）：整体重取

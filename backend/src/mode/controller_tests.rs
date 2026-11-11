@@ -961,6 +961,184 @@ async fn codex_detaching_and_attaching_keep_the_login_next_to_a_third_party_rout
     );
 }
 
+/// 本机有 ChatGPT 登录时第三方路由也写成内置 openai（和官方路由同一个会话组，Codex 0.167
+/// 起 provider 不一致的会话只读），第三方的 Key 不进客户端文件；没有登录就退回 custom 表
+/// （上游 905c9148）。
+#[tokio::test]
+#[serial]
+async fn codex_third_party_route_uses_the_built_in_openai_bucket_while_logged_in() {
+    let f = Fixture::new();
+    let state = &f.state;
+    let mut settings = get_settings();
+    settings.preserve_codex_official_auth_on_switch = true;
+    update_settings(settings).unwrap();
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    let a = codex_native_row("a", "", "");
+    let b = codex_native_row("b", "", "");
+    state.db.save_provider("codex", &a).unwrap();
+    state.db.save_provider("codex", &b).unwrap();
+    let auth_path = crate::codex_config::get_codex_auth_path();
+    std::fs::create_dir_all(auth_path.parent().unwrap()).unwrap();
+    std::fs::write(&auth_path, chatgpt_login("acct").to_string()).unwrap();
+    codex_direct::write_direct(state, None, &a, true, None).unwrap();
+
+    enter(state, &AppType::Codex, Some("a")).await.unwrap();
+    let text = codex_direct::read_config_text().unwrap();
+    let doc = codex_doc();
+    assert!(doc.get("model_provider").is_none(), "{text}");
+    assert!(
+        doc["openai_base_url"]
+            .as_str()
+            .is_some_and(|url| url.starts_with("http://127.0.0.1:")),
+        "{text}"
+    );
+    assert!(!text.contains("test-key"), "{text}");
+    assert_eq!(codex_login_on_disk(), Some(chatgpt_login("acct")));
+
+    // 在 Codex 里登出后换路由：内置 openai 没有登录会卡在登录页，退回 custom 表。
+    std::fs::remove_file(&auth_path).unwrap();
+    set_route(state, &AppType::Codex, "b").await.unwrap();
+    let text = codex_direct::read_config_text().unwrap();
+    let doc = codex_doc();
+    assert_eq!(doc["model_provider"].as_str(), Some("custom"), "{text}");
+    assert!(doc.get("openai_base_url").is_none(), "{text}");
+    assert_eq!(
+        doc["model_providers"]["custom"]["requires_openai_auth"].as_bool(),
+        Some(false),
+        "{text}"
+    );
+    assert_eq!(
+        doc["model_providers"]["custom"]["experimental_bearer_token"].as_str(),
+        Some(PROXY_TOKEN_PLACEHOLDER)
+    );
+    exit(state, &AppType::Codex).await.unwrap();
+}
+
+/// 有登录也仍写 custom 表的两种情况：统一会话历史开着（本来全在 custom 组），行里写了
+/// 内置 openai 表达不了的客户端设置（流空闲超时等，Codex 只认 provider 表上的）。
+#[tokio::test]
+#[serial]
+async fn codex_third_party_route_keeps_the_custom_table_when_openai_cannot_carry_it() {
+    for (unified, table_extra) in [(true, ""), (false, "stream_idle_timeout_ms = 900000\n")] {
+        let f = Fixture::new();
+        let state = &f.state;
+        let mut settings = get_settings();
+        settings.preserve_codex_official_auth_on_switch = true;
+        settings.unify_codex_session_history = unified;
+        update_settings(settings).unwrap();
+        let mut global = state.db.get_global_proxy_config().await.unwrap();
+        global.listen_port = 0;
+        state.db.update_global_proxy_config(global).await.unwrap();
+        let row = codex_native_row("a", "", table_extra);
+        state.db.save_provider("codex", &row).unwrap();
+        let auth_path = crate::codex_config::get_codex_auth_path();
+        std::fs::create_dir_all(auth_path.parent().unwrap()).unwrap();
+        std::fs::write(&auth_path, chatgpt_login("acct").to_string()).unwrap();
+        codex_direct::write_direct(state, None, &row, true, None).unwrap();
+
+        enter(state, &AppType::Codex, Some("a")).await.unwrap();
+        let text = codex_direct::read_config_text().unwrap();
+        let doc = codex_doc();
+        assert_eq!(
+            doc.get("model_provider").and_then(|v| v.as_str()),
+            Some("custom"),
+            "unified={unified}: {text}"
+        );
+        assert!(doc.get("openai_base_url").is_none(), "{text}");
+        let table = &doc["model_providers"]["custom"];
+        assert_eq!(
+            table["requires_openai_auth"].as_bool(),
+            Some(true),
+            "{text}"
+        );
+        if !table_extra.is_empty() {
+            assert_eq!(table["stream_idle_timeout_ms"].as_integer(), Some(900000));
+        }
+        exit(state, &AppType::Codex).await.unwrap();
+    }
+}
+
+/// 暂停使用官方登录：官方路由和第三方路由都写成不要求登录的 custom 表（Codex 不按官方
+/// 额度锁发送键），登录留在 auth.json；关掉后回到内置 openai 的写法（上游 b0e452ff）。
+#[tokio::test]
+#[serial]
+async fn codex_paused_official_login_writes_a_login_free_custom_table() {
+    let f = Fixture::new();
+    let state = &f.state;
+    let set_paused = |paused: bool| {
+        let mut settings = get_settings();
+        settings.preserve_codex_official_auth_on_switch = true;
+        settings.codex_proxy_without_official_login = paused;
+        update_settings(settings).unwrap();
+    };
+    set_paused(false);
+    let mut global = state.db.get_global_proxy_config().await.unwrap();
+    global.listen_port = 0;
+    state.db.update_global_proxy_config(global).await.unwrap();
+    let mut official = Provider::with_id(
+        "official".into(),
+        "OpenAI".into(),
+        json!({"auth":{},"config":"model = 'gpt-5.4'\n"}),
+        None,
+    );
+    official.category = Some("official".into());
+    state.db.save_provider("codex", &official).unwrap();
+    state
+        .db
+        .save_provider("codex", &codex_native_row("a", "", ""))
+        .unwrap();
+    let auth_path = crate::codex_config::get_codex_auth_path();
+    std::fs::create_dir_all(auth_path.parent().unwrap()).unwrap();
+    std::fs::write(&auth_path, chatgpt_login("acct").to_string()).unwrap();
+    crate::services::provider::ProviderService::switch(state, AppType::Codex, "official").unwrap();
+    enter(state, &AppType::Codex, Some("official"))
+        .await
+        .unwrap();
+    assert!(
+        codex_doc().get("openai_base_url").is_some(),
+        "{}",
+        codex_direct::read_config_text().unwrap()
+    );
+
+    set_paused(true);
+    resync_codex_proxy(state).await.expect("pause");
+    for route in ["official", "a"] {
+        if route == "a" {
+            set_route(state, &AppType::Codex, "a").await.unwrap();
+        }
+        let text = codex_direct::read_config_text().unwrap();
+        let doc = codex_doc();
+        assert_eq!(
+            doc["model_provider"].as_str(),
+            Some("custom"),
+            "{route}: {text}"
+        );
+        assert!(doc.get("openai_base_url").is_none(), "{text}");
+        let table = &doc["model_providers"]["custom"];
+        assert_ne!(
+            table
+                .get("requires_openai_auth")
+                .and_then(|value| value.as_bool()),
+            Some(true),
+            "{route}: {text}"
+        );
+        assert_eq!(
+            table["experimental_bearer_token"].as_str(),
+            Some(PROXY_TOKEN_PLACEHOLDER)
+        );
+        assert_eq!(codex_login_on_disk(), Some(chatgpt_login("acct")));
+    }
+
+    set_paused(false);
+    resync_codex_proxy(state).await.expect("resume");
+    let doc = codex_doc();
+    assert!(doc.get("model_provider").is_none(), "{doc}");
+    assert!(doc.get("openai_base_url").is_some(), "{doc}");
+    exit(state, &AppType::Codex).await.unwrap();
+}
+
 fn codex_native_row(id: &str, extra: &str, table_extra: &str) -> Provider {
     Provider::with_id(
         id.into(),
@@ -1139,9 +1317,14 @@ async fn codex_adopting_the_catalog_drops_the_route_rows_own_pointer() {
         !row_config.contains("model_catalog_json") && row_config.contains("model_verbosity"),
         "{row_config}"
     );
+    // cc-switch 接管指针时写绝对路径（严格重读的 Codex 只认绝对形态）。
     assert_eq!(
         codex_doc()["model_catalog_json"].as_str(),
-        Some(crate::codex_config::CC_SWITCH_CODEX_MODEL_CATALOG_FILENAME)
+        Some(
+            crate::codex_config::get_codex_model_catalog_path()
+                .to_string_lossy()
+                .as_ref()
+        )
     );
     assert!(codex_catalog_rows()
         .iter()

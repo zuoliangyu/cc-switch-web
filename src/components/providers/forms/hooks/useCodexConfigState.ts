@@ -34,6 +34,8 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
   >([]);
   // 自动审批（Auto Review）用的模型：`modelCatalog.autoReviewModel`，空串 = 用 Codex 的默认
   const [codexAutoReviewModel, setCodexAutoReviewModel] = useState("");
+  // 保留官方 Fast 档：`modelCatalog.officialSpeedTiers`，默认关
+  const [codexOfficialSpeedTiers, setCodexOfficialSpeedTiers] = useState(false);
   const [codexAuthError, setCodexAuthError] = useState("");
 
   const isUpdatingCodexBaseUrlRef = useRef(false);
@@ -62,6 +64,7 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
           ? modelCatalog.autoReviewModel.trim()
           : "",
       );
+      setCodexOfficialSpeedTiers(modelCatalog?.officialSpeedTiers === true);
       const rawCatalogModels = Array.isArray(modelCatalog?.models)
         ? modelCatalog.models
         : [];
@@ -354,6 +357,7 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
       setCodexConfig(config);
       setCodexCatalogModels(modelCatalogModels);
       setCodexAutoReviewModel("");
+      setCodexOfficialSpeedTiers(false);
 
       const baseUrl = extractCodexBaseUrl(config);
       if (baseUrl) {
@@ -389,6 +393,7 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
     codexModelName,
     codexCatalogModels,
     codexAutoReviewModel,
+    codexOfficialSpeedTiers,
     codexSubagentModel,
     codexSubagentReasoningEffort,
     codexAgentMaxThreads,
@@ -398,6 +403,7 @@ export function useCodexConfigState({ initialData }: UseCodexConfigStateProps) {
     setCodexConfig,
     setCodexCatalogModels,
     setCodexAutoReviewModel,
+    setCodexOfficialSpeedTiers,
     handleCodexApiKeyChange,
     handleCodexBaseUrlChange,
     handleCodexModelNameChange,

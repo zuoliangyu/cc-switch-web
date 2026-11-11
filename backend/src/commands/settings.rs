@@ -47,18 +47,55 @@ pub fn save_settings_internal(
             return Err(format!("统一 Codex 会话历史设置未生效: {error}"));
         }
         if unify_enabled {
-            tokio::task::spawn_blocking(|| {
-                if let Err(error) =
-                    crate::codex_history_migration::maybe_migrate_codex_official_history()
-                {
-                    log::warn!("Codex 官方历史迁移失败，将在下次启动重试: {error}");
-                }
-            });
+            // 后台把留在 openai 桶的会话迁进 custom 桶（仅当用户勾选了迁入既有会话，函数内部
+            // 自门控）。大会话目录可能要读数秒，不能阻塞设置保存；失败时下次启动自动重试。
+            tokio::task::spawn_blocking(run_codex_unify_migration_and_notify);
         } else if let Err(error) = crate::settings::clear_codex_official_history_unify_state() {
             log::warn!("清理 Codex 官方历史迁移状态失败: {error}");
         }
     }
     Ok(true)
+}
+
+/// 开启统一会话历史后，后台把官方会话迁进共享组的那一轮跑完了（或失败）。
+const CODEX_UNIFY_MIGRATION_FINISHED_EVENT: &str = "codex-unify-migration-finished";
+
+/// 跑一轮统一迁移，迁完（或失败）经事件推送告诉前端：开启时前端只说了「后台迁入中」，
+/// 用户要等到这一刻再重启 Codex，旧会话才会解锁。跳过（没东西可迁等）时不发。
+fn run_codex_unify_migration_and_notify() {
+    let result = crate::codex_history_migration::maybe_migrate_codex_official_history();
+    match &result {
+        Ok(outcome) => match &outcome.skipped_reason {
+            Some(reason) => log::debug!("Codex 官方历史迁移跳过: {reason}"),
+            None => log::info!(
+                "Codex 官方历史迁移完成: files={}, rows={}",
+                outcome.migrated_jsonl_files,
+                outcome.migrated_state_rows
+            ),
+        },
+        Err(error) => log::warn!("Codex 官方历史迁移失败，将在下次启动重试: {error}"),
+    }
+    if let Some(payload) = codex_unify_migration_finished_payload(&result) {
+        crate::events::emit(CODEX_UNIFY_MIGRATION_FINISHED_EVENT, payload);
+    }
+}
+
+fn codex_unify_migration_finished_payload(
+    result: &Result<crate::codex_history_migration::MigrationOutcome, crate::error::AppError>,
+) -> Option<serde_json::Value> {
+    match result {
+        Ok(outcome) if outcome.skipped_reason.is_some() => None,
+        Ok(outcome) => Some(serde_json::json!({
+            "migratedStateRows": outcome.migrated_state_rows,
+            "migratedJsonlFiles": outcome.migrated_jsonl_files,
+            "error": null,
+        })),
+        Err(error) => Some(serde_json::json!({
+            "migratedStateRows": 0,
+            "migratedJsonlFiles": 0,
+            "error": error.to_string(),
+        })),
+    }
 }
 
 /// 聚合设置（经典子 agent 工具、子 agent 模型和推理强度、自动审批模型）只影响 Stack 模式下
@@ -90,6 +127,30 @@ pub async fn resync_codex_stack_settings(
         }
         return Err(format!(
             "聚合设置未生效（Codex 配置重写失败） (The aggregation setting did not take effect: rewriting the Codex config failed): {err}"
+        ));
+    }
+    Ok(())
+}
+
+/// 「暂停使用官方登录」只影响路由 / 聚合模式下写给 Codex 的内容：保存后立即重写，失败时回滚
+/// 这一项。`existing` 是保存前的设置。
+pub async fn resync_codex_proxy_settings(
+    state: &crate::store::AppState,
+    existing: &crate::settings::AppSettings,
+) -> Result<(), String> {
+    let saved = crate::settings::get_settings();
+    if saved.codex_proxy_without_official_login == existing.codex_proxy_without_official_login {
+        return Ok(());
+    }
+    if let Err(err) = crate::mode::controller::resync_codex_proxy(state).await {
+        log::warn!("「暂停使用官方登录」变更后重写 Codex 配置失败，回滚设置: {err}");
+        let mut rollback = crate::settings::get_settings();
+        rollback.codex_proxy_without_official_login = existing.codex_proxy_without_official_login;
+        if let Err(rollback_err) = crate::settings::update_settings(rollback) {
+            log::error!("回滚「暂停使用官方登录」设置失败: {rollback_err}");
+        }
+        return Err(format!(
+            "「暂停使用官方登录」未生效（Codex 配置重写失败） (\"Pause the official login\" did not take effect: rewriting the Codex config failed): {err}"
         ));
     }
     Ok(())
@@ -208,6 +269,38 @@ mod tests {
     use crate::settings::{
         AppSettings, CodexOfficialHistoryUnifyMigration, LocalMigrations, WebDavSyncSettings,
     };
+
+    #[test]
+    fn unify_migration_finished_payload_reports_counts_or_error_but_not_skips() {
+        use super::codex_unify_migration_finished_payload as payload;
+        use crate::codex_history_migration::MigrationOutcome;
+
+        let done = Ok(MigrationOutcome {
+            migrated_jsonl_files: 4,
+            migrated_state_rows: 3,
+            skipped_reason: None,
+        });
+        assert_eq!(
+            payload(&done),
+            Some(serde_json::json!({
+                "migratedStateRows": 3,
+                "migratedJsonlFiles": 4,
+                "error": null,
+            }))
+        );
+
+        let failed = Err(crate::error::AppError::Message("disk full".to_string()));
+        let failed = payload(&failed).expect("failure is reported");
+        assert_eq!(failed["migratedStateRows"], 0);
+        assert!(failed["error"].as_str().unwrap().contains("disk full"));
+
+        // 跳过（开关关着、没勾选迁入、没东西可迁）时不提示。
+        let skipped = Ok(MigrationOutcome {
+            skipped_reason: Some("nothing_to_migrate".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(payload(&skipped), None);
+    }
 
     #[test]
     fn save_settings_should_keep_the_existing_proxy_client_host() {

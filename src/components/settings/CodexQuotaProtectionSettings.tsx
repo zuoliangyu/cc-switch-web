@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { SettingsRow, SettingsSwitchRow } from "./SettingsLayout";
 
 export const DEFAULT_CODEX_QUOTA_PROTECTION = {
-  enabled: false,
+  enabled: true,
   fiveHourThreshold: 95,
   weeklyThreshold: 98,
 };

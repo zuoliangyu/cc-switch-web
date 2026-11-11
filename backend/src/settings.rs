@@ -240,10 +240,16 @@ pub struct LocalMigrations {
     /// 旧版官方路由桶（`cc-switch-official`）迁回 openai 桶的标记，按 Codex 目录生效。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_legacy_official_history_bucket_v1: Option<CodexLegacyOfficialHistoryBucketMigration>,
+    /// 官方额度保护改成默认开启的一次性迁移：旧版每次保存都把 `enabled: false` 整块写进
+    /// settings.json，分不出「没碰过」和「主动关掉」，所以没有这个标记的设置一律打开一次。
+    /// 之后用户再关掉就以用户为准。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_quota_protection_default_on_v1: Option<bool>,
 }
 
-/// Codex 本地路由里 ChatGPT 官方请求的使用率阈值，两个窗口各自判断。默认关：查不到用量时
-/// 一律放行，不开就什么都不变。
+/// Codex 本地路由里 ChatGPT 官方请求的使用率阈值，两个窗口各自判断。默认开：账号用到 100%
+/// 后 Codex 会锁住发送键（Luna Reserve），第三方模型也用不了。查不到用量时一律放行。默认值
+/// 改之前保存的设置由 [`LocalMigrations::codex_quota_protection_default_on_v1`] 打开一次。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CodexQuotaProtection {
@@ -255,7 +261,7 @@ pub struct CodexQuotaProtection {
 impl Default for CodexQuotaProtection {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             five_hour_threshold: 95,
             weekly_threshold: 98,
         }
@@ -393,6 +399,12 @@ pub struct AppSettings {
     /// Codex 本地路由里 ChatGPT 官方请求的额度耗尽前保护。
     #[serde(default)]
     pub codex_quota_protection: CodexQuotaProtection,
+    /// 路由 / 聚合模式下暂不让 Codex 用官方登录：写 `requires_openai_auth = false` 的 custom
+    /// 表，Codex 当成没登录，就不会因官方额度用完锁住发送键（Luna Reserve）。登录留在
+    /// auth.json 里不动；开着期间代理在本地拒绝官方请求，新会话记在 custom 组。直连不受影响。
+    /// 手动开关，默认关。
+    #[serde(default)]
+    pub codex_proxy_without_official_login: bool,
     /// 写给客户端的代理主机（IP 或主机名），空 / 未设时按监听地址推（`0.0.0.0` → `127.0.0.1`）。
     /// 客户端和代理不在同一个网络栈时用，比如 WSL2 NAT 模式里的会话连不到 Windows 的回环。
     /// 只对这台机器有意义，所以不放在会随同步覆盖的 proxy_config 表里。
@@ -574,6 +586,7 @@ impl Default for AppSettings {
             enable_local_proxy: false,
             preserve_codex_official_auth_on_switch: false,
             codex_quota_protection: CodexQuotaProtection::default(),
+            codex_proxy_without_official_login: false,
             proxy_client_host: None,
             unify_codex_session_history: false,
             unify_codex_migrate_existing: None,
@@ -753,7 +766,18 @@ impl AppSettings {
         }
         let mut settings = loaded.settings;
         settings.normalize_paths();
+        settings.apply_load_migrations();
         settings
+    }
+
+    /// 读入时的一次性调整。只改内存里的值，下次保存时随标记一起落盘；没保存之前每次启动
+    /// 重跑一遍，结果一样。
+    fn apply_load_migrations(&mut self) {
+        let migrations = self.local_migrations.get_or_insert_with(Default::default);
+        if migrations.codex_quota_protection_default_on_v1.is_none() {
+            migrations.codex_quota_protection_default_on_v1 = Some(true);
+            self.codex_quota_protection.enabled = true;
+        }
     }
 }
 
@@ -1063,6 +1087,16 @@ pub fn codex_stack_auto_review_model() -> Option<String> {
 
 pub fn preserve_codex_official_auth_on_switch() -> bool {
     get_settings().preserve_codex_official_auth_on_switch
+}
+
+pub fn codex_proxy_without_official_login() -> bool {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .codex_proxy_without_official_login
 }
 
 /// 客户端地址（见 [`AppSettings::proxy_client_host`]），去掉首尾空白；没设或为空时是 `None`。
@@ -1682,6 +1716,31 @@ mod tests {
         let (settings, lossy) = parse_settings_lenient(&content);
         assert!(!lossy);
         assert_eq!(settings.claude_config_dir.as_deref(), Some("/tmp/claude"));
+    }
+
+    /// 旧版存下的 `enabled: false` 分不出是不是用户关的，读入时打开一次；带了标记之后
+    /// 用户再关掉就以用户为准。
+    #[test]
+    fn quota_protection_is_switched_on_once_for_settings_saved_before_the_default() {
+        let saved_by_old_version = r#"{"codexQuotaProtection":{"enabled":false,"fiveHourThreshold":90,"weeklyThreshold":97}}"#;
+        let (mut settings, lossy) = parse_settings_lenient(saved_by_old_version);
+        assert!(!lossy);
+        settings.apply_load_migrations();
+        assert!(settings.codex_quota_protection.enabled);
+        assert_eq!(settings.codex_quota_protection.five_hour_threshold, 90);
+        assert_eq!(settings.codex_quota_protection.weekly_threshold, 97);
+
+        settings.codex_quota_protection.enabled = false;
+        let saved = serde_json::to_string(&settings).expect("serialize");
+        assert!(saved.contains("codexQuotaProtectionDefaultOnV1"), "{saved}");
+        let (mut reloaded, _) = parse_settings_lenient(&saved);
+        reloaded.apply_load_migrations();
+        assert!(!reloaded.codex_quota_protection.enabled);
+
+        let (mut fresh, _) = parse_settings_lenient("{}");
+        fresh.apply_load_migrations();
+        assert!(fresh.codex_quota_protection.enabled);
+        assert!(!fresh.codex_proxy_without_official_login);
     }
 
     #[test]

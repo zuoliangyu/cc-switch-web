@@ -97,6 +97,10 @@ pub struct SwitchResult {
     /// 这次选的是本地路由的目标时才有：实际生效的是什么、客户端文件有没有改写。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub route: Option<crate::mode::controller::RouteSwitchResult>,
+    /// Codex only: this switch moved new sessions to the other history bucket
+    /// while unified history is off, so newer Codex locks the old bucket.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_history_split: Option<crate::codex_history_migration::CodexHistorySplitHint>,
 }
 
 /// Claude Desktop 直连模式下用不了要经路由的卡。

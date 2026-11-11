@@ -61,7 +61,6 @@ const CODEX_ROW_TOP_FIELDS = [
   "review_model",
   "model_reasoning_effort",
   "plan_mode_reasoning_effort",
-  "disable_response_storage",
 ];
 
 /** Codex 的供应商独有字段（后端 `live::floor::CODEX_EXCLUSIVE_TOP`） */

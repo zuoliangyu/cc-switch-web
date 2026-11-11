@@ -33,6 +33,7 @@ import {
 } from "@/components/providers/presentation";
 import { RouteSettingsSheet } from "./RouteSettingsSheet";
 import { StackSettingsSheet } from "./StackSettingsSheet";
+import { useCodexPauseOfficialLogin } from "./CodexPauseOfficialLogin";
 import {
   sameStackSubagent,
   stackSubagentSettings,
@@ -110,6 +111,7 @@ export function SwitchModePanel({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: settings } = useSettingsQuery();
+  const pauseOfficialLogin = useCodexPauseOfficialLogin();
   const appName = APP_DISPLAY_NAME[app];
   const modes = modesFor(app);
   const modeView = state.data;
@@ -436,6 +438,28 @@ export function SwitchModePanel({
           setStaleDismissed(staleRevision);
         }}
       />,
+    );
+  }
+  // 暂停使用官方登录只在路由 / 聚合下生效；开着就一直提示，免得额度恢复后忘了关
+  if (app === "codex" && active !== "direct" && pauseOfficialLogin.paused) {
+    notices.push(
+      <Notice
+        key="officialLoginPaused"
+        tone="warning"
+        title={t("mode.notice.officialLoginPaused")}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pauseOfficialLogin.saving}
+            onClick={() => void pauseOfficialLogin.setPaused(false)}
+          >
+            {t("mode.notice.resumeOfficialLogin")}
+          </Button>
+        }
+      >
+        {t("mode.notice.officialLoginPausedBody")}
+      </Notice>,
     );
   }
   if (view !== active) {

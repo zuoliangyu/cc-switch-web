@@ -1181,6 +1181,17 @@ pub async fn resync_codex_stack_catalog(state: &AppState) -> Result<(), AppError
         .map(|_| ())
 }
 
+/// 「暂停使用官方登录」变了：路由 / 聚合模式下按新契约重写 Codex（契约没变就什么都不做）。
+/// 直连或没接上代理时这个开关不起作用，等进代理时自然按设置写。
+pub async fn resync_codex_proxy(state: &AppState) -> Result<(), AppError> {
+    let app = AppType::Codex;
+    let _service = SERVICE_LOCK.lock().await;
+    let _app = lock_settled(state, &app).await?;
+    reapply_after_save_locked(state, &app, None)
+        .await
+        .map(|_| ())
+}
+
 /// 没取到官方模型列表的原因码（见 [`stack::StackView::notice_reasons`]）：先是官方列表的，
 /// 两个来源都没取到时再跟自带列表的。
 fn official_models_reasons(

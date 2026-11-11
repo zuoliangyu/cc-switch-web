@@ -217,6 +217,10 @@ interface CodexFormFieldsProps {
   // Codex 专用；聚合模式下不生效（改用聚合设置）。
   autoReviewModel?: string;
   onAutoReviewModelChange?: (model: string) => void;
+  // Keep the official Fast speed tier on GPT rows mirrored from Codex's bundled
+  // entries: `modelCatalog.officialSpeedTiers`. Native Responses only.
+  officialSpeedTiers?: boolean;
+  onOfficialSpeedTiersChange?: (keep: boolean) => void;
 
   // 子代理默认值（config.toml 的 `[agents]`）。Codex 专用：Grok Build 没有这两个键。
   subagentModel?: string;
@@ -645,6 +649,8 @@ export function CodexFormFields({
   onCatalogModelsChange,
   autoReviewModel = "",
   onAutoReviewModelChange,
+  officialSpeedTiers = false,
+  onOfficialSpeedTiersChange,
   subagentModel = "",
   onSubagentModelChange,
   subagentReasoningEffort = "",
@@ -1422,6 +1428,28 @@ export function CodexFormFields({
     </p>
   );
 
+  // 保留官方 Fast 档：镜像官方的 GPT 行默认清空速度档，后面接官方账号的中转（如 CPA）才认
+  // service_tier=priority。Chat、Anthropic 转换会把它转给不认的上游，Copilot 走自己的目录，
+  // 都只给原生 Responses；聚合布局不显示（合并目录不看卡上的设置）。
+  const officialSpeedTiersToggle = onOfficialSpeedTiersChange &&
+    !isStack &&
+    !isCopilotPreset &&
+    effectiveApiFormat === "openai_responses" && (
+      <div className="flex items-center justify-between gap-4">
+        {labelWithHelp(
+          t("codexConfig.officialSpeedTiersLabel"),
+          t("codexConfig.officialSpeedTiersHint"),
+          "codexOfficialSpeedTiers",
+        )}
+        <Switch
+          id="codexOfficialSpeedTiers"
+          checked={officialSpeedTiers}
+          onCheckedChange={onOfficialSpeedTiersChange}
+          aria-label={t("codexConfig.officialSpeedTiersLabel")}
+        />
+      </div>
+    );
+
   // 上游格式（Copilot 可自动按模型能力选，也可显式指定）。直连下 Chat 发不出请求，按应用
   // 实际的模式提示后果；Copilot 恒需路由，单独提示（上游 e615a6f4）。
   const upstreamFormatSelect = (
@@ -1857,6 +1885,7 @@ export function CodexFormFields({
                 !isXaiOauthPreset && (
                   <div className="space-y-3">
                     {upstreamFormatSelect}
+                    {officialSpeedTiersToggle}
 
                     {isGrokBuild && (
                       <div className="flex items-center justify-between gap-4 border-t border-border-default pt-3">

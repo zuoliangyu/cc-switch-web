@@ -9,8 +9,9 @@ import { emitRuntimeEvent } from "../msw/runtimeMocks";
 
 const toastError = vi.hoisted(() => vi.fn());
 const toastWarning = vi.hoisted(() => vi.fn());
+const toastSuccess = vi.hoisted(() => vi.fn());
 vi.mock("sonner", () => ({
-  toast: { error: toastError, warning: toastWarning },
+  toast: { error: toastError, warning: toastWarning, success: toastSuccess },
 }));
 
 function setup() {
@@ -52,6 +53,31 @@ describe("useAppServerEvents", () => {
     cleanup();
     toastError.mockReset();
     toastWarning.mockReset();
+    toastSuccess.mockReset();
+  });
+
+  it("tells the user when the Codex unify migration finishes or fails", async () => {
+    const { wrapper } = setup();
+    renderHook(() => useAppServerEvents(), { wrapper });
+    await flush();
+    await act(async () => {
+      emitRuntimeEvent("codex-unify-migration-finished", {
+        migratedStateRows: 5,
+        migratedJsonlFiles: 4,
+        error: null,
+      });
+    });
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(toastError).not.toHaveBeenCalled();
+    await act(async () => {
+      emitRuntimeEvent("codex-unify-migration-finished", {
+        migratedStateRows: 0,
+        migratedJsonlFiles: 0,
+        error: "disk full",
+      });
+    });
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes the provider list and mode view on provider-switched", async () => {

@@ -712,6 +712,8 @@ function ProviderFormFull({
     codexCatalogModels,
     codexAutoReviewModel,
     setCodexAutoReviewModel,
+    codexOfficialSpeedTiers,
+    setCodexOfficialSpeedTiers,
     codexSubagentModel,
     codexSubagentReasoningEffort,
     codexAgentMaxThreads,
@@ -1563,6 +1565,7 @@ function ProviderFormFull({
           modelCatalog?: {
             models: CodexCatalogModel[];
             autoReviewModel?: string;
+            officialSpeedTiers?: boolean;
           };
         };
         if (normalizedCatalogModels.length > 0) {
@@ -1576,6 +1579,9 @@ function ProviderFormFull({
             )
           ) {
             configObj.modelCatalog.autoReviewModel = autoReviewModel;
+          }
+          if (codexOfficialSpeedTiers) {
+            configObj.modelCatalog.officialSpeedTiers = true;
           }
         }
         settingsConfig = JSON.stringify(configObj);
@@ -2550,6 +2556,8 @@ function ProviderFormFull({
                 onCatalogModelsChange={setCodexCatalogModels}
                 autoReviewModel={codexAutoReviewModel}
                 onAutoReviewModelChange={setCodexAutoReviewModel}
+                officialSpeedTiers={codexOfficialSpeedTiers}
+                onOfficialSpeedTiersChange={setCodexOfficialSpeedTiers}
                 subagentModel={codexSubagentModel}
                 onSubagentModelChange={handleCodexSubagentModelChange}
                 subagentReasoningEffort={codexSubagentReasoningEffort}

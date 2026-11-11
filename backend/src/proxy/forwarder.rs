@@ -1584,6 +1584,11 @@ impl RequestForwarder {
         // 官方请求的账号令牌：额度保护按它放行，并从响应头记下这个账号的用量。
         let mut quota_token = None;
         if codex_official_auth_passthrough {
+            // 暂停使用官方登录时 Codex 带的是占位 Key，没有官方凭据可透传：本地拒绝并说明
+            // 怎么恢复，不发往上游。
+            if crate::settings::codex_proxy_without_official_login() {
+                return Err(ProxyError::CodexOfficialLoginPaused);
+            }
             // 共享 workspace 下本地账号 ID 与 ChatGPT workspace ID 分离：请求头比对
             // workspace，bearer 必须与该账号记录的 live 会话一致（上游 c2ec78dd）。
             let (expected_chatgpt_account_id, managed_session_matches) = match provider

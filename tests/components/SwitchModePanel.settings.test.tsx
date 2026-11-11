@@ -1,4 +1,5 @@
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -224,5 +225,89 @@ describe("模式行的故障转移、路由设置与聚合设置（上游 v7）"
       ),
     );
     client.clear();
+  });
+});
+
+// 上游 b0e452ff / e6256c50：「暂停使用官方登录」放在 Codex 的路由 / 聚合设置里，
+// 开着时页面顶部常驻一条提示，可以直接恢复；直连下不起作用，不提示。
+describe("暂停使用 Codex 官方登录", () => {
+  const PAUSED_TITLE = "mode.notice.officialLoginPaused";
+  const TOGGLE = "settings.codexPauseOfficialLogin.title";
+
+  function mockMode(mode: "direct" | "routing") {
+    server.use(
+      http.post("http://runtime.local/get_app_mode", () =>
+        HttpResponse.json({
+          mode,
+          attached: mode !== "direct",
+          directProviderId: "a",
+          routeProviderId: "a",
+          eligibleProviderIds: ["a", "b"],
+          aggregation: { members: [] },
+        }),
+      ),
+      http.post("http://runtime.local/get_auto_failover_enabled", () =>
+        HttpResponse.json(false),
+      ),
+    );
+  }
+
+  it("路由模式下开着时常驻提示，点「恢复官方登录」即保存并收起", async () => {
+    const saved = mockSettings({ codexProxyWithoutOfficialLogin: true });
+    mockMode("routing");
+    toastSuccess.mockClear();
+    const client = renderPanel({ app: "codex" });
+
+    expect(await screen.findByText(PAUSED_TITLE)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "mode.notice.resumeOfficialLogin" }),
+    );
+    await waitFor(() =>
+      expect(saved.at(-1)?.codexProxyWithoutOfficialLogin).toBe(false),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText(PAUSED_TITLE)).not.toBeInTheDocument(),
+    );
+    expect(toastSuccess).toHaveBeenCalledWith(
+      "settings.codexPauseOfficialLogin.resumedToast",
+    );
+    client.clear();
+  });
+
+  it("直连模式下不提示", async () => {
+    mockSettings({ codexProxyWithoutOfficialLogin: true });
+    mockMode("direct");
+    const client = renderPanel({ app: "codex" });
+    await screen.findByRole("button", { name: /^mode\.names\.route/ });
+    expect(screen.queryByText(PAUSED_TITLE)).not.toBeInTheDocument();
+    client.clear();
+  });
+
+  it("只有 Codex 的路由设置里有这个开关，打开后保存", async () => {
+    const saved = mockSettings({});
+    mockMode("routing");
+    const codex = renderPanel({ app: "codex" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "mode.routeSettings" }),
+    );
+    const toggle = await screen.findByRole("switch", { name: TOGGLE });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(saved.at(-1)?.codexProxyWithoutOfficialLogin).toBe(true),
+    );
+    codex.clear();
+    cleanup();
+
+    mockMode("routing");
+    const claude = renderPanel({ app: "claude" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "mode.routeSettings" }),
+    );
+    await screen.findByText("mode.routeSettingsTitle");
+    expect(
+      screen.queryByRole("switch", { name: TOGGLE }),
+    ).not.toBeInTheDocument();
+    claude.clear();
   });
 });

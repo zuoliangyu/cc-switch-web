@@ -84,6 +84,70 @@ function renderXaiOauthFields() {
 }
 
 describe("CodexFormFields", () => {
+  // 上游 62688ab3：「保留官方 Fast 档」只给原生 Responses，放在高级选项的上游格式下面
+  it("高级选项里只在原生 Responses 下显示「保留官方 Fast 档」", () => {
+    const onOfficialSpeedTiersChange = vi.fn();
+    const renderWith = (apiFormat: "openai_responses" | "openai_chat") =>
+      render(
+        <CodexFormFields
+          codexApiKey="sk-test"
+          onApiKeyChange={vi.fn()}
+          category="third_party"
+          shouldShowApiKeyLink={false}
+          websiteUrl="https://example.com"
+          shouldShowSpeedTest
+          codexBaseUrl="https://relay.example/v1"
+          onBaseUrlChange={vi.fn()}
+          isFullUrl={false}
+          onFullUrlChange={vi.fn()}
+          isEndpointModalOpen={false}
+          onEndpointModalToggle={vi.fn()}
+          autoSelect={false}
+          onAutoSelectChange={vi.fn()}
+          apiFormat={apiFormat}
+          onApiFormatChange={vi.fn()}
+          promptCacheRouting="auto"
+          onPromptCacheRoutingChange={vi.fn()}
+          modelName="gpt-5.5"
+          onModelNameChange={vi.fn()}
+          officialSpeedTiers={false}
+          onOfficialSpeedTiersChange={onOfficialSpeedTiersChange}
+          speedTestEndpoints={[]}
+          customUserAgent=""
+          onCustomUserAgentChange={vi.fn()}
+          localProxyHeadersOverride=""
+          onLocalProxyHeadersOverrideChange={vi.fn()}
+          localProxyBodyOverride=""
+          onLocalProxyBodyOverrideChange={vi.fn()}
+        />,
+      );
+
+    const responses = renderWith("openai_responses");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /providerForm.advancedOptionsToggle/,
+      }),
+    );
+    const toggle = screen.getByRole("switch", {
+      name: "codexConfig.officialSpeedTiersLabel",
+    });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(toggle);
+    expect(onOfficialSpeedTiersChange).toHaveBeenCalledWith(true);
+    responses.unmount();
+
+    renderWith("openai_chat");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /providerForm.advancedOptionsToggle/,
+      }),
+    );
+    expect(
+      screen.queryByRole("switch", {
+        name: "codexConfig.officialSpeedTiersLabel",
+      }),
+    ).toBeNull();
+  });
   it("xAI OAuth 模式隐藏凭据和端点，并用绑定账号拉取模型", async () => {
     fetchXaiOauthModelsMock.mockResolvedValueOnce([{ id: "grok-4.5" }]);
     renderXaiOauthFields();

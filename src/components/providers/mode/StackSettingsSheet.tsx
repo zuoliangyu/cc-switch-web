@@ -25,6 +25,7 @@ import {
   stackSubagentValue,
 } from "./StackSubagentFields";
 import { appModeQueryKey } from "@/lib/query/appModeKeys";
+import { CodexPauseOfficialLoginSection } from "./CodexPauseOfficialLogin";
 
 // 原生 select 的空值：不写覆盖、用 Codex 的默认审批模型。
 const CODEX_DEFAULT_REVIEWER = "";
@@ -39,8 +40,8 @@ interface StackSettingsSheetProps {
 }
 
 /**
- * Codex 聚合页签上的「聚合设置」（上游 6aeaeb17）：子代理默认用的模型和推理强度、经典子代理开关，
- * 以及自动审批（Auto Review）用的模型。都是设备级设置，改了就保存；后端按合并目录校验再写进
+ * Codex 聚合页签上的「聚合设置」（上游 6aeaeb17）：最上面是「暂停使用官方登录」，下面是子代理
+ * 默认用的模型和推理强度、经典子代理开关，以及自动审批（Auto Review）用的模型。都是设备级设置，改了就保存；后端按合并目录校验再写进
  * 客户端（不在目录里就用默认：子代理跟随主模型，审批用 Codex 的默认）。
  */
 export function StackSettingsSheet({
@@ -93,6 +94,7 @@ export function StackSettingsSheet({
           <SheetDescription>{APP_DISPLAY_NAME.codex}</SheetDescription>
         </SheetHeader>
         <SheetBody className="space-y-3">
+          <CodexPauseOfficialLoginSection />
           <p className="text-xs text-muted-foreground">
             {t("mode.stackSettings.subagentDescription")}
           </p>

@@ -224,7 +224,6 @@ const buildCodexSettings = (
     config: `model_provider = "custom"
 model = ${tomlString(model)}
 model_reasoning_effort = "high"
-disable_response_storage = true
 
 [model_providers.custom]
 name = ${tomlString(displayName)}

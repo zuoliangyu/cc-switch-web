@@ -1898,10 +1898,6 @@ fn codex_keychain_account(codex_home: &std::path::Path) -> String {
     format!("cli|{}", &hex[..16])
 }
 
-/// `security` 找不到条目时的退出码（errSecItemNotFound）。
-#[cfg(target_os = "macos")]
-const SECURITY_ITEM_NOT_FOUND: i32 = 44;
-
 /// Keychain 里当前 Codex 配置目录的登录 JSON。服务名所有配置目录共用，必须带上账户名：
 /// 只按服务名查，本机有别的配置目录的登录时 `security` 返回第一条匹配的。
 ///

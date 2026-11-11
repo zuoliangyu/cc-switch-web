@@ -26,4 +26,5 @@ CODEBUDDY.md
 .github/*
 !.github/workflows/
 !.github/workflows/*.yml
+!.github/secret_scanning.yml
 docker-compose.host.yml

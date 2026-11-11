@@ -909,19 +909,25 @@ mod tests {
     }
 
     /// 临时 HOME：Hermes 目录跟着 `CC_SWITCH_TEST_HOME` 走，设置也重读一遍（不带目录覆盖）
-    struct HomeGuard(tempfile::TempDir, Option<std::ffi::OsString>);
+    struct HomeGuard {
+        _dir: tempfile::TempDir,
+        previous: Option<std::ffi::OsString>,
+    }
     impl HomeGuard {
         fn new() -> Self {
             let dir = tempfile::tempdir().unwrap();
             let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
             std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
             crate::settings::reload_settings().unwrap();
-            Self(dir, previous)
+            Self {
+                _dir: dir,
+                previous,
+            }
         }
     }
     impl Drop for HomeGuard {
         fn drop(&mut self) {
-            match self.1.take() {
+            match self.previous.take() {
                 Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
                 None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
             }

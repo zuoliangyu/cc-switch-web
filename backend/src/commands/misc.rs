@@ -41,7 +41,7 @@ pub struct LatestReleaseInfo {
     has_update: bool,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 struct GithubLatestReleaseResponse {
     tag_name: String,
     html_url: String,
@@ -239,7 +239,132 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
 
 pub async fn get_latest_release_info(
     current_version: Option<String>,
-) -> Result<LatestReleaseInfo, String> {
+) -> Result<LatestReleaseInfo, ReleaseCheckError> {
+    let release = latest_release_cached(std::time::Instant::now()).await?;
+    Ok(release_info(release, current_version))
+}
+
+/// 检查更新失败的原因：被 GitHub 限流（附还要等多少秒）或其他上游错误
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReleaseCheckError {
+    RateLimited { retry_after_secs: u64 },
+    Upstream(String),
+}
+
+impl std::fmt::Display for ReleaseCheckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RateLimited { retry_after_secs } => write!(
+                f,
+                "GitHub 接口访问次数已达上限，约 {} 分钟后可再检查",
+                retry_after_secs.div_ceil(60).max(1)
+            ),
+            Self::Upstream(message) => f.write_str(message),
+        }
+    }
+}
+
+/// 拿到的版本信息缓存多久：页面每次打开都会自动检查一次，未登录的 GitHub 接口每小时只给 60 次
+const RELEASE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+/// 限流时最多等多久再去问（GitHub 给的重置时间异常时兜底）
+const RELEASE_RATE_LIMIT_MAX_WAIT_SECS: u64 = 60 * 60;
+
+#[derive(Clone)]
+enum CachedRelease {
+    Release {
+        release: GithubLatestReleaseResponse,
+        expires_at: std::time::Instant,
+    },
+    RateLimited {
+        until: std::time::Instant,
+    },
+}
+
+static RELEASE_CACHE: std::sync::Mutex<Option<CachedRelease>> = std::sync::Mutex::new(None);
+
+fn cached_release(
+    cache: &std::sync::Mutex<Option<CachedRelease>>,
+    now: std::time::Instant,
+) -> Option<Result<GithubLatestReleaseResponse, ReleaseCheckError>> {
+    let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    match guard.as_ref()? {
+        CachedRelease::Release {
+            release,
+            expires_at,
+        } if now < *expires_at => Some(Ok(release.clone())),
+        CachedRelease::RateLimited { until } if now < *until => {
+            Some(Err(ReleaseCheckError::RateLimited {
+                retry_after_secs: until.duration_since(now).as_secs().max(1),
+            }))
+        }
+        _ => None,
+    }
+}
+
+/// 记下这次结果：成功缓存 [`RELEASE_CACHE_TTL`]，限流缓存到 GitHub 说的重置时间，其他错误不缓存
+fn remember_release(
+    cache: &std::sync::Mutex<Option<CachedRelease>>,
+    now: std::time::Instant,
+    result: &Result<GithubLatestReleaseResponse, ReleaseCheckError>,
+) {
+    let entry = match result {
+        Ok(release) => Some(CachedRelease::Release {
+            release: release.clone(),
+            expires_at: now + RELEASE_CACHE_TTL,
+        }),
+        Err(ReleaseCheckError::RateLimited { retry_after_secs }) => {
+            Some(CachedRelease::RateLimited {
+                until: now + std::time::Duration::from_secs(*retry_after_secs),
+            })
+        }
+        Err(ReleaseCheckError::Upstream(_)) => return,
+    };
+    *cache.lock().unwrap_or_else(|e| e.into_inner()) = entry;
+}
+
+async fn latest_release_cached(
+    now: std::time::Instant,
+) -> Result<GithubLatestReleaseResponse, ReleaseCheckError> {
+    if let Some(cached) = cached_release(&RELEASE_CACHE, now) {
+        return cached;
+    }
+    let result = fetch_latest_release().await;
+    remember_release(&RELEASE_CACHE, now, &result);
+    result
+}
+
+/// GitHub 的限流响应：429，或 403 且带 `retry-after` / `x-ratelimit-remaining: 0`。
+/// 返回要等的秒数（优先 `retry-after`，其次 `x-ratelimit-reset`），不是限流时返回 None。
+fn rate_limit_wait_secs(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+    now_unix: i64,
+) -> Option<u64> {
+    let header = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+    };
+    let retry_after = header("retry-after").and_then(|value| value.parse::<u64>().ok());
+    let exhausted = header("x-ratelimit-remaining") == Some("0");
+    let limited = status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || (status == reqwest::StatusCode::FORBIDDEN && (exhausted || retry_after.is_some()));
+    if !limited {
+        return None;
+    }
+    let wait = retry_after.or_else(|| {
+        header("x-ratelimit-reset")
+            .and_then(|value| value.parse::<i64>().ok())
+            .map(|reset| reset.saturating_sub(now_unix).max(0) as u64)
+    });
+    Some(
+        wait.unwrap_or(60)
+            .clamp(1, RELEASE_RATE_LIMIT_MAX_WAIT_SECS),
+    )
+}
+
+async fn fetch_latest_release() -> Result<GithubLatestReleaseResponse, ReleaseCheckError> {
     let client = crate::proxy::http_client::get();
     let url = format!("https://api.github.com/repos/{WEB_GITHUB_REPO}/releases/latest");
 
@@ -249,20 +374,29 @@ pub async fn get_latest_release_info(
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|e| format!("请求 GitHub Releases 失败: {e}"))?;
+        .map_err(|e| ReleaseCheckError::Upstream(format!("请求 GitHub Releases 失败: {e}")))?;
 
-    if !response.status().is_success() {
-        return Err(format!(
-            "请求 GitHub Releases 失败: HTTP {}",
-            response.status()
-        ));
+    let status = response.status();
+    if !status.is_success() {
+        let now_unix = chrono::Utc::now().timestamp();
+        if let Some(retry_after_secs) = rate_limit_wait_secs(status, response.headers(), now_unix) {
+            return Err(ReleaseCheckError::RateLimited { retry_after_secs });
+        }
+        return Err(ReleaseCheckError::Upstream(format!(
+            "请求 GitHub Releases 失败: HTTP {status}"
+        )));
     }
 
-    let release = response
+    response
         .json::<GithubLatestReleaseResponse>()
         .await
-        .map_err(|e| format!("解析 GitHub Releases 响应失败: {e}"))?;
+        .map_err(|e| ReleaseCheckError::Upstream(format!("解析 GitHub Releases 响应失败: {e}")))
+}
 
+fn release_info(
+    release: GithubLatestReleaseResponse,
+    current_version: Option<String>,
+) -> LatestReleaseInfo {
     let latest_version = normalize_version_value(&release.tag_name);
     let normalized_current_version = current_version
         .as_deref()
@@ -273,7 +407,7 @@ pub async fn get_latest_release_info(
         .map(|current| is_newer_version(current, &latest_version))
         .unwrap_or(false);
 
-    Ok(LatestReleaseInfo {
+    LatestReleaseInfo {
         current_version: normalized_current_version,
         latest_version,
         tag_name: release.tag_name,
@@ -287,7 +421,7 @@ pub async fn get_latest_release_info(
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
         has_update,
-    })
+    }
 }
 
 fn normalize_version_value(value: &str) -> String {
@@ -3284,6 +3418,122 @@ mod tests {
     }
 
     use super::*;
+
+    fn github_headers(pairs: &[(&'static str, &str)]) -> reqwest::header::HeaderMap {
+        let mut headers = reqwest::header::HeaderMap::new();
+        for (name, value) in pairs {
+            headers.insert(*name, value.parse().unwrap());
+        }
+        headers
+    }
+
+    #[test]
+    fn github_rate_limits_are_recognised_with_the_time_to_wait() {
+        use reqwest::StatusCode;
+        let now = 1_800_000_000;
+        // 未登录额度用完：403 + remaining 0，按 reset 算还要等多久
+        let exhausted = github_headers(&[
+            ("x-ratelimit-remaining", "0"),
+            ("x-ratelimit-reset", "1800000600"),
+        ]);
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::FORBIDDEN, &exhausted, now),
+            Some(600)
+        );
+        // 次级限流：retry-after 优先
+        let secondary = github_headers(&[("retry-after", "90"), ("x-ratelimit-remaining", "0")]);
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::FORBIDDEN, &secondary, now),
+            Some(90)
+        );
+        // 429 没给时间：等一分钟；reset 已过或离谱时夹在 1 秒到 1 小时之间
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::TOO_MANY_REQUESTS, &github_headers(&[]), now),
+            Some(60)
+        );
+        let past = github_headers(&[("x-ratelimit-remaining", "0"), ("x-ratelimit-reset", "1")]);
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::FORBIDDEN, &past, now),
+            Some(1)
+        );
+        let far = github_headers(&[("retry-after", "999999")]);
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::FORBIDDEN, &far, now),
+            Some(RELEASE_RATE_LIMIT_MAX_WAIT_SECS)
+        );
+        // 普通的 403 / 404 / 5xx 不是限流
+        let plain = github_headers(&[("x-ratelimit-remaining", "42")]);
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::FORBIDDEN, &plain, now),
+            None
+        );
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::NOT_FOUND, &exhausted, now),
+            None
+        );
+        assert_eq!(
+            rate_limit_wait_secs(StatusCode::BAD_GATEWAY, &github_headers(&[]), now),
+            None
+        );
+    }
+
+    #[test]
+    fn release_cache_keeps_successes_and_rate_limits_but_not_other_errors() {
+        use std::time::{Duration, Instant};
+        let cache = std::sync::Mutex::new(None);
+        let start = Instant::now();
+        let release = GithubLatestReleaseResponse {
+            tag_name: "v3.2.0".to_string(),
+            html_url: "https://example.invalid/r".to_string(),
+            body: None,
+            published_at: None,
+        };
+
+        // 其他错误不缓存：下次照常去问
+        remember_release(
+            &cache,
+            start,
+            &Err(ReleaseCheckError::Upstream("HTTP 502".to_string())),
+        );
+        assert!(cached_release(&cache, start).is_none());
+
+        // 成功结果在有效期内复用，过期后重新去问
+        remember_release(&cache, start, &Ok(release.clone()));
+        let hit = cached_release(&cache, start + Duration::from_secs(60));
+        assert_eq!(hit.unwrap().unwrap().tag_name, "v3.2.0");
+        assert!(cached_release(&cache, start + RELEASE_CACHE_TTL).is_none());
+
+        // 限流一直记到重置时间，期间直接回剩余秒数，不再打 GitHub
+        remember_release(
+            &cache,
+            start,
+            &Err(ReleaseCheckError::RateLimited {
+                retry_after_secs: 300,
+            }),
+        );
+        assert_eq!(
+            cached_release(&cache, start + Duration::from_secs(100))
+                .unwrap()
+                .unwrap_err(),
+            ReleaseCheckError::RateLimited {
+                retry_after_secs: 200
+            }
+        );
+        assert!(cached_release(&cache, start + Duration::from_secs(300)).is_none());
+    }
+
+    #[test]
+    fn rate_limit_message_rounds_up_to_whole_minutes() {
+        let message = |secs| {
+            ReleaseCheckError::RateLimited {
+                retry_after_secs: secs,
+            }
+            .to_string()
+        };
+        assert!(message(1).contains("约 1 分钟"));
+        assert!(message(61).contains("约 2 分钟"));
+        assert!(message(3600).contains("约 60 分钟"));
+    }
 
     #[test]
     fn fnm_default_alias_dir_candidates_follow_fnm_base_dir_order() {

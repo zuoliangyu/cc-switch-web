@@ -27,6 +27,7 @@ import { motion } from "framer-motion";
 import ccswitchLogo from "@/assets/icons/logo.svg";
 import { isWindows } from "@/lib/platform";
 import { useUpdate } from "@/contexts/UpdateContext";
+import { extractErrorMessage } from "@/utils/errorUtils";
 
 interface ToolVersion {
   name: string;
@@ -283,8 +284,11 @@ export function AboutSection() {
         toast.success(t("settings.upToDate"), { closeButton: true });
       }
     } catch (error) {
-      console.error("[AboutSection] Failed to check latest release", error);
-      toast.error(t("settings.checkUpdateFailed"));
+      console.warn("[AboutSection] Failed to check latest release", error);
+      // 原因（如 GitHub 限流、还要等几分钟）放在说明里
+      toast.error(t("settings.checkUpdateFailed"), {
+        description: extractErrorMessage(error) || undefined,
+      });
     }
   }, [checkUpdate, t]);
 

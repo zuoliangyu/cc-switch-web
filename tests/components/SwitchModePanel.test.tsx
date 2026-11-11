@@ -112,9 +112,10 @@ describe("模式页签与确认框", () => {
       screen.getByRole("button", { name: "webMode.restartDaemon" }),
     );
     expect(calls).toBe(0);
-    const dialog = await screen
-      .findByRole("alertdialog")
-      .catch(() => screen.findByRole("dialog"));
+    // 确认框可能是 alertdialog 也可能是 dialog：一次等两种，不靠前一个查找超时再退回
+    const dialog = await waitFor(
+      () => screen.queryByRole("alertdialog") ?? screen.getByRole("dialog"),
+    );
     const confirm = within(dialog).getByRole("button", {
       name: "common.confirm",
     });

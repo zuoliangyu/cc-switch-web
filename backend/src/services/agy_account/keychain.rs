@@ -69,8 +69,8 @@ impl SystemKeychain {
         }
     }
 
-    /// 真机测试用的另一条，别动 agy 那条。
-    #[cfg(test)]
+    /// 真机测试用的另一条，别动 agy 那条（只有 macOS 的钥匙串冒烟用到）。
+    #[cfg(all(test, target_os = "macos"))]
     pub fn named(service: &'static str, account: &'static str) -> Self {
         Self { service, account }
     }

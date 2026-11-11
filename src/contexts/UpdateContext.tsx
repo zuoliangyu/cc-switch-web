@@ -46,7 +46,6 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
       setUpdateInfo(release.hasUpdate ? release : null);
       return release.hasUpdate;
     } catch (err) {
-      console.error("[UpdateContext] Failed to check latest release", err);
       setError(err instanceof Error ? err.message : "检查更新失败");
       setHasUpdate(false);
       setUpdateInfo(null);
@@ -59,8 +58,9 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      // 打开页面时的自动检查：离线、被 GitHub 限流都很常见，只记一条警告，不算页面出错
       checkUpdate().catch((err) => {
-        console.error("[UpdateContext] Initial update check failed", err);
+        console.warn("[UpdateContext] Initial update check failed", err);
       });
     }, 1000);
 

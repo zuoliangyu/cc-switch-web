@@ -157,3 +157,23 @@ async fn profile_and_universal_mutations_wait_for_their_serial_locks() {
     drop(held);
     let _ = delete.await.unwrap();
 }
+
+/// 检查更新失败是 GitHub 那边的问题：限流回 503 带 Retry-After，其他回 502，都不是 500
+#[test]
+fn latest_release_errors_map_to_gateway_statuses() {
+    use crate::commands::ReleaseCheckError;
+
+    let limited = latest_release_error_response(ReleaseCheckError::RateLimited {
+        retry_after_secs: 120,
+    });
+    assert_eq!(limited.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(limited.headers()[axum::http::header::RETRY_AFTER], "120");
+
+    let upstream =
+        latest_release_error_response(ReleaseCheckError::Upstream("HTTP 404".to_string()));
+    assert_eq!(upstream.status(), StatusCode::BAD_GATEWAY);
+    assert!(upstream
+        .headers()
+        .get(axum::http::header::RETRY_AFTER)
+        .is_none());
+}

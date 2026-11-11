@@ -3571,11 +3571,32 @@ async fn run_tool_lifecycle_action(
 
 async fn get_latest_release(
     Query(query): Query<LatestReleaseQuery>,
-) -> Result<Json<crate::commands::LatestReleaseInfo>, ApiError> {
-    let release = crate::commands::get_latest_release_info(query.current_version)
+) -> Result<Json<crate::commands::LatestReleaseInfo>, Response> {
+    crate::commands::get_latest_release_info(query.current_version)
         .await
-        .map_err(|e| ApiError::internal(format!("failed to load latest release info: {e}")))?;
-    Ok(Json(release))
+        .map(Json)
+        .map_err(latest_release_error_response)
+}
+
+/// 检查更新失败是 GitHub 那边的问题，不是本服务出错：限流回 503 并带 Retry-After，其他回 502
+fn latest_release_error_response(error: crate::commands::ReleaseCheckError) -> Response {
+    let body = Json(ErrorResponse {
+        error: error.to_string(),
+    });
+    match error {
+        crate::commands::ReleaseCheckError::RateLimited { retry_after_secs } => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(
+                axum::http::header::RETRY_AFTER,
+                retry_after_secs.to_string(),
+            )],
+            body,
+        )
+            .into_response(),
+        crate::commands::ReleaseCheckError::Upstream(_) => {
+            (StatusCode::BAD_GATEWAY, body).into_response()
+        }
+    }
 }
 
 async fn auth_start_login(

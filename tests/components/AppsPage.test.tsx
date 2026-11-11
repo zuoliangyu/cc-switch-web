@@ -495,10 +495,11 @@ describe("AppsPage concurrent CLI upgrades", () => {
     }
   });
 
+  // 一路点开下拉切环境，满载并行跑全量测试时容易超过默认 5 秒（同上）
   it.each([
     ["updates the detected environments and per-client WSL commands", false],
     ["preserves a manual environment selection during detection", true],
-  ] as const)("%s", async (_name, manualOverride) => {
+  ] as const)("%s", { timeout: 15_000 }, async (_name, manualOverride) => {
     const platform = vi
       .spyOn(navigator, "userAgent", "get")
       .mockReturnValue("Windows NT 10.0");
@@ -1944,7 +1945,9 @@ describe("AppsPage concurrent CLI upgrades", () => {
     }
     expect(updateButton("Claude Code")).toBeDisabled();
     expect(updateButton("Claude Code")).toHaveAttribute("aria-busy", "true");
-    expect(updateButton("Codex")).toBeEnabled();
+    // 缓存过期后重挂会重新检查其余应用；「检查更新」按钮加载中也在 DOM 里，
+    // renderApps 不等这轮检查，Codex 这一行要等它查完才有升级按钮（Linux 上必然没查完）
+    await waitFor(() => expect(updateButton("Codex")).toBeEnabled());
     fireEvent.click(updateAllButton());
     await waitFor(() =>
       expect(mocks.runToolLifecycleAction).toHaveBeenCalledTimes(3),

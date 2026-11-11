@@ -273,3 +273,6 @@
 - 2026-11-11 发版准备（按用户要求）：
   - 修复遗留小问题：390px 下全文搜索跳转后关键词在可视区外（命中行比可视区高时，等行渲染稳定后把当前高亮滚到中间）；直接 PUT 设置关闭「搜索消息正文」时服务端删除索引文件（新增 `saving_settings_with_content_search_off_removes_the_index_file`）；页面补图标，不再请求 `/favicon.ico`。均在隔离数据目录下用浏览器 / 接口复验。检查更新遇 GitHub 限流返回 500 仍未处理。
   - 版本升至 `3.2.0`：package.json、Cargo.toml、Cargo.lock，CHANGELOG 的 Unreleased 定为 `[3.2.0] - 2026-11-11`，三语 README「当前版本」改为 3.2.0、3.1.0 改为上一版本。`/api/copilot/token` 按用户决定不收紧。未打 tag：本地已有从上游取来的同名 `v3.2.0`。
+  - 继续排查遗留（按用户要求）：检查更新改为 GitHub 限流回 503 + `Retry-After`、其他上游错误回 502，结果缓存 15 分钟、限流缓存到重置时间（实测 3 次检查只耗 1 次 GitHub 额度）；VS Code 的 `bin/copilot-shim` 不再算作已装的 Copilot CLI（本机实测显示为未安装）；删去 Linux 下未用的终端 shell 辅助函数与测试构建的两处死代码警告；root 下跳过需非特权的权限用例。
+  - 首次跑 `pnpm verify:docker`（此前只在 Rust 1.96 / 1.99 上验证过，CI 与发布镜像用 1.88）：Linux 上前端 5 项失败——应用页一项是与平台相关的竞态（必现），其余 4 项是满核并行下 1 秒等待超时；修正后 `verify` 全部通过（Rust 1.88 警告即错误、Linux 与 Windows 交叉零警告、前端 2833、Rust 3902）。`smoke` 因本机内存不足被终止，未完成。
+  - Rust 1.99 会对 `fetch_update` 报弃用（改名 `try_update`），但 MSRV 1.88 没有 `try_update`，保持不改。

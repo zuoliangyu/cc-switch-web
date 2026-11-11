@@ -1649,119 +1649,6 @@ fn default_flag_for_shell(shell: &str) -> &'static str {
     }
 }
 
-// 以下 shell 解析辅助函数仅被 macOS/Linux 的终端启动逻辑使用；Windows 非 test 编译下为死代码。
-#[cfg_attr(windows, allow(dead_code))]
-fn fallback_user_shell() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "/bin/zsh"
-    } else {
-        "/bin/bash"
-    }
-}
-
-#[cfg_attr(windows, allow(dead_code))]
-fn valid_user_shell_path(shell: &str) -> bool {
-    if shell.is_empty()
-        || !shell.starts_with('/')
-        || !is_valid_shell(shell)
-        || shell.chars().any(char::is_control)
-    {
-        return false;
-    }
-
-    let path = std::path::Path::new(shell);
-    path.is_file() && is_executable_file(path)
-}
-
-#[cfg(unix)]
-fn is_executable_file(path: &std::path::Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-
-    path.metadata()
-        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-#[cfg_attr(windows, allow(dead_code))]
-fn is_executable_file(path: &std::path::Path) -> bool {
-    path.is_file()
-}
-
-/// 获取用户默认 shell 的完整路径；异常或被污染的 SHELL 回退到平台默认值。
-#[cfg_attr(windows, allow(dead_code))]
-fn get_user_shell() -> String {
-    std::env::var("SHELL")
-        .ok()
-        .filter(|shell| valid_user_shell_path(shell))
-        .unwrap_or_else(|| fallback_user_shell().to_string())
-}
-
-/// 构建 exec 行：引号保护 shell 路径，交还用户 shell 让其按默认规则加载 rc 配置。
-#[cfg_attr(windows, allow(dead_code))]
-fn build_exec_line(shell: &str, cwd: Option<&Path>) -> String {
-    let quoted_shell = shell_single_quote(shell);
-
-    match shell.rsplit('/').next().unwrap_or(shell) {
-        "zsh" => cwd
-            .map(|dir| {
-                let command = format!(
-                    "cd {} || exit 1; exec {} -i",
-                    shell_single_quote(&dir.to_string_lossy()),
-                    quoted_shell
-                );
-                format!("exec {} -lc {}", quoted_shell, shell_single_quote(&command))
-            })
-            .unwrap_or_else(|| format!("exec {quoted_shell} -l")),
-        _ => format!("exec {quoted_shell}"),
-    }
-}
-
-/// 构建 provider 命令行：通过用户 shell 的交互模式执行，确保 GUI 启动的终端也加载用户 PATH。
-#[cfg_attr(windows, allow(dead_code))]
-fn build_provider_command_line(shell: &str, launch_command: &str, cwd: Option<&Path>) -> String {
-    let command = cwd
-        .map(|dir| {
-            format!(
-                "cd {} && {}",
-                user_shell_quote(shell, &dir.to_string_lossy()),
-                launch_command
-            )
-        })
-        .unwrap_or_else(|| launch_command.to_string());
-
-    format!(
-        "{} {} {}",
-        shell_single_quote(shell),
-        provider_command_flag_for_shell(shell),
-        shell_single_quote(&command)
-    )
-}
-
-#[cfg_attr(windows, allow(dead_code))]
-fn provider_command_flag_for_shell(shell: &str) -> &'static str {
-    match shell.rsplit('/').next().unwrap_or(shell) {
-        "dash" | "sh" => "-c",
-        "zsh" => "-lic",
-        _ => "-ic",
-    }
-}
-
-#[cfg_attr(windows, allow(dead_code))]
-fn build_final_shell_cd_command(shell: &str, cwd: Option<&Path>) -> String {
-    if matches!(shell.rsplit('/').next().unwrap_or(shell), "zsh") {
-        return String::new();
-    }
-
-    cwd.map(|dir| {
-        format!(
-            "cd {} || exit 1\n",
-            shell_single_quote(&dir.to_string_lossy())
-        )
-    })
-    .unwrap_or_default()
-}
-
 #[cfg(target_os = "windows")]
 fn try_get_version_wsl(
     tool: &str,
@@ -2116,6 +2003,9 @@ fn shadowed_by_pathext_sibling(path: &Path, pathext: Option<&str>) -> bool {
 }
 
 fn tool_executable_candidates(tool: &str, dir: &Path) -> Vec<std::path::PathBuf> {
+    if is_vscode_copilot_shim(tool, &dir.join(tool)) {
+        return Vec::new();
+    }
     #[cfg(target_os = "windows")]
     {
         let extensionless = dir.join(tool);
@@ -4396,16 +4286,6 @@ fn wsl_auto_shell_command(payload: &str, flag: Option<&str>) -> String {
         .join(" || ")
 }
 
-/// 交给用户 shell（而不是启动脚本的 sh）解析的一段文本加引号。
-#[cfg_attr(windows, allow(dead_code))]
-fn user_shell_quote(shell: &str, value: &str) -> String {
-    if is_fish_shell(shell) {
-        format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'"))
-    } else {
-        shell_single_quote(value)
-    }
-}
-
 /// WSL 未指定 shell 时依次尝试的 flag：交互式初始化（nvm 等写在 rc 里）优先。
 /// 卸载探测（`tool_uninstall`）按同一顺序选 flag，否则两边可能命中不同的安装。
 #[cfg(any(target_os = "windows", test))]
@@ -4657,7 +4537,19 @@ fn windows_preferred_path_default(tool: &str, raw: &str) -> Option<std::path::Pa
         .filter(|line| {
             !is_windows_app_execution_alias_dir(Path::new(line).parent().unwrap_or(Path::new("")))
         })
+        .filter(|line| !is_vscode_copilot_shim(tool, Path::new(line)))
         .find_map(|line| windows_preferred_tool_executable(tool, Path::new(line)))
+}
+
+/// Web：VS Code 往 PATH 里放的 `bin/copilot-shim/copilot(.exe)` 不是 Copilot CLI，跑起来只提示
+/// 「GitHub Copilot CLI was not found」并以 127 退出。当成没装（不是「装了但跑不起来」），
+/// 也不拿它当升级 / 卸载的目标，后面真正装好的 copilot 照常命中。
+fn is_vscode_copilot_shim(tool: &str, path: &Path) -> bool {
+    tool == "copilot"
+        && path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|dir| dir.eq_ignore_ascii_case("copilot-shim"))
 }
 
 fn kimi_upgrade_ignores_yes(version: Option<&str>) -> bool {
@@ -4685,12 +4577,6 @@ fn kimi_legacy_update_command(bin_path: &str, real_target: &str) -> Option<Strin
         kimi_native_install_root(bin_path, real_target)
             .map(|root| kimi_installer_update_command(&root))
     })
-}
-
-/// fish 的单引号里 `\'` 和 `\\` 仍是转义，POSIX 的 `'"'"'` 写法会让引号错位、接出别的命令。
-#[cfg_attr(windows, allow(dead_code))]
-fn is_fish_shell(shell: &str) -> bool {
-    shell.rsplit('/').next().unwrap_or(shell) == "fish"
 }
 
 /// 已定位到的可执行文件启动失败（文件损坏、被安全软件拦截、不是有效程序等）时的诊断。
@@ -5657,15 +5543,6 @@ mod tests {
             build_wsl_env_argv(&extra_env).unwrap(),
             vec!["OPENCODE_DISABLE_PROJECT_CONFIG=true".to_string()]
         );
-    }
-
-    #[cfg(unix)]
-    fn set_test_executable(path: &Path, executable: bool) {
-        use std::os::unix::fs::PermissionsExt;
-
-        let mode = if executable { 0o755 } else { 0o644 };
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-            .expect("fixture permissions should be set");
     }
 
     #[test]
@@ -8961,6 +8838,22 @@ mod tests {
         assert!(!is_windows_app_execution_alias_dir(Path::new(
             r"C:\Users\tester\AppData\Roaming\npm"
         )));
+    }
+
+    #[test]
+    fn vscode_copilot_shim_is_not_treated_as_the_copilot_cli() {
+        let shim = Path::new("D:/Program Files/Microsoft VS Code/bin/copilot-shim/copilot.exe");
+        assert!(is_vscode_copilot_shim("copilot", shim));
+        assert!(is_vscode_copilot_shim(
+            "copilot",
+            Path::new("C:/Code/bin/Copilot-Shim/copilot")
+        ));
+        // 真正装好的 Copilot CLI、别的工具都不受影响
+        assert!(!is_vscode_copilot_shim(
+            "copilot",
+            Path::new("C:/Users/tester/AppData/Roaming/npm/copilot.cmd")
+        ));
+        assert!(!is_vscode_copilot_shim("codex", shim));
     }
 
     #[test]

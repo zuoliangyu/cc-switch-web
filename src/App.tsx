@@ -56,6 +56,11 @@ import {
   translatePiProviderMutationError,
 } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
+import { isOfficialAccount } from "@/utils/providerCapabilities";
+import {
+  COPILOT_PROVIDER_ID_MAX,
+  normalizeCopilotProviderId,
+} from "@/config/copilotConfig";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { isMac } from "@/lib/platform";
 import { cn } from "@/lib/utils";
@@ -517,16 +522,24 @@ function App() {
   );
 
   // Kimi「添加」：写进 config.toml 但不改默认模型；改默认模型走「设为默认」（切换）
-  const addKimiProviderToConfig = async (provider: Provider) => {
+  // Kimi「添加」只写进 config.toml、不改默认模型；「切换」走 switchProvider。
+  // Copilot CLI 的自带模型卡同理：「添加」只写进 providers.json，默认模型在 copilot 里用 /model 选
+  const addNativeProviderToConfig = async (
+    provider: Provider,
+    app: "kimi" | "copilot",
+  ) => {
     try {
-      await providersApi.addToLiveConfig(provider.id, "kimi");
-      await queryClient.invalidateQueries({ queryKey: ["providers", "kimi"] });
-      toast.success(
-        t("notifications.addToConfigSuccess", { defaultValue: "已添加到配置" }),
-      );
+      await providersApi.addToLiveConfig(provider.id, app);
     } catch (error) {
       toast.error(extractErrorMessage(error));
+      return;
+    } finally {
+      // 失败也重读：文件可能在客户端里改过，「已添加」状态要跟上
+      await queryClient.invalidateQueries({ queryKey: ["providers", app] });
     }
+    toast.success(
+      t("notifications.addToConfigSuccess", { defaultValue: "已添加到配置" }),
+    );
   };
 
   const disableOmoMutation = useDisableCurrentOmo();
@@ -669,8 +682,14 @@ function App() {
       ]);
     } else if (app === "omp") {
       await queryClient.invalidateQueries({ queryKey: ["omp", "state"] });
-    } else if (app === "mcode" || app === "kimi" || app === "dsh") {
-      // MiniMax Code / Kimi Code / DeepSeek Harness 的“已添加”状态来自 meta.liveConfigManaged（上游 09c5d39d）。
+    } else if (
+      app === "mcode" ||
+      app === "kimi" ||
+      app === "dsh" ||
+      app === "copilot"
+    ) {
+      // MiniMax Code / Kimi Code / DeepSeek Harness / Copilot CLI 的“已添加”状态来自
+      // meta.liveConfigManaged（上游 09c5d39d）。
       await queryClient.invalidateQueries({ queryKey: ["providers", app] });
     }
   };
@@ -856,6 +875,22 @@ function App() {
         );
         duplicatedProvider.addToLive = false;
       }
+    } else if (activeApp === "copilot") {
+      // 自带模型卡的 id 就是 providers.json 里的供应商名，副本另起一个；官方卡仍用随机 id。
+      // 副本都先不写进 providers.json（官方卡本来就不写）
+      if (!isOfficialAccount(activeApp, provider)) {
+        // 后端要求供应商名不超过 64 个字符：给「-copy-N」留出位置再截断
+        const base =
+          normalizeCopilotProviderId(provider.id).slice(
+            0,
+            COPILOT_PROVIDER_ID_MAX - "-copy-999".length,
+          ) || "copilot";
+        duplicatedProvider.providerKey = generateUniqueProviderCopyKey(
+          base,
+          Object.keys(providers),
+        );
+      }
+      duplicatedProvider.addToLive = false;
     }
 
     await addProvider(duplicatedProvider);
@@ -1031,8 +1066,9 @@ function App() {
                           appId={activeApp}
                           isLoading={isLoading}
                           onSwitch={
-                            activeApp === "kimi"
-                              ? addKimiProviderToConfig
+                            activeApp === "kimi" || activeApp === "copilot"
+                              ? (provider: Provider) =>
+                                  addNativeProviderToConfig(provider, activeApp)
                               : switchProvider
                           }
                           onRemoveFromConfig={
@@ -1043,7 +1079,8 @@ function App() {
                             activeApp === "omp" ||
                             activeApp === "mcode" ||
                             activeApp === "kimi" ||
-                            activeApp === "dsh"
+                            activeApp === "dsh" ||
+                            activeApp === "copilot"
                               ? (provider) =>
                                   setConfirmAction({
                                     provider,

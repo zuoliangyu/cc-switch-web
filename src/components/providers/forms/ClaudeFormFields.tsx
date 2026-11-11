@@ -405,7 +405,10 @@ export function ClaudeFormFields({
 
     fetchModels
       .then((models) => {
-        if (!cancelled) setCopilotModels(models);
+        if (cancelled) return;
+        setCopilotModels(models);
+        // Copilot Free 账号的模型都不允许在模型选择器中使用，会被后端过滤成空
+        if (models.length === 0) toast.info(t("copilot.noPickerModelsClaude"));
       })
       .catch((err) => {
         console.warn("[Copilot] Failed to fetch models:", err);

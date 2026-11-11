@@ -8,6 +8,7 @@ const providersApiMock = vi.hoisted(() => ({
   add: vi.fn(async () => true),
   addWithoutSwitching: vi.fn(async () => true),
   switch: vi.fn(async () => ({ warnings: [] })),
+  getAll: vi.fn(async () => ({}) as Record<string, unknown>),
 }));
 const mcpApiMock = vi.hoisted(() => ({
   getAllServers: vi.fn(async () => ({}) as Record<string, unknown>),
@@ -972,30 +973,39 @@ describe("GitHub Copilot CLI 的供应商链接", () => {
     vi.clearAllMocks();
   });
 
-  it("按接口格式写 COPILOT_PROVIDER_TYPE 与 WIRE_API", () => {
+  // 上游 65720291 / 0d69dd06：链接导入成 Copilot 原生 providers.json 的卡片形状
+  it("按接口格式写 provider.type 与 wireApi", () => {
     expect(buildFromLink("copilot").settingsConfig).toEqual({
-      env: {
-        COPILOT_PROVIDER_BASE_URL: "https://api.example.com/v1",
-        COPILOT_PROVIDER_API_KEY: "sk-test",
-        COPILOT_PROVIDER_TYPE: "openai",
-        COPILOT_PROVIDER_WIRE_API: "completions",
-        COPILOT_MODEL: "example-model",
+      provider: {
+        type: "openai",
+        wireApi: "completions",
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test",
       },
+      models: [{ id: "example-model" }],
     });
     expect(
       buildFromLink("copilot", { apiFormat: "openai_responses" })
         .settingsConfig,
-    ).toMatchObject({ env: { COPILOT_PROVIDER_WIRE_API: "responses" } });
+    ).toMatchObject({ provider: { wireApi: "responses" } });
     const anthropic = buildFromLink("copilot", { apiFormat: "anthropic" })
-      .settingsConfig as { env: Record<string, string> };
-    expect(anthropic.env.COPILOT_PROVIDER_TYPE).toBe("anthropic");
-    expect(anthropic.env.COPILOT_PROVIDER_WIRE_API).toBeUndefined();
+      .settingsConfig as { provider: Record<string, string> };
+    expect(anthropic.provider.type).toBe("anthropic");
+    expect(anthropic.provider.wireApi).toBeUndefined();
     expect(() =>
       parseDeepLinkUrl(providerLink("copilot", { apiFormat: "gemini_native" })),
     ).toThrow();
   });
 
-  it("config 只补地址、Key 和模型，URL 参数优先", async () => {
+  it("Copilot 不调 /models：链接和 config 都没有模型时拒绝", () => {
+    const url = new URL(providerLink("copilot"));
+    url.searchParams.delete("model");
+    expect(() =>
+      buildProviderFromRequest(parseDeepLinkUrl(url.toString())),
+    ).toThrow(/model/);
+  });
+
+  it("旧版 env 形状的 config 只补地址、Key 和模型，URL 参数优先", async () => {
     const url = new URL(providerLink("copilot"));
     url.searchParams.delete("apiKey");
     url.searchParams.delete("model");
@@ -1016,23 +1026,108 @@ describe("GitHub Copilot CLI 的供应商链接", () => {
     expect(merged.endpoint).toBe("https://api.example.com/v1");
     expect(merged.apiKey).toBe("sk-from-config");
     expect(merged.model).toBe("config-model");
-    const env = (
-      buildProviderFromRequest(merged).settingsConfig as {
-        env: Record<string, string>;
-      }
-    ).env;
-    expect(env.COPILOT_PROVIDER_HEADERS).toBeUndefined();
+    expect(buildProviderFromRequest(merged).settingsConfig).toEqual({
+      provider: {
+        type: "openai",
+        wireApi: "completions",
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-from-config",
+      },
+      models: [{ id: "config-model" }],
+    });
   });
 
-  it("卡片没有「启用」：链接带 enabled=true 也只保存", async () => {
-    const request = parseDeepLinkUrl(providerLink("copilot"));
-    await importFromDeepLink({ ...request, enabled: true });
-    expect(providersApiMock.addWithoutSwitching).toHaveBeenCalledWith(
+  it("原生 config：bearerToken 也算凭据，链接模型排第一、其余模型保留", async () => {
+    const url = new URL(providerLink("copilot"));
+    url.searchParams.delete("apiKey");
+    url.searchParams.set(
+      "config",
+      encodeBase64Utf8(
+        JSON.stringify({
+          provider: {
+            baseUrl: "https://config.example.com/v1",
+            bearerToken: "token-from-config",
+          },
+          models: [{ id: "a" }, { id: "example-model" }, { id: "b" }],
+        }),
+      ),
+    );
+    const merged = await mergeDeepLinkConfig(parseDeepLinkUrl(url.toString()));
+    // bearerToken 不填进 apiKey，构建卡片时从内嵌 config 取
+    expect(merged.apiKey).toBeUndefined();
+    expect(buildProviderFromRequest(merged).settingsConfig).toEqual({
+      provider: {
+        type: "openai",
+        wireApi: "completions",
+        baseUrl: "https://api.example.com/v1",
+        bearerToken: "token-from-config",
+      },
+      models: [{ id: "example-model" }, { id: "a" }, { id: "b" }],
+    });
+
+    // URL 的 apiKey 覆盖内嵌的 bearerToken
+    url.searchParams.set("apiKey", "sk-url");
+    const withKey = await mergeDeepLinkConfig(parseDeepLinkUrl(url.toString()));
+    const provider = (
+      buildProviderFromRequest(withKey).settingsConfig as {
+        provider: Record<string, string>;
+      }
+    ).provider;
+    expect(provider.apiKey).toBe("sk-url");
+    expect(provider.bearerToken).toBeUndefined();
+  });
+
+  it("没有凭据、模型 ID 不是字面量、凭据带变量引用时拒绝", async () => {
+    const noCredential = new URL(providerLink("copilot"));
+    noCredential.searchParams.delete("apiKey");
+    await expect(
+      importFromDeepLink(parseDeepLinkUrl(noCredential.toString())),
+    ).rejects.toThrow(/API Key|bearerToken/);
+
+    const badModel = new URL(providerLink("copilot"));
+    badModel.searchParams.set(
+      "config",
+      encodeBase64Utf8(
+        JSON.stringify({
+          provider: { baseUrl: "https://x.example.com/v1" },
+          models: [{ id: "${MODEL}" }],
+        }),
+      ),
+    );
+    await expect(
+      mergeDeepLinkConfig(parseDeepLinkUrl(badModel.toString())),
+    ).rejects.toThrow();
+
+    expect(() =>
+      parseDeepLinkUrl(providerLink("copilot", { apiKey: "${TOKEN}" })),
+    ).toThrow();
+  });
+
+  it("卡片 id 取名字的 slug，撞了已有的就加序号；默认马上添加进 providers.json", async () => {
+    providersApiMock.getAll.mockResolvedValueOnce({
+      "my-relay": {},
+      "my-relay-2": {},
+    });
+    const request = parseDeepLinkUrl(
+      providerLink("copilot", { name: "My Relay" }),
+    );
+    await importFromDeepLink(request);
+    expect(providersApiMock.getAll).toHaveBeenCalledWith("copilot");
+    expect(providersApiMock.add).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "my-relay-3" }),
+      "copilot",
+      true,
+    );
+    expect(providersApiMock.switch).not.toHaveBeenCalled();
+
+    // 关掉开关：只存进列表，不写 providers.json
+    providersApiMock.add.mockClear();
+    await importFromDeepLink({ ...request, enabled: false });
+    expect(providersApiMock.add).toHaveBeenCalledWith(
       expect.anything(),
       "copilot",
+      false,
     );
-    expect(providersApiMock.add).not.toHaveBeenCalled();
-    expect(providersApiMock.switch).not.toHaveBeenCalled();
   });
 
   it("提示词与 MCP 链接接受 copilot", async () => {

@@ -30,6 +30,7 @@ import {
   decodeDeepLinkConfig,
   extractDeepLinkFromLocation,
   mergeDeepLinkConfig,
+  parseCopilotLinkConfig,
   parseDeepLinkUrl,
 } from "@/lib/deeplink/parser";
 import {
@@ -64,7 +65,7 @@ const API_FORMAT_LABELS: Record<DeepLinkApiFormat, string> = {
  * 一直是写进去的，初始值保持打开；切换式应用和提示词默认关闭。
  */
 const initialActivation = (request: DeepLinkImportRequest): boolean => {
-  // Antigravity、Copilot CLI 的卡没有「启用」，只导入（导入时同样忽略 enabled）
+  // Antigravity 的卡没有「启用」，只导入（导入时同样忽略 enabled）
   if (request.resource === "provider" && isLaunchOnlyLinkApp(request.app)) {
     return false;
   }
@@ -147,21 +148,23 @@ const buildProviderConfigPreview = (
         ? { kind: "gemini", env: parsedConfig }
         : { kind: "generic", raw: parsedConfig };
     case "copilot": {
-      // `{env:{…}}` 或扁平的 COPILOT_*：只预览会导入的地址、Key、模型
-      const source =
-        parsedConfig.env &&
-        typeof parsedConfig.env === "object" &&
-        !Array.isArray(parsedConfig.env)
-          ? (parsedConfig.env as Record<string, unknown>)
-          : parsedConfig;
+      // 原生 `{provider, models}` 或旧版 `{env:{…}}` / 扁平 COPILOT_*：只预览会导入的地址、
+      // 凭据和模型（同上游 deepLinkConfigPreview）
+      let inline: ReturnType<typeof parseCopilotLinkConfig>;
+      try {
+        inline = parseCopilotLinkConfig(parsedConfig);
+      } catch {
+        return { kind: "generic", raw: parsedConfig };
+      }
       const env = Object.fromEntries(
-        [
-          "COPILOT_PROVIDER_BASE_URL",
-          "COPILOT_PROVIDER_API_KEY",
-          "COPILOT_MODEL",
-        ]
-          .filter((key) => typeof source[key] === "string")
-          .map((key) => [key, source[key]]),
+        (
+          [
+            ["baseUrl", inline.endpoint],
+            ["apiKey", inline.apiKey],
+            ["bearerToken", inline.bearerToken],
+            ["models", inline.models.join(", ") || undefined],
+          ] as Array<[string, string | undefined]>
+        ).filter((entry): entry is [string, string] => !!entry[1]),
       );
       return Object.keys(env).length > 0
         ? { kind: "gemini", env }
@@ -819,7 +822,7 @@ export function DeepLinkImportDialog() {
                     导入后是否立即生效由用户决定，链接里的 enabled 只是初始值。切换式应用打开后
                     会立即切到这家，客户端流量随之改走链接里的地址，所以打开时要给出提示。
                   */}
-                  {/* Antigravity、Copilot CLI 的卡没有「启用」，只导入，不给这个开关 */}
+                  {/* Antigravity 的卡没有「启用」，只导入，不给这个开关 */}
                   {!isLaunchOnlyLinkApp(request.app) && (
                     <ActivationSwitch
                       id="deeplink-activate-after-import"

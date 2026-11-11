@@ -318,4 +318,33 @@ describe("Codex model-fetch lifecycle", () => {
       ]),
     );
   });
+  // 上游 aab0ea57 / 17e20a59：空列表按原因提示，Codex 不提示手填 gpt-4.1 / gpt-4o
+  it("explains an account without picker-enabled Copilot models", async () => {
+    vi.mocked(copilotGetModelsForAccount).mockResolvedValue([]);
+    render(<Harness {...makeProps("copilot")} />);
+    fireEvent.click(fetchButton());
+
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith("copilot.noPickerModels"),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("explains Copilot models that do not support the selected format", async () => {
+    vi.mocked(copilotGetModelsForAccount).mockResolvedValue([
+      advertisedModel("responses-model"),
+    ]);
+    render(
+      <Harness
+        {...makeProps("copilot")}
+        copilotApiFormat={"openai_chat" as const}
+      />,
+    );
+    fireEvent.click(fetchButton());
+
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith("copilot.noModelsForApiFormat"),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
 });

@@ -196,15 +196,13 @@ impl Provider {
                     .unwrap_or_default();
                 (base_url, api_key)
             }
-            // Copilot CLI BYOK keeps its endpoint and key in `COPILOT_PROVIDER_*` env vars.
+            // Copilot CLI 自带模型卡：provider 节点（旧版环境变量形状兜底）。
             AppType::Copilot => {
-                let env = settings.get("env");
+                let converted = crate::copilot_config::convert_legacy_settings(settings);
+                let provider = converted.as_ref().unwrap_or(settings).get("provider");
                 (
-                    str_at(env.and_then(|e| e.get("COPILOT_PROVIDER_BASE_URL"))),
-                    first_non_empty(
-                        env,
-                        &["COPILOT_PROVIDER_API_KEY", "COPILOT_PROVIDER_BEARER_TOKEN"],
-                    ),
+                    str_at(provider.and_then(|p| p.get("baseUrl"))),
+                    first_non_empty(provider, &["apiKey", "bearerToken"]),
                 )
             }
             // Hermes (config.yaml) flattens credentials at the top level, snake_case.

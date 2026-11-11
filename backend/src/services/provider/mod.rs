@@ -92,6 +92,15 @@ use usage::validate_usage_script;
 /// Provider business logic service
 pub struct ProviderService;
 
+/// Copilot 官方卡只用来打开终端，不能添加进 providers.json。
+fn copilot_official_not_added() -> AppError {
+    AppError::localized(
+        "copilot.switch.unsupported",
+        "GitHub Copilot CLI 的官方卡片不需要启用，用「打开终端」启动即可",
+        "GitHub Copilot CLI official cards are not enabled; use Open terminal to start one",
+    )
+}
+
 /// Result of a provider switch operation, including any non-fatal warnings
 #[derive(Debug, serde::Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -1922,6 +1931,9 @@ impl ProviderService {
         if app_type == AppType::Omp {
             return omp::list(state);
         }
+        if app_type == AppType::Copilot {
+            return Self::list_copilot(state);
+        }
         if matches!(app_type, AppType::Mcode | AppType::Kimi | AppType::Dsh) {
             let native = if app_type == AppType::Dsh {
                 crate::dsh_config::get_providers()?
@@ -1966,6 +1978,181 @@ impl ProviderService {
         state.db.get_all_providers(app_type.as_str())
     }
 
+    /// GitHub Copilot CLI 的列表：自带模型卡和 `providers.json` 合并（文件里有、库里没有的
+    /// 显示成卡片；库里有的用文件里的 provider / models 覆盖，保留卡片自己的推理强度）。
+    /// 官方卡不参与合并，永远不是「已添加」。旧版环境变量形状的自带模型卡就地转成新形状。
+    fn list_copilot(state: &AppState) -> Result<IndexMap<String, Provider>, AppError> {
+        let app = AppType::Copilot.as_str();
+        let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app(app));
+        let mut saved = state.db.get_all_providers(app)?;
+        let native = match crate::copilot_config::get_providers() {
+            Ok(native) => native,
+            Err(error) => {
+                // Keep the last known membership. A read failure is not a removal.
+                log::warn!("Could not refresh Copilot providers.json: {error}");
+                return Ok(saved);
+            }
+        };
+        for (id, config) in &native {
+            if !saved.contains_key(id) {
+                saved.insert(
+                    id.clone(),
+                    Provider::with_id(id.clone(), id.clone(), config.clone(), None),
+                );
+            }
+        }
+        for (id, provider) in &mut saved {
+            let before = (
+                provider.settings_config.clone(),
+                Self::provider_live_config_managed(provider),
+            );
+            if provider.category.as_deref() != Some("official") {
+                if let Some(converted) =
+                    crate::copilot_config::convert_legacy_settings(&provider.settings_config)
+                {
+                    provider.settings_config = converted;
+                }
+            }
+            let official = copilot_direct::is_official(provider);
+            let in_file = !official && native.contains_key(id);
+            if in_file {
+                let config = &native[id];
+                provider.settings_config["provider"] = config["provider"].clone();
+                provider.settings_config["models"] = config["models"].clone();
+            }
+            Self::set_provider_live_config_managed(provider, in_file);
+            if before
+                != (
+                    provider.settings_config.clone(),
+                    Self::provider_live_config_managed(provider),
+                )
+            {
+                state.db.save_provider(app, provider)?;
+            }
+        }
+        Ok(saved)
+    }
+
+    /// Copilot 自带模型卡写进 providers.json（官方卡绝不写文件），再存行；
+    /// 写文件和存库在 `save_and_commit` 里一个事务完成。
+    fn save_copilot_provider(
+        state: &AppState,
+        provider: &Provider,
+        write_live: bool,
+        create: bool,
+    ) -> Result<bool, AppError> {
+        if write_live && !copilot_direct::is_official(provider) {
+            crate::copilot_config::save_and_commit(
+                &provider.id,
+                Some(&provider.settings_config),
+                create,
+                || {
+                    state.db.save_provider("copilot", provider)?;
+                    Ok(true)
+                },
+            )
+        } else {
+            state.db.save_provider("copilot", provider)?;
+            Ok(true)
+        }
+    }
+
+    /// Copilot「新增」：官方卡只存行；自带模型卡按 `add_to_live`（前端默认 true）写进
+    /// providers.json。卡片 id 也是 providers.json 里的供应商名，库里或文件里已有就拒绝。
+    fn add_copilot(
+        state: &AppState,
+        provider: Provider,
+        add_to_live: bool,
+    ) -> Result<bool, AppError> {
+        let _guard =
+            futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+        let mut provider = provider;
+        Self::validate_provider_settings(&AppType::Copilot, &provider)?;
+        let add_to_live = add_to_live && !copilot_direct::is_official(&provider);
+        Self::set_provider_live_config_managed(&mut provider, add_to_live);
+        if state
+            .db
+            .get_provider_by_id(&provider.id, "copilot")?
+            .is_some()
+            || crate::copilot_config::provider_key_exists(&provider.id)?
+        {
+            return Err(AppError::InvalidInput(format!(
+                "copilot provider key '{}' already exists",
+                provider.id
+            )));
+        }
+        Self::save_copilot_provider(state, &provider, add_to_live, true)
+    }
+
+    /// Copilot「编辑」：已添加的自带模型卡同步改 providers.json（默认那家不能删掉选中的模型）；
+    /// 还没添加的卡可以改 id，加进去之后 id 就是 Copilot 里的供应商名，不能再改。
+    fn update_copilot(
+        state: &AppState,
+        original_id: Option<&str>,
+        provider: Provider,
+    ) -> Result<bool, AppError> {
+        let _guard =
+            futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+        let mut provider = provider;
+        Self::validate_provider_settings(&AppType::Copilot, &provider)?;
+        let official = copilot_direct::is_official(&provider);
+        let original_id = original_id.unwrap_or(provider.id.as_str()).to_string();
+        if original_id != provider.id {
+            let existing = state
+                .db
+                .get_provider_by_id(&original_id, "copilot")?
+                .ok_or_else(|| {
+                    AppError::Message(format!(
+                        "Original provider '{original_id}' does not exist in app 'copilot'"
+                    ))
+                })?;
+            if !copilot_direct::is_official(&existing)
+                && crate::copilot_config::provider_key_exists(&original_id)?
+            {
+                return Err(AppError::Message(
+                    "Provider key cannot be changed after the provider has been added to the app config"
+                        .to_string(),
+                ));
+            }
+            if state
+                .db
+                .get_provider_by_id(&provider.id, "copilot")?
+                .is_some()
+                || crate::copilot_config::provider_key_exists(&provider.id)?
+            {
+                return Err(AppError::Message(format!(
+                    "Provider '{}' already exists in app 'copilot'",
+                    provider.id
+                )));
+            }
+            Self::set_provider_live_config_managed(&mut provider, false);
+            state.db.save_provider("copilot", &provider)?;
+            state.db.delete_provider("copilot", &original_id)?;
+            return Ok(true);
+        }
+        // 官方卡不在 providers.json 里（同名条目属于别人）。
+        let in_file = !official && crate::copilot_config::provider_key_exists(&provider.id)?;
+        Self::set_provider_live_config_managed(&mut provider, in_file);
+        Self::save_copilot_provider(state, &provider, in_file, false)
+    }
+
+    /// Copilot 自带模型卡写进 providers.json；文件里已经有这家时原样保留（同 Kimi）。
+    /// 调用方已拿 Copilot 的应用锁。
+    fn add_copilot_to_live(state: &AppState, id: &str) -> Result<(), AppError> {
+        let mut provider = state
+            .db
+            .get_provider_by_id(id, "copilot")?
+            .ok_or_else(|| AppError::Message(format!("供应商 {id} 不存在")))?;
+        if copilot_direct::is_official(&provider) {
+            return Err(copilot_official_not_added());
+        }
+        Self::validate_provider_settings(&AppType::Copilot, &provider)?;
+        Self::set_provider_live_config_managed(&mut provider, true);
+        crate::copilot_config::add_and_commit(id, &provider.settings_config, || {
+            state.db.save_provider("copilot", &provider)
+        })
+    }
+
     /// Get current provider ID
     ///
     /// 使用有效的当前供应商 ID（验证过存在性）。
@@ -1976,6 +2163,16 @@ impl ProviderService {
     pub fn current(state: &AppState, app_type: AppType) -> Result<String, AppError> {
         if app_type == AppType::Kimi {
             return crate::kimi_config::current_provider();
+        }
+        if app_type == AppType::Copilot {
+            // 拥有 Copilot 默认模型（settings.json 的 `model`）的那家是「默认」。读不了 Copilot
+            // 的设置或供应商文件时不影响列表显示，只是没有「默认」。
+            return Ok(
+                crate::copilot_config::current_provider().unwrap_or_else(|error| {
+                    log::warn!("读取 GitHub Copilot CLI 默认模型失败: {error}");
+                    String::new()
+                }),
+            );
         }
         if matches!(
             app_type,
@@ -2170,11 +2367,15 @@ impl ProviderService {
         if app_type == AppType::Omp {
             return omp::add(state, provider, add_to_live);
         }
-        // Antigravity、Copilot CLI 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
-        if matches!(app_type, AppType::Agy | AppType::Copilot) {
+        // Antigravity 的卡只用来打开终端：添加只存行，不写任何文件、不设当前。
+        if app_type == AppType::Agy {
             Self::validate_provider_settings(&app_type, &provider)?;
             state.db.save_provider(app_type.as_str(), &provider)?;
             return Ok(true);
+        }
+        // Copilot CLI：官方卡只存行；自带模型卡写进 providers.json（累加式）。
+        if app_type == AppType::Copilot {
+            return Self::add_copilot(state, provider, add_to_live);
         }
         let _switch_guard = if matches!(
             app_type,
@@ -2436,21 +2637,19 @@ impl ProviderService {
             }
             return Self::save_gemini(state, provider, None, false);
         }
-        // Antigravity、Copilot CLI 的卡只用来打开终端：编辑只存行，不写任何文件。
-        if matches!(app_type, AppType::Agy | AppType::Copilot) {
+        // Antigravity 的卡只用来打开终端：编辑只存行，不写任何文件。
+        if app_type == AppType::Agy {
             if original_id.is_some_and(|id| id != provider.id) {
-                return Err(AppError::Message(format!(
-                    "{} provider ID cannot be changed",
-                    if app_type == AppType::Agy {
-                        "Antigravity"
-                    } else {
-                        "GitHub Copilot CLI"
-                    }
-                )));
+                return Err(AppError::Message(
+                    "Antigravity provider ID cannot be changed".into(),
+                ));
             }
             Self::validate_provider_settings(&app_type, &provider)?;
             state.db.save_provider(app_type.as_str(), &provider)?;
             return Ok(true);
+        }
+        if app_type == AppType::Copilot {
+            return Self::update_copilot(state, original_id, provider);
         }
         if app_type == AppType::GrokBuild {
             if original_id.is_some_and(|id| id != provider.id) {
@@ -2741,6 +2940,21 @@ impl ProviderService {
                 state.db.delete_provider(app_type.as_str(), id)
             });
         }
+        if app_type == AppType::Copilot {
+            let _guard =
+                futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+            // 官方卡不在文件里；自带模型卡连同 providers.json 里的条目一起删（默认那家拒绝）。
+            let official = state
+                .db
+                .get_provider_by_id(id, "copilot")?
+                .is_some_and(|row| copilot_direct::is_official(&row));
+            if official {
+                return state.db.delete_provider("copilot", id);
+            }
+            return crate::copilot_config::save_and_commit(id, None, false, || {
+                state.db.delete_provider("copilot", id)
+            });
+        }
         if app_type == AppType::Kimi {
             let _guard = futures::executor::block_on(
                 state.proxy_service.lock_switch_for_app(app_type.as_str()),
@@ -2810,8 +3024,8 @@ impl ProviderService {
             return Ok(());
         }
 
-        // Antigravity、Copilot CLI 的卡没有「启用」（只用来打开终端），旧版留下的当前指针不拦删除。
-        if matches!(app_type, AppType::Agy | AppType::Copilot) {
+        // Antigravity 的卡没有「启用」（只用来打开终端），旧版留下的当前指针不拦删除。
+        if app_type == AppType::Agy {
             return state.db.delete_provider(app_type.as_str(), id);
         }
 
@@ -2832,12 +3046,18 @@ impl ProviderService {
     }
 
     /// Kimi「添加」：把卡片写进 config.toml，但不改 default_model（「切换」才改）。
+    /// Copilot「添加」：把自带模型卡写进 providers.json（不改 Copilot 的默认模型）。
     /// 其他累加式应用的添加就是 `switch`，不走这里。
     pub fn add_to_live_config(
         state: &AppState,
         app_type: AppType,
         id: &str,
     ) -> Result<(), AppError> {
+        if app_type == AppType::Copilot {
+            let _guard =
+                futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+            return Self::add_copilot_to_live(state, id);
+        }
         if app_type != AppType::Kimi {
             return Err(AppError::InvalidInput(format!(
                 "{} adds providers through switch",
@@ -2872,6 +3092,24 @@ impl ProviderService {
         }
         if app_type == AppType::Omp {
             return omp::remove(state, id);
+        }
+        if app_type == AppType::Copilot {
+            let _guard =
+                futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+            if state
+                .db
+                .get_provider_by_id(id, "copilot")?
+                .is_some_and(|row| copilot_direct::is_official(&row))
+            {
+                return Err(copilot_official_not_added());
+            }
+            return crate::copilot_config::save_and_commit(id, None, false, || {
+                if let Some(mut provider) = state.db.get_provider_by_id(id, "copilot")? {
+                    Self::set_provider_live_config_managed(&mut provider, false);
+                    state.db.save_provider("copilot", &provider)?;
+                }
+                Ok(())
+            });
         }
         if app_type == AppType::Dsh {
             let _guard = futures::executor::block_on(
@@ -3019,13 +3257,13 @@ impl ProviderService {
                 "Antigravity cards are not enabled; use Open terminal to start one",
             ));
         }
-        // Copilot CLI 同理：自带模型只能经进程环境传入（见 copilot_config 模块说明）。
+        // Copilot CLI：官方卡只用来打开终端；自带模型卡的「切换」就是添加进 providers.json，
+        // 不改 Copilot 自己的默认模型（见 copilot_config 模块说明）。
         if app_type == AppType::Copilot {
-            return Err(AppError::localized(
-                "copilot.switch.unsupported",
-                "GitHub Copilot CLI 的卡片不需要启用，用「打开终端」启动即可",
-                "GitHub Copilot CLI cards are not enabled; use Open terminal to start one",
-            ));
+            let _guard =
+                futures::executor::block_on(state.proxy_service.lock_switch_for_app("copilot"));
+            Self::add_copilot_to_live(state, id)?;
+            return Ok(SwitchResult::default());
         }
         let _service = if crate::mode::controller::PROXY_APPS.contains(&app_type) {
             Some(futures::executor::block_on(
@@ -4384,7 +4622,7 @@ impl ProviderService {
                 validate_gemini_settings(&provider.settings_config)?
             }
             AppType::Copilot => {
-                crate::copilot_config::validate_settings(&provider.settings_config)?
+                crate::copilot_config::validate_provider(&provider.id, &provider.settings_config)?
             }
             AppType::GrokBuild => {
                 let settings = provider.settings_config.as_object().ok_or_else(|| {
@@ -4618,22 +4856,27 @@ impl ProviderService {
                 Ok((api_key, base_url))
             }
             AppType::Copilot => {
-                let env = provider.settings_config.get("env");
+                // 新形状在 provider 节点；旧版环境变量形状的行还没被列表转换时兜底。
+                let settings =
+                    crate::copilot_config::convert_legacy_settings(&provider.settings_config)
+                        .unwrap_or_else(|| provider.settings_config.clone());
                 let get = |key: &str| {
-                    env.and_then(|env| env.get(key))
+                    settings
+                        .get("provider")
+                        .and_then(|provider| provider.get(key))
                         .and_then(Value::as_str)
                         .map(str::trim)
                         .filter(|value| !value.is_empty())
                         .map(str::to_string)
                 };
-                let api_key = get(crate::copilot_config::API_KEY_ENV)
-                    .or_else(|| get(crate::copilot_config::BEARER_TOKEN_ENV))
+                let api_key = get("apiKey")
+                    .or_else(|| get("bearerToken"))
                     .unwrap_or_default();
-                let base_url = get(crate::copilot_config::BASE_URL_ENV).ok_or_else(|| {
+                let base_url = get("baseUrl").ok_or_else(|| {
                     AppError::localized(
                         "copilot.missing_base_url",
-                        "缺少 COPILOT_PROVIDER_BASE_URL",
-                        "Missing COPILOT_PROVIDER_BASE_URL",
+                        "缺少自带模型的接口地址",
+                        "Missing the bring-your-own-model endpoint",
                     )
                 })?;
                 Ok((api_key, base_url))

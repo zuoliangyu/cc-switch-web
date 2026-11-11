@@ -1728,9 +1728,10 @@ async fn copilot_bound_account(
 
 /// GitHub Copilot CLI 的「打开终端」（上游 copilot_terminal_launch 的 Web 版）：官方卡跑
 /// `copilot`，卡上设了模型就加 `--model`；绑了授权中心账号时经 `COPILOT_GITHUB_TOKEN` 只给这
-/// 一个进程。自带模型卡的 Key、地址和模型只经环境变量传入（`env_launch_command` 写进 0600 的
-/// 临时文件、读完即删，Windows 写进自删的启动 .bat），不进命令行参数、不写常驻文件。
-/// 官方卡清掉全部 `COPILOT_PROVIDER_*`，自带模型卡清掉没填的同名变量，免得 rc 里 export 的值混进来。
+/// 一个进程（`env_launch_command` 写进 0600 的临时文件、读完即删，Windows 写进自删的启动
+/// .bat），不进命令行参数、不写常驻文件。自带模型卡要先添加进 providers.json，启动时
+/// `--model=<卡片 id>/<第一个模型>`；两种卡都清掉全部 `COPILOT_PROVIDER_*`（有它们 Copilot
+/// 就不读 providers.json），自带模型卡另清 `COPILOT_MODEL`。
 fn copilot_launch_command(
     provider: &crate::provider::Provider,
     account: Option<(String, String)>,
@@ -1747,6 +1748,17 @@ fn copilot_launch_command(
     }
     // npm 装的是 copilot.cmd，要 `call`；`call` 会把 `%` 再展开一遍、把引号里的 `^` 加倍，cmd
     // 也不认 `\"`，所以模型名里有这些字符时不在 Windows 上启动。
+    // 模型名会拼进启动命令：控制字符（换行）在任何平台都拒绝，保存时已经校验过，这里兜底。
+    if launch
+        .model
+        .as_deref()
+        .is_some_and(|model| model.chars().any(char::is_control))
+    {
+        return Err(format!(
+            "「{}」的模型名里有换行等控制字符，不能用来启动",
+            provider.name
+        ));
+    }
     if cfg!(target_os = "windows")
         && launch
             .model
@@ -3093,14 +3105,37 @@ mod tests {
 
     fn copilot_byok_card() -> crate::provider::Provider {
         copilot_card(
-            serde_json::json!({"env":{
-                "COPILOT_PROVIDER_BASE_URL":"https://relay.test/v1",
-                "COPILOT_PROVIDER_API_KEY":"fixture-key",
-                "COPILOT_PROVIDER_WIRE_API":"responses",
-                "COPILOT_MODEL":"gpt-5.4"
-            },"reasoningEffort":"none"}),
+            serde_json::json!({
+                "provider": {"baseUrl":"https://relay.test/v1","apiKey":"fixture-key","wireApi":"responses"},
+                "models": [{"id":"gpt-5.4"}],
+                "reasoningEffort":"none"
+            }),
             false,
         )
+    }
+
+    /// 自带模型卡要先添加进 providers.json 才能打开终端：临时 COPILOT_HOME 里放好 `relay`。
+    fn copilot_home_with_relay() -> (
+        tempfile::TempDir,
+        crate::copilot_config::test_support::CopilotHomeGuard,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let guard = crate::copilot_config::test_support::CopilotHomeGuard::new(dir.path());
+        std::fs::write(
+            dir.path().join("providers.json"),
+            r#"{"providers":[{"name":"relay","baseUrl":"https://relay.test/v1"}],"models":[{"id":"gpt-5.4","provider":"relay"}]}"#,
+        )
+        .unwrap();
+        (dir, guard)
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn copilot_byok_launch_requires_the_card_to_be_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let _home = crate::copilot_config::test_support::CopilotHomeGuard::new(dir.path());
+        let error = super::copilot_launch_command(&copilot_byok_card(), None, &[]).unwrap_err();
+        assert!(error.contains("Relay"), "{error}");
     }
 
     /// macOS / Linux：命令里只有 0600 临时文件的路径，取出它的内容后删掉。
@@ -3117,7 +3152,9 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[test]
-    fn copilot_byok_launch_passes_the_provider_only_through_the_environment() {
+    #[serial_test::serial]
+    fn copilot_byok_launch_selects_the_card_model_and_clears_byok_variables() {
+        let _home = copilot_home_with_relay();
         let args =
             super::terminal_user_args("copilot", true, vec!["--add-dir".into(), "/tmp/a b".into()])
                 .unwrap();
@@ -3130,16 +3167,19 @@ mod tests {
         .unwrap();
         assert!(
             command.ends_with(
-                "; copilot '--reasoning-effort=none' '--allow-all' '--add-dir' '/tmp/a b'"
+                "; copilot '--model=relay/gpt-5.4' '--reasoning-effort=none' '--allow-all' '--add-dir' '/tmp/a b'"
             ),
             "{command}"
         );
         assert!(!command.contains("fixture-key"), "{command}");
         assert!(!command.contains("gho_fixture"), "{command}");
         let env = take_env_file(&command);
-        assert!(env.contains("export COPILOT_PROVIDER_API_KEY='fixture-key'"));
-        assert!(env.contains("export COPILOT_MODEL='gpt-5.4'"));
-        assert!(env.contains("unset COPILOT_PROVIDER_BEARER_TOKEN"));
+        // 有任何 COPILOT_PROVIDER_* Copilot 就不读 providers.json：全部清掉，Key 不进环境。
+        for key in crate::copilot_config::BYOK_ENV_KEYS {
+            assert!(env.contains(&format!("unset {key}")), "{key}: {env}");
+        }
+        assert!(env.contains("unset COPILOT_MODEL"), "{env}");
+        assert!(!env.contains("fixture-key"));
         assert!(!env.contains("gho_fixture"));
     }
 
@@ -3173,7 +3213,9 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
-    fn copilot_byok_launch_passes_the_provider_only_through_the_environment() {
+    #[serial_test::serial]
+    fn copilot_byok_launch_selects_the_card_model_and_clears_byok_variables() {
+        let _home = copilot_home_with_relay();
         let args = super::terminal_user_args("copilot", true, Vec::new()).unwrap();
         let command = super::copilot_launch_command(
             &copilot_byok_card(),
@@ -3182,14 +3224,15 @@ mod tests {
         )
         .unwrap();
         let (env, launch) = command.rsplit_once("\r\n").unwrap();
-        // Key 只在 `set` 行（启动 .bat 跑完即删），不进 copilot 的命令行参数。
         assert_eq!(
             launch,
-            "call copilot \"--reasoning-effort=none\" \"--allow-all\""
+            "call copilot \"--model=relay/gpt-5.4\" \"--reasoning-effort=none\" \"--allow-all\""
         );
-        assert!(env.contains("set \"COPILOT_PROVIDER_API_KEY=fixture-key\""));
-        assert!(env.contains("set \"COPILOT_MODEL=gpt-5.4\""));
-        assert!(env.contains("set \"COPILOT_PROVIDER_BEARER_TOKEN=\""));
+        for key in crate::copilot_config::BYOK_ENV_KEYS {
+            assert!(env.contains(&format!("set \"{key}=\"")), "{key}: {env}");
+        }
+        assert!(env.contains("set \"COPILOT_MODEL=\""), "{env}");
+        assert!(!command.contains("fixture-key"), "{command}");
         assert!(!command.contains("gho_fixture"), "{command}");
     }
 

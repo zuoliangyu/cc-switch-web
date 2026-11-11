@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.29 及其后差异清单
 
-> 状态：进行中（2026-11-11 建立）。
+> 状态：已完成（2026-11-11 建立并完成；29 项均已处置：已迁移 22、不适用 7）。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 为 `DISABLED_READ_ONLY`）。`remote.upstream.tagOpt = --no-tags`：取上游永远不带 tag；2026-11-11 已删掉本地 80 个上游 tag（名单在当时的临时目录），本地只留 Web 自己的 tag。
 > 起点：`5e9812e0`（上一轮冻结目标）；目标：`upstream/main` = `abf50589`（v4.0.29 之后，2026-11-11）。
 > 范围：29 个提交（无合并提交），113 个文件变化（+14535/−1463）。Web 起点为 `a26a99b8`（3.2.0 之后）。
@@ -30,7 +30,7 @@
 | 批次 | 范围 | 提交数 | 状态 |
 | --- | --- | --- | --- |
 | A | 代理 / Codex / 杂项 | 13 | 已完成（12 已迁移、1 不适用） |
-| B | Copilot 自带模型卡 | 9 | 待迁移 |
+| B | Copilot 自带模型卡 | 9 | 已完成（9 已迁移） |
 | C | 隐私过滤 | 1 | 已完成（1 已迁移） |
 | — | 不适用 | 6 | — |
 
@@ -47,21 +47,21 @@
 | 提交 | 版本 | 标题 | 批次 | 说明 | 处置 |
 | --- | --- | --- | --- | --- | --- |
 | `3bde8262` | v4.0.29 | fix(proxy): raise the Codex to Anthropic default max_tokens to 32000 | A | A：Codex→Anthropic 默认 `max_tokens` 从 8192 提到 32000（`transform_codex_anthropic::DEFAULT_CODEX_ANTHROPIC_MAX_TOKENS`，forwarder 改用它），迁入上游用例；上游表单提示与占位文案不适用（Web 的 Codex 表单没有「最大输出 Token」项，旧缺口见第 4 节） | 已迁移 |
-| `aab0ea57` | v4.0.29 | fix(copilot): explain empty model lists and log both model counts | B | | 待迁移 |
-| `17e20a59` | v4.0.29 | fix(copilot): only suggest gpt-4.1/gpt-4o as a fallback on Claude forms | B | | 待迁移 |
+| `aab0ea57` | v4.0.29 | fix(copilot): explain empty model lists and log both model counts | B | B：后端日志记 /models 原始数量与可在模型选择器用的数量（缓存命中也记）；Codex / Claude Code / Claude Desktop 表单拉到 0 个 Copilot 模型时说明多半是 Copilot Free，Codex 另区分「有模型但都不支持所选上游格式」。Web 的 Claude Code 表单是选中账号后自动加载模型（上游是手动拉取），空列表时同样提示一次；三语文案；迁入上游 Codex 用例 | 已迁移 |
+| `17e20a59` | v4.0.29 | fix(copilot): only suggest gpt-4.1/gpt-4o as a fallback on Claude forms | B | B：空列表提示拆成两条，Claude Code / Claude Desktop 保留「可手填 gpt-4.1 / gpt-4o」，Codex 只说明套餐（Codex 路由只转发声明过的端点） | 已迁移 |
 | `3561af53` | v4.0.29 | feat(i18n): maintain all seven UI languages together | — | 托盘、ru/tr/zh-TW 文案与七语言一致性测试；Web 只保留 zh/en/ja、无托盘 | 不适用 |
 | `3dfc92c6` | v4.0.29 | fix(i18n): add ko, tr and ru strings for recent Copilot and max_tokens changes | — | 只改 ko/tr/ru | 不适用 |
 | `9c0ab57f` | v4.0.29 | test(grok): expect the 32000 default in the max output tokens hint | A | 只改 Grok Build 表单「最大输出 Token」提示的用例；Web 没有该表单项与文案 | 不适用 |
 | `5d961a3a` | v4.0.29 | fix(terminal): disable the provider terminal for route-only cards | A | A：只能走路由的卡（托管账号卡、非原生格式，`providerNeedsRouting`）的「打开终端」按钮保留但置灰并说明原因（`terminalNeedsRoute`，Claude Code 与 Codex）；Codex 这类卡此前隐藏，改为同样置灰；Web 的卡片按钮用 `IconAction` / `DisabledReason`；三语文案；迁入上游用例 | 已迁移 |
-| `7b657e02` | v4.0.29 | feat(copilot): keep BYOK cards in Copilot's native providers.json | B | | 待迁移 |
-| `9bd9c516` | v4.0.29 | feat(copilot): attribute session usage to the selected BYOK card | B | | 待迁移 |
-| `65720291` | v4.0.29 | feat(copilot): import deep links as providers.json cards | B | | 待迁移 |
-| `8d866cef` | v4.0.29 | feat(copilot): manage BYOK cards with add/remove in the provider list | B | | 待迁移 |
+| `7b657e02` | v4.0.29 | feat(copilot): keep BYOK cards in Copilot's native providers.json | B | B：Copilot CLI 变成混合应用（`is_additive_mode` 含 Copilot）：官方卡只开终端、从不写文件；自带模型卡改为 `{provider, models, reasoningEffort?}`，「添加」写进 `$COPILOT_HOME/providers.json`（或 `COPILOT_PROVIDERS_CONFIG`），只动这张卡自己的条目、整份先按 Copilot 规则校验、事务式写入。`copilot_config.rs` / `copilot_direct.rs` 与上游同源，补丁直接合入（保留 Web 自加的 Copilot 登录账号匹配）；`services/provider/mod.rs` 结构与上游不同，按 Web 写法新增 `list_copilot` / `add_copilot` / `update_copilot` / `save_copilot_provider` / `add_copilot_to_live`，接到列表、当前项（拥有 Copilot 默认模型的那家）、新增、编辑（未添加时可改 id）、删除、加入 / 移出、切换（=添加）各处；`live.rs` 的手动导入改用 `imports_default_config`（Copilot 官方卡仍从 settings.json 导入），不迁上游 `should_import_default_config_on_startup`（Web 没有启动时自动导入）。打开终端：自带模型卡要先添加，启动时 `--model=<卡 id>/<第一个模型>`、清掉全部 `COPILOT_PROVIDER_*` 与 `COPILOT_MODEL`，控制字符的模型名各平台都拒绝（Web 原有的 Windows `" % ^` 拒绝保留）。Web 自有的 Copilot 流式检测改读 `provider` 节点（旧形状先转换，测试模型取第一个模型的 wireModel / id）；凭据提取同上 | 已迁移 |
+| `9bd9c516` | v4.0.29 | feat(copilot): attribute session usage to the selected BYOK card | B | B：Copilot 会话用量跟着 session.start / model_change / resume 里选中的 `<id>/<模型>` 记到对应的自带模型卡（库里有这张卡时），否则仍记 `_copilot_session`；去重键不变。补丁直接合入 | 已迁移 |
+| `65720291` | v4.0.29 | feat(copilot): import deep links as providers.json cards | B | B：Web 的深链在前端解析：Copilot 链接构建成新卡片形状，卡片 id 取名字的 ASCII slug、和库里或 providers.json 里已有的撞了加 `-2`…（导入时查一次列表）；Copilot 算累加式，确认框给「添加到应用」开关（默认开），不再按只能开终端处理；确认框的配置预览认新旧两种形状 | 已迁移 |
+| `8d866cef` | v4.0.29 | feat(copilot): manage BYOK cards with add/remove in the provider list | B | B：前端：`CopilotProviderForm`、`copilotProviderPresets`、新 `copilotConfig.ts` 与 Web 原版同源，直接取上游最终版（toast 改回 Web 的 sonner）；`presentation.ts`、`OpenTerminalDialog` 补丁合入（保留批次 A 的「只能走路由的卡置灰」）；`App`、`ProviderList`、`ProviderCard`、`AddProviderDialog`、`mutations`、`providerCapabilities`、`providerConfigUtils` 按 Web 结构手工接：Kimi 的「添加」泛化到 Copilot、移出 / 复制副本（官方卡随机 id、自带模型卡 `<id>-copy` 且不超过 64 字符）、已添加状态看 `liveConfigManaged`、官方卡分组与默认那家不能移除、自带模型卡没添加时「打开终端」置灰并说明；三语文案按上游 key 合并 | 已迁移 |
 | `83d744b9` | v4.0.29 | fix(claude-account): verify the default credential owner before reading quota | A | A：查 Claude 账号额度前核对默认槽位的凭据确实是这个号（`default_login_is`），对不上就读它自己的账号目录 | 已迁移 |
 | `81fd9c25` | v4.0.29 | test(claude-account): cover which slot the quota is read from | A | A：判断抽成 `resolve_slot`（槽位、凭据存储、账号目录由调用方给），迁入上游四个用例 | 已迁移 |
-| `0d69dd06` | v4.0.29 | feat(copilot): accept bearerToken and keep every model ID in deep links | B | | 待迁移 |
-| `4d68975b` | v4.0.29 | fix(copilot): keep saved cards when providers.json cannot be read | B | | 待迁移 |
-| `cf12f010` | v4.0.29 | fix(copilot): validate output limits and systemMessage before writing a card | B | | 待迁移 |
+| `0d69dd06` | v4.0.29 | feat(copilot): accept bearerToken and keep every model ID in deep links | B | B：链接 config 认原生 `{provider, models}` 与旧 env 形状，`bearerToken` 也算凭据（URL 的 apiKey 优先），原生形状里的其余模型 ID 保留、链接模型排第一，模型 ID 必须是字面量；Copilot 的模型在合并 config 后构建时要求（不在解析阶段要求，模型可来自 config）。迁入上游用例语义 | 已迁移 |
+| `4d68975b` | v4.0.29 | fix(copilot): keep saved cards when providers.json cannot be read | B | B：读不了 providers.json 时列表照旧返回已存的卡（记警告），不当成被移除；补丁直接合入 | 已迁移 |
+| `cf12f010` | v4.0.29 | fix(copilot): validate output limits and systemMessage before writing a card | B | B：写卡片前校验 `maxOutputTokens` 要给 `maxContextWindowTokens` 留出余量、`systemMessage` 形状；前端表单与 copilotConfig 同步（随上游最终版带入）；后端补丁直接合入 | 已迁移 |
 | `5c462269` | v4.0.29 | fix(codex): keep a bare model_catalog_json pointer when the desktop app runs Codex in WSL | A | A：Codex 桌面端开了「在 WSL 中运行 Codex」（`[desktop] runCodexInWindowsSubsystemForLinux`）时目录指针写裸文件名，只在 Windows 宿主上看这个开关；Web 的容器内规则不变；迁入上游用例（非 Windows 那条期望值按 `catalog_pointer_value` 算，容器里也成立） | 已迁移 |
 | `e38a4fd1` | v4.0.29 | fix(codex): pass the official model list through the route for official cards | A | A：官方卡走路由、没有 CC Switch 目录时，Codex 的 `GET /models` 带着 Codex 自己的登录转给官方上游并原样交回（含 304/401），Codex 没要压缩时这边要 gzip 再解开；新增 `codex_models_passthrough`，Web 缺的 `strip_hop_by_ 一并补到 `response_processor`；迁入上游用例 | 已迁移 |
 | `cb187a11` | v4.0.29 | chore(release): v4.0.29 | — | 上游版本号与 whats-new | 不适用 |
@@ -81,3 +81,4 @@
 - 2026-11-11：建立台账。
 - 2026-11-11 批次 C（隐私过滤）：见第 5 节 `32365a54`。验证：Rust 3901 项通过、10 项忽略（新增 30 项隐私过滤用例），`cargo check --bin cc-switch-web` 零警告；前端 270 个文件 2835 项通过，tsc 通过。上游对请求体大小没有单独上限（靠关键词预筛与线性正则，在请求任务里同步执行），Web 照搬。
 - 2026-11-11：批次 A 完成（12 已迁移、1 不适用）。另查出上一轮 `4aa554ad`（Argon 周额度）只迁了 `subscription_agy.rs`，`agy_account/quota.rs` 的测试样本漏了 Argon 一档，本批补上。Windows 验证：Rust 3901 项通过、10 项忽略，`cargo check --bin cc-switch-web` 零警告；前端 269 个文件 2835 项通过；tsc 通过。
+- 2026-11-11：批次 B 完成（9 已迁移）。旧数据升级：库里旧版环境变量形状的自带模型卡在列表时就地转成新形状并写回（`convert_legacy_settings`，标为未添加），点「添加」后写进 providers.json；转换前流式检测、凭据提取、打开终端都兜底转换；官方卡不转换。Windows 验证：Rust 3951 项通过、10 项忽略，`cargo check --bin cc-switch-web` 零警告；前端 270 个文件 2856 项通过；tsc 通过。

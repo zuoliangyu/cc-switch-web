@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import {
   checkLinkValues,
+  hasDynamicReference,
   isAdditiveLinkApp,
   linkApiFormat,
   nativeProtocol,
@@ -30,6 +31,7 @@ import {
   codexConfigTextOf,
   decodeDeepLinkConfig,
   grokConfigTextOf,
+  parseCopilotLinkConfig,
 } from "./parser";
 import {
   GROK_DEFAULT_API_BACKEND,
@@ -70,7 +72,37 @@ const SLUG_ID_APPS = new Set<AppId>([
  * `^[a-z0-9]+(-[a-z0-9]+)*$` 校验，所以只取 ASCII 字母数字片段，后缀换成随机值，
  * 同一毫秒内重复导入也不会撞 ID。
  */
+/** 卡片 id 的长度上限（也是 Copilot `providers.json` 里的供应商名） */
+const COPILOT_CARD_ID_MAX = 64;
+
+/**
+ * Copilot CLI 的卡片 id 就是 `/model` 里 `<id>/<模型>` 的前缀，用户看得见：取名字的 ASCII
+ * slug（`deepseek`），撞了已有的（库里或 providers.json 里）就加 `-2`、`-3`…（上游
+ * copilot_link_provider_id）。
+ */
+export const copilotLinkProviderId = (
+  name: string,
+  taken: ReadonlySet<string> = new Set(),
+) => {
+  const slug =
+    name
+      .split(/[^A-Za-z0-9]+/)
+      .filter(Boolean)
+      .join("-")
+      .toLowerCase()
+      // 给 `-NN` 后缀留位置，整体不超过卡片 id 的上限
+      .slice(0, COPILOT_CARD_ID_MAX - 8)
+      .replace(/-+$/, "") || "provider";
+  if (!taken.has(slug)) return slug;
+  for (let n = 2; n < 1000; n += 1) {
+    const id = `${slug}-${n}`;
+    if (!taken.has(id)) return id;
+  }
+  return `${slug}-${randomSuffix()}`.slice(0, COPILOT_CARD_ID_MAX);
+};
+
 const getProviderId = (app: AppId, name: string) => {
+  if (app === "copilot") return copilotLinkProviderId(name);
   if (!SLUG_ID_APPS.has(app)) return getTimestampId(name);
   const slug = name
     .split(/[^A-Za-z0-9]+/)
@@ -363,6 +395,48 @@ context_window = ${GROK_DEFAULT_CONTEXT_WINDOW}
 };
 
 /**
+ * Copilot CLI 自带模型卡（Copilot 原生 `providers.json` 的形状，上游 build_copilot_settings）：
+ * 接口格式换算成 `provider.type` / `provider.wireApi`；凭据优先 URL 的 apiKey，否则用内嵌
+ * config 的 bearerToken。链接指定的模型排第一，原生形状的 config 里其余模型保留。
+ */
+const buildCopilotSettings = (
+  request: DeepLinkImportRequest,
+  apiFormat: DeepLinkApiFormat | undefined,
+  endpoint: string,
+) => {
+  const model = requiredLinkModel(request);
+  const wire = nativeProtocol("copilot", apiFormat);
+  const payload = decodeDeepLinkConfig(request);
+  const inline = payload ? parseCopilotLinkConfig(payload.value) : null;
+  const apiKey = request.apiKey?.trim();
+  const [credentialKey, credential] = apiKey
+    ? ["apiKey", apiKey]
+    : inline?.bearerToken
+      ? ["bearerToken", inline.bearerToken]
+      : [undefined, undefined];
+  if (!credentialKey || !credential) {
+    throw new Error("Copilot CLI 供应商需要 API Key 或 bearerToken");
+  }
+  if (hasDynamicReference(credential, false)) {
+    throw new Error("链接里的 Copilot CLI 凭据无效");
+  }
+  const models = [
+    model,
+    ...(inline?.native ? inline.models.filter((id) => id !== model) : []),
+  ].map((id) => ({ id }));
+  return {
+    provider: {
+      ...(wire === "anthropic"
+        ? { type: "anthropic" }
+        : { type: "openai", wireApi: wire }),
+      baseUrl: endpoint,
+      [credentialKey]: credential,
+    },
+    models,
+  };
+};
+
+/**
  * 链接的主模型。Pi 系这几家的节点没有模型就选不到任何模型，解析时已要求链接带上；
  * 从 `config` 合并来的请求、直接构造的请求再查一次。
  */
@@ -446,27 +520,8 @@ const buildProviderSettings = (
       };
     case "grokbuild":
       return buildGrokbuildSettings(request);
-    case "copilot": {
-      // Copilot CLI 自带模型的环境变量：接口格式换算成 COPILOT_PROVIDER_TYPE 与
-      // COPILOT_PROVIDER_WIRE_API（上游 build_copilot_settings）；Key 只在打开的终端里传给 copilot
-      const wire = nativeProtocol("copilot", apiFormat);
-      const model = request.model?.trim();
-      return {
-        env: {
-          COPILOT_PROVIDER_BASE_URL: endpoint,
-          ...(request.apiKey
-            ? { COPILOT_PROVIDER_API_KEY: request.apiKey }
-            : {}),
-          ...(wire === "anthropic"
-            ? { COPILOT_PROVIDER_TYPE: "anthropic" }
-            : {
-                COPILOT_PROVIDER_TYPE: "openai",
-                COPILOT_PROVIDER_WIRE_API: wire,
-              }),
-          ...(model ? { COPILOT_MODEL: model } : {}),
-        },
-      };
-    }
+    case "copilot":
+      return buildCopilotSettings(request, apiFormat, endpoint);
     case "opencode":
       return {
         npm: nativeProtocol("opencode", apiFormat),
@@ -601,7 +656,8 @@ const importProvider = async (
   if (!request.app || !request.name) {
     throw new Error("provider deeplink 缺少必要字段");
   }
-  if (!request.apiKey) {
+  // Copilot CLI 也认内嵌 config 里的 bearerToken，构建卡片时再查
+  if (!request.apiKey && request.app !== "copilot") {
     throw new Error("provider deeplink 缺少 API Key");
   }
   if (!getPrimaryEndpoint(request)) {
@@ -609,10 +665,22 @@ const importProvider = async (
   }
   const app = request.app;
   const provider = buildProviderFromRequest(request);
+  if (app === "copilot") {
+    // 列表里已含 providers.json 里的条目：和库里、文件里已有的都不撞
+    const existing = await providersApi.getAll("copilot");
+    provider.id = copilotLinkProviderId(
+      request.name,
+      new Set(Object.keys(existing)),
+    );
+  }
   const providerId = provider.id;
   // omp 先把 Key 当环境变量名查（服务端进程的环境和 `.env`）：此刻就能解析成别的值的，
   // 导入后会把那个值发到链接给的地址
-  if (app === "omp" && (await piApi.isOmpApiKeyReference(request.apiKey))) {
+  if (
+    app === "omp" &&
+    request.apiKey &&
+    (await piApi.isOmpApiKeyReference(request.apiKey))
+  ) {
     throw new Error(
       "链接的 apiKey 会被 omp 当成环境变量名解析成本机的值，不能从链接导入，请手动添加供应商",
     );
@@ -623,10 +691,10 @@ const importProvider = async (
   // 写进应用的配置文件；旧链接没写时照旧写进去。切换式应用开关关闭时只存进列表：`add` 在
   // 还没有当前供应商时会让这家直接生效，所以走不写客户端配置的路径。
   const additive = isAdditiveLinkApp(app);
-  // Antigravity、Copilot CLI 没有「启用」（卡片只用来打开终端），只导入
+  // Antigravity 没有「启用」（卡片只用来打开终端），只导入；Copilot CLI 的自带模型卡是累加式，
+  // 开关决定要不要马上写进 providers.json
   const activate =
     app !== "agy" &&
-    app !== "copilot" &&
     (additive ? (request.enabled ?? true) : (request.enabled ?? false));
 
   if (additive) {

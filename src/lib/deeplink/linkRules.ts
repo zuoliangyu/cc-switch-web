@@ -24,7 +24,10 @@ export const PROVIDER_LINK_APPS: readonly AppId[] = [
   "omp",
 ];
 
-/** 这几家的节点没有模型就选不到任何模型：链接必须带 `model` */
+/**
+ * 这几家的节点没有模型就选不到任何模型：链接必须带 `model`。Copilot CLI 不调上游 /models
+ * 也要模型，但模型可以来自内嵌 config，合并后构建卡片时再查（上游 required_link_model）。
+ */
 export const MODEL_REQUIRED_LINK_APPS: readonly AppId[] = [
   "pi",
   "mcode",
@@ -75,6 +78,8 @@ const ADDITIVE_APPS = new Set<AppId>([
   "kimi",
   "dsh",
   "omp",
+  // Copilot CLI 是混合的：自带模型卡累加式写进 providers.json，官方卡不经链接导入
+  "copilot",
 ]);
 
 export const isAdditiveLinkApp = (app: AppId | undefined): boolean =>
@@ -82,7 +87,7 @@ export const isAdditiveLinkApp = (app: AppId | undefined): boolean =>
 
 /** 卡片只用来打开终端、没有「启用」的应用：链接只导入，忽略 `enabled` */
 export const isLaunchOnlyLinkApp = (app: AppId | undefined): boolean =>
-  app === "agy" || app === "copilot";
+  app === "agy";
 
 const API_FORMAT_VALUES: readonly DeepLinkApiFormat[] = [
   "anthropic",
@@ -125,7 +130,7 @@ const NATIVE_VALUES: Partial<
   },
   gemini: { gemini_native: "gemini_native" },
   agy: { gemini_native: "gemini_native" },
-  // Copilot CLI：Anthropic 只写 COPILOT_PROVIDER_TYPE；OpenAI 两种接口写 COPILOT_PROVIDER_WIRE_API
+  // Copilot CLI：Anthropic 只写 provider.type；OpenAI 两种接口另写 provider.wireApi
   copilot: {
     anthropic: "anthropic",
     openai_chat: "completions",
@@ -262,7 +267,7 @@ export const isOmpKeyReferenceShape = (value: string) =>
  * 值里有没有环境变量或文件引用。`${` 和 OpenCode 的 `{env:` / `{file:` 对所有累加式应用
  * 都拒绝；Pi 还会展开不带花括号的 `$NAME`。
  */
-const hasDynamicReference = (value: string, isPi: boolean) => {
+export const hasDynamicReference = (value: string, isPi: boolean) => {
   if (
     value.includes("${") ||
     value.includes("{env:") ||

@@ -317,6 +317,41 @@ describe("OpenTerminalDialog", () => {
     ).toBe(false);
   });
 
+  // Copilot 自带模型卡以 --model=<卡片 id>/<模型> 启动；官方登录卡跟着 Copilot 自己的登录走
+  it("explains the Copilot BYOK terminal and hides it for the login card", () => {
+    renderDialog(
+      vi.fn(),
+      {
+        id: "relay",
+        name: "Relay",
+        settingsConfig: {
+          provider: { baseUrl: "https://relay.example/v1" },
+          models: [{ id: "m" }],
+        },
+      } as Provider,
+      "copilot",
+    );
+    expect(
+      screen.getByText("provider.openTerminalDialog.isolationBodyCopilot"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the isolation notice for the Copilot login card", () => {
+    renderDialog(
+      vi.fn(),
+      {
+        id: "login",
+        name: "GitHub Copilot",
+        category: "official",
+        settingsConfig: { env: { COPILOT_MODEL: "gpt-5.4" } },
+      } as Provider,
+      "copilot",
+    );
+    expect(
+      screen.queryByText("provider.openTerminalDialog.isolationTitle"),
+    ).not.toBeInTheDocument();
+  });
+
   const codexRelay = {
     id: "kimi",
     name: "Kimi",

@@ -1170,7 +1170,13 @@ export function CodexFormFields({
             onModelNameChange(defaultModel.id);
           }
           if (usableModels.length === 0) {
-            toast.info(t("providerForm.fetchModelsEmpty"));
+            // 后端返回 0 个＝账号本身无可选模型（Copilot Free 通常如此）；
+            // 否则是有模型但都不支持当前上游格式
+            toast.info(
+              models.length === 0
+                ? t("copilot.noPickerModels")
+                : t("copilot.noModelsForApiFormat"),
+            );
           } else if (!canEditCatalog) {
             // 有模型列表时拉取成功会直接打开选择弹窗，不再提示成功。
             toast.success(

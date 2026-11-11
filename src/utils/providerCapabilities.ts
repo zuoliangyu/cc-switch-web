@@ -10,6 +10,7 @@ import {
   isCodexChatWireApi,
 } from "@/utils/providerConfigUtils";
 import { resolveManagedAccountId } from "@/lib/authBinding";
+import { isCopilotOfficialCard } from "@/config/copilotConfig";
 
 export const GROKBUILD_OFFICIAL_PROVIDER_ID = "grokbuild-official";
 export const CODEX_OFFICIAL_PROVIDER_ID = "codex-official";
@@ -122,16 +123,9 @@ export function isOfficialAccount(
   provider: Pick<Provider, "id" | "category" | "meta" | "settingsConfig">,
 ): boolean {
   if (appId === "kimi") return isKimiOfficialAccount(provider);
-  // Copilot CLI：没填自带模型地址的卡就是 Copilot 自己的 GitHub 登录（与后端 copilot_direct 一致）
-  if (appId === "copilot") {
-    const env = (provider.settingsConfig as { env?: Record<string, unknown> })
-      ?.env;
-    const baseUrl = env?.COPILOT_PROVIDER_BASE_URL;
-    return (
-      provider.category === "official" ||
-      !(typeof baseUrl === "string" && baseUrl.trim())
-    );
-  }
+  // Copilot CLI：没有自带模型（provider 节点，旧版环境变量形状也认）的卡用 Copilot 自己的
+  // GitHub 登录（与后端 copilot_direct 一致）
+  if (appId === "copilot") return isCopilotOfficialCard(provider);
   return (
     provider.category === "official" ||
     resolveCodexOfficialIdentity(appId, provider) !== null

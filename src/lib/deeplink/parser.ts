@@ -17,6 +17,7 @@ import {
   MODEL_REQUIRED_LINK_APPS,
   checkApiFormat,
   checkLinkValues,
+  hasDynamicReference,
 } from "./linkRules";
 import {
   codexLinkConfigText,
@@ -291,26 +292,83 @@ const mergeGeminiConfig = (
   }
 };
 
+/** Copilot CLI 链接 config 里能导入的部分：字面量的地址、Key / bearerToken 和模型 ID */
+export interface CopilotLinkConfig {
+  endpoint?: string;
+  apiKey?: string;
+  bearerToken?: string;
+  models: string[];
+  /** 原生 `providers.json` 形状（`{ provider, models }`），而不是旧版环境变量形状 */
+  native: boolean;
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
 /**
- * Copilot CLI 的 config：`{ env: {...} }` 或扁平的 `COPILOT_*` 键；只取地址、Key、模型，其余
- * 环境变量不从链接导入。URL 参数优先（上游 merge_copilot_config）。
+ * 解析 Copilot CLI 链接的 config（上游 CopilotLinkConfig）：原生 `{ provider, models }`，
+ * 或旧版 `{ env: {...} }` / 扁平的 `COPILOT_*` 键。只取字面量的地址、凭据和模型 ID，
+ * 其余字段不从链接导入。
+ */
+export const parseCopilotLinkConfig = (
+  config: Record<string, unknown>,
+): CopilotLinkConfig => {
+  const native = config.provider !== undefined;
+  const node = native
+    ? config.provider
+    : config.env !== undefined
+      ? config.env
+      : config;
+  if (!isPlainObject(node)) {
+    throw new Error("Copilot CLI 的供应商配置必须是对象");
+  }
+  const get = (field: string, legacy: string) => {
+    const value = node[native ? field : legacy];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  const models: string[] = [];
+  if (native) {
+    if (config.models !== undefined) {
+      if (!Array.isArray(config.models)) {
+        throw new Error("Copilot CLI 的 models 必须是数组");
+      }
+      for (const entry of config.models) {
+        const raw = isPlainObject(entry) ? entry.id : undefined;
+        const id = typeof raw === "string" ? raw.trim() : "";
+        if (!id || hasDynamicReference(id, false)) {
+          throw new Error("Copilot CLI 的每个模型都要有字面量的模型 ID");
+        }
+        if (!models.includes(id)) models.push(id);
+      }
+    }
+  } else {
+    const model = get("id", "COPILOT_MODEL");
+    if (model) models.push(model);
+  }
+  return {
+    endpoint: get("baseUrl", "COPILOT_PROVIDER_BASE_URL"),
+    apiKey: get("apiKey", "COPILOT_PROVIDER_API_KEY"),
+    bearerToken: get("bearerToken", "COPILOT_PROVIDER_BEARER_TOKEN"),
+    models,
+    native,
+  };
+};
+
+/**
+ * Copilot CLI 的 config 合进请求，URL 参数优先（上游 merge_copilot_config）。
+ * URL 的 apiKey 覆盖内嵌的任一种凭据；否则 Copilot 优先 bearerToken，它留在内嵌 config 里
+ * 由构建时取用，这里不把 apiKey 填进来。
  */
 const mergeCopilotConfig = (
   request: DeepLinkImportRequest,
   config: Record<string, unknown>,
 ) => {
-  const env = (
-    config.env && typeof config.env === "object" && !Array.isArray(config.env)
-      ? config.env
-      : config
-  ) as Record<string, unknown>;
-  const get = (key: string) => {
-    const value = env[key];
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
-  };
-  request.apiKey ||= get("COPILOT_PROVIDER_API_KEY");
-  request.endpoint ||= get("COPILOT_PROVIDER_BASE_URL");
-  request.model ||= get("COPILOT_MODEL");
+  const inline = parseCopilotLinkConfig(config);
+  if (!request.apiKey && !inline.bearerToken) {
+    request.apiKey = inline.apiKey;
+  }
+  request.endpoint ||= inline.endpoint;
+  request.model ||= inline.models[0];
 };
 
 /** agy 的 config：`{ env, config }` 或直接是 env；模型优先 URL，其次 config.model.name，再 GEMINI_MODEL */

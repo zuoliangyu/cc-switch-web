@@ -233,7 +233,7 @@ impl StreamCheckService {
         }
 
         // GitHub Copilot CLI：官方卡走 Copilot 自己的 GitHub 登录，没有可检测的端点（上游同样
-        // 拒绝）；自带模型卡按 `COPILOT_PROVIDER_*` 的协议直接检测那个地址。
+        // 拒绝）；自带模型卡按 `provider` 节点的协议直接检测那个地址。
         if matches!(app_type, AppType::Copilot) {
             if crate::services::provider::copilot_direct::is_official(provider) {
                 return Err(AppError::Message(
@@ -1059,9 +1059,9 @@ impl StreamCheckService {
             .unwrap_or(false)
     }
 
-    /// Copilot CLI 自带模型卡：`COPILOT_PROVIDER_TYPE` / `COPILOT_PROVIDER_WIRE_API` 决定协议，
-    /// `COPILOT_PROVIDER_HEADERS`（每行 `名称: 值`，或字面量 `\n` 分隔）作附加请求头。
-    /// Azure OpenAI 的地址按部署名和 api-version 拼，这里不做检测。
+    /// Copilot CLI 自带模型卡的 `provider` 节点（旧版环境变量形状先转换）：`type` /
+    /// `wireApi` 决定协议，`headers` 作附加请求头。Azure OpenAI 的地址按部署名和
+    /// api-version 拼，这里不做检测。
     async fn check_copilot_stream(
         client: &Client,
         provider: &Provider,
@@ -1069,25 +1069,30 @@ impl StreamCheckService {
         test_prompt: &str,
         timeout: std::time::Duration,
     ) -> Result<(u16, String), AppError> {
-        let env = provider.settings_config.get("env");
+        let card = Self::copilot_card(provider);
+        let node = card.get("provider");
         let get = |key: &str| {
-            env.and_then(|env| env.get(key))
+            node.and_then(|node| node.get(key))
                 .and_then(|value| value.as_str())
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
         };
-        let base_url = get(crate::copilot_config::BASE_URL_ENV)
-            .ok_or_else(|| AppError::Message("COPILOT_PROVIDER_BASE_URL is empty".to_string()))?
+        let base_url = get("baseUrl")
+            .ok_or_else(|| {
+                AppError::Message(
+                    "The bring-your-own-model endpoint (provider.baseUrl) is empty".to_string(),
+                )
+            })?
             .to_string();
-        let api_key = get(crate::copilot_config::API_KEY_ENV)
-            .or_else(|| get(crate::copilot_config::BEARER_TOKEN_ENV))
+        let api_key = get("apiKey")
+            .or_else(|| get("bearerToken"))
             .unwrap_or_default()
             .to_string();
-        let headers = Self::copilot_headers(get(crate::copilot_config::HEADERS_ENV));
+        let headers = Self::copilot_headers(node.and_then(|node| node.get("headers")));
         let extra_headers = (!headers.is_empty()).then_some(&headers);
         let (format, strategy) = match (
-            get(crate::copilot_config::TYPE_ENV).unwrap_or("openai"),
-            get(crate::copilot_config::WIRE_API_ENV).unwrap_or("completions"),
+            get("type").unwrap_or("openai"),
+            get("wireApi").unwrap_or("completions"),
         ) {
             ("anthropic", _) => ("anthropic", AuthStrategy::ClaudeAuth),
             ("azure", _) => {
@@ -1113,21 +1118,39 @@ impl StreamCheckService {
         .await
     }
 
-    fn copilot_headers(text: Option<&str>) -> serde_json::Map<String, serde_json::Value> {
-        let mut headers = serde_json::Map::new();
-        for line in text
-            .unwrap_or_default()
-            .split(['\n', '\r'])
-            .flat_map(|line| line.split("\\n"))
-        {
-            if let Some((name, value)) = line.split_once(':') {
-                let name = name.trim();
-                if !name.is_empty() {
-                    headers.insert(name.to_string(), serde_json::json!(value.trim()));
-                }
-            }
-        }
+    /// 自带模型卡的设置：新形状 `{provider, models}` 原样返回，旧版环境变量形状先转换。
+    fn copilot_card(provider: &Provider) -> serde_json::Value {
+        crate::copilot_config::convert_legacy_settings(&provider.settings_config)
+            .unwrap_or_else(|| provider.settings_config.clone())
+    }
+
+    /// 发往上游的模型名：第一个模型的 `wireModel`，没有时用它的 `id`。
+    fn copilot_test_model(provider: &Provider) -> Option<String> {
+        let card = Self::copilot_card(provider);
+        let model = card.pointer("/models/0")?;
+        ["wireModel", "id"].into_iter().find_map(|key| {
+            model
+                .get(key)
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+    }
+
+    fn copilot_headers(
+        headers: Option<&serde_json::Value>,
+    ) -> serde_json::Map<String, serde_json::Value> {
         headers
+            .and_then(|headers| headers.as_object())
+            .map(|headers| {
+                headers
+                    .iter()
+                    .filter(|(name, value)| !name.trim().is_empty() && value.is_string())
+                    .map(|(name, value)| (name.trim().to_string(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn extract_openclaw_headers(
@@ -1467,10 +1490,9 @@ impl StreamCheckService {
             .unwrap_or_else(|| config.codex_model.clone()),
             AppType::Gemini | AppType::Agy => Self::extract_env_model(provider, "GEMINI_MODEL")
                 .unwrap_or_else(|| config.gemini_model.clone()),
-            AppType::Copilot => Self::extract_env_model(provider, "COPILOT_MODEL")
-                .or_else(|| Self::extract_env_model(provider, "COPILOT_PROVIDER_MODEL_ID"))
-                .or_else(|| Self::extract_env_model(provider, "COPILOT_PROVIDER_WIRE_MODEL"))
-                .unwrap_or_else(|| config.codex_model.clone()),
+            AppType::Copilot => {
+                Self::copilot_test_model(provider).unwrap_or_else(|| config.codex_model.clone())
+            }
             AppType::OpenCode => {
                 // OpenCode uses models map in settings_config
                 // Try to extract first model from the models object
@@ -1833,15 +1855,30 @@ mod tests {
                 .unwrap_err();
         assert!(error.to_string().contains("Official providers"), "{error}");
 
-        let custom = make_provider(serde_json::json!({ "env": {
-            "COPILOT_PROVIDER_BASE_URL": "https://relay.example/v1",
-            "COPILOT_PROVIDER_MODEL_ID": "relay-model"
-        } }));
+        // 新形状：第一个模型的 wireModel（没有时用 id）就是发往上游的模型
+        let custom = make_provider(serde_json::json!({
+            "provider": { "baseUrl": "https://relay.example/v1" },
+            "models": [{ "id": "relay", "wireModel": "relay-model" }, { "id": "other" }]
+        }));
         assert_eq!(
             StreamCheckService::resolve_test_model(&AppType::Copilot, &custom, &config),
             "relay-model"
         );
-        let headers = StreamCheckService::copilot_headers(Some("X-A: 1\\nX-B: two words\n\nbad"));
+        // 旧版环境变量形状的卡先转换再取
+        let legacy = make_provider(serde_json::json!({ "env": {
+            "COPILOT_PROVIDER_BASE_URL": "https://relay.example/v1",
+            "COPILOT_PROVIDER_MODEL_ID": "relay-model"
+        } }));
+        assert_eq!(
+            StreamCheckService::resolve_test_model(&AppType::Copilot, &legacy, &config),
+            "relay-model"
+        );
+        let headers = StreamCheckService::copilot_headers(Some(&serde_json::json!({
+            "X-A": "1",
+            "X-B": "two words",
+            " ": "blank name",
+            "X-C": 3
+        })));
         assert_eq!(headers.len(), 2);
         assert_eq!(headers["X-A"], "1");
         assert_eq!(headers["X-B"], "two words");

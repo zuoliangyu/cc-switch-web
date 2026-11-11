@@ -19,12 +19,18 @@ struct CopilotHome {
 impl CopilotHome {
     fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
-        let previous_env = ["CC_SWITCH_TEST_HOME", "COPILOT_HOME"]
-            .into_iter()
-            .map(|key| (key, std::env::var_os(key)))
-            .collect();
+        let previous_env = [
+            "CC_SWITCH_TEST_HOME",
+            "COPILOT_HOME",
+            "COPILOT_PROVIDERS_CONFIG",
+        ]
+        .into_iter()
+        .map(|key| (key, std::env::var_os(key)))
+        .collect();
         std::env::set_var("CC_SWITCH_TEST_HOME", directory.path().join("home"));
         std::env::set_var("COPILOT_HOME", directory.path().join("copilot"));
+        // providers.json 只在没有这个覆盖时跟着 COPILOT_HOME 走。
+        std::env::remove_var("COPILOT_PROVIDERS_CONFIG");
         fs::create_dir_all(directory.path().join("copilot")).unwrap();
         Self {
             directory,
@@ -51,12 +57,11 @@ fn byok(id: &str) -> Provider {
     Provider::with_id(
         id.into(),
         id.into(),
-        json!({"env":{
-            "COPILOT_PROVIDER_BASE_URL":"https://example.com/v1",
-            "COPILOT_PROVIDER_API_KEY":"fixture-key",
-            "COPILOT_PROVIDER_TYPE":"openai",
-            "COPILOT_MODEL":"gpt-5.4"
-        }}),
+        json!({
+            "provider": {"type":"openai","baseUrl":"https://example.com/v1","apiKey":"fixture-key"},
+            "models": [{"id":"gpt-5.4"}],
+            "reasoningEffort": "high"
+        }),
         None,
     )
 }
@@ -79,41 +84,113 @@ fn any_file_contains(dir: &std::path::Path, needle: &str) -> Option<std::path::P
     None
 }
 
+/// 上游 7b657e02：自带模型卡写进 providers.json（Copilot 自己的条目原样保留），官方卡只存行。
 #[test]
 #[serial]
-fn copilot_cards_launch_terminals_and_never_write_native_settings() {
+fn copilot_byok_cards_live_in_providers_json_and_official_cards_never_write() {
     let home = CopilotHome::new();
     let state = &home.state;
     let original = "{\n  \"model\": \"claude-sonnet-4.6\",\n  \"theme\": \"dark\"\n}";
     fs::write(home.path("settings.json"), original).unwrap();
+    // Copilot 自己写进去的条目（如 Foundry Local）在 CC Switch 写入后保留。
+    let foreign = json!({
+        "providers": [{"name":"foundry","baseUrl":"http://localhost:5272/v1"}],
+        "models": [{"id":"phi","provider":"foundry"}]
+    });
+    fs::write(home.path("providers.json"), foreign.to_string()).unwrap();
 
     assert!(ProviderService::add(state, AppType::Copilot, byok("relay"), true).unwrap());
-    let error = ProviderService::switch(state, AppType::Copilot, "relay").unwrap_err();
-    assert!(error.to_string().contains("Open terminal"), "{error}");
+    let written: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.path("providers.json")).unwrap()).unwrap();
+    assert_eq!(written["providers"][0], foreign["providers"][0]);
+    assert_eq!(written["providers"][1]["name"], "relay");
+    assert_eq!(
+        written["models"][1],
+        json!({"id":"gpt-5.4","provider":"relay"})
+    );
+    assert!(!written.to_string().contains("reasoningEffort"));
+    // 列表从文件读回：已添加
+    let listed = ProviderService::list(state, AppType::Copilot).unwrap();
+    assert_eq!(
+        ProviderService::provider_live_config_managed(&listed["relay"]),
+        Some(true)
+    );
+    assert!(listed.contains_key("foundry"));
 
-    // 保存前按 Copilot CLI 的环境变量约定校验，不合格的不进库。
+    // 保存前先校验卡片，不合格的不进库也不写文件。
     let mut missing_model = byok("broken");
-    missing_model.settings_config["env"]
-        .as_object_mut()
-        .unwrap()
-        .remove("COPILOT_MODEL");
+    missing_model.settings_config["models"] = json!([]);
     assert!(ProviderService::add(state, AppType::Copilot, missing_model, true).is_err());
-    assert!(state
-        .db
-        .get_provider_by_id("broken", "copilot")
+    assert!(ProviderService::list(state, AppType::Copilot)
         .unwrap()
+        .get("broken")
         .is_none());
 
+    // 官方卡只用来打开终端：存行、不写文件、不能「添加」。
+    let mut official = Provider::with_id(
+        "login".into(),
+        "GitHub Copilot".into(),
+        json!({"env":{"COPILOT_MODEL":"gpt-5-mini"}}),
+        None,
+    );
+    official.category = Some("official".into());
+    assert!(ProviderService::add(state, AppType::Copilot, official, true).unwrap());
+    let error = ProviderService::switch(state, AppType::Copilot, "login").unwrap_err();
+    assert!(error.to_string().contains("Open terminal"), "{error}");
+
     ProviderService::delete(state, AppType::Copilot, "relay").unwrap();
+    let after: serde_json::Value =
+        serde_json::from_slice(&fs::read(home.path("providers.json")).unwrap()).unwrap();
+    assert_eq!(after, foreign);
     assert_eq!(
         fs::read_to_string(home.path("settings.json")).unwrap(),
         original
     );
-    // Key 不落到 Copilot 目录，也不落到 CC Switch 自己的数据目录（数据库在内存里）。
+    // 删掉之后 Key 不留在 Copilot 目录，也不落到 CC Switch 自己的数据目录（数据库在内存里）。
     assert_eq!(
         any_file_contains(home.directory.path(), "fixture-key"),
         None
     );
+}
+
+/// 旧版（环境变量形状）的自带模型卡在列表里就地转成新形状，未添加。
+#[test]
+#[serial]
+fn copilot_legacy_env_cards_are_converted_on_list() {
+    let home = CopilotHome::new();
+    let state = &home.state;
+    let legacy = Provider::with_id(
+        "old".into(),
+        "Old relay".into(),
+        json!({"env":{
+            "COPILOT_PROVIDER_BASE_URL":"https://example.com/v1",
+            "COPILOT_PROVIDER_API_KEY":"fixture-key",
+            "COPILOT_PROVIDER_WIRE_API":"responses",
+            "COPILOT_MODEL":"gpt-5.4"
+        },"reasoningEffort":"low"}),
+        None,
+    );
+    state.db.save_provider("copilot", &legacy).unwrap();
+    let listed = ProviderService::list(state, AppType::Copilot).unwrap();
+    let card = &listed["old"].settings_config;
+    assert_eq!(card["provider"]["baseUrl"], "https://example.com/v1");
+    assert_eq!(card["provider"]["wireApi"], "responses");
+    assert_eq!(card["models"], json!([{"id":"gpt-5.4"}]));
+    assert_eq!(card["reasoningEffort"], "low");
+    assert!(card.get("env").is_none());
+    assert_eq!(
+        ProviderService::provider_live_config_managed(&listed["old"]),
+        Some(false)
+    );
+    // 转换结果写回库里，之后「添加」就写进 providers.json。
+    let saved = state
+        .db
+        .get_provider_by_id("old", "copilot")
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.settings_config, *card);
+    ProviderService::add_to_live_config(state, AppType::Copilot, "old").unwrap();
+    assert!(home.path("providers.json").exists());
 }
 
 #[test]

@@ -191,7 +191,23 @@ export const APP_ICON_MAP: Record<AppId, AppConfig> = {
   },
 };
 
-export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = { claude: true, "claude-desktop": true, codex: true, gemini: true, grokbuild: true, opencode: true, openclaw: true, hermes: true, pi: true, mcode: true, kimi: true, dsh: true, agy: true, omp: true, copilot: true };
+export const DEFAULT_VISIBLE_APPS: import("@/types").VisibleApps = {
+  claude: true,
+  "claude-desktop": true,
+  codex: true,
+  gemini: true,
+  grokbuild: true,
+  opencode: true,
+  openclaw: true,
+  hermes: true,
+  pi: true,
+  mcode: true,
+  kimi: true,
+  dsh: true,
+  agy: true,
+  omp: true,
+  copilot: true,
+};
 
 /**
  * 应用页和侧栏的应用顺序：先按用户拖出来的顺序（`settings.appOrder`，不认识的 ID 忽略），

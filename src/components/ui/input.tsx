@@ -22,4 +22,5 @@ Input.displayName = "Input";
 
 export { Input };
 
-export const fieldClass = "rounded-md border border-border bg-background text-foreground px-3 py-1 text-sm focus:ring-2 focus:ring-ring";
+export const fieldClass =
+  "rounded-md border border-border bg-background text-foreground px-3 py-1 text-sm focus:ring-2 focus:ring-ring";

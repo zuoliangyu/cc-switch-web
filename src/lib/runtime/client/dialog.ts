@@ -12,4 +12,3 @@ export async function message(
     window.alert(`${title}${text}`);
   }
 }
-

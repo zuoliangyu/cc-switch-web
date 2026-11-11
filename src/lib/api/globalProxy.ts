@@ -83,4 +83,3 @@ export async function getUpstreamProxyStatus(): Promise<UpstreamProxyStatus> {
 export async function scanLocalProxies(): Promise<DetectedProxy[]> {
   return invoke<DetectedProxy[]>("scan_local_proxies");
 }
-

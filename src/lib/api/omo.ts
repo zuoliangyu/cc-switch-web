@@ -15,4 +15,3 @@ export const omoSlimApi = {
     invoke("get_current_omo_slim_provider_id"),
   disableCurrent: (): Promise<void> => invoke("disable_current_omo_slim"),
 };
-

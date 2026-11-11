@@ -149,4 +149,3 @@ export async function copilotGetUsageForAccount(
     accountId,
   });
 }
-

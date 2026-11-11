@@ -79,11 +79,7 @@ export function SessionDeleteDialog({
       }}
     >
       {list.length > 0 && (
-        <DialogContent
-          role="alertdialog"
-
-          className={dialogClass}
-        >
+        <DialogContent role="alertdialog" className={dialogClass}>
           <div className="flex flex-col gap-1.5">
             <DialogTitle className="text-title text-foreground [overflow-wrap:anywhere]">
               {single
@@ -111,11 +107,7 @@ export function SessionDeleteDialog({
                 <li key={app} className="flex items-start gap-2.5 text-xs">
                   <span className="flex h-[18px] w-4 shrink-0 items-center">
                     {isSessionAppId(app) && (
-                      <AppGlyph
-                        app={app}
-                        size={14}
-                        badgeClassName="bg-muted"
-                      />
+                      <AppGlyph app={app} size={14} badgeClassName="bg-muted" />
                     )}
                   </span>
                   <span>
@@ -128,7 +120,9 @@ export function SessionDeleteDialog({
                             count: perApp.get(app),
                           })}
                     </span>
-                    <span className="text-muted-foreground">：{consequence(app)}</span>
+                    <span className="text-muted-foreground">
+                      ：{consequence(app)}
+                    </span>
                   </span>
                 </li>
               );
@@ -181,7 +175,6 @@ export function SessionSourcesDialog({
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       {open && (
         <DialogContent
-
           className={`${dialogClass} max-w-[520px]`}
           onInteractOutside={() => onClose()}
         >

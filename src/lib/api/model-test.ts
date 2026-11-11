@@ -64,4 +64,3 @@ export async function saveStreamCheckConfig(
 ): Promise<void> {
   return invoke("save_stream_check_config", { config });
 }
-

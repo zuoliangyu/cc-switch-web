@@ -114,7 +114,9 @@ export function findManagedAccountUsers(
       }
     }
   }
-  return users.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+  return users.sort((a, b) =>
+    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+  );
 }
 
 /** 按应用分组（保持 MANAGED_ACCOUNT_APPS 的顺序），确认框里一行一个应用 */
@@ -123,6 +125,9 @@ export function groupUsersByApp(
 ): { appId: AppId; names: string[] }[] {
   return MANAGED_ACCOUNT_APPS.map((appId) => ({
     appId,
-    names: users.filter((user) => user.appId === appId).map((u) => u.name).sort((a,b) => a.localeCompare(b, "en", { sensitivity: "base" })),
+    names: users
+      .filter((user) => user.appId === appId)
+      .map((u) => u.name)
+      .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })),
   })).filter((group) => group.names.length > 0);
 }

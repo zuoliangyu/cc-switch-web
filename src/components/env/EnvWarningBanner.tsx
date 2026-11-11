@@ -45,7 +45,8 @@ export function EnvWarningBanner({
       return;
     }
 
-    const updateHeight = () => onHeightChange(target.getBoundingClientRect().height);
+    const updateHeight = () =>
+      onHeightChange(target.getBoundingClientRect().height);
     updateHeight();
 
     const observer = new ResizeObserver(updateHeight);
@@ -72,7 +73,11 @@ export function EnvWarningBanner({
       return;
     }
     setSelectedConflicts(
-      new Set(conflicts.map((conflict) => `${conflict.varName}:${conflict.sourcePath}`)),
+      new Set(
+        conflicts.map(
+          (conflict) => `${conflict.varName}:${conflict.sourcePath}`,
+        ),
+      ),
     );
   };
 
@@ -215,7 +220,8 @@ export function EnvWarningBanner({
                               {t("env.field.value")}: {conflict.varValue}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {t("env.field.source")}: {getSourceDescription(conflict)}
+                              {t("env.field.source")}:{" "}
+                              {getSourceDescription(conflict)}
                             </p>
                           </div>
                         </div>
@@ -264,14 +270,19 @@ export function EnvWarningBanner({
               {t("env.confirm.title")}
             </DialogTitle>
             <DialogDescription className="space-y-2">
-              <p>{t("env.confirm.message", { count: selectedConflicts.size })}</p>
+              <p>
+                {t("env.confirm.message", { count: selectedConflicts.size })}
+              </p>
               <p className="text-sm text-muted-foreground">
                 {t("env.confirm.backupNotice")}
               </p>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+            >
               {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleDelete}>

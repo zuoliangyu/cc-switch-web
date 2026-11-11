@@ -151,4 +151,10 @@ export function useToggleHermesMemoryEnabled() {
   });
 }
 
-export function useHermesConfigDir(enabled = true) { return useQuery({ queryKey: ["hermesConfigDir"], queryFn: () => settingsApi.getConfigDir("hermes"), enabled }); }
+export function useHermesConfigDir(enabled = true) {
+  return useQuery({
+    queryKey: ["hermesConfigDir"],
+    queryFn: () => settingsApi.getConfigDir("hermes"),
+    enabled,
+  });
+}

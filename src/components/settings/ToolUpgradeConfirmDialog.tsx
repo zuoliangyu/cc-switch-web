@@ -50,7 +50,6 @@ export function ToolUpgradeConfirmDialog({
     >
       <DialogContent
         className="max-w-md"
-
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           titleRef.current?.focus();

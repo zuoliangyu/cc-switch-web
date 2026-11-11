@@ -147,7 +147,8 @@ export function HermesPlaceholderPanel({
                   defaultValue: "流程保护",
                 })}
                 description={t("hermes.placeholderStatus.flowDescription", {
-                  defaultValue: "当前会停在占位页，避免误走现有 Provider 链路。",
+                  defaultValue:
+                    "当前会停在占位页，避免误走现有 Provider 链路。",
                 })}
               />
               <StatusCard
@@ -156,7 +157,8 @@ export function HermesPlaceholderPanel({
                   defaultValue: "后续接入",
                 })}
                 description={t("hermes.placeholderStatus.nextDescription", {
-                  defaultValue: "下一步将继续补 Hermes Provider、Memory 和 Session。",
+                  defaultValue:
+                    "下一步将继续补 Hermes Provider、Memory 和 Session。",
                 })}
               />
             </div>
@@ -181,7 +183,8 @@ export function HermesPlaceholderPanel({
               </li>
               <li>
                 {t("hermes.placeholderChecklist.guard", {
-                  defaultValue: "切到 Hermes 时不会误触发未完成的 Provider 操作。",
+                  defaultValue:
+                    "切到 Hermes 时不会误触发未完成的 Provider 操作。",
                 })}
               </li>
             </ul>
@@ -214,13 +217,7 @@ function StatusCard({
   );
 }
 
-function SummaryItem({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string;
-}) {
+function SummaryItem({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-2xl border border-border-default bg-background/75 p-4">
       <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">

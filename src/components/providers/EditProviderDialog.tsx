@@ -54,7 +54,10 @@ export function EditProviderDialog({
   const { t } = useTranslation();
   // 表单用了聚合的简化布局：页头标「聚合模式」
   const [stackLayout, setStackLayout] = useState(false);
-  const editorConflict = useProviderEditorConflict(open, `${appId}:${provider?.id ?? ""}`);
+  const editorConflict = useProviderEditorConflict(
+    open,
+    `${appId}:${provider?.id ?? ""}`,
+  );
   const providerEditor = useProviderEditorView(
     open &&
       (appId === "claude" ||
@@ -381,7 +384,6 @@ export function EditProviderDialog({
             />
           </>
         )}
-
       </FullScreenPanel>
       {/* 放在表单面板外面：授权中心里的开关、下拉（含渲染到 body 的选项）不沿组件树冒泡到
           表单的未保存登记；两个面板都渲染到 body，后打开的在上，Esc 按打开顺序先关它 */}

@@ -157,12 +157,20 @@ describe("SessionManagerPage", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(sessionsApi, "streamMessages").mockImplementation(async (providerId, sourcePath, onChunk) => {
-      const messages = await sessionsApi.getMessages(providerId, sourcePath);
-      onChunk({type: "header", total: messages.length, turns: [], cached: false, parseMs: 0});
-      onChunk({type: "messages", start: 0, messages});
-      onChunk({type: "done", payloadBytes: 0});
-    });
+    vi.spyOn(sessionsApi, "streamMessages").mockImplementation(
+      async (providerId, sourcePath, onChunk) => {
+        const messages = await sessionsApi.getMessages(providerId, sourcePath);
+        onChunk({
+          type: "header",
+          total: messages.length,
+          turns: [],
+          cached: false,
+          parseMs: 0,
+        });
+        onChunk({ type: "messages", start: 0, messages });
+        onChunk({ type: "done", payloadBytes: 0 });
+      },
+    );
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
     platform.mac = false;
@@ -499,7 +507,9 @@ describe("SessionManagerPage", () => {
       await screen.findByText("没有标题、目录或首末消息匹配“const a”的会话"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("开启后会在 CC Switch 服务的数据目录里为消息正文建立索引"),
+      screen.getByText(
+        "开启后会在 CC Switch 服务的数据目录里为消息正文建立索引",
+      ),
     ).toBeInTheDocument();
     // 没开启前不读正文、不建索引
     expect(sync).not.toHaveBeenCalled();
@@ -610,7 +620,9 @@ describe("SessionManagerPage", () => {
       screen.queryByRole("button", { name: "搜索消息正文" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("开启后会在 CC Switch 服务的数据目录里为消息正文建立索引"),
+      screen.queryByText(
+        "开启后会在 CC Switch 服务的数据目录里为消息正文建立索引",
+      ),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "清除搜索" }));
     expect(await screen.findByText("Alpha Session")).toBeInTheDocument();

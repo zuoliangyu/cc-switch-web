@@ -804,7 +804,9 @@ function ToolRow({
       {t("appsPage.notRunnable")}
     </span>
   ) : (
-    <span className="text-xs text-muted-foreground">{t("common.notInstalled")}</span>
+    <span className="text-xs text-muted-foreground">
+      {t("common.notInstalled")}
+    </span>
   );
 
   const actionButton = action ? (

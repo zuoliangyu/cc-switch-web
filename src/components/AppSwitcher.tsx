@@ -150,7 +150,7 @@ export function AppSwitcher({
               <DropdownMenuRadioItem key={app} value={app}>
                 <ProviderIcon
                   className={activeApp !== app ? "grayscale opacity-60" : ""}
-              icon={appIconName[app]}
+                  icon={appIconName[app]}
                   name={appDisplayName[app]}
                   size={iconSize}
                 />
@@ -217,7 +217,7 @@ export function AppSwitcher({
                 >
                   <ProviderIcon
                     className={activeApp !== app ? "grayscale opacity-60" : ""}
-              icon={appIconName[app]}
+                    icon={appIconName[app]}
                     name={appDisplayName[app]}
                     size={iconSize}
                   />

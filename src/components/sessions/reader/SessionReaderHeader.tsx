@@ -167,7 +167,10 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
               className={sessionMenuItemClass}
               onSelect={onLaunch}
             >
-              <Play className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+              <Play
+                className="h-3.5 w-3.5 text-muted-foreground"
+                strokeWidth={1.5}
+              />
               {launchLabel}
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -175,7 +178,10 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
               title={command}
               onSelect={copyResume}
             >
-              <Copy className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+              <Copy
+                className="h-3.5 w-3.5 text-muted-foreground"
+                strokeWidth={1.5}
+              />
               <span className="shrink-0">
                 {t("sessionManager.copyResumeCommand", {
                   defaultValue: "复制恢复命令",
@@ -200,7 +206,10 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
                   )
                 }
               >
-                <Folder className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+                <Folder
+                  className="h-3.5 w-3.5 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
                 {t("sessionManager.copyCdResume", {
                   defaultValue: "复制「进入目录并恢复」命令",
                 })}
@@ -727,7 +736,10 @@ export const SessionReaderToolbar = memo(function SessionReaderToolbar({
                 })}
                 autoComplete="off"
                 spellCheck={false}
-                className={cn(fieldClass, "h-7 w-full min-w-0 pe-2 ps-7 text-xs")}
+                className={cn(
+                  fieldClass,
+                  "h-7 w-full min-w-0 pe-2 ps-7 text-xs",
+                )}
               />
             </div>
             <span
@@ -818,7 +830,10 @@ export const SessionReaderToolbar = memo(function SessionReaderToolbar({
       </div>
 
       {noResumeReason && (
-        <p id="session-resume-note" className="m-0 mb-1 text-xs text-muted-foreground">
+        <p
+          id="session-resume-note"
+          className="m-0 mb-1 text-xs text-muted-foreground"
+        >
           {noResumeReason}
         </p>
       )}

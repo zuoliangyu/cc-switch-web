@@ -11,7 +11,10 @@ import {
 describe("deeplink 安全边界", () => {
   it("解码无填充的 URL-safe Base64", () => {
     const standard = encodeBase64Utf8("ÿÿ");
-    const urlSafe = standard.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const urlSafe = standard
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
     expect(urlSafe).not.toBe(standard);
     expect(decodeBase64Utf8(urlSafe)).toBe("ÿÿ");
   });

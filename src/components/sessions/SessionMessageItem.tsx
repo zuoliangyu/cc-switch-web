@@ -65,7 +65,7 @@ export const SessionMessageItem = memo(function SessionMessageItem({
             variant="ghost"
             size="icon"
             className="absolute top-2 right-2 size-7 rounded-xl opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-            onClick={() => onCopy((message.content ?? ""))}
+            onClick={() => onCopy(message.content ?? "")}
           >
             <Copy className="size-3" />
           </Button>

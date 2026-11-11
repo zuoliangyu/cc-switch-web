@@ -68,7 +68,9 @@ export const SessionAgentHeader = memo(function SessionAgentHeader({
         </time>
       ) : null}
       {model && (
-        <span className="min-w-0 truncate font-mono text-muted-foreground">· {model}</span>
+        <span className="min-w-0 truncate font-mono text-muted-foreground">
+          · {model}
+        </span>
       )}
     </div>
   );

@@ -4,11 +4,10 @@ import { Input } from "@/components/ui/input";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 
-export interface SearchFieldProps
-  extends Omit<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    "value" | "onChange" | "type"
-  > {
+export interface SearchFieldProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "type"
+> {
   value: string;
   onValueChange: (value: string) => void;
   /** 清除按钮的名字（悬停提示 + aria-label） */

@@ -126,7 +126,9 @@ export function PageTabs<T extends string>({
       {trailing && (
         <>
           <div className="flex-1 max-md:hidden" />
-          <div className="flex h-full max-md:h-8 max-md:ml-auto items-center">{trailing}</div>
+          <div className="flex h-full max-md:h-8 max-md:ml-auto items-center">
+            {trailing}
+          </div>
         </>
       )}
     </div>

@@ -68,7 +68,9 @@ export const THEME_SCHEMES: ThemeSchemeDefinition[] = [
   },
 ];
 
-export function isThemeScheme(value: string | null | undefined): value is ThemeScheme {
+export function isThemeScheme(
+  value: string | null | undefined,
+): value is ThemeScheme {
   if (!value) {
     return false;
   }

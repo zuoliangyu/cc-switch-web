@@ -1,7 +1,9 @@
 import { invoke } from "@/lib/runtime/client/core";
 import type { BackupInfo, EnvConflict } from "@/types/env";
 
-export async function checkEnvConflicts(appType: string): Promise<EnvConflict[]> {
+export async function checkEnvConflicts(
+  appType: string,
+): Promise<EnvConflict[]> {
   return invoke("check_env_conflicts", { app: appType });
 }
 

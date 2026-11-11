@@ -36,4 +36,3 @@ export const promptsApi = {
     return await invoke("get_current_prompt_file_content", { app });
   },
 };
-

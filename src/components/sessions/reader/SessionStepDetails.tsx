@@ -57,10 +57,8 @@ export interface BlockTextProps {
 }
 
 const VARIANT_CLASS = {
-  output:
-    "whitespace-pre rounded-[8px] bg-muted px-3 py-2 font-mono text-xs",
-  params:
-    "whitespace-pre rounded-[8px] bg-muted px-3 py-2 font-mono text-xs",
+  output: "whitespace-pre rounded-[8px] bg-muted px-3 py-2 font-mono text-xs",
+  params: "whitespace-pre rounded-[8px] bg-muted px-3 py-2 font-mono text-xs",
   thinking: "whitespace-pre-wrap break-words text-xs italic",
   /** 注入文本、压缩摘要等长说明 */
   plain: "whitespace-pre-wrap break-words text-xs",
@@ -232,7 +230,9 @@ const Section = ({
   if (!collapsible) {
     return (
       <section className="min-w-0">
-        <h4 className="m-0 mb-1 text-xs font-medium text-muted-foreground">{label}</h4>
+        <h4 className="m-0 mb-1 text-xs font-medium text-muted-foreground">
+          {label}
+        </h4>
         {children}
       </section>
     );
@@ -277,7 +277,9 @@ const DiffFromRef = ({
     );
   }
   if (content.error || !content.text) {
-    return <p className="m-0 text-xs text-muted-foreground">{rt("loadFailed")}</p>;
+    return (
+      <p className="m-0 text-xs text-muted-foreground">{rt("loadFailed")}</p>
+    );
   }
   return (
     <SessionDiff

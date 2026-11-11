@@ -854,21 +854,61 @@ html[data-window-active="false"] .status-heartbeat {
 }
 
 /* Structured session reader accents, independent from the Web primary theme. */
-:root { --agent-claude: #c2613f; --agent-codex: #3f3f46; --agent-gemini: #3367d6; --agent-opencode: #0f766e; --agent-pi: #7c3aed; --agent-generic: hsl(var(--muted-foreground)); }
-.dark { --agent-claude: #e08a6a; --agent-codex: #d4d4d8; --agent-gemini: #8ab4f8; --agent-opencode: #5eead4; --agent-pi: #c4b5fd; }
-.scroll-stable { scrollbar-gutter: stable; }
+:root {
+  --agent-claude: #c2613f;
+  --agent-codex: #3f3f46;
+  --agent-gemini: #3367d6;
+  --agent-opencode: #0f766e;
+  --agent-pi: #7c3aed;
+  --agent-generic: hsl(var(--muted-foreground));
+}
+.dark {
+  --agent-claude: #e08a6a;
+  --agent-codex: #d4d4d8;
+  --agent-gemini: #8ab4f8;
+  --agent-opencode: #5eead4;
+  --agent-pi: #c4b5fd;
+}
+.scroll-stable {
+  scrollbar-gutter: stable;
+}
 
 /* Keep the content width stable when a page starts scrolling. */
-.overflow-y-auto, .scroll-overlay { scrollbar-gutter: stable; }
+.overflow-y-auto,
+.scroll-overlay {
+  scrollbar-gutter: stable;
+}
 
 @media (max-width: 767px) {
-  .resource-toolbar-page { --web-header-height: 112px; }
-  .resource-toolbar-page [data-page-toolbar] { flex-wrap: wrap; gap: 0; }
-  .resource-toolbar-page [data-page-toolbar] > div:first-child { width: 100%; height: 56px; min-width: 0; }
-  .resource-toolbar-page [data-page-toolbar] > div:last-child > div:empty { display: none; }
-  .resource-toolbar-page [data-page-toolbar] > div:last-child { width: 100%; flex: 0 0 100%; height: 48px; overflow-x: auto; }
-  .resource-toolbar-page [data-page-toolbar] > div:last-child > div { margin-left: 0; }
-  .resource-toolbar-page [data-page-toolbar] > div:last-child > div:last-child { min-width: 0; overflow-x: auto; flex-shrink: 1; }
+  .resource-toolbar-page {
+    --web-header-height: 112px;
+  }
+  .resource-toolbar-page [data-page-toolbar] {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+  .resource-toolbar-page [data-page-toolbar] > div:first-child {
+    width: 100%;
+    height: 56px;
+    min-width: 0;
+  }
+  .resource-toolbar-page [data-page-toolbar] > div:last-child > div:empty {
+    display: none;
+  }
+  .resource-toolbar-page [data-page-toolbar] > div:last-child {
+    width: 100%;
+    flex: 0 0 100%;
+    height: 48px;
+    overflow-x: auto;
+  }
+  .resource-toolbar-page [data-page-toolbar] > div:last-child > div {
+    margin-left: 0;
+  }
+  .resource-toolbar-page [data-page-toolbar] > div:last-child > div:last-child {
+    min-width: 0;
+    overflow-x: auto;
+    flex-shrink: 1;
+  }
 }
 
 /*

@@ -136,22 +136,27 @@ export const PathChip = memo(function PathChip({
         onClick={() => void handleCopy()}
         className="inline-flex min-w-0 items-center gap-1 rounded-s-md py-px pe-1 ps-1.5 font-mono transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+        <FileText
+          aria-hidden
+          className="size-3 shrink-0 text-muted-foreground"
+        />
         <span className="truncate">
           {label ??
             (searchQuery ? highlightText(display, searchQuery) : display)}
         </span>
       </button>
-      {onReveal && <HoverTip content={revealLabel}>
-        <button
-          type="button"
-          aria-label={revealLabel}
-          onClick={() => void handleReveal()}
-          className="inline-flex h-full shrink-0 items-center rounded-e-md border-s border-border px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <FolderOpen aria-hidden className="size-3" />
-        </button>
-      </HoverTip>}
+      {onReveal && (
+        <HoverTip content={revealLabel}>
+          <button
+            type="button"
+            aria-label={revealLabel}
+            onClick={() => void handleReveal()}
+            className="inline-flex h-full shrink-0 items-center rounded-e-md border-s border-border px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <FolderOpen aria-hidden className="size-3" />
+          </button>
+        </HoverTip>
+      )}
     </span>
   );
 });

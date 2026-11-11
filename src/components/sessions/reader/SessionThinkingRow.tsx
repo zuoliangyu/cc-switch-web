@@ -36,7 +36,9 @@ export const SessionThinkingRow = memo(function SessionThinkingRow({
     info.durationMs !== undefined && info.durationMs > 0
       ? formatDuration(info.durationMs)
       : null;
-  const glyph = <GlyphCell glyph={style.thinkingGlyph} className="text-muted-foreground" />;
+  const glyph = (
+    <GlyphCell glyph={style.thinkingGlyph} className="text-muted-foreground" />
+  );
 
   if (info.redacted || (!step.block.text && !step.block.full)) {
     return (
@@ -73,7 +75,10 @@ export const SessionThinkingRow = memo(function SessionThinkingRow({
         {glyph}
         <span className="shrink-0 italic text-muted-foreground">{label}</span>
         {summary && (
-          <span className="min-w-0 truncate text-muted-foreground" title={summary}>
+          <span
+            className="min-w-0 truncate text-muted-foreground"
+            title={summary}
+          >
             {summary}
           </span>
         )}

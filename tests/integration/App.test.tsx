@@ -39,7 +39,9 @@ vi.mock("@/components/providers/ProviderList", () => ({
   }: any) => (
     <div>
       <div data-testid="provider-list">{JSON.stringify(providers)}</div>
-      <div data-testid="provider-search-open">{String(Boolean(searchOpen))}</div>
+      <div data-testid="provider-search-open">
+        {String(Boolean(searchOpen))}
+      </div>
       <div data-testid="current-provider">{currentProviderId}</div>
       <button onClick={() => onSwitch(providers[currentProviderId])}>
         switch
@@ -305,12 +307,22 @@ describe("App integration with MSW", () => {
 
   it("closes provider editors when navigating to another app", async () => {
     renderApp(App);
-    await waitFor(() => expect(screen.getByTestId("provider-list")).toHaveTextContent("claude-1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list")).toHaveTextContent("claude-1"),
+    );
     fireEvent.click(screen.getByText("edit"));
-    expect(await screen.findByTestId("edit-provider-dialog")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("edit-provider-dialog"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText("switch-codex"));
-    await waitFor(() => expect(screen.queryByTestId("edit-provider-dialog")).not.toBeInTheDocument());
-    await waitFor(() => expect(screen.getByTestId("provider-list")).toHaveTextContent("codex-1"));
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("edit-provider-dialog"),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list")).toHaveTextContent("codex-1"),
+    );
   });
 
   // 模块加载已在收集阶段完成，默认超时只衡量实际交互流程。

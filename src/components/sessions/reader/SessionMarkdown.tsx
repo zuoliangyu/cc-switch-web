@@ -941,7 +941,8 @@ const renderNode = (
     const level = Number(node.name.at(-1));
     const className = cn(
       "mb-1.5 tracking-normal text-foreground first:mt-0",
-      HEADING_CLASS[level] ?? "mt-2 text-sm font-semibold text-muted-foreground",
+      HEADING_CLASS[level] ??
+        "mt-2 text-sm font-semibold text-muted-foreground",
     );
     if (level === 1) return <h1 className={className}>{children()}</h1>;
     if (level === 2) return <h2 className={className}>{children()}</h2>;

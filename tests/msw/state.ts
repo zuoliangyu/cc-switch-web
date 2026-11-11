@@ -13,7 +13,10 @@ import {
 
 type ProvidersByApp = Record<AppId, Record<string, Provider>>;
 type CurrentProviderState = Record<AppId, string>;
-type LiveProviderIdsByApp = Record<"opencode" | "openclaw" | "hermes", string[]>;
+type LiveProviderIdsByApp = Record<
+  "opencode" | "openclaw" | "hermes",
+  string[]
+>;
 
 const createDefaultProviders = (): ProvidersByApp => ({
   claude: {
@@ -175,7 +178,7 @@ export interface CustomIconFixture {
 
 let customIconsState: CustomIconFixture[] = [];
 
-const cloneIcons = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const cloneIcons = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 export const listCustomIcons = () => cloneIcons(customIconsState);
 

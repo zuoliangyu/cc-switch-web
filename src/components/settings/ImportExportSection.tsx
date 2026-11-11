@@ -68,9 +68,7 @@ export function ImportExportSection({
   };
 
   const handleOpenDeepLinkImport = () => {
-    window.dispatchEvent(
-      new CustomEvent("cc-switch-open-deeplink-import"),
-    );
+    window.dispatchEvent(new CustomEvent("cc-switch-open-deeplink-import"));
   };
 
   const handleMigrateFromCcSwitch = async () => {
@@ -133,7 +131,9 @@ export function ImportExportSection({
             <Button
               type="button"
               className={`w-full h-auto py-3 px-4 ${selectedFile && !isImporting ? "flex-col items-start" : "items-center"}`}
-              onClick={!selectedFile ? handleSelectImport : () => void onImport()}
+              onClick={
+                !selectedFile ? handleSelectImport : () => void onImport()
+              }
               disabled={isImporting}
             >
               <div className="flex items-center gap-2 w-full justify-center">
@@ -274,9 +274,7 @@ function ImportStatusMessage({
 
   if (status === "importing") {
     return (
-      <div
-        className={`${baseClass} theme-panel-info`}
-      >
+      <div className={`${baseClass} theme-panel-info`}>
         <Loader2 className="mt-0.5 h-5 w-5 flex-shrink-0 animate-spin" />
         <div>
           <p className="font-semibold">{t("settings.importing")}</p>
@@ -288,9 +286,7 @@ function ImportStatusMessage({
 
   if (status === "success") {
     return (
-      <div
-        className={`${baseClass} theme-panel-success`}
-      >
+      <div className={`${baseClass} theme-panel-success`}>
         <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" />
         <div className="space-y-1.5">
           <p className="font-semibold">{t("settings.importSuccess")}</p>
@@ -307,9 +303,7 @@ function ImportStatusMessage({
 
   if (status === "partial-success") {
     return (
-      <div
-        className={`${baseClass} theme-panel-warning`}
-      >
+      <div className={`${baseClass} theme-panel-warning`}>
         <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
         <div className="space-y-1.5">
           <p className="font-semibold">{t("settings.importPartialSuccess")}</p>

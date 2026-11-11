@@ -172,7 +172,9 @@ export const SessionOutline = memo(function SessionOutline({
                   <span
                     className={cn(
                       "line-clamp-2 break-words text-xs transition-colors group-hover/outline:text-foreground",
-                      entry.reply ? "text-muted-foreground" : "italic text-muted-foreground",
+                      entry.reply
+                        ? "text-muted-foreground"
+                        : "italic text-muted-foreground",
                     )}
                   >
                     {entry.reply ||

@@ -29,7 +29,10 @@ export function SkillStorageLocationSettings({
 }: SkillStorageLocationSettingsProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const paths = useQuery({queryKey: ["skills", "storage-paths"], queryFn: skillsApi.storagePaths});
+  const paths = useQuery({
+    queryKey: ["skills", "storage-paths"],
+    queryFn: skillsApi.storagePaths,
+  });
   const [pendingTarget, setPendingTarget] =
     useState<SkillStorageLocation | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
@@ -107,7 +110,11 @@ export function SkillStorageLocationSettings({
           : t("settings.skillStorage.ccSwitchHint")}
       </p>
 
-      {paths.data && <code className="block break-all text-xs">{value === "unified" ? paths.data.unified : paths.data.ccSwitch}</code>}
+      {paths.data && (
+        <code className="block break-all text-xs">
+          {value === "unified" ? paths.data.unified : paths.data.ccSwitch}
+        </code>
+      )}
       <Dialog
         open={pendingTarget !== null}
         onOpenChange={(open) => {

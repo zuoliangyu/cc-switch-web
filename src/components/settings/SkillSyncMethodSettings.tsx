@@ -25,7 +25,12 @@ export function SkillSyncMethodSettings({
         </p>
       </header>
       <div className="inline-flex gap-1 rounded-md border border-border-default bg-background p-1">
-        <SyncMethodButton active={displayValue === "auto"} onClick={() => onChange("auto")}>{t("settings.skillSync.auto")}</SyncMethodButton>
+        <SyncMethodButton
+          active={displayValue === "auto"}
+          onClick={() => onChange("auto")}
+        >
+          {t("settings.skillSync.auto")}
+        </SyncMethodButton>
         <SyncMethodButton
           active={displayValue === "symlink"}
           onClick={() => onChange("symlink")}
@@ -39,7 +44,11 @@ export function SkillSyncMethodSettings({
           {t("settings.skillSync.copy")}
         </SyncMethodButton>
       </div>
-      {displayValue === "auto" && <p className="text-xs text-muted-foreground">{t("settings.skillSync.autoHint")}</p>}
+      {displayValue === "auto" && (
+        <p className="text-xs text-muted-foreground">
+          {t("settings.skillSync.autoHint")}
+        </p>
+      )}
       {displayValue === "symlink" && (
         <p className="text-xs text-muted-foreground">
           {t("settings.skillSync.symlinkHint")}

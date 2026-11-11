@@ -50,8 +50,7 @@ vi.mock("@tanstack/react-query", async () => {
   return {
     ...actual,
     useQueryClient: () => ({
-      invalidateQueries: (...args: unknown[]) =>
-        invalidateQueriesMock(...args),
+      invalidateQueries: (...args: unknown[]) => invalidateQueriesMock(...args),
     }),
   };
 });
@@ -168,7 +167,7 @@ describe("useSettings hook", () => {
     directorySettingsMock = createDirectorySettingsMock({
       appConfigDir: "  /override/app  ",
       markAppConfigDirSaved: vi.fn(),
-  initialAppConfigDir: "/previous/app",
+      initialAppConfigDir: "/previous/app",
     });
 
     const { result } = renderHook(() => useSettings());
@@ -211,7 +210,7 @@ describe("useSettings hook", () => {
     directorySettingsMock = createDirectorySettingsMock({
       appConfigDir: undefined,
       markAppConfigDirSaved: vi.fn(),
-  initialAppConfigDir: undefined,
+      initialAppConfigDir: undefined,
     });
 
     const { result } = renderHook(() => useSettings());
@@ -326,7 +325,7 @@ describe("useSettings hook", () => {
     directorySettingsMock = createDirectorySettingsMock({
       appConfigDir: "/override/app",
       markAppConfigDirSaved: vi.fn(),
-  initialAppConfigDir: "/override/app",
+      initialAppConfigDir: "/override/app",
     });
     const rejection = new Error("save failed");
     mutateAsyncMock.mockRejectedValueOnce(rejection);

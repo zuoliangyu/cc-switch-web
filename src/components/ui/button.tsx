@@ -17,7 +17,8 @@ const buttonVariants = cva(
         outline:
           "border border-border-default bg-background/80 text-foreground hover:bg-accent hover:text-accent-foreground hover:border-border-hover",
         // 次按钮：柔和表面色
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/85",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/85",
         // 幽灵按钮
         ghost: "text-muted-foreground hover:text-foreground hover:bg-accent/80",
         // MCP 专属按钮：Monet 冷色强调
@@ -46,7 +47,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }

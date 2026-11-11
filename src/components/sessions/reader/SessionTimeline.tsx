@@ -114,7 +114,9 @@ export const SessionTimeline = memo(function SessionTimeline({
             </span>
           )}
           {noFinal && (
-            <span className="ms-2 text-muted-foreground">{rt("noFinalReply")}</span>
+            <span className="ms-2 text-muted-foreground">
+              {rt("noFinalReply")}
+            </span>
           )}
         </span>
       </button>

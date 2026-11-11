@@ -54,4 +54,3 @@ export const workspaceApi = {
     return invoke<string>("get_workspace_directory_path", { subdir });
   },
 };
-

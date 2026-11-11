@@ -87,7 +87,8 @@ describe("syncModelsDevPricing", () => {
   });
 
   it("skips startup network access when pricing synced within the interval", async () => {
-    const lastSyncAt = Date.now() - MODELS_DEV_STARTUP_SYNC_INTERVAL_MS + 60_000;
+    const lastSyncAt =
+      Date.now() - MODELS_DEV_STARTUP_SYNC_INTERVAL_MS + 60_000;
     getModelsDevSyncConfig.mockResolvedValue({
       ...state,
       config: { ...state.config, lastSyncAt },

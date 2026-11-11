@@ -70,10 +70,7 @@ export function FirstRunNoticeDialog() {
           </DialogDescription>
         </div>
         <DialogFooter>
-          <Button
-            disabled={saving}
-            onClick={() => void handleAcknowledge()}
-          >
+          <Button disabled={saving} onClick={() => void handleAcknowledge()}>
             {t("firstRunNotice.confirm")}
           </Button>
         </DialogFooter>

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildOmoProfilePreview,
-  parseOmoOtherFieldsObject,
-} from "@/types/omo";
+import { buildOmoProfilePreview, parseOmoOtherFieldsObject } from "@/types/omo";
 
 describe("parseOmoOtherFieldsObject", () => {
   it("解析对象 JSON", () => {

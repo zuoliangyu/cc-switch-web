@@ -164,7 +164,9 @@ export const SessionFinalReply = memo(function SessionFinalReply({
         )}
         {hiddenMatches.length > 0 && searchQuery && (
           <div className="mt-2 rounded-[8px] border border-border px-3 py-2 text-xs text-muted-foreground">
-            <div className="mb-1 font-medium text-muted-foreground">{rt("rawMatch")}</div>
+            <div className="mb-1 font-medium text-muted-foreground">
+              {rt("rawMatch")}
+            </div>
             {hiddenMatches.map((snippet, index) => (
               <p
                 key={index}

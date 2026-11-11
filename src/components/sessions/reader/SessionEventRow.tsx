@@ -136,7 +136,8 @@ export const SessionEventRow = memo(function SessionEventRow({
   const { searchQuery } = useReaderContext();
   const [open, setOpen] = useState(false);
   const display = describeEvent(block, rt, body);
-  const tone = display.tone === "danger" ? "text-destructive" : "text-muted-foreground";
+  const tone =
+    display.tone === "danger" ? "text-destructive" : "text-muted-foreground";
   const label = searchQuery
     ? highlightText(display.label, searchQuery)
     : display.label;
@@ -194,10 +195,7 @@ export const SessionEventRow = memo(function SessionEventRow({
     return (
       <div className="min-w-0 px-1.5 py-1">
         <div
-          className={cn(
-            "flex h-6 min-w-0 items-center gap-2 text-xs",
-            tone,
-          )}
+          className={cn("flex h-6 min-w-0 items-center gap-2 text-xs", tone)}
         >
           <GlyphCell glyph="·" className="text-muted-foreground" />
           {content}

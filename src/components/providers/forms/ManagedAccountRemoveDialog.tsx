@@ -66,16 +66,9 @@ export function ManagedAccountRemoveDialog({
       <p className="m-0 text-sm text-foreground">{lead}</p>
       <ul className="m-0 flex list-none flex-col gap-2 rounded-xl bg-muted px-3.5 py-3">
         {groupUsersByApp(list).map((group) => (
-          <li
-            key={group.appId}
-            className="flex items-start gap-2.5 text-xs"
-          >
+          <li key={group.appId} className="flex items-start gap-2.5 text-xs">
             <span className="flex h-[18px] w-4 shrink-0 items-center">
-              <AppGlyph
-                app={group.appId}
-                size={14}
-                badgeClassName="bg-muted"
-              />
+              <AppGlyph app={group.appId} size={14} badgeClassName="bg-muted" />
             </span>
             <span className="min-w-0 [overflow-wrap:anywhere]">
               <span className="font-semibold text-foreground">
@@ -102,7 +95,6 @@ export function ManagedAccountRemoveDialog({
       {target && (
         <DialogContent
           role="alertdialog"
-
           className="max-w-[480px] gap-4 rounded-dialog border-border bg-card p-6 shadow-v7-lg sm:rounded-dialog"
         >
           <div className="flex flex-col gap-1.5">

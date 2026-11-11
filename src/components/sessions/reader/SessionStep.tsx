@@ -35,7 +35,10 @@ const TitleText = ({
   query?: string;
 }) => {
   const target = query ? highlightText(title.target, query) : title.target;
-  const targetClass = cn("text-foreground", style.monoTitles ? "" : "font-mono");
+  const targetClass = cn(
+    "text-foreground",
+    style.monoTitles ? "" : "font-mono",
+  );
   return (
     <span
       className={cn(
@@ -43,7 +46,9 @@ const TitleText = ({
         style.monoTitles ? "font-mono" : "font-sans",
       )}
     >
-      {title.icon && <span className="me-1.5 text-muted-foreground">{title.icon}</span>}
+      {title.icon && (
+        <span className="me-1.5 text-muted-foreground">{title.icon}</span>
+      )}
       <span className="font-semibold text-foreground">{title.verb}</span>
       {title.target &&
         (style.titleFormat === "call" ? (

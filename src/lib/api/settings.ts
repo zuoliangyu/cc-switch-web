@@ -279,7 +279,13 @@ export const settingsApi = {
     return await invoke("list_tool_installations", { tools });
   },
 
-  async getManagedToolVersions(tools?: string[], wslShellByTool?: Record<string, { wslShell?: string | null; wslShellFlag?: string | null }>): Promise<import("@/components/apps/useToolManagement").ToolVersion[]> {
+  async getManagedToolVersions(
+    tools?: string[],
+    wslShellByTool?: Record<
+      string,
+      { wslShell?: string | null; wslShellFlag?: string | null }
+    >,
+  ): Promise<import("@/components/apps/useToolManagement").ToolVersion[]> {
     return invoke("get_managed_tool_versions", { tools, wslShellByTool });
   },
 

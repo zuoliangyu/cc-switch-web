@@ -1,7 +1,14 @@
-import type { SkillDiscoveryResult, SkillUpdateCheckResult, SkillAppSyncOutcome } from "@/lib/api/skills";
+import type {
+  SkillDiscoveryResult,
+  SkillUpdateCheckResult,
+  SkillAppSyncOutcome,
+} from "@/lib/api/skills";
 import type { AppMode, AppModeView, RouteSwitchResult } from "@/types/proxy";
 import type { FetchedExchangeRates, Settings } from "@/types";
-import type { AddCustomIconResult, CustomIconEntry } from "@/lib/api/customIcons";
+import type {
+  AddCustomIconResult,
+  CustomIconEntry,
+} from "@/lib/api/customIcons";
 import type {
   CustomEndpoint,
   Provider,
@@ -2081,7 +2088,9 @@ export async function discoverWebAvailableSkills(
   forceRefresh = false,
 ): Promise<SkillDiscoveryResult> {
   return requestJson<SkillDiscoveryResult>(
-    forceRefresh ? "/api/skills/discover?forceRefresh=true" : "/api/skills/discover",
+    forceRefresh
+      ? "/api/skills/discover?forceRefresh=true"
+      : "/api/skills/discover",
   );
 }
 export async function discoverWebRepoSkills(
@@ -2095,10 +2104,10 @@ export async function discoverWebRepoSkills(
   );
 }
 export async function checkWebSkillUpdates(): Promise<SkillUpdateCheckResult> {
- return requestJson<SkillUpdateCheckResult>("/api/skills/updates");
+  return requestJson<SkillUpdateCheckResult>("/api/skills/updates");
 }
 export async function resyncWebSkills(): Promise<SkillAppSyncOutcome[]> {
- return requestWithBody<SkillAppSyncOutcome[]>("/api/skills/resync", "POST");
+  return requestWithBody<SkillAppSyncOutcome[]>("/api/skills/resync", "POST");
 }
 export async function installWebSkillUnified(
   skill: DiscoverableSkill,
@@ -2637,7 +2646,13 @@ export async function getWebUsageSummary(
   providerName?: string,
   model?: string,
 ): Promise<UsageSummary> {
-  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
+  const query = usageScopeQuery(
+    startDate,
+    endDate,
+    appType,
+    providerName,
+    model,
+  );
   return requestJson<UsageSummary>(
     `/api/usage/summary${query ? `?${query}` : ""}`,
   );
@@ -2650,7 +2665,13 @@ export async function getWebUsageTrends(
   providerName?: string,
   model?: string,
 ): Promise<DailyStats[]> {
-  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
+  const query = usageScopeQuery(
+    startDate,
+    endDate,
+    appType,
+    providerName,
+    model,
+  );
   return requestJson<DailyStats[]>(
     `/api/usage/trends${query ? `?${query}` : ""}`,
   );
@@ -2663,7 +2684,13 @@ export async function getWebProviderStats(
   providerName?: string,
   model?: string,
 ): Promise<ProviderStats[]> {
-  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
+  const query = usageScopeQuery(
+    startDate,
+    endDate,
+    appType,
+    providerName,
+    model,
+  );
   return requestJson<ProviderStats[]>(
     `/api/usage/provider-stats${query ? `?${query}` : ""}`,
   );
@@ -2676,7 +2703,13 @@ export async function getWebModelStats(
   providerName?: string,
   model?: string,
 ): Promise<ModelStats[]> {
-  const query = usageScopeQuery(startDate, endDate, appType, providerName, model);
+  const query = usageScopeQuery(
+    startDate,
+    endDate,
+    appType,
+    providerName,
+    model,
+  );
   return requestJson<ModelStats[]>(
     `/api/usage/model-stats${query ? `?${query}` : ""}`,
   );
@@ -2858,7 +2891,10 @@ export async function restartWebCodexDaemon(): Promise<
   return requestWithBody("/api/proxy/codex/daemon/restart", "POST");
 }
 export async function adoptWebCodexStackCatalog(): Promise<string | null> {
-  return requestWithBody<string | null>("/api/proxy/codex/adopt-catalog", "POST");
+  return requestWithBody<string | null>(
+    "/api/proxy/codex/adopt-catalog",
+    "POST",
+  );
 }
 export async function acknowledgeWebCodexStaleClients(): Promise<void> {
   return requestWithBody<void>(
@@ -2883,7 +2919,10 @@ export async function restartWebProxyService(
   return requestWithBody<void>("/api/proxy/restart", "POST", config);
 }
 
-export const manageWebTools = <T>(path: "versions" | "installations" | "action" | "uninstall-plan", payload: Record<string, unknown>): Promise<T> => requestWithBody<T>(`/api/tools/${path}`, "POST", payload);
+export const manageWebTools = <T>(
+  path: "versions" | "installations" | "action" | "uninstall-plan",
+  payload: Record<string, unknown>,
+): Promise<T> => requestWithBody<T>(`/api/tools/${path}`, "POST", payload);
 
 /**
  * 打开服务端事件推送（SSE）长连接。浏览器的 EventSource 带不了 Authorization 头，
@@ -2906,11 +2945,19 @@ export async function openWebServerEventStream(
 }
 
 /** Stream and image bytes bypass debug body logging. */
-export async function streamWebSession(providerId: string, sourcePath: string, onChunk: (chunk: import("@/types").TranscriptChunk) => void): Promise<void> {
+export async function streamWebSession(
+  providerId: string,
+  sourcePath: string,
+  onChunk: (chunk: import("@/types").TranscriptChunk) => void,
+): Promise<void> {
   const query = new URLSearchParams({ providerId, sourcePath });
-  const response = await fetch(`${getWebApiBase()}/api/sessions/stream?${query}`, { headers: webRequestHeaders("application/x-ndjson") });
+  const response = await fetch(
+    `${getWebApiBase()}/api/sessions/stream?${query}`,
+    { headers: webRequestHeaders("application/x-ndjson") },
+  );
   handleUnauthorized(response);
-  if (!response.ok) throw new Error(await getErrorMessage(response, `HTTP ${response.status}`));
+  if (!response.ok)
+    throw new Error(await getErrorMessage(response, `HTTP ${response.status}`));
   if (!response.body) throw new Error("Missing transcript stream");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -2929,34 +2976,69 @@ export async function streamWebSession(providerId: string, sourcePath: string, o
       pending += decoder.decode(next.value, { stream: !next.done });
       let newline: number;
       while ((newline = pending.indexOf("\n")) >= 0) {
-        accept(pending.slice(0, newline)); pending = pending.slice(newline + 1);
+        accept(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
       }
-      if (pending.length > 64 * 1024 * 1024) throw new Error("Transcript chunk too large");
+      if (pending.length > 64 * 1024 * 1024)
+        throw new Error("Transcript chunk too large");
       if (next.done) break;
     }
     accept(pending);
     if (!done) throw new Error("Incomplete transcript stream");
-  } finally { await reader.cancel(); reader.releaseLock(); }
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
 }
-export async function getWebSessionImage(payload: unknown): Promise<ArrayBuffer> {
-  const response = await fetch(`${getWebApiBase()}/api/sessions/image`, { method: "POST", headers: { ...webRequestHeaders("application/octet-stream"), "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+export async function getWebSessionImage(
+  payload: unknown,
+): Promise<ArrayBuffer> {
+  const response = await fetch(`${getWebApiBase()}/api/sessions/image`, {
+    method: "POST",
+    headers: {
+      ...webRequestHeaders("application/octet-stream"),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
   handleUnauthorized(response);
-  if (!response.ok) throw new Error(await getErrorMessage(response, `HTTP ${response.status}`));
+  if (!response.ok)
+    throw new Error(await getErrorMessage(response, `HTTP ${response.status}`));
   return response.arrayBuffer();
 }
-export const getWebSessionContent = (payload: unknown): Promise<import("@/lib/api/sessions").BlockContent> => requestWithBody("/api/sessions/content", "POST", payload);
+export const getWebSessionContent = (
+  payload: unknown,
+): Promise<import("@/lib/api/sessions").BlockContent> =>
+  requestWithBody("/api/sessions/content", "POST", payload);
 
-export const getWebSessionUsage = (appType: string, sessionId: string): Promise<import("@/types/usage").UsageSummary> => requestJson(`/api/sessions/usage?${new URLSearchParams({appType, sessionId})}`);
+export const getWebSessionUsage = (
+  appType: string,
+  sessionId: string,
+): Promise<import("@/types/usage").UsageSummary> =>
+  requestJson(
+    `/api/sessions/usage?${new URLSearchParams({ appType, sessionId })}`,
+  );
 
-export function resyncWebMcp(apps?: AppId[]): Promise<import("@/lib/api/mcp").McpAppSyncOutcome[]> { return requestWithBody("/api/mcp/resync", "POST", { apps }); }
+export function resyncWebMcp(
+  apps?: AppId[],
+): Promise<import("@/lib/api/mcp").McpAppSyncOutcome[]> {
+  return requestWithBody("/api/mcp/resync", "POST", { apps });
+}
 
-export async function getWebInstalledSkillDir(directory: string): Promise<string> {
+export async function getWebInstalledSkillDir(
+  directory: string,
+): Promise<string> {
   return requestJson<string>(
     `/api/skills/installed-dir?directory=${encodeURIComponent(directory)}`,
   );
 }
 
-export function getWebSkillStoragePaths(): Promise<{ ccSwitch: string; unified: string }> { return requestJson("/api/skills/storage-paths"); }
+export function getWebSkillStoragePaths(): Promise<{
+  ccSwitch: string;
+  unified: string;
+}> {
+  return requestJson("/api/skills/storage-paths");
+}
 
 export async function startWebMcpConnectivityChecks(
   serverIds: string[],

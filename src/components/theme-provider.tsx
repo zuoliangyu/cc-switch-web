@@ -74,8 +74,9 @@ export function ThemeProvider({
 
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
   const [scheme, setSchemeState] = useState<ThemeScheme>(getInitialScheme);
-  const [systemTheme, setSystemTheme] =
-    useState<ResolvedTheme>(getInitialSystemTheme);
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(
+    getInitialSystemTheme,
+  );
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   useEffect(() => {

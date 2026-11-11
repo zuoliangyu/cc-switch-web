@@ -88,4 +88,3 @@ export const failoverApi = {
     return invoke("set_auto_failover_enabled", { appType, enabled });
   },
 };
-

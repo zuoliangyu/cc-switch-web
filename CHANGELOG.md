@@ -2,6 +2,27 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [Unreleased]
+
+跟进上游 `5e9812e0..abf50589`（v4.0.29 及其后）：29 项提交中 22 项已迁移、7 项不适用（七语言维护、ko/tr/ru 文案、上游发版与 README），详见 [迁移台账](docs-dev/web-parity-post-5e9812e0-2026-11.md)。
+
+### 升级注意
+
+- GitHub Copilot CLI 的自带模型卡改为写进 Copilot 自己的 `providers.json`（`$COPILOT_HOME/providers.json` 或 `COPILOT_PROVIDERS_CONFIG`）：点「添加」后 Copilot 能在 `/model` 里直接选 `<卡 id>/<模型>`，不经 CC Switch 转发；Key 会写进这个文件。旧的按环境变量存的卡在打开列表时自动转成新格式（未添加状态），添加之前不能打开终端。官方卡不受影响。
+- Codex 走 Anthropic 上游时默认 `max_tokens` 从 8192 提到 32000（思考也算在内）；网关输出上限更低时会报 400。
+
+### 新增与改进
+
+- 隐私过滤（设置 › 数据，默认关）：路由与聚合模式下把请求里的个人信息与密钥换成占位符再转发，工具结果另有子开关；占位符跟随设置里保存的界面语言。新增 `GET/PUT /api/settings/privacy-filter`。
+- Copilot CLI：自带模型卡的添加 / 移出、复制、深链导入新格式（支持 `bearerToken`、保留全部模型 ID）、会话用量记到所选的卡、写入前校验输出上限与 `systemMessage`、读不了 `providers.json` 时保留已存的卡；模型列表为空时说明原因（多半是 Copilot Free）。
+- Codex：官方卡走路由时透传官方模型列表（按账号返回的完整列表）；发往第三方的请求去掉官方私有的 include 标记；桌面端在 WSL 里跑 Codex 时目录指针只写文件名。
+- 只能走路由的卡（托管账号、非 Anthropic 格式）「打开终端」置灰并说明原因。
+- Claude 账号额度先核对默认登录归属；Antigravity 额度查询带项目并显示地区不可用的原因；omo-slim 表单无限重渲染、Safari 下两个弹窗内容被压扁；删除预设里的 CCSub 推广字段。
+
+### 验证
+
+- Windows：前端 270 个文件 2856 项通过；Rust 3951 项通过、10 项忽略；TypeScript 与 `cargo check --bin cc-switch-web` 通过、零警告。本轮未做浏览器验收与真实 Copilot CLI 联调，也未在 Linux 上重跑。
+
 ## [3.2.0] - 2026-11-11
 
 跟进上游 `a3eafa40..5e9812e0`（v4.0.26–v4.0.28 及其后）：108 项提交中 80 项已迁移、4 项部分迁移（均为有意保留的 Web 差异）、24 项不适用，详见 [迁移台账](docs-dev/web-parity-post-a3eafa40-2026-11.md)。本轮先补齐了上一轮缺的两个底层框架，上一轮台账相应改判为已迁移 563、部分迁移 15、不适用 180。本次将 Web 版本从 `3.1.0` 提升到 `3.2.0`；版本说明已整理，发布包与 Release 尚未发布。
@@ -38,7 +59,7 @@
 ### 验证
 
 - Windows：前端 269 个文件 2833 项通过；Rust 3871 项通过、10 项忽略；TypeScript 与 `cargo check --bin cc-switch-web` 通过、零警告。
-- Linux：`pnpm verify:docker -- verify`（Rust 1.88、警告即错误）通过——Linux 与 Windows 交叉 `cargo check --all-targets` 零警告，前端 2833 项通过，Rust 3902 项通过、10 项忽略；镜像冒烟（`smoke`）因本机内存不足中途被终止，未完成。
+- Linux：`pnpm verify:docker -- verify`（Rust 1.88、警告即错误）通过——Linux 与 Windows 交叉 `cargo check --all-targets` 零警告，前端 2833 项通过，Rust 3902 项通过、10 项忽略；镜像冒烟（`smoke`）随后单独重跑通过（Rust 1.88 release 构建，`/api/health` 正常）。
 - 在隔离的临时数据目录下做了 1440 与 390px 的浏览器验收，发现的 5 处问题已修正并复验（跨标签页切换推送、页头应用切换补全、窄屏布局）。本轮未运行发布构建与真实账号联调。
 
 ## [3.1.0] - 2026-11-07

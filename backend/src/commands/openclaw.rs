@@ -79,8 +79,8 @@ pub(crate) fn set_openclaw_env_internal(
     openclaw_config::set_env_config(&env).map_err(|e| e.to_string())
 }
 
-pub(crate) fn get_openclaw_tools_internal(
-) -> Result<openclaw_config::OpenClawToolsConfig, String> {
+pub(crate) fn get_openclaw_tools_internal() -> Result<openclaw_config::OpenClawToolsConfig, String>
+{
     openclaw_config::get_tools_config().map_err(|e| e.to_string())
 }
 

@@ -88,9 +88,11 @@ async fn agy_live_provider_skill_session_and_tokens() {
     )
     .unwrap();
     assert_eq!(imported.len(), 1);
-    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, false).unwrap();
+    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, false)
+        .unwrap();
     assert!(!skill_dir.exists());
-    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, true).unwrap();
+    crate::services::skill::SkillService::toggle_app(&db, &imported[0].id, &AppType::Agy, true)
+        .unwrap();
     assert!(skill_dir.join("SKILL.md").is_file());
     println!("SMOKE skill_import_disable_enable=ok");
 

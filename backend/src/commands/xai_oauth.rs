@@ -8,7 +8,11 @@ pub(crate) async fn get_xai_oauth_quota_internal(
     state: &Arc<RwLock<XaiOAuthManager>>,
 ) -> Result<SubscriptionQuota, String> {
     let manager = state.read().await;
-    let account_id = match account_id.as_deref().map(str::trim).filter(|id| !id.is_empty()) {
+    let account_id = match account_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
         Some(id) => id.to_string(),
         None => match manager.default_account_id().await {
             Some(id) => id,

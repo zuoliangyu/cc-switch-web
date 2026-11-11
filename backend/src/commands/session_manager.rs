@@ -95,11 +95,9 @@ pub async fn delete_session_internal(
     let session_id = sessionId.clone();
     let source_path = sourcePath.clone();
 
-    spawn_blocking(move || {
-        session_manager::delete_session(&provider_id, &session_id, &source_path)
-    })
-    .await
-    .map_err(|e| format!("Failed to delete session: {e}"))?
+    spawn_blocking(move || session_manager::delete_session(&provider_id, &session_id, &source_path))
+        .await
+        .map_err(|e| format!("Failed to delete session: {e}"))?
 }
 
 pub async fn delete_sessions_internal(

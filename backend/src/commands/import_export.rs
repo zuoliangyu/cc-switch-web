@@ -10,7 +10,9 @@ use crate::store::AppState;
 
 // ─── File import/export ──────────────────────────────────────
 
-pub async fn sync_current_providers_live_internal(db: std::sync::Arc<Database>) -> Result<Value, String> {
+pub async fn sync_current_providers_live_internal(
+    db: std::sync::Arc<Database>,
+) -> Result<Value, String> {
     spawn_blocking(move || {
         let app_state = AppState::new(db);
         ProviderService::sync_current_to_live(&app_state)?;

@@ -129,7 +129,10 @@ fn delete_single_env(conflict: &EnvConflict) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
     if conflict.source_type != "system" {
-        return Err(format!("无法恢复类型为 {} 的环境变量", conflict.source_type));
+        return Err(format!(
+            "无法恢复类型为 {} 的环境变量",
+            conflict.source_type
+        ));
     }
 
     if conflict.source_path.contains("HKEY_CURRENT_USER") {
@@ -156,7 +159,10 @@ fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
     if conflict.source_type != "file" {
-        return Err(format!("无法恢复类型为 {} 的环境变量", conflict.source_type));
+        return Err(format!(
+            "无法恢复类型为 {} 的环境变量",
+            conflict.source_type
+        ));
     }
 
     let file_path = conflict
@@ -166,7 +172,10 @@ fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
         .ok_or("无效的文件路径格式")?;
     let mut content = fs::read_to_string(file_path)
         .map_err(|error| format!("读取文件失败 {file_path}: {error}"))?;
-    content.push_str(&format!("\nexport {}={}", conflict.var_name, conflict.var_value));
+    content.push_str(&format!(
+        "\nexport {}={}",
+        conflict.var_name, conflict.var_value
+    ));
     fs::write(file_path, content).map_err(|error| format!("写入文件失败 {file_path}: {error}"))?;
     Ok(())
 }

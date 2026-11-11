@@ -36,7 +36,12 @@ pub fn import_from_claude(servers: &mut ImportedMcpServers) -> Result<usize, App
             continue;
         }
 
-        if merge_imported_server(servers, id, spec.clone(), crate::app_config::AppType::Claude) {
+        if merge_imported_server(
+            servers,
+            id,
+            spec.clone(),
+            crate::app_config::AppType::Claude,
+        ) {
             changed += 1;
             log::info!("导入或启用 Claude MCP 服务器 '{id}'");
         }

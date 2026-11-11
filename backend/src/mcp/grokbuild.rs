@@ -54,10 +54,18 @@ fn toml_server_to_json(entry: &toml::value::Table) -> Value {
 
     let mut spec = serde_json::Map::new();
     for (key, value) in entry {
-        let output_key = if key == "http_headers" { "headers" } else { key };
+        let output_key = if key == "http_headers" {
+            "headers"
+        } else {
+            key
+        };
         spec.insert(output_key.to_string(), convert(value));
     }
-    let default_type = if spec.contains_key("url") { "http" } else { "stdio" };
+    let default_type = if spec.contains_key("url") {
+        "http"
+    } else {
+        "stdio"
+    };
     spec.entry("type".to_string())
         .or_insert_with(|| json!(default_type));
     Value::Object(spec)
@@ -68,8 +76,9 @@ pub fn import_from_grokbuild(servers: &mut ImportedMcpServers) -> Result<usize, 
     if text.trim().is_empty() {
         return Ok(0);
     }
-    let root: toml::Table = toml::from_str(&text)
-        .map_err(|error| AppError::McpValidation(format!("解析 Grok Build config.toml 失败: {error}")))?;
+    let root: toml::Table = toml::from_str(&text).map_err(|error| {
+        AppError::McpValidation(format!("解析 Grok Build config.toml 失败: {error}"))
+    })?;
     let Some(entries) = root.get("mcp_servers").and_then(toml::Value::as_table) else {
         return Ok(0);
     };
@@ -84,12 +93,7 @@ pub fn import_from_grokbuild(servers: &mut ImportedMcpServers) -> Result<usize, 
             log::warn!("跳过无效 Grok Build MCP 项 '{id}': {error}");
             continue;
         }
-        changed += usize::from(merge_imported_server(
-            servers,
-            id,
-            spec,
-            AppType::GrokBuild,
-        ));
+        changed += usize::from(merge_imported_server(servers, id, spec, AppType::GrokBuild));
     }
     Ok(changed)
 }
@@ -189,8 +193,10 @@ mod tests {
         let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
         std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
         crate::settings::reload_settings().expect("reload settings");
-        crate::grok_config::write_grok_live_settings(&json!({ "config": "[models]\ndefault = \"grok\"\n" }))
-            .expect("seed config");
+        crate::grok_config::write_grok_live_settings(
+            &json!({ "config": "[models]\ndefault = \"grok\"\n" }),
+        )
+        .expect("seed config");
 
         sync_single_server_to_grokbuild(
             "demo",

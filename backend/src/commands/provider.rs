@@ -1,10 +1,10 @@
-use indexmap::IndexMap;
 use crate::app_config::AppType;
 use crate::error::AppError;
 use crate::provider::Provider;
 use crate::services::provider::{ProviderService, ProviderSortUpdate, SwitchResult};
 use crate::services::speedtest::{EndpointLatency, SpeedtestService};
 use crate::store::AppState;
+use indexmap::IndexMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -23,7 +23,10 @@ pub(crate) fn get_providers_internal(
     ProviderService::list(state, app_type).map_err(|e| e.to_string())
 }
 
-pub(crate) fn get_current_provider_internal(state: &AppState, app: String) -> Result<String, String> {
+pub(crate) fn get_current_provider_internal(
+    state: &AppState,
+    app: String,
+) -> Result<String, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     ProviderService::current(state, app_type).map_err(|e| e.to_string())
 }
@@ -379,7 +382,9 @@ pub(crate) async fn test_usage_script_internal(
     .await
 }
 
-pub(crate) fn read_live_provider_settings_internal(app: String) -> Result<serde_json::Value, String> {
+pub(crate) fn read_live_provider_settings_internal(
+    app: String,
+) -> Result<serde_json::Value, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
     ProviderService::read_live_settings(app_type).map_err(|e| e.to_string())
 }
@@ -399,8 +404,7 @@ pub(crate) fn get_custom_endpoints_internal(
     provider_id: String,
 ) -> Result<Vec<crate::settings::CustomEndpoint>, String> {
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
-    ProviderService::get_custom_endpoints(state, app_type, &provider_id)
-        .map_err(|e| e.to_string())
+    ProviderService::get_custom_endpoints(state, app_type, &provider_id).map_err(|e| e.to_string())
 }
 
 pub(crate) fn add_custom_endpoint_internal(

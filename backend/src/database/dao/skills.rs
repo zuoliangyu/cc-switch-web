@@ -316,6 +316,9 @@ mod tests {
             .init_default_skill_repos()
             .expect("seed default skill repos again");
         assert_eq!(inserted_again, 0);
-        assert_eq!(db.get_skill_repos().expect("repos after reseed").len(), expected);
+        assert_eq!(
+            db.get_skill_repos().expect("repos after reseed").len(),
+            expected
+        );
     }
 }

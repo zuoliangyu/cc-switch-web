@@ -32,7 +32,12 @@ pub fn import_from_gemini(servers: &mut ImportedMcpServers) -> Result<usize, App
             continue;
         }
 
-        if merge_imported_server(servers, id, spec.clone(), crate::app_config::AppType::Gemini) {
+        if merge_imported_server(
+            servers,
+            id,
+            spec.clone(),
+            crate::app_config::AppType::Gemini,
+        ) {
             changed += 1;
             log::info!("导入或启用 Gemini MCP 服务器 '{id}'");
         }

@@ -850,7 +850,11 @@ mod integration_tests {
         let db = Arc::new(Database::memory().unwrap());
         let state = AppState::new(db.clone());
         assert!(
-            !crate::services::provider::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
+            !crate::services::provider::ProviderService::import_default_config(
+                &state,
+                AppType::Agy
+            )
+            .unwrap()
         );
         assert!(db.get_all_providers("agy").unwrap().is_empty());
 
@@ -877,7 +881,8 @@ mod integration_tests {
         let db = Arc::new(Database::memory().unwrap());
         let state = AppState::new(db.clone());
         assert!(
-            crate::services::provider::ProviderService::import_default_config(&state, AppType::Agy).unwrap()
+            crate::services::provider::ProviderService::import_default_config(&state, AppType::Agy)
+                .unwrap()
         );
         // The key never lives in a file, so anything imported is agy's own login.
         let imported = db.get_provider_by_id("default", "agy").unwrap().unwrap();

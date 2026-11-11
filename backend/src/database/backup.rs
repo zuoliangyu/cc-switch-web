@@ -290,10 +290,7 @@ impl Database {
         Ok(snapshot)
     }
 
-    pub(crate) fn complete_backup(
-        backup: &Backup<'_, '_>,
-        context: &str,
-    ) -> Result<(), AppError> {
+    pub(crate) fn complete_backup(backup: &Backup<'_, '_>, context: &str) -> Result<(), AppError> {
         let result = backup
             .step(-1)
             .map_err(|e| AppError::Database(format!("{context}失败: {e}")))?;

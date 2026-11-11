@@ -88,7 +88,9 @@ impl FailoverSwitchManager {
         provider_name: &str,
     ) -> Result<bool, AppError> {
         let app = crate::app_config::AppType::from_str(app_type)?;
-        if let Some(switched) = crate::mode::controller::record_failover(&self.db, &app, provider_id).await? {
+        if let Some(switched) =
+            crate::mode::controller::record_failover(&self.db, &app, provider_id).await?
+        {
             return Ok(switched);
         }
         // 检查该应用是否已被代理接管（enabled=true）

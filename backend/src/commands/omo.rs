@@ -1,12 +1,14 @@
-use crate::services::omo::{OmoLocalFileData, SLIM, STANDARD};
 use crate::services::omo::OmoService;
+use crate::services::omo::{OmoLocalFileData, SLIM, STANDARD};
 use crate::store::AppState;
 
 pub(crate) async fn read_omo_local_file_internal() -> Result<OmoLocalFileData, String> {
     OmoService::read_local_file(&STANDARD).map_err(|e| e.to_string())
 }
 
-pub(crate) async fn get_current_omo_provider_id_internal(state: &AppState) -> Result<String, String> {
+pub(crate) async fn get_current_omo_provider_id_internal(
+    state: &AppState,
+) -> Result<String, String> {
     let provider = state
         .db
         .get_current_omo_provider("opencode", "omo")
@@ -15,7 +17,10 @@ pub(crate) async fn get_current_omo_provider_id_internal(state: &AppState) -> Re
 }
 
 pub(crate) async fn disable_current_omo_internal(state: &AppState) -> Result<(), String> {
-    let providers = state.db.get_all_providers("opencode").map_err(|e| e.to_string())?;
+    let providers = state
+        .db
+        .get_all_providers("opencode")
+        .map_err(|e| e.to_string())?;
     for (id, p) in &providers {
         if p.category.as_deref() == Some("omo") {
             state
@@ -45,7 +50,10 @@ pub(crate) async fn get_current_omo_slim_provider_id_internal(
 }
 
 pub(crate) async fn disable_current_omo_slim_internal(state: &AppState) -> Result<(), String> {
-    let providers = state.db.get_all_providers("opencode").map_err(|e| e.to_string())?;
+    let providers = state
+        .db
+        .get_all_providers("opencode")
+        .map_err(|e| e.to_string())?;
     for (id, p) in &providers {
         if p.category.as_deref() == Some("omo-slim") {
             state

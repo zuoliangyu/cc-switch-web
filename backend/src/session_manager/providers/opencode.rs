@@ -34,7 +34,11 @@ pub(crate) fn get_opencode_db_path() -> PathBuf {
     if let Ok(custom_path) = std::env::var("OPENCODE_DB") {
         if !custom_path.is_empty() {
             let path = PathBuf::from(custom_path);
-            return if path.is_absolute() { path } else { get_opencode_base_dir().join(path) };
+            return if path.is_absolute() {
+                path
+            } else {
+                get_opencode_base_dir().join(path)
+            };
         }
     }
     get_opencode_base_dir().join("opencode.db")

@@ -87,8 +87,7 @@ pub fn set_app_config_dir_override(path: Option<&str>) -> Result<(), AppError> {
     {
         if crate::config::is_cc_switch_source_path(&path) {
             return Err(AppError::InvalidInput(
-                "CC Switch 数据目录 ~/.cc-switch 仅允许读取，不能作为 Web 数据目录"
-                    .to_string(),
+                "CC Switch 数据目录 ~/.cc-switch 仅允许读取，不能作为 Web 数据目录".to_string(),
             ));
         }
     }
@@ -130,10 +129,7 @@ mod tests {
             home.path().join(".cc-switch-web/app_paths.json")
         );
         assert!(store_file_path().is_file());
-        assert!(set_app_config_dir_override(
-            home.path().join(".cc-switch").to_str()
-        )
-        .is_err());
+        assert!(set_app_config_dir_override(home.path().join(".cc-switch").to_str()).is_err());
 
         match previous {
             Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),

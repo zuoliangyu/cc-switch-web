@@ -6,7 +6,9 @@ fn print_usage() {
     println!("Options:");
     println!("  -b, --backend-port <PORT>   Preferred backend/web port");
     println!("      --host <HOST>           Bind host, default 127.0.0.1");
-    println!("      --port-scan-count <N>   Number of ports to try starting from the preferred port");
+    println!(
+        "      --port-scan-count <N>   Number of ports to try starting from the preferred port"
+    );
     println!("  -h, --help                  Show this help message");
     println!();
     println!("Environment variables:");

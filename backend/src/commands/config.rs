@@ -112,10 +112,10 @@ pub(crate) fn get_default_config_dir_internal(app: String) -> Result<String, Str
         AppType::Mcode => config::get_home_dir().join(".minimax"),
         AppType::Kimi => config::get_home_dir().join(".kimi-code"),
         AppType::Dsh => crate::dsh_config::native_data_dir(),
-        AppType::Agy => config::get_home_dir().join(".gemini").join("antigravity-cli"),
-        AppType::Omp => {
-            crate::omp_config::get_omp_native_agent_dir().map_err(|e| e.to_string())?
-        }
+        AppType::Agy => config::get_home_dir()
+            .join(".gemini")
+            .join("antigravity-cli"),
+        AppType::Omp => crate::omp_config::get_omp_native_agent_dir().map_err(|e| e.to_string())?,
         // Copilot CLI 没有设备级目录覆盖，默认目录即 `COPILOT_HOME` 或 `~/.copilot`。
         AppType::Copilot => crate::copilot_config::copilot_dir(),
     };

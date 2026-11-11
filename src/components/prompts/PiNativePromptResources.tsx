@@ -274,6 +274,8 @@ export function PiNativePromptResources() {
           </div>
           {editor.type === "template" && (
             <Input
+              autoCorrect="off"
+              autoCapitalize="off"
               value={editor.slug}
               onChange={(event) =>
                 setEditor({ ...editor, slug: event.target.value })

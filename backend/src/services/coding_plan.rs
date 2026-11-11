@@ -97,6 +97,7 @@ fn make_error(message: String) -> SubscriptionQuota {
         error: Some(message),
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -158,6 +159,7 @@ async fn query_kimi_with_base(base_url: &str, api_key: &str) -> SubscriptionQuot
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -223,6 +225,7 @@ async fn query_kimi_with_base(base_url: &str, api_key: &str) -> SubscriptionQuot
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -340,6 +343,7 @@ async fn query_zhipu_at(url: &str, api_key: &str) -> CodingPlanOutcome {
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: Some(now_millis()),
         });
     }
@@ -431,6 +435,7 @@ fn zhipu_quota_from_body(body: &serde_json::Value) -> SubscriptionQuota {
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -469,6 +474,7 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -547,6 +553,7 @@ async fn query_minimax(api_key: &str, is_cn: bool) -> SubscriptionQuota {
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -633,6 +640,7 @@ async fn query_opencode_go(api_key: &str) -> SubscriptionQuota {
             error: Some(format!("Authentication failed (HTTP {status})")),
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: Some(now_millis()),
         };
     }
@@ -662,6 +670,7 @@ async fn query_opencode_go(api_key: &str) -> SubscriptionQuota {
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -743,6 +752,7 @@ fn command_code_auth_error() -> SubscriptionQuota {
         error: Some("Authentication failed (HTTP 401 Unauthorized)".to_string()),
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -851,6 +861,7 @@ fn parse_command_code_quota(
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }

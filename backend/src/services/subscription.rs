@@ -56,6 +56,10 @@ pub struct SubscriptionQuota {
     /// ChatGPT 订阅买的 Codex Credits 余额（额度用完后才扣）；没有、不限量或为 0 时为 None
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credits_balance: Option<f64>,
+    /// 套餐显示名（「Pro 200」「Google AI Pro」「SuperGrok Heavy」…），授权中心的账号行显示；
+    /// 只有能顺带查到套餐的服务填，认不出或查不到时为 None
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_name: Option<String>,
     pub error: Option<String>,
     pub queried_at: Option<i64>,
 }
@@ -72,6 +76,7 @@ impl SubscriptionQuota {
             error: None,
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: None,
         }
     }
@@ -88,6 +93,7 @@ impl SubscriptionQuota {
             error: Some(message),
             reset_credits: None,
             credits_balance: None,
+            plan_name: None,
             queried_at: Some(now_millis()),
         }
     }
@@ -158,6 +164,46 @@ struct CodexUsageResponse {
     rate_limit: Option<CodexRateLimit>,
     /// 原样收下再挑字段：形状不对时只是不显示余额，不能让整份额度解析失败
     credits: Option<serde_json::Value>,
+    #[serde(default)]
+    plan_type: Option<String>,
+}
+
+/// `wham/usage` 的 `plan_type` → 套餐名，照 Codex 自己 `/status` 的叫法
+/// （codex-rs/tui/src/subscription.rs：`business` 在那里也叫 Enterprise）。认不出的首字母大写照写
+fn codex_plan_label(plan_type: &str) -> Option<String> {
+    let plan = plan_type.trim().to_ascii_lowercase();
+    let label = match plan.as_str() {
+        "" | "unknown" => return None,
+        "free" => "Free",
+        "go" => "Go",
+        "plus" => "Plus",
+        "prolite" => "Pro 100",
+        "pro" => "Pro 200",
+        "promax" => "Pro 500",
+        "team" | "self_serve_business_usage_based" => "Business",
+        "self_serve_business_prolite" => "Business Premium",
+        "edu" => "Edu",
+        "edu_plus" => "Edu Plus",
+        "edu_pro" => "Edu Pro",
+        p if p == "business" || p == "ent26" || p.starts_with("enterprise") => "Enterprise",
+        _ => return Some(title_case_words(&plan)),
+    };
+    Some(label.to_string())
+}
+
+/// `free_workspace` → `Free Workspace`
+pub(crate) fn title_case_words(raw: &str) -> String {
+    raw.split(['_', '-', ' '])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().chain(chars).collect::<String>(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// `wham/usage` 的 `credits`：`{has_credits, unlimited, balance}`，balance 实测是字符串
@@ -757,6 +803,7 @@ fn parse_claude_quota(body: &serde_json::Value) -> SubscriptionQuota {
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: None,
         queried_at: Some(now_millis()),
     }
 }
@@ -964,6 +1011,7 @@ pub(crate) async fn query_codex_usage(
         error: None,
         reset_credits: None,
         credits_balance: body.credits.as_ref().and_then(parse_codex_credits_balance),
+        plan_name: body.plan_type.as_deref().and_then(codex_plan_label),
         queried_at: Some(now_millis()),
     }
 }
@@ -1062,7 +1110,18 @@ async fn query_gemini_quota(access_token: &str) -> SubscriptionQuota {
         );
     }
 
-    let load_body: GeminiLoadCodeAssistResponse = match load_response.json().await {
+    // 原始响应留着：套餐名用 Antigravity 同一个解析器从这里取
+    let load_raw = match load_response.bytes().await {
+        Ok(raw) => raw,
+        Err(error) => {
+            return SubscriptionQuota::error(
+                "gemini",
+                CredentialStatus::Valid,
+                format!("Failed to read loadCodeAssist response: {error}"),
+            );
+        }
+    };
+    let load_body: GeminiLoadCodeAssistResponse = match serde_json::from_slice(&load_raw) {
         Ok(body) => body,
         Err(error) => {
             return SubscriptionQuota::error(
@@ -1175,6 +1234,7 @@ async fn query_gemini_quota(access_token: &str) -> SubscriptionQuota {
         error: None,
         reset_credits: None,
         credits_balance: None,
+        plan_name: crate::services::agy_account::quota::code_assist_plan(&load_raw),
         queried_at: Some(now_millis()),
     }
 }
@@ -1756,6 +1816,37 @@ mod tests {
         .unwrap();
         assert!(quota.reset_credits.is_none());
         assert!(quota.credits_balance.is_none());
+    }
+
+    #[test]
+    fn codex_plan_label_follows_codex_status_names() {
+        let label = |raw: &str| {
+            let body: CodexUsageResponse = serde_json::from_str(raw).unwrap();
+            body.plan_type.as_deref().and_then(codex_plan_label)
+        };
+        assert_eq!(label(r#"{"plan_type":"pro"}"#).as_deref(), Some("Pro 200"));
+        assert_eq!(
+            label(r#"{"plan_type":"prolite"}"#).as_deref(),
+            Some("Pro 100")
+        );
+        assert_eq!(
+            label(r#"{"plan_type":"team"}"#).as_deref(),
+            Some("Business")
+        );
+        assert_eq!(
+            label(r#"{"plan_type":"business"}"#).as_deref(),
+            Some("Enterprise")
+        );
+        assert_eq!(
+            label(r#"{"plan_type":"enterprise_cbp_usage_based"}"#).as_deref(),
+            Some("Enterprise")
+        );
+        assert_eq!(
+            label(r#"{"plan_type":"free_workspace"}"#).as_deref(),
+            Some("Free Workspace")
+        );
+        assert_eq!(label(r#"{"plan_type":"unknown"}"#), None);
+        assert_eq!(label(r#"{"rate_limit":null}"#), None);
     }
 
     #[test]

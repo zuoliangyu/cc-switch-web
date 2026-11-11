@@ -124,6 +124,8 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
             {t("prompts.name")}
           </Label>
           <Input
+            autoCorrect="off"
+            autoCapitalize="off"
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -137,6 +139,8 @@ const PromptFormPanel: React.FC<PromptFormPanelProps> = ({
             {t("prompts.description")}
           </Label>
           <Input
+            autoCorrect="off"
+            autoCapitalize="off"
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}

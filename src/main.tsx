@@ -14,7 +14,10 @@ import {
   syncModelsDevPricingOnStartup,
 } from "@/lib/modelsDevAutoSync";
 import { initializeWindowActivity } from "@/lib/windowActivity";
+import { initializeInterfacePrefs } from "@/lib/interfacePrefs";
 
+// 界面密度要在任何界面渲染之前用上，首屏不会先按紧凑尺寸画一遍
+initializeInterfacePrefs();
 initializeWindowActivity();
 
 // 根据平台添加 body class，便于平台特定样式

@@ -156,6 +156,18 @@ const UsagePage = lazy(() =>
   })),
 );
 
+function PageLoading() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="status"
+      className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+    >
+      {t("common.loading")}
+    </div>
+  );
+}
+
 type View =
   | "usage"
   | "accounts"
@@ -244,6 +256,11 @@ function App() {
     [],
   );
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // 新增 / 编辑面板第一次打开时才挂载（才去加载表单代码），之后保留以便关闭动画
+  const [hasOpenedAdd, setHasOpenedAdd] = useState(false);
+  useEffect(() => {
+    if (isAddOpen) setHasOpenedAdd(true);
+  }, [isAddOpen]);
   // 供应商页顶部正在看的那格（直连 / 路由 / 聚合），由 SwitchModePanel 报上来。打开新增、
   // 编辑时记下当时那格，表单按它选布局：在聚合那格打开就是聚合的简化表单（上游 fe831f0a）。
   const [providerModeView, setProviderModeView] = useState<{
@@ -392,6 +409,10 @@ function App() {
   }, [activeApp]);
 
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [hasOpenedEdit, setHasOpenedEdit] = useState(false);
+  useEffect(() => {
+    if (editingProvider) setHasOpenedEdit(true);
+  }, [editingProvider]);
   const [usageProvider, setUsageProvider] = useState<Provider | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     provider: Provider;
@@ -973,7 +994,8 @@ function App() {
                         onOpenTerminal:
                           activeApp === "claude" ||
                           activeApp === "codex" ||
-                          activeApp === "agy"
+                          activeApp === "agy" ||
+                          activeApp === "grokbuild"
                             ? handleOpenTerminal
                             : undefined,
                         onCreate: () => openAddProvider(currentModeView),
@@ -1065,7 +1087,7 @@ function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <Suspense fallback={<div className="flex-1" />}>{content}</Suspense>
+          <Suspense fallback={<PageLoading />}>{content}</Suspense>
         </motion.div>
       </AnimatePresence>
     );
@@ -1605,29 +1627,33 @@ function App() {
       </main>
 
       <Suspense fallback={null}>
-        <AddProviderDialog
-          open={isAddOpen}
-          onOpenChange={setIsAddOpen}
-          appId={activeApp}
-          onSubmit={addProvider}
-          modeView={formModeView}
-        />
+        {(isAddOpen || hasOpenedAdd) && (
+          <AddProviderDialog
+            open={isAddOpen}
+            onOpenChange={setIsAddOpen}
+            appId={activeApp}
+            onSubmit={addProvider}
+            modeView={formModeView}
+          />
+        )}
       </Suspense>
 
       <Suspense fallback={null}>
-        <EditProviderDialog
-          open={Boolean(editingProvider)}
-          provider={effectiveEditingProvider}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditingProvider(null);
-            }
-          }}
-          onSubmit={handleEditProvider}
-          appId={activeApp}
-          isProxyTakeover={isProxyRunning && isCurrentAppTakeoverActive}
-          modeView={formModeView}
-        />
+        {(editingProvider || hasOpenedEdit) && (
+          <EditProviderDialog
+            open={Boolean(editingProvider)}
+            provider={effectiveEditingProvider}
+            onOpenChange={(open) => {
+              if (!open) {
+                setEditingProvider(null);
+              }
+            }}
+            onSubmit={handleEditProvider}
+            appId={activeApp}
+            isProxyTakeover={isProxyRunning && isCurrentAppTakeoverActive}
+            modeView={formModeView}
+          />
+        )}
       </Suspense>
 
       {effectiveUsageProvider && (

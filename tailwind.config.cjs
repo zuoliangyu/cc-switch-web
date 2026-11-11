@@ -4,6 +4,24 @@ module.exports = {
   darkMode: ["selector", ".dark"],
   theme: {
     extend: {
+      // 字号、控件高度随界面密度变（src/index.css 的 --fs-* / --h-*，<html data-density>）
+      fontSize: {
+        xs: ["var(--fs-xs)", { lineHeight: "var(--lh-xs)" }],
+        sm: ["var(--fs-sm)", { lineHeight: "var(--lh-sm)" }],
+        base: ["var(--fs-base)", { lineHeight: "var(--lh-base)" }],
+        lg: ["var(--fs-lg)", { lineHeight: "var(--lh-lg)" }],
+      },
+      spacing: {
+        // 按钮 / 输入框：control = default（36），control-sm = sm（32），control-xs = compact（28）
+        control: "var(--h-control)",
+        "control-sm": "var(--h-control-sm)",
+        "control-xs": "var(--h-control-xs)",
+        "nav-row": "var(--h-nav-row)",
+        "card-y": "var(--card-py)",
+      },
+      minHeight: {
+        card: "var(--h-card)",
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

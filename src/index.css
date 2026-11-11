@@ -462,6 +462,46 @@
   border-top: 2px solid hsl(var(--border));
 }
 
+/* 界面密度（设置 › 通用 › 界面密度，src/lib/interfacePrefs.ts，上游 4e7413c5）。
+   不带 data-density 或为 compact 时是紧凑，即原来的尺寸（默认）；
+   选了舒适时 <html> 上是 data-density="comfortable"，字号整体大一档、控件高 4px。
+   Web 的字号沿用 Tailwind 的 xs / sm / base / lg，控件高度沿用原来的 36 / 32 / 28。 */
+:root {
+  --fs-xs: 12px;
+  --lh-xs: 16px;
+  --fs-sm: 14px;
+  --lh-sm: 20px;
+  --fs-base: 16px;
+  --lh-base: 24px;
+  --fs-lg: 18px;
+  --lh-lg: 28px;
+
+  --h-control: 36px;
+  --h-control-sm: 32px;
+  --h-control-xs: 28px;
+  --h-nav-row: 36px;
+  --h-card: 58px;
+  --card-py: 10px;
+}
+
+html[data-density="comfortable"] {
+  --fs-xs: 13px;
+  --lh-xs: 18px;
+  --fs-sm: 15px;
+  --lh-sm: 22px;
+  --fs-base: 18px;
+  --lh-base: 26px;
+  --fs-lg: 20px;
+  --lh-lg: 28px;
+
+  --h-control: 40px;
+  --h-control-sm: 36px;
+  --h-control-xs: 32px;
+  --h-nav-row: 42px;
+  --h-card: 68px;
+  --card-py: 14px;
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: none;

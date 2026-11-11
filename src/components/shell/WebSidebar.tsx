@@ -144,7 +144,7 @@ export const WebSidebar = memo(function WebSidebar({
         aria-current={currentView === id ? "page" : undefined}
         onClick={() => selectView(id)}
         className={cn(
-          "flex h-9 w-full shrink-0 items-center gap-3 rounded-md px-3 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+          "flex h-nav-row w-full shrink-0 items-center gap-3 rounded-md px-3 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
           currentView === id && "bg-accent font-medium",
         )}
       >

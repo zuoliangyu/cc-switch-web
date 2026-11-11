@@ -523,6 +523,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
           return (
             <div key={index} className="flex items-center gap-1">
               <input
+                autoCorrect="off"
+                autoCapitalize="off"
                 type="text"
                 className={cn(MONO_FIELD_CLASS, "w-1/3 shrink-0")}
                 aria-label={t("mcpPage.drawer.kvKeyAria", {
@@ -542,6 +544,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                 }
               />
               <input
+                autoCorrect="off"
+                autoCapitalize="off"
                 type={shown ? "text" : "password"}
                 className={cn(MONO_FIELD_CLASS, "flex-1")}
                 aria-label={t("mcpPage.drawer.kvValueAria", {
@@ -708,6 +712,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                 {t("mcpPage.drawer.paste")}
               </label>
               <textarea
+                autoCorrect="off"
+                autoCapitalize="off"
                 id="mcp-paste"
                 value={pasteText}
                 onChange={(event) => handlePaste(event.target.value)}
@@ -885,6 +891,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                 </HelpTip>
               </div>
               <input
+                autoCorrect="off"
+                autoCapitalize="off"
                 id="mcp-name"
                 type="text"
                 className={MONO_FIELD_CLASS}
@@ -978,6 +986,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                           <RequiredMark srText={t("mcpPage.drawer.required")} />
                         </label>
                         <input
+                          autoCorrect="off"
+                          autoCapitalize="off"
                           id="mcp-cmd"
                           type="text"
                           className={cn(
@@ -1015,6 +1025,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                         {conn.args.map((arg, index) => (
                           <div key={index} className="flex items-center gap-1">
                             <input
+                              autoCorrect="off"
+                              autoCapitalize="off"
                               type="text"
                               className={cn(MONO_FIELD_CLASS, "flex-1")}
                               aria-label={t("mcpPage.drawer.argAria", {
@@ -1071,6 +1083,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                           </span>
                         </label>
                         <input
+                          autoCorrect="off"
+                          autoCapitalize="off"
                           id="mcp-cwd"
                           type="text"
                           className={cn(
@@ -1095,6 +1109,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                           <RequiredMark srText={t("mcpPage.drawer.required")} />
                         </label>
                         <input
+                          autoCorrect="off"
+                          autoCapitalize="off"
                           id="mcp-url"
                           type="text"
                           inputMode="url"
@@ -1175,6 +1191,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     )}
                   </div>
                   <textarea
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-json"
                     value={jsonText}
                     onChange={(event) => handleJsonChange(event.target.value)}
@@ -1290,6 +1308,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     </HelpTip>
                   </div>
                   <input
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-meta-name"
                     type="text"
                     className={FIELD_CLASS}
@@ -1308,6 +1328,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcpPage.drawer.description")}
                   </label>
                   <textarea
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-meta-desc"
                     rows={2}
                     className={cn(FIELD_CLASS, "h-auto py-2")}
@@ -1325,6 +1347,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcpPage.drawer.tags")}
                   </label>
                   <input
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-meta-tags"
                     type="text"
                     className={FIELD_CLASS}
@@ -1344,6 +1368,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcpPage.drawer.homepage")}
                   </label>
                   <input
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-meta-home"
                     type="text"
                     inputMode="url"
@@ -1365,6 +1391,8 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcpPage.drawer.docs")}
                   </label>
                   <input
+                    autoCorrect="off"
+                    autoCapitalize="off"
                     id="mcp-meta-docs"
                     type="text"
                     inputMode="url"

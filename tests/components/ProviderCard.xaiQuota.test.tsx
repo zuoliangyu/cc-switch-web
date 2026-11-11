@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProviderCard } from "@/components/providers/ProviderCard";
 import type { Provider } from "@/types";
 
@@ -59,19 +60,26 @@ function renderCard(
   provider: Provider,
   appId: "codex" | "grokbuild",
   onConfigureUsage = vi.fn(),
+  cached: [readonly unknown[], unknown][] = [],
 ) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, enabled: false } },
+  });
+  for (const [key, data] of cached) queryClient.setQueryData(key, data);
   return render(
-    <ProviderCard
-      provider={provider}
-      isCurrent
-      appId={appId}
-      presentation={{ chips: [], buttons: [] }}
-      onEdit={vi.fn()}
-      onDelete={vi.fn()}
-      onConfigureUsage={onConfigureUsage}
-      onOpenWebsite={vi.fn()}
-      onDuplicate={vi.fn()}
-    />,
+    <QueryClientProvider client={queryClient}>
+      <ProviderCard
+        provider={provider}
+        isCurrent
+        appId={appId}
+        presentation={{ chips: [], buttons: [] }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onConfigureUsage={onConfigureUsage}
+        onOpenWebsite={vi.fn()}
+        onDuplicate={vi.fn()}
+      />
+    </QueryClientProvider>,
   );
 }
 
@@ -181,6 +189,90 @@ describe("ProviderCard subscription quota", () => {
     expect(codexQuotaFooterProps).toHaveBeenCalledWith(
       expect.objectContaining({ autoQueryInterval: 12 }),
     );
+  });
+
+  it("副标题末尾显示额度查询带回的套餐（上游 626f0226）", () => {
+    renderCard(
+      {
+        id: "xai-oauth",
+        name: "xAI OAuth",
+        category: "third_party",
+        settingsConfig: {},
+        websiteUrl: "https://x.ai",
+        meta: { providerType: "xai_oauth" },
+      } as Provider,
+      "codex",
+      vi.fn(),
+      [
+        [
+          ["xai_oauth", "quota", "default"],
+          { success: true, tiers: [], planName: "SuperGrok Heavy" },
+        ],
+      ],
+    );
+
+    expect(screen.getByText("· SuperGrok Heavy")).toBeInTheDocument();
+  });
+
+  it("官方卡读 CLI 订阅额度缓存里的套餐；查询失败时不显示", () => {
+    const provider = {
+      id: "codex-official",
+      name: "OpenAI Official",
+      category: "official",
+      websiteUrl: "https://chatgpt.com",
+      settingsConfig: { auth: {}, config: "" },
+    } as Provider;
+    const { unmount } = renderCard(provider, "codex", vi.fn(), [
+      [
+        ["subscription", "quota", "codex"],
+        { success: true, tiers: [], planName: "Pro 200" },
+      ],
+    ]);
+    expect(screen.getByText("· Pro 200")).toBeInTheDocument();
+    unmount();
+
+    renderCard(provider, "codex", vi.fn(), [
+      [
+        ["subscription", "quota", "codex"],
+        { success: false, tiers: [], planName: "Pro 200" },
+      ],
+    ]);
+    expect(screen.queryByText("· Pro 200")).not.toBeInTheDocument();
+  });
+
+  it("绑定账号的卡关了额度查询就不显示套餐", () => {
+    renderCard(
+      {
+        id: "bound-login",
+        name: "Bound account",
+        category: "custom",
+        websiteUrl: "https://chatgpt.com",
+        settingsConfig: { auth: {}, config: "" },
+        meta: {
+          authBinding: {
+            source: "managed_account",
+            authProvider: "codex_oauth",
+            accountId: "account-3",
+          },
+          usage_script: {
+            enabled: false,
+            language: "javascript",
+            code: "",
+            templateType: "official_subscription",
+          },
+        },
+      } as Provider,
+      "codex",
+      vi.fn(),
+      [
+        [
+          ["codex_oauth", "quota", "account-3"],
+          { success: true, tiers: [], planName: "Plus" },
+        ],
+      ],
+    );
+
+    expect(screen.queryByText("· Plus")).not.toBeInTheDocument();
   });
 
   it("旧式 codex_oauth Provider 保持固定额度行为", () => {

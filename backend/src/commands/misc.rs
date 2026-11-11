@@ -1279,6 +1279,7 @@ pub(crate) fn open_provider_terminal_internal(
     let program = match app_type {
         AppType::Agy => "agy",
         AppType::Codex => "codex",
+        AppType::GrokBuild => "grok",
         _ => "claude",
     };
     let user_args = terminal_user_args(program, skip_permissions, extra_args)?;
@@ -1297,6 +1298,11 @@ pub(crate) fn open_provider_terminal_internal(
 
     if app_type == AppType::Codex {
         open_codex_terminal(state, provider, &user_args, launch_cwd.as_deref())?;
+        return Ok(true);
+    }
+
+    if app_type == AppType::GrokBuild {
+        open_grok_terminal(state, provider, &user_args, launch_cwd.as_deref())?;
         return Ok(true);
     }
 
@@ -1349,10 +1355,11 @@ pub(crate) fn open_provider_terminal_internal(
     Ok(true)
 }
 
-/// 跳过权限确认的参数：Claude Code 和 agy 同名，Codex 跳过确认的同时也关掉沙箱。
+/// 跳过权限确认的参数：Claude Code 和 agy 同名，Codex 跳过确认的同时也关掉沙箱；Grok Build 用自己的。
 fn skip_permissions_flag(program: &str) -> &'static str {
     match program {
         "codex" => "--dangerously-bypass-approvals-and-sandbox",
+        "grok" => "--always-approve",
         _ => "--dangerously-skip-permissions",
     }
 }
@@ -1483,6 +1490,62 @@ fn open_codex_terminal(
         }
     }
     result
+}
+
+/// Grok Build 的「打开终端」（上游 89409412 的 grok_terminal_launch）：直接跑 `grok`，读的就是
+/// live 的 `config.toml`，所以只能打开当前供应商。
+///
+/// Grok CLI 没有只对一个进程换配置的办法：没有 `-c` 之类的覆盖参数，`GROK_CONFIG_PATH`
+/// 不生效（1.0.70 实测），`GROK_HOME` 会把会话、登录、技能一起换到别的目录。
+/// `GROK_HOME` 定到 CC Switch 管的目录（设置里可以改），Grok 读的就是这里写的那份。
+fn open_grok_terminal(
+    state: &AppState,
+    provider: &crate::provider::Provider,
+    user_args: &[String],
+    cwd: Option<&Path>,
+) -> Result<(), String> {
+    use crate::mode::current::{self, Purpose};
+    let in_use = current::provider_for(state.db.as_ref(), &AppType::GrokBuild, Purpose::InUse)
+        .map_err(|e| e.to_string())?;
+    if in_use.as_deref() != Some(provider.id.as_str()) {
+        return Err(crate::error::AppError::localized(
+            "grokbuild.terminal.not_current",
+            format!(
+                "Grok Build 不能只对一个终端换供应商：请先切换到「{}」，再打开终端",
+                provider.name
+            ),
+            format!(
+                "Grok Build can't use a different provider in a single terminal. Switch to \"{}\" first, then open the terminal",
+                provider.name
+            ),
+        )
+        .to_string());
+    }
+    let grok_home = crate::grok_config::get_grok_config_dir()
+        .to_string_lossy()
+        .into_owned();
+    let command = grok_launch_command(&provider.id, grok_home, user_args)?;
+    launch_terminal_command(&command, cwd, None).map_err(|e| format!("启动终端失败: {e}"))
+}
+
+/// `GROK_HOME` 经启动环境传入，再接用户参数。Windows 上 npm 装的是 grok.cmd：不加 `call`
+/// 跑完不回到启动 .bat，后面的清理就不执行了。
+fn grok_launch_command(
+    provider_id: &str,
+    grok_home: String,
+    user_args: &[String],
+) -> Result<String, String> {
+    let program = if cfg!(target_os = "windows") {
+        "call grok"
+    } else {
+        "grok"
+    };
+    env_launch_command(
+        program,
+        provider_id,
+        user_args,
+        &[("GROK_HOME", Some(grok_home))],
+    )
 }
 
 /// `-c` 参数：卡要覆盖的配置项，再接用户参数。
@@ -2782,6 +2845,50 @@ mod tests {
         assert!(super::terminal_user_args("agy", false, Vec::new())
             .unwrap()
             .is_empty());
+        let grok = super::terminal_user_args("grok", true, Vec::new()).unwrap();
+        assert_eq!(grok, vec!["--always-approve"]);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn grok_launch_runs_plain_grok_against_the_managed_home() {
+        let args = super::terminal_user_args(
+            "grok",
+            true,
+            vec!["--model".to_string(), "grok-4.6".to_string()],
+        )
+        .unwrap();
+        let command =
+            super::grok_launch_command("grok-1", r"C:\Users\me\.grok".to_string(), &args).unwrap();
+        assert_eq!(
+            command,
+            "set \"GROK_HOME=C:\\Users\\me\\.grok\"\r\ncall grok \"--always-approve\" \"--model\" \"grok-4.6\""
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn grok_launch_runs_plain_grok_against_the_managed_home() {
+        let args = super::terminal_user_args(
+            "grok",
+            true,
+            vec!["--model".to_string(), "grok-4.6".to_string()],
+        )
+        .unwrap();
+        let command =
+            super::grok_launch_command("grok-1", "/home/me/.grok".to_string(), &args).unwrap();
+        assert!(
+            command.ends_with("grok '--always-approve' '--model' 'grok-4.6'"),
+            "{command}"
+        );
+        // GROK_HOME 写进只有本人可读的临时文件，命令里读入后删掉
+        let env_file = command
+            .strip_prefix(". '")
+            .and_then(|rest| rest.split('\'').next())
+            .expect("env file path");
+        let content = std::fs::read_to_string(env_file).unwrap();
+        let _ = std::fs::remove_file(env_file);
+        assert_eq!(content, "export GROK_HOME='/home/me/.grok'\n");
     }
 
     #[cfg(target_os = "windows")]

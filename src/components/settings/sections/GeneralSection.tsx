@@ -4,6 +4,11 @@ import type { SettingsFormState } from "@/hooks/useSettings";
 import { useTheme } from "@/components/theme-provider";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
+  setDensity,
+  useInterfacePrefs,
+  type Density,
+} from "@/lib/interfacePrefs";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -48,6 +53,7 @@ export function GeneralSection({
 }: GeneralSectionProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  const { density } = useInterfacePrefs();
 
   return (
     <>
@@ -148,6 +154,31 @@ export function GeneralSection({
                   {
                     value: "used",
                     label: t("settings.general.quotaDisplayUsed"),
+                  },
+                ]}
+              />
+            }
+          />
+          <SettingsRow
+            label={t("settings.general.density")}
+            help={{
+              title: t("settings.general.density"),
+              body: t("settings.general.densityHelp"),
+            }}
+            control={
+              <SegmentedControl<Density>
+                size="sm"
+                aria-label={t("settings.general.density")}
+                value={density}
+                onValueChange={setDensity}
+                items={[
+                  {
+                    value: "compact",
+                    label: t("settings.general.densityCompact"),
+                  },
+                  {
+                    value: "comfortable",
+                    label: t("settings.general.densityComfortable"),
                   },
                 ]}
               />

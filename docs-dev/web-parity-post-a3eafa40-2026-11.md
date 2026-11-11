@@ -37,18 +37,18 @@
 | --- | --- | --- | --- |
 | A | 预设/定价/图标 | 11 | 已完成（11 已迁移） |
 | B | 代理 | 22 | 已完成（19 已迁移、1 部分迁移、2 不适用） |
-| C | 后端杂项 | 27 | 已完成（24 已迁移、3 部分迁移） |
+| C | 后端杂项 | 27 | 已完成（25 已迁移、2 部分迁移） |
 | D | Codex | 13 | 已完成（13 已迁移） |
-| E | 界面 | 11 | 待迁移 |
+| E | 界面 | 11 | 已完成（10 已迁移、1 部分迁移） |
 | F | 会话全文搜索 | 1 | 已完成（1 已迁移） |
 | G | Copilot CLI | 1 | 待迁移 |
 | — | 不适用 | 22 | — |
 
 | 处置 | 数量 |
 | --- | --- |
-| 已迁移 | 68 |
+| 已迁移 | 79 |
 | 部分迁移 | 4 |
-| 待迁移 | 12 |
+| 待迁移 | 1 |
 | 不适用 | 24 |
 
 执行顺序：A → B → C → D → E → F → G。各批共享文件多，顺序执行、逐批提交。
@@ -68,25 +68,25 @@
 | `e217bfcb` | v4.0.26 | perf(proxy): reduce forwarding allocations and failover database reads (#9161) | B 代理 | SSE 分帧换成 `SseBuffer` / `SseBlocks`（全部 `take_sse_block` 调用方）、故障转移只加载队列内供应商且端点一次批量读、常用查询 `prepare_cached`、私有参数原地过滤（顺带补上 00a789e7 遗漏的 JSON Schema 属性名保留）、规范 JSON 直接序列化；不适用：活跃连接 guard 计数（Web 没有该 guard，计数在每次尝试里累加）、按家复制请求体改 `Cow`（Web 每家都要 `apply_media_prevention`）、forwarder 改借用参数、`codex_chat_history`（Web 无该缓存） | 部分迁移 |
 | `e7878471` | v4.0.26 | fix(proxy): stop classifier retry loops (#9201) | B 代理 | 连续三轮工具结果报 auto mode 分类器不可用时 Claude / Claude Desktop 本地回 400、不发往上游，用户发新消息恢复；新增 `classifier_guard` | 已迁移 |
 | `c70d61de` | v4.0.26 | fix(linux): bump @tauri-apps/cli so the AppImage stops bundling libwayland-client (#9229) | — | Tauri CLI / AppImage 打包；Web 无桌面打包 | 不适用 |
-| `d16064bd` | v4.0.26 | fix(sessions): improve reader toolbar layout and metadata wrapping (#9109) | E 界面 |  | 待迁移 |
+| `d16064bd` | v4.0.26 | fix(sessions): improve reader toolbar layout and metadata wrapping (#9109) | E 界面 | E：会话阅读页工具栏：项目路径独占第一行（不再和日期挤在一行被截断），时间范围、加载进度、问答 / 工具数、模型、用量放到第二行，各段整体换行、长文本可断行，去掉分隔点；Token 数改用 `realTotalTokens`（与用量统计同口径）；颜色沿用 Web 的 muted-foreground | 已迁移 |
 | `98777515` | v4.0.26 | fix(ui): keep the remaining DB-lock-waiting sync commands off the UI thread (#9178) | C 后端杂项 | C：项目写入（新建 / 改 / 删 / 清除当前 / 应用）与统一供应商增删同步各用一把模块级锁串行（`PROFILE_LOCK` / `UNIVERSAL_LOCK`），连同项目列表放到阻塞线程池，参数先解析、非法输入不等锁；不迁：其余约 40 个命令改 async（Web 是 axum 多线程运行时，没有会被冻结的 UI 主线程），托盘的两个项目入口（Web 无托盘） | 部分迁移 |
 | `fc9b17cb` | v4.0.26 | perf(db): batch provider endpoint reads and skip unchanged saves (#9180) | C 后端杂项 | C：保存供应商时内容没变不发 UPDATE（不弄脏库、不触发 WebDAV 自动同步），meta 键序不同但等价时沿用库里的 JSON；端点批量读取 Web 已随 e217bfcb 做过；迁入上游 `providers_tests` | 已迁移 |
-| `ca58c031` | v4.0.26 | perf(ui): lazy-load secondary pages and provider editors (#9181) | E 界面 |  | 待迁移 |
+| `ca58c031` | v4.0.26 | perf(ui): lazy-load secondary pages and provider editors (#9181) | E 界面 | E：Web 此前已把次级页面、弹窗按需加载；按上游补上新增 / 编辑供应商面板第一次打开才挂载（此前一渲染就拉表单代码）、页面加载时显示「加载中」状态；迁入 `scripts/measure-renderer.mjs`（注释改为 `vite build --manifest`）；上游 App 用例的 findBy 改动 Web 已有，另补「未打开不挂载」用例 | 已迁移 |
 | `50a51b86` | v4.0.26 | perf(runtime): defer maintenance and pause hidden-window work (#9182) | C 后端杂项 | C：打开数据库不再做日志归档 / 清理 / 回收空间，统一由维护任务在启动恢复之后、阻塞线程池里做，备份失败也照常清理；Web 此前只在启动时同步维护一次，按上游补上每日维护定时器（`spawn_periodic_maintenance`，休眠不补跑）；窗口活跃状态不变时不重启心跳；用量页的推送失效与滚动范围暂停已在框架 2 取上游版本；Tauri 窗口显隐事件不适用（浏览器按 visibilitychange，React Query 默认按页面可见性） | 已迁移 |
 | `2186b305` | v4.0.26 | fix(apps): append actionable hint when npm install hits a bin-path collision (#9196) | C 后端杂项 | C：npm 全局安装撞上 bin 路径冲突（EEXIST + File exists）时在错误详情后追加可操作提示 | 已迁移 |
 | `cc4ce038` | v4.0.26 | perf(sessions): avoid transcript copies and release lightweight caches (#9183) | C 后端杂项 | C：消息字节数改为计数写入、问题预览只看需要的前缀、整份消息与流式分包按借用序列化不复制（`/api/sessions/messages` 直接返回序列化字节）；不迁：轻量模式释放会话缓存（Web 没有轻量模式） | 部分迁移 |
 | `1adb3cbc` | v4.0.26 | fix(codex): stop GitHub Copilot Responses replies from showing twice (#8025) | B 代理 | Copilot 卡的原生 Responses 流按 output_index 固定首个 item ID（压缩与补参数两条流） | 已迁移 |
 | `02a13641` | v4.0.26 | fix(codex): reuse the Grok compat layer for GitHub Copilot Responses (#7989) | B 代理 | Copilot 承载 Grok 模型时按实际发出的模型复用 xAI 兼容（请求 namespace 展开与字段清洗、不回落卡片默认模型，响应还原工具名与整数参数）；`ForwardResult` / `RequestContext` 增加 `outbound_model`；xAI 改写流去掉实体头 | 已迁移 |
 | `df3a9072` | v4.0.26 | fix(webdav-sync): preserve file symlink names in skills archives (#9197) | C 后端杂项 | C：WebDAV 同步打包 Skills 时文件符号链接保留原名（按原路径命名、读取解析后的目标） | 已迁移 |
-| `78971d56` | v4.0.26 | feat(copilot): show every capped quota and label premium as Credits | E 界面 |  | 待迁移 |
-| `cf3c86fe` | v4.0.26 | feat(auth): show each account's subscription plan in the Auth Center | E 界面 |  | 待迁移 |
-| `626f0226` | v4.0.26 | feat(providers): show the plan on official provider cards | E 界面 |  | 待迁移 |
+| `78971d56` | v4.0.26 | feat(copilot): show every capped quota and label premium as Credits | E 界面 | E：Copilot 每项有上限的额度各一行（Credits / 代码补全 / 聊天），悬停写「剩余 / 共」；Free 不含 Credits 时账号行写「当前计划不含」、卡片上不占行；后端 `QuotaDetail` 透传 `has_quota`；「高级请求」改名 Credits（三语，含 `subscription.short` 与用量脚本）；托盘部分不适用；迁入 `copilotQuota` 用例 | 已迁移 |
+| `cf3c86fe` | v4.0.26 | feat(auth): show each account's subscription plan in the Auth Center | E 界面 | E：账号额度查询带回套餐名 `planName`：Copilot（先 SKU 再 `copilot_plan`，按 VS Code 的认法）、ChatGPT（`plan_type`，照 Codex `/status` 的叫法）、Kimi（`/me` 的 `user_level_name`）、Antigravity（`loadCodeAssist` 的 `paidTier`）、xAI（Grok CLI 设置接口）；授权中心账号行第二行打头显示，额度刷新失败时沿用上次；Web 的 xAI 额度只有前端一处调用，总是带上套餐（上游托盘轮询不问）；上游 `usage_cache`、`ManagedAuthStatusError` 用例 Web 无对应；迁入 `accountPlans`、各授权区块与后端套餐解析用例 | 已迁移 |
+| `626f0226` | v4.0.26 | feat(providers): show the plan on official provider cards | E 界面 | E：官方卡副标题末尾「· 套餐」，读卡片右侧额度查询的缓存（Copilot、Codex OAuth / 绑定账号、xAI、Antigravity 绑定账号或官方订阅、Kimi、其余官方订阅额度），不另发请求；Gemini CLI 额度用 `code_assist_plan` 读 `paidTier`；Web 卡片没有上游的 Codex 官方身份行，套餐接在地址或 agy 模型后面，写法同 Claude 默认登录的套餐；按 Web 结构补 `ProviderCard.xaiQuota` 用例（测试补上 QueryClientProvider） | 已迁移 |
 | `3cf79926` | v4.0.26 | fix(claude-desktop): point the official card at claude.com/download | A 预设/定价/图标 | A：Claude Desktop 官方卡地址改为 claude.com/download（预设、claude_desktop_config；上游 providers_seed 在 Web 对应 mode/controller 的官方卡补建） | 已迁移 |
 | `51b464bd` | v4.0.26 | feat(deeplink): import providers for Claude Desktop and the Pi-family apps | C 后端杂项 | C：Web 的深链接在前端解析导入，照上游放开 Claude Desktop 与 MiniMax Code / Kimi Code / DeepSeek Harness / Oh My Pi：Desktop 按模型名导成直连卡或占满四档的映射卡，Pi 系四家要求 `model` 并生成各自的最小节点（Kimi 带 128K 窗口、模型键加供应商 id 前缀），ID 用 ASCII slug，内联 config 补 `options.apiKey` 与 Kimi 的 `provider.*`；omp 的 `!` / 变量名形状前端拒绝，「此刻能解析成别的值」那条经新增的 `POST /api/omp/api-key-reference` 问服务端 | 已迁移 |
 | `420646d8` | v4.0.26 | fix(dsh): let headless profiles read keys CC Switch stores | C 后端杂项 | C：写进 headless 配置档的供应商有存储的 Key 时补上 `- id: credentials` / `disabled: false`，用户自己写过的不动 | 已迁移 |
 | `1c2ed066` | v4.0.26 | fix(apps): explain npm bin collisions instead of echoing --force | C 后端杂项 | C：截尾前保留 EEXIST 与 File exists 两行，前端换成三语的冲突提示（不建议 `--force`） | 已迁移 |
 | `65f6e682` | v4.0.26 | fix(mcp): show sign-in required instead of failed for 401 MCP endpoints | C 后端杂项 | C：MCP 端点回 401 时显示「需要登录」而不是失败；状态灯用 Web 现有色板（amber），三语文案；Web 轮询结果类型同步改为 `status` | 已迁移 |
-| `e6e7831e` | v4.0.26 | fix(claude-desktop): let auto-filled menu names follow model edits | E 界面 |  | 待迁移 |
+| `e6e7831e` | v4.0.26 | fix(claude-desktop): let auto-filled menu names follow model edits | E 界面 | E：Claude Desktop 映射行的菜单名还等于旧模型时随模型改动，自定义名称保留；补丁直接合入并迁入用例 | 已迁移 |
 | `a990c81a` | v4.0.26 | fix(proxy): race IPv4 when IPv6 upstream addresses are unreachable | B 代理 | IPv6 上游地址不通时竞速 IPv4 | 已迁移 |
 | `7c250c42` | v4.0.26 | feat(proxy): warn when the system proxy hijacks the local route | B 代理 | Codex / Grok Build 手动进入路由后按系统代理自检本地路由（`loopback_probe`，`/health` 回写随机头），回不到 CC Switch 时记日志并经事件推送提示；服务启动时接上的路由不检查 | 已迁移 |
 | `62688ab3` | v4.0.26 | feat(codex): let a card keep the official Fast speed tier on GPT rows | D Codex | D：卡上「保留官方 Fast 档」（`modelCatalog.officialSpeedTiers`，默认关）：原生 Responses 下给镜像官方的 GPT 行还原 `service_tiers` / `additional_speed_tiers`，反向解析还原开关；表单高级选项里上游格式下方的开关（只在 Responses、非 Copilot、非聚合布局显示），三语文案；迁入后端用例并补表单用例 | 已迁移 |
@@ -94,8 +94,8 @@
 | `38efe109` | v4.0.26 | fix(proxy): scope the Codex chat call_id cache to the client session | B 代理 | Web 没有 Codex Chat 的 `CodexChatHistoryStore` 内存缓存，不存在跨会话串用 call_id 的问题 | 不适用 |
 | `abf441fe` | v4.0.26 | fix(proxy): keep turn-start developer messages in place for Codex chat | B 代理 | Codex Chat 转换保留回合开头的 developer 消息位置 | 已迁移 |
 | `1d9b448e` | v4.0.26 | fix(subscription): refresh expired Claude login for follow-login cards | C 后端杂项 | C：跟随本地登录的 Claude 官方卡令牌过期时在默认槽位跑 `claude -p /usage` 读缓存额度，改了配置目录时不跑 | 已迁移 |
-| `7a0718e1` | v4.0.26 | fix(ui): stop macOS from capitalizing text typed into raw inputs | E 界面 |  | 待迁移 |
-| `0f06fed2` | v4.0.26 | fix(ui): center dialogs without translate so they stay sharp on 1x displays | E 界面 |  | 待迁移 |
+| `7a0718e1` | v4.0.26 | fix(ui): stop macOS from capitalizing text typed into raw inputs | E 界面 | E：MCP 表单、提示词、Pi 提示词资源、Skill 仓库管理、会话查找、Hermes 记忆里的输入框加 `autoCorrect` / `autoCapitalize` off；Web 的共用 `Input` 没有上游那组默认属性，这几处用到它的也一并加上；托盘面板不适用 | 已迁移 |
+| `0f06fed2` | v4.0.26 | fix(ui): center dialogs without translate so they stay sharp on 1x displays | E 界面 | E：弹窗改用 `inset-0 + m-auto + h-fit` 居中，去掉 translate 与 slide 动画类（1x 屏不再发虚）；会话图片灯箱改 `w-fit` | 已迁移 |
 | `81a9fa79` | v4.0.26 | feat(dsh): allow overriding the DeepSeek Harness home directory | C 后端杂项 | C：设备级 `dsh_config_dir`（优先于 `DSH_HOME`），WSL 路径让 DSH 的检测与安装走那个发行版；应用配置页加 DSH 目录，保存后刷新 DSH 供应商、Skills、会话与官方账号；Web 的「恢复默认」取后端默认目录，新增 `native_data_dir` 让它不含设置覆盖 | 已迁移 |
 | `a5100e0e` | v4.0.26 | chore(presets): switch TeamoRouter domain from .cn to .com | A 预设/定价/图标 | A：TeamoRouter 各应用预设域名 .cn → .com；迁入上游 teamorouterClaudePresets 用例；Web 三语 README 无 TeamoRouter，不改 | 已迁移 |
 | `44c7fa9b` | v4.0.26 | fix(proxy): fill outbound_model on the classifier-loop early return | B 代理 | 分类器循环的提前返回显式带 `outbound_model: None` | 已迁移 |
@@ -106,11 +106,11 @@
 | `cb2f2389` | v4.0.27 | fix(tray): stabilize Linux quick panel rendering in lightweight mode (#9233) | — | 系统托盘 | 不适用 |
 | `158b2ba3` | v4.0.27 | feat(pricing): add search to the model pricing table (#9205) | A 预设/定价/图标 | A：定价表搜索（词首前缀匹配、精确 ID 置顶、回车编辑首条或按查询新增），按 Web 保留的定价页布局接入；编辑弹窗自动聚焦；三语文案；迁入上游用例（定价页先有计费默认表，取最后一张表） | 已迁移 |
 | `e66441d8` | v4.0.27 | fix(ui): make provider icons follow the theme (#8438) | A 预设/定价/图标 | A：近黑单墨色 SVG 换成 currentColor 跟随主题，近黑色不写死，位图 / 仍带近黑笔画的图标深色下垫白；Web 的位图图标在 @/icons/local，needsLightBacking 按它判断；卡片图标框去掉底色；迁入 themeAdapt 用例 | 已迁移 |
-| `89409412` | v4.0.27 | feat(terminal): open a Grok Build terminal for the current provider (#9234) | E 界面 |  | 待迁移 |
+| `89409412` | v4.0.27 | feat(terminal): open a Grok Build terminal for the current provider (#9234) | E 界面 | E：Grok Build 当前供应商可「打开终端」：后端核对是当前在用的那家，`GROK_HOME` 指向 CC Switch 管的目录跑 `grok`，跳过确认用 `--always-approve`，Windows 用 `call grok`；按 Web 的 `env_launch_command` 接入；迁入前端用例，后端用例按 Web 结构改写 | 已迁移 |
 | `6a3a7a44` | v4.0.27 | docs(tray): update outdated comments about the Linux panel background (#9279) | — | 系统托盘 | 不适用 |
 | `566448f0` | v4.0.27 | fix(ui): keep the window draggable and its controls clickable while a dialog is open (#9140) | — | 桌面窗口拖动与标题栏控件 | 不适用 |
-| `65106ce6` | v4.0.27 | feat(skills): tidy the installed Skills layout (#9210) | E 界面 |  | 待迁移 |
-| `4e7413c5` | v4.0.27 | feat(ui): add interface density and zoom settings (#9209) | E 界面 |  | 待迁移 |
+| `65106ce6` | v4.0.27 | feat(skills): tidy the installed Skills layout (#9210) | E 界面 | E：已安装 Skills 版式：横向滚动时名称栏钉在左边、表宽按可见应用数算；状态 / 来源筛选移到页签下的工具栏行（右侧「全部更新」，勾选后换成批量操作，窄窗口换行）；去掉页头的更新数链接，行上「可更新」徽标直接更新该 Skill；写入失败替换描述显示；行尾列收窄；三语加 `rowUpdateAria`、删 `headerUpdates*`。与上游不同：「打开目录」仍是复制路径；钉住的表头与名称栏用不透明底色（Web 的 muted 底色半透明）；迁入用例并改为复制路径 | 已迁移 |
+| `4e7413c5` | v4.0.27 | feat(ui): add interface density and zoom settings (#9209) | E 界面 | E：界面密度（紧凑默认 / 舒适）：`<html data-density>` 切换 CSS 变量，Web 的 `text-xs/sm/base/lg` 与按钮、输入框、下拉框、侧栏行、供应商卡高度随之变，tailwind-merge 登记新尺寸；设置 › 通用 › 外观加一行（三语），存 localStorage，`main.tsx` 渲染前应用。不迁：缩放档位与 Ctrl/⌘ + − 0（浏览器自带同样的缩放并按站点记住，不拦截浏览器快捷键）、Tauri webview 权限；上游 v7 字号角色 Web 没有，按 Web 的 Tailwind 字号做；用例按 Web 改写并补设置页用例 | 部分迁移 |
 | `cd15a164` | v4.0.27 | feat(provider): add Genesis presets for compatible clients (#9269) | A 预设/定价/图标 | A：Genesis 预设（Claude / Codex / Pi）、图标（按 Web 布局登记在 @/icons/local）、取模型按地址补 ?type=chat；迁入上游预设与取模型用例（mock 改 Web 的 runtime client），Claude 表单用例按 Web 结构改写 | 已迁移 |
 | `b9fd5d99` | v4.0.27 | feat(presets): move Mistral AI to Large 4 and unhide it | A 预设/定价/图标 | A：Mistral AI 改为 Large 4 并取消隐藏；行数断言随 4ed410ad 换成上游最终的「不丢预设」用例 | 已迁移 |
 | `2360631f` | v4.0.27 | chore(presets): align Genesis presets with the inline preset style | A 预设/定价/图标 | A：Genesis 预设改为内联写法，删除 genesisModels.ts，取模型常量内联 | 已迁移 |
@@ -167,7 +167,7 @@
 | `5a3d7f92` | 未发布 | feat(i18n): add Korean community localization (#8794) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `cdca0984` | 未发布 | feat(i18n): add Russian community localization (#7788) | — | 用户决定不新增语言（Web 保持 zh/en/ja）；提交内与语言无关的改动随 E 复核 | 不适用 |
 | `bd487e83` | 未发布 | feat(copilot): add GitHub Copilot CLI support (#8753) | G Copilot CLI |  | 待迁移 |
-| `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 | C：账号额度接口改用 agy 自己的 `daily-cloudcode-pa`；不迁：Ultra 5x / 20x 套餐名区分，依赖 Web 尚无的 `code_assist_plan`（套餐显示属批次 E 的 cf3c86fe / 626f0226），随 E 补 | 部分迁移 |
+| `76e19b47` | 未发布 | fix(agy): align account quota endpoint with agy CLI and distinguish Ultra 5x/20x plans (#9319) | C 后端杂项 | C：账号额度接口改用 agy 自己的 `daily-cloudcode-pa`；Ultra 5x / 20x 套餐名区分（按 `paidTier.id` 补档位，名字里已带时不重复）依赖套餐显示，随批次 E（cf3c86fe / 626f0226）补上，迁入上游用例 | 已迁移 |
 | `72e826ed` | 未发布 | fix(proxy): normalize call-less outputs for native Responses providers (#9328) | B 代理 | 非官方原生 Responses 上游把没有 call_id 的 function_call_output 改写成 user 消息 | 已迁移 |
 | `5e9812e0` | 未发布 | fix(claude): omit reasoning_content for Mistral tool history (#9388) | B 代理 | 上游为 api.mistral.ai 时不回放 reasoning_content | 已迁移 |
 
@@ -240,3 +240,11 @@
   - 事件推送：`session-index-status` 由 `commands::sync_session_index_internal` 的回调经 `crate::events::emit` 发出（payload `running` / `processed` / `total`，开始、每 25 个会话、结束各一次）；`useSessionContentSearch` 用 `useServerEvent` 订阅，开关开着时更新进度并让搜索重查（边建边能搜到），关着时忽略。
   - 用例：迁入上游 `search`（28，其中目录不可读那条仅 Unix）、`search_revision`（2）、`ScanStatus` 与首尾行读取（3）、Codex 压缩会话读失败、扫描复用、设置默认值，前端 `SessionContentSearchToggle`（7）、`sessionSearchUnicode`（5）、`useSessionContentSearch`（6）、`SessionManagerPage` / `SessionReader` / `turns` 新增用例与 msw 模拟；新增后端 HTTP 用例：同步经事件推送收尾、命中只有根目录内的会话、索引里塞进根目录外来源的行也不返回、关掉后搜索为空、清理删掉文件（去掉根目录过滤时该用例失败）；前端新增 `session-index-status` 推送更新进度、关着时忽略两条。
   - 验证：`cargo test --locked --lib` 3826 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/session_manager.rs` 的 `delete_session_internal`、`providers/opencode.rs` 的 `get_opencode_db_path`、`web_session_tests.rs` 第一条用例报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 262 个文件 2786 项通过；改动的前端文件 Prettier 通过（`SessionFinalReply.tsx`、`search-field.tsx`、`sessions.ts`、`web.ts`、`SessionManagerPage.test.tsx`、`msw/state.ts` 报的差异在 HEAD 就有，不在本批改动的行上，未动）。未做浏览器验收与 Docker Linux 检查。
+- 2026-11-11：完成批次 E（界面，11 项：10 项已迁移、1 项部分迁移），并补齐 C 批 `76e19b47` 的 Ultra 5x / 20x（改为已迁移）。
+  - 方法：上游补丁按 `src-tauri/src` → `backend/src` 映射后逐个 `git apply --3way`（缺失文件 `--exclude`）。`ClaudeDesktopProviderForm`、`OpenTerminalDialog`、`CopilotQuotaFooter`、各授权区块、`accountPlans`、`kimi_oauth/account.rs`、`agy_account` 干净合入；`App.tsx`、`ProviderCard`、`subscription*.rs`、`coding_plan.rs`、`xai_oauth.rs`、`misc.rs`（终端）与 Web 分叉，回到 Web 版本按行为手工迁移；`UnifiedSkillsPanel` 先把上游基线与目标版本的 v7 设计 token 换成 Web 的写法再三方合并，只剩两处冲突（表宽、搜索框宽度），取上游版式、保留 Web 的窄屏宽度。
+  - 套餐显示（cf3c86fe、626f0226、76e19b47）：`SubscriptionQuota.plan_name` 与前端 `planName`；Web 的 xAI 额度只有 `/api` 前端一处调用，总是并行问套餐；Gemini CLI 额度读 `loadCodeAssist` 原始响应后用 `code_assist_plan` 取套餐；卡片副标题按 Web 的额度 footer 选择顺序算缓存键（Antigravity 绑定账号按服务端是否支持切号判断，与 `AgyOfficialQuotaFooter` 一致）。
+  - 与上游不同：会话工具栏颜色、Skills 版式按 Web 的 CSS 变量（钉住的表头与名称栏改用不透明底色叠半透明 muted，避免滚过去的列透出来）；Skills「打开目录」仍是复制路径；`7a0718e1` 额外覆盖 Web 共用 `Input`（Web 的 `Input` 没有上游默认的 `autoCorrect` / `autoCapitalize`）；界面密度按 Web 的 Tailwind 字号（xs / sm / base / lg）与控件高度（36 / 32 / 28，舒适各 +4）做变量，侧栏行改 `WebSidebar`；缩放不迁，浏览器自带缩放，不拦截 Ctrl/⌘ + − 0；Grok Build 终端经 Web 的 `env_launch_command` 启动（Windows `call grok`）。托盘相关改动（78971d56、cf3c86fe、7a0718e1）不适用。
+  - 事件推送：本批没有新增服务端事件，上游这些提交也没有 `app.emit` / `listen`。
+  - 用例：迁入上游 `copilotQuota`、`accountPlans`、`ClaudeDesktopProviderForm`、`OpenTerminalDialog`、`UnifiedSkillsPanel`（「打开目录」一条改为复制路径）、各授权区块的套餐 mock、后端 `codex_plan_label`、`grok_plan`、`plan_prefers_the_paid_tier_name`、`ultra_plans_show_their_5x_or_20x_variant`；按 Web 结构新写 Grok 终端启动命令与 `--always-approve`、`ProviderCard` 副标题套餐三条、App「编辑器未打开不挂载」、`interfacePrefs`（密度与 tailwind-merge 覆盖）、设置页密度切换。
+  - 变基：先基于批次 D 之后的 main（`3a6d7e310`）完成并提交，再变基到批次 F（`c4af3ccda`）之后；三语 locale 自动合并（F 的 `sessionManager` 十个正文搜索键与本批的键都在），只有本台账第 3、6 节冲突，统计按两批合计重算；变基后重跑全部验证。
+  - 验证（变基后）：`cargo test --locked --lib` 3831 项通过、9 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；改动的 Rust 文件 rustfmt 干净（`commands/xai_oauth.rs` 报的差异在 HEAD 就有，不在本批改动的行上，未动）；`tsc --noEmit` 通过；前端全量 Vitest 266 个文件 2811 项通过；改动的前端文件 Prettier 通过（`SessionReaderHeader.tsx`、`button.tsx`、`input.tsx`、`index.css`、`lib/api/copilot.ts`、`tailwind.config.cjs`、`App.test.tsx` 报的差异在 HEAD 就有，未动）。未做浏览器验收与 Docker Linux 检查。

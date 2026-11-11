@@ -125,8 +125,11 @@ const COPILOT_USAGE_URL: &str = "https://api.github.com/copilot_internal/user";
 /// Copilot 使用量响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CopilotUsageResponse {
-    /// Copilot 计划类型
+    /// Copilot 计划类型（Free 也报 `individual`，认套餐要先看 `access_type_sku`）
     pub copilot_plan: String,
+    /// 订阅 SKU：`free_limited_copilot`（Free）、`max_monthly_subscriber_quota`（Max）…
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_type_sku: Option<String>,
     /// 配额重置日期
     pub quota_reset_date: String,
     /// 配额快照
@@ -155,6 +158,10 @@ pub struct QuotaDetail {
     pub percent_remaining: f64,
     /// 是否无限
     pub unlimited: bool,
+    /// 当前计划是否含这一项：Free 的 premium_interactions 是 false（总额 0，不是用完了）；
+    /// 旧响应没有这个字段
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_quota: Option<bool>,
 }
 
 /// Copilot 可用模型

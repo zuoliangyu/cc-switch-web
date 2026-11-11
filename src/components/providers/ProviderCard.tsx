@@ -2,6 +2,7 @@ import type * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { QueryKey } from "@tanstack/react-query";
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,12 @@ import AgyAccountQuotaFooter from "@/components/AgyAccountQuotaFooter";
 import ClaudeAccountQuotaFooter from "@/components/ClaudeAccountQuotaFooter";
 import { ClaudeBoundAccountLine } from "@/components/providers/forms/ClaudeOfficialSection";
 import { claudePlanLabel } from "@/lib/claudePlan";
-import { useClaudeDefaultPlan } from "@/lib/query/subscription";
+import {
+  subscriptionKeys,
+  useClaudeDefaultPlan,
+} from "@/lib/query/subscription";
+import { useQuotaPlan } from "@/lib/query/accountPlans";
+import type { CopilotQuota } from "@/lib/query/copilot";
 import { useAgyAccountSupported } from "@/components/providers/forms/AgyOAuthSection";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
@@ -137,6 +143,13 @@ function ClaudeDefaultPlanSuffix() {
   return <span className="ms-1 shrink-0 text-muted-foreground">· {label}</span>;
 }
 
+/** 副标题末尾的套餐（「· Pro 200」），写法同 Claude 默认登录的套餐 */
+function PlanSuffix({ plan }: { plan: string }) {
+  return <span className="ms-1 shrink-0 text-muted-foreground">· {plan}</span>;
+}
+
+const copilotPlan = (data: unknown) => (data as CopilotQuota).plan;
+
 /**
  * Antigravity 官方卡的额度：绑了授权中心账号就按那个号查，不用先切号；切号只实现了
  * macOS 钥匙串，服务端不支持时按 agy 当前登录查，忽略卡上的绑定。
@@ -247,6 +260,53 @@ export function ProviderCard({
     provider.meta?.providerType === PROVIDER_TYPES.CODEX_OAUTH ||
     isBoundCodexOfficial;
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
+  // Antigravity 官方卡绑了授权中心的账号：额度查绑定的号（服务端不支持切号时忽略绑定），
+  // 与 AgyOfficialQuotaFooter 一致
+  const agySupported = useAgyAccountSupported();
+  const agyBoundAccountId =
+    appId === "agy" && isOfficial && agySupported
+      ? resolveManagedAccountId(provider.meta, "agy_oauth")?.trim() || null
+      : null;
+  // 副标题末尾的套餐：读右边额度那个查询的缓存（键和各额度 footer 一致），额度查到才有，
+  // 不另发请求。Claude 官方卡另有写法（ClaudeDefaultPlanSuffix / ClaudeBoundAccountLine）
+  const quotaPlanKey: QueryKey | null = isCopilot
+    ? [
+        "copilot",
+        "quota",
+        resolveManagedAccountId(provider.meta, PROVIDER_TYPES.GITHUB_COPILOT) ??
+          "default",
+      ]
+    : isCodexOauth
+      ? !isBoundCodexOfficial || usageEnabled
+        ? [
+            "codex_oauth",
+            "quota",
+            resolveManagedAccountId(
+              provider.meta,
+              PROVIDER_TYPES.CODEX_OAUTH,
+            ) ?? "default",
+          ]
+        : null
+      : isXaiOauth
+        ? [
+            "xai_oauth",
+            "quota",
+            resolveManagedAccountId(provider.meta, PROVIDER_TYPES.XAI_OAUTH) ??
+              "default",
+          ]
+        : appId === "agy" && isOfficial
+          ? agyBoundAccountId
+            ? ["agy_oauth", "quota", agyBoundAccountId]
+            : subscriptionKeys.quota(appId)
+          : appId === "kimi" && isOfficial
+            ? ["kimi_oauth", "quota", provider.id]
+            : isOfficial && appId !== "claude"
+              ? subscriptionKeys.quota(appId)
+              : null;
+  const quotaPlan = useQuotaPlan(
+    quotaPlanKey,
+    isCopilot ? copilotPlan : undefined,
+  );
 
   // 获取用量数据以判断是否有多套餐，按用户配置刷新，不依赖供应商启用状态。
   const autoQueryInterval = provider.meta?.usage_script?.autoQueryInterval ?? 0;
@@ -309,7 +369,7 @@ export function ProviderCard({
         )}
       />
       {/* 一行排开（上游 v7）：图标 → 名称与副标题 → 用量列 → 操作；窄屏时用量与操作换到第二行靠右 */}
-      <div className="relative flex min-h-[58px] flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
+      <div className="relative flex min-h-card flex-wrap items-center gap-x-3 gap-y-2 px-3 py-card-y">
         <ProviderIconBox
           icon={provider.icon}
           name={provider.name}
@@ -363,6 +423,7 @@ export function ProviderCard({
               title={agyModel}
             >
               <span className="min-w-0 truncate">{agyModel}</span>
+              {quotaPlan && <PlanSuffix plan={quotaPlan} />}
             </div>
           ) : (
             displayUrl && (
@@ -379,7 +440,11 @@ export function ProviderCard({
                 disabled={!isClickableUrl}
               >
                 <span className="min-w-0 truncate">{displayUrl}</span>
-                {showClaudeDefaultPlan && <ClaudeDefaultPlanSuffix />}
+                {showClaudeDefaultPlan ? (
+                  <ClaudeDefaultPlanSuffix />
+                ) : (
+                  quotaPlan && <PlanSuffix plan={quotaPlan} />
+                )}
               </button>
             )
           )}

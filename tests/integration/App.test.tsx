@@ -13,6 +13,8 @@ import {
 import { providersApi } from "@/lib/api/providers";
 
 const toastSuccessMock = vi.fn();
+// 新增 / 编辑面板被挂载（渲染）过几次：没打开过之前不该挂载，也就不会去加载表单代码
+const editorRenders = vi.hoisted(() => ({ add: 0, edit: 0 }));
 const toastErrorMock = vi.fn();
 
 vi.mock("sonner", () => ({
@@ -62,7 +64,7 @@ vi.mock("@/components/providers/ProviderList", () => ({
 
 vi.mock("@/components/providers/AddProviderDialog", () => ({
   AddProviderDialog: ({ open, onOpenChange, onSubmit, appId }: any) =>
-    open ? (
+    (editorRenders.add++, open) ? (
       <div data-testid="add-provider-dialog">
         <button
           onClick={() =>
@@ -83,7 +85,7 @@ vi.mock("@/components/providers/AddProviderDialog", () => ({
 
 vi.mock("@/components/providers/EditProviderDialog", () => ({
   EditProviderDialog: ({ open, provider, onSubmit, onOpenChange }: any) =>
-    open ? (
+    (editorRenders.edit++, open) ? (
       <div data-testid="edit-provider-dialog">
         <button
           onClick={() =>
@@ -282,6 +284,23 @@ describe("App integration with MSW", () => {
     expect(
       screen.queryByRole("button", { name: "搜索供应商" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("mounts the provider editors only once they are first opened", async () => {
+    editorRenders.add = 0;
+    editorRenders.edit = 0;
+    renderApp(App);
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list")).toHaveTextContent("claude-1"),
+    );
+    expect(editorRenders).toEqual({ add: 0, edit: 0 });
+
+    fireEvent.click(screen.getByText("edit"));
+    expect(
+      await screen.findByTestId("edit-provider-dialog"),
+    ).toBeInTheDocument();
+    expect(editorRenders.edit).toBeGreaterThan(0);
+    expect(editorRenders.add).toBe(0);
   });
 
   it("closes provider editors when navigating to another app", async () => {

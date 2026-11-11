@@ -203,6 +203,8 @@ export function RepoManagerPanel({
                   {t("skills.repo.url")}
                 </Label>
                 <Input
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   id="repo-url"
                   placeholder={t("skills.repo.urlPlaceholder")}
                   value={repoUrl}
@@ -215,6 +217,8 @@ export function RepoManagerPanel({
                   {t("skills.repo.branch")}
                 </Label>
                 <Input
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   id="branch"
                   placeholder={t("skills.repo.branchPlaceholder")}
                   value={branch}

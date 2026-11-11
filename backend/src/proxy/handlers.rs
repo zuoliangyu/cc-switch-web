@@ -271,6 +271,7 @@ async fn handle_messages_for_app(
         stack,
     )
     .await?;
+    ctx.apply_privacy_filter(&mut body);
 
     let raw_endpoint = uri
         .path_and_query()
@@ -1120,6 +1121,7 @@ pub async fn handle_chat_completions(
         stack,
     )
     .await?;
+    ctx.apply_privacy_filter(&mut body);
     let endpoint = endpoint_with_query(&uri, "/chat/completions");
 
     let is_stream = body
@@ -1228,6 +1230,7 @@ async fn handle_responses_for_app(
         stack,
     )
     .await?;
+    ctx.apply_privacy_filter(&mut body);
     let endpoint = endpoint_with_query(&uri, "/responses");
 
     let is_stream = body
@@ -1397,6 +1400,7 @@ async fn handle_codex_standalone_passthrough(
         stack,
     )
     .await?;
+    ctx.apply_privacy_filter(&mut body);
     let endpoint = endpoint_with_query(&uri, canonical_endpoint);
 
     let forwarder = ctx.create_forwarder(&state);
@@ -1474,6 +1478,7 @@ async fn handle_responses_compact_for_app(
         stack,
     )
     .await?;
+    ctx.apply_privacy_filter(&mut body);
     let endpoint = endpoint_with_query(&uri, "/responses/compact");
 
     let is_stream = body
@@ -2028,13 +2033,14 @@ pub async fn handle_gemini(
         .await
         .map_err(|e| ProxyError::Internal(format!("Failed to read request body: {e}")))?
         .to_bytes();
-    let body: Value = serde_json::from_slice(&body_bytes)
+    let mut body: Value = serde_json::from_slice(&body_bytes)
         .map_err(|e| ProxyError::Internal(format!("Failed to parse request body: {e}")))?;
 
     // Gemini 的模型名称在 URI 中
     let mut ctx = RequestContext::new(&state, &body, &headers, AppType::Gemini, "Gemini", "gemini")
         .await?
         .with_model_from_uri(&uri);
+    ctx.apply_privacy_filter(&mut body);
 
     // 提取完整的路径和查询参数
     let endpoint = uri

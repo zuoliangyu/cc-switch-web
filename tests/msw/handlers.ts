@@ -284,6 +284,14 @@ export const handlers = [
 
   http.post(`${RUNTIME_ENDPOINT}/get_settings`, () => success(getSettings())),
 
+  http.post(`${RUNTIME_ENDPOINT}/get_privacy_filter_config`, () =>
+    success({ enabled: false, filterToolResults: false }),
+  ),
+
+  http.post(`${RUNTIME_ENDPOINT}/set_privacy_filter_config`, () =>
+    success(true),
+  ),
+
   http.post(`${RUNTIME_ENDPOINT}/codex_forces_multi_agent_v2`, () =>
     success(false),
   ),

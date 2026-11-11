@@ -31,7 +31,7 @@
 | --- | --- | --- | --- |
 | A | 代理 / Codex / 杂项 | 13 | 待迁移 |
 | B | Copilot 自带模型卡 | 9 | 待迁移 |
-| C | 隐私过滤 | 1 | 待迁移 |
+| C | 隐私过滤 | 1 | 已完成（1 已迁移） |
 | — | 不适用 | 6 | — |
 
 执行顺序：A → B → C，逐批提交。本机内存紧张（2026-11-11 曾因内存不足终止 Docker 验证），各批编译不并行。
@@ -71,7 +71,7 @@
 | `242abf78` | 未发布 | chore(presets): remove the CCSub promotion copy | A | | 待迁移 |
 | `f57e24ce` | 未发布 | docs(readme): add Trendshift daily/weekly/monthly Rust badges | — | 上游 README 徽章 | 不适用 |
 | `f38a612c` | 未发布 | fix(tools): skip VS Code copilot-shim when detecting Copilot CLI on Windows | A | | 待迁移 |
-| `32365a54` | 未发布 | feat: add privacy filter for PII and secrets detection (#8951) | C | | 待迁移 |
+| `32365a54` | 未发布 | feat: add privacy filter for PII and secrets detection (#8951) | C | C：`proxy/privacy_filter`（PII 正则、gitleaks 规则集 + 上下文口令 + 熵兜底、四种请求格式的文本改写）与上游用例原样迁入；配置存 settings 表 `privacy_filter_config`（默认关，工具结果子开关默认关），新增 `GET/PUT /api/settings/privacy-filter`，打开时后台预热规则；Claude / Claude Desktop、Codex Chat / Responses / compact / 图片与独立透传、Gemini 六个入口在建好请求上下文后过滤（Session ID 与模型名仍按原始请求体提取），只在路由与聚合模式经过代理时生效；设置 › 数据里云同步之后加「隐私过滤器」（三语）。与上游不同：占位符语言取设置里的界面语言，没保存过时按服务进程的 `LC_ALL` / `LC_MESSAGES` / `LANG`，再没有用英文（上游按托盘语言 / 系统区域；Web 没有托盘，浏览器语言服务端拿不到）；补面板用例与区域名映射用例 | 已迁移 |
 | `f16a9d74` | 未发布 | fix(ui): stop the what's-new dialog from collapsing on macOS and Linux (#9401) | A | | 待迁移 |
 | `a6200c1e` | 未发布 | fix(proxy): drop Codex-private include markers for third-party upstreams (#9077) | A | | 待迁移 |
 | `abf50589` | 未发布 | fix(agy): pass cloudaicompanionProject in quota lookup and surface region ineligibility (#9414) | A | | 待迁移 |
@@ -79,3 +79,4 @@
 ## 6. 执行记录
 
 - 2026-11-11：建立台账。
+- 2026-11-11 批次 C（隐私过滤）：见第 5 节 `32365a54`。验证：Rust 3901 项通过、10 项忽略（新增 30 项隐私过滤用例），`cargo check --bin cc-switch-web` 零警告；前端 270 个文件 2835 项通过，tsc 通过。上游对请求体大小没有单独上限（靠关键词预筛与线性正则，在请求任务里同步执行），Web 照搬。

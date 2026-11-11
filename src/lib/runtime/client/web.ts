@@ -46,6 +46,7 @@ import type {
   ConfigTransferResult,
   LogConfig,
   OptimizerConfig,
+  PrivacyFilterConfig,
   RectifierConfig,
 } from "@/lib/api/settings";
 import type { StreamCheckConfig } from "@/lib/api/model-test";
@@ -1693,6 +1694,20 @@ export async function setWebOptimizerConfig(
   config: OptimizerConfig,
 ): Promise<boolean> {
   return requestWithBody<boolean>("/api/settings/optimizer", "PUT", config);
+}
+
+export async function getWebPrivacyFilterConfig(): Promise<PrivacyFilterConfig> {
+  return requestJson<PrivacyFilterConfig>("/api/settings/privacy-filter");
+}
+
+export async function setWebPrivacyFilterConfig(
+  config: PrivacyFilterConfig,
+): Promise<boolean> {
+  return requestWithBody<boolean>(
+    "/api/settings/privacy-filter",
+    "PUT",
+    config,
+  );
 }
 
 export async function getWebLogConfig(): Promise<LogConfig> {

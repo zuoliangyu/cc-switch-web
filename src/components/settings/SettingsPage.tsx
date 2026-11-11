@@ -35,6 +35,7 @@ import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
 import { AboutSection } from "@/components/settings/AboutSection";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
+import { PrivacyFilterConfigPanel } from "@/components/settings/PrivacyFilterConfigPanel";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import { AppConfigSection } from "@/components/settings/sections/AppConfigSection";
 import { RoutingSection } from "@/components/settings/sections/RoutingSection";
@@ -470,6 +471,15 @@ export function SettingsPage({
                   onAutoSave={handleAutoSave}
                 />
               </div>
+            </SettingsBlock>
+            <SettingsBlock
+              title={t("settings.advanced.privacyFilter.title")}
+              help={{
+                title: t("settings.advanced.privacyFilter.title"),
+                body: t("settings.advanced.privacyFilter.description"),
+              }}
+            >
+              <PrivacyFilterConfigPanel />
             </SettingsBlock>
             <SettingsBlock
               title={t("settings.advanced.logConfig.title")}

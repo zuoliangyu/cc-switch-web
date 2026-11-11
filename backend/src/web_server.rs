@@ -27,8 +27,9 @@ use crate::proxy::providers::codex_oauth_auth::{CodexOAuthError, CodexOAuthManag
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::types::{
-    AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, ProviderHealth, ProxyConfig,
-    ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus, RectifierConfig,
+    AppProxyConfig, GlobalProxyConfig, LogConfig, OptimizerConfig, PrivacyFilterConfig,
+    ProviderHealth, ProxyConfig, ProxyServerInfo, ProxyStatus, ProxyTakeoverStatus,
+    RectifierConfig,
 };
 use crate::services::omo::OmoLocalFileData;
 use crate::services::profile::{ProfilePayload, ProfileScope, ProfileService};
@@ -3475,6 +3476,23 @@ async fn set_optimizer_config(
         .map_err(|e| ApiError::internal(format!("failed to save optimizer config: {e}")))
 }
 
+async fn get_privacy_filter_config(
+    State(state): State<WebApiState>,
+) -> Result<Json<PrivacyFilterConfig>, ApiError> {
+    crate::commands::get_privacy_filter_config_internal(state.app_state.as_ref())
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to load privacy filter config: {e}")))
+}
+
+async fn set_privacy_filter_config(
+    State(state): State<WebApiState>,
+    Json(config): Json<PrivacyFilterConfig>,
+) -> Result<Json<bool>, ApiError> {
+    crate::commands::set_privacy_filter_config_internal(state.app_state.as_ref(), config)
+        .map(Json)
+        .map_err(|e| ApiError::internal(format!("failed to save privacy filter config: {e}")))
+}
+
 async fn get_log_config(State(state): State<WebApiState>) -> Result<Json<LogConfig>, ApiError> {
     crate::commands::get_log_config_internal(state.app_state.as_ref())
         .map(Json)
@@ -5348,6 +5366,10 @@ pub async fn run_web_server_with_options(options: WebServerOptions) -> Result<()
         .route(
             "/api/settings/optimizer",
             get(get_optimizer_config).put(set_optimizer_config),
+        )
+        .route(
+            "/api/settings/privacy-filter",
+            get(get_privacy_filter_config).put(set_privacy_filter_config),
         )
         .route(
             "/api/settings/log-config",

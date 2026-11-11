@@ -28,6 +28,7 @@ pub(crate) mod loopback_probe;
 pub(crate) mod media_sanitizer;
 pub(crate) mod model_mapper;
 pub(crate) mod opaque_state_rectifier;
+pub(crate) mod privacy_filter;
 pub(crate) mod provider_router;
 pub(crate) mod providers;
 pub(crate) mod response_processor;

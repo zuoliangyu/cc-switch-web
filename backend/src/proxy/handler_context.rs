@@ -8,7 +8,7 @@ use crate::proxy::{
     extract_session_id,
     forwarder::RequestForwarder,
     server::ProxyState,
-    types::{AppProxyConfig, OptimizerConfig, RectifierConfig},
+    types::{AppProxyConfig, OptimizerConfig, PrivacyFilterConfig, RectifierConfig},
     ProxyError,
 };
 use axum::http::HeaderMap;
@@ -62,6 +62,8 @@ pub struct RequestContext {
     pub rectifier_config: RectifierConfig,
     /// 优化器配置
     pub optimizer_config: OptimizerConfig,
+    /// 隐私过滤器配置
+    pub privacy_filter_config: PrivacyFilterConfig,
     pub is_stack: bool,
 }
 
@@ -99,6 +101,7 @@ impl RequestContext {
         // 从数据库读取整流器配置
         let rectifier_config = state.db.get_rectifier_config().unwrap_or_default();
         let optimizer_config = state.db.get_optimizer_config().unwrap_or_default();
+        let privacy_filter_config = state.db.get_privacy_filter_config().unwrap_or_default();
 
         let current_provider_id = crate::mode::current::provider_for(
             &state.db,
@@ -188,6 +191,7 @@ impl RequestContext {
             session_client_provided: session_result.client_provided,
             rectifier_config,
             optimizer_config,
+            privacy_filter_config,
             is_stack,
         })
     }
@@ -201,6 +205,31 @@ impl RequestContext {
         app_type_str: &'static str,
     ) -> Result<Self, ProxyError> {
         Self::new_with_stack(state, body, headers, app_type, tag, app_type_str, None).await
+    }
+
+    /// 隐私过滤：开关打开时脱敏用户输入和系统提示里的 PII / 密钥，工具结果看子开关
+    ///
+    /// 在上下文创建之后调用，Session ID 与模型名仍按原始请求体提取。
+    /// 占位符跟随界面语言（见 [`crate::proxy::privacy_filter::placeholder_language`]）。
+    pub fn apply_privacy_filter(&self, body: &mut serde_json::Value) {
+        if !self.privacy_filter_config.enabled {
+            return;
+        }
+        let language = crate::proxy::privacy_filter::placeholder_language();
+        let placeholders = crate::proxy::privacy_filter::Placeholders::for_language(&language);
+        let count = crate::proxy::privacy_filter::redact_request_body(
+            body,
+            placeholders,
+            self.privacy_filter_config.filter_tool_results,
+        );
+        if count > 0 {
+            log::info!(
+                "[{}] Privacy filter redacted {} item(s), session: {}",
+                self.tag,
+                count,
+                self.session_id
+            );
+        }
     }
 
     /// 从 URI 提取模型名称（Gemini 专用）

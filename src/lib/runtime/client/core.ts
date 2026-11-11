@@ -130,6 +130,7 @@ import {
   getWebCodexOauthModels,
   getWebUnmanagedSkills,
   getWebOptimizerConfig,
+  getWebPrivacyFilterConfig,
   getWebUpstreamProxyStatus,
   listWebManagedAuthAccounts,
   listWebDbBackups,
@@ -155,6 +156,7 @@ import {
   setWebLogConfig,
   setWebManagedAuthDefaultAccount,
   setWebOptimizerConfig,
+  setWebPrivacyFilterConfig,
   setWebPricingModelSource,
   setWebGlobalProxyUrl,
   setWebRectifierConfig,
@@ -366,6 +368,10 @@ export async function invoke<T>(
       return (await getWebOptimizerConfig()) as T;
     case "set_optimizer_config":
       return (await setWebOptimizerConfig(args?.config as any)) as T;
+    case "get_privacy_filter_config":
+      return (await getWebPrivacyFilterConfig()) as T;
+    case "set_privacy_filter_config":
+      return (await setWebPrivacyFilterConfig(args?.config as any)) as T;
     case "get_log_config":
       return (await getWebLogConfig()) as T;
     case "set_log_config":

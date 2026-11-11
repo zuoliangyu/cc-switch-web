@@ -2,6 +2,15 @@
 
 本仓库从 Web 分支独立维护开始，重新以 `0.1.0` 作为初始版本。
 
+## [3.3.1] - 2026-11-11
+
+3.3.0 的修复版，功能与 3.3.0 相同。
+
+### 修复
+
+- macOS 构建失败：`subscription.rs` 里只在 macOS 编译的常量 `SECURITY_ITEM_NOT_FOUND` 定义了两次（E0428）。3.1.0 起 CI 的 macOS 检查一直失败，3.3.0 的 macOS 包也编不出来；Windows / Linux 不受影响。
+- GitHub 密钥扫描误报：隐私过滤器的 gitleaks 规则集白名单里收录了公开的示例 Google API Key（gitleaks 官方规则，不是本仓库的凭据），新增 `.github/secret_scanning.yml` 跳过规则文件与测试样本目录。
+
 ## [3.3.0] - 2026-11-11
 
 跟进上游 `5e9812e0..abf50589`（v4.0.29 及其后）：29 项提交中 22 项已迁移、7 项不适用（七语言维护、ko/tr/ru 文案、上游发版与 README），详见 [迁移台账](docs-dev/web-parity-post-5e9812e0-2026-11.md)。本次将 Web 版本从 `3.2.0` 提升到 `3.3.0`，并整仓统一了 Prettier 与 rustfmt 格式（纯格式，无行为变化）。

@@ -1,6 +1,6 @@
 # Web 跟进 cc-switch v4.0.26–v4.0.28 及其后差异清单
 
-> 状态：进行中（2026-11-10 建立）。
+> 状态：已完成（2026-11-10 建立，2026-11-11 完成；108 项均已处置，未发版）。
 > 上游：`upstream` = `git@github.com:farion1231/cc-switch.git`，只读（push URL 为 `DISABLED_READ_ONLY`）。取上游时用 `git fetch upstream --no-tags`：Web 本地 tag `v3.0.0`、`v3.1.0` 与上游旧 tag 同名，不能强制拉上游 tag。
 > 起点：`a3eafa40`（v4.0.25，上一轮冻结目标）；目标：`upstream/main` = `5e9812e0`（v4.0.28 之后，2026-11-10）。
 > 范围：108 个提交（无合并提交），434 个文件变化（+34576/−3169）。Web 起点为 `ee20caee`（3.1.0）。
@@ -257,3 +257,16 @@
   - 事件推送：本批没有新增服务端事件，上游提交也没有 `app.emit` / `listen`。
   - 用例：迁入上游 `copilot_config`（6）与 `commands/copilot.rs` 的账号匹配（1，并入 `copilot_config`，另补当前登录读取 1）、`mcp/copilot`（6）、`copilot_direct`（2）、`session_manager/providers/copilot`（3）、`session_usage_copilot`（2 + 1 忽略的真实目录冒烟）、`tests/copilot_commands.rs` 三条改写为 `services/provider/copilot_tests.rs`、数据库迁移 / 全新安装 / 双开关独立保存，前端 `copilotProviderPresets`（4）、`CopilotProviderForm`（8）、`CopilotCliQuotaFooter`（4）；按 Web 结构新写：v22 → v23 迁移、建表阶段补 `enabled_copilot`、终端启动（Unix / Windows 各两条：Key 与令牌只在环境文件或 `set` 行、不进命令行文本，自带模型卡不带令牌，官方卡清 BYOK 变量，Windows 拒绝 `%`）、绑定账号已删时报错、Copilot 会话不越出 `session-state`（直接给根目录外路径、`..` 跳出都拒绝，删除接口拒绝）、Copilot 连通性检查（官方卡拒绝、模型与请求头解析）、深链接四条、`OpenTerminalDialog` 一条；`AppsPage` 的版本探测次数随工具数改为 14。
   - 验证：`cargo test --locked --lib` 3864 项通过、10 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告（`--lib --tests` 的两条 dead_code 警告在 HEAD 就有）；改动的 Rust 文件 rustfmt 干净（`lib.rs`、`services/mod.rs` 的模块顺序，`commands/config.rs` 的 Agy / Omp 两行，`dao/skills.rs`、`mcp/mod.rs`、`web_session_tests.rs` 第一条用例报的差异在 HEAD 就有，未动）；`tsc --noEmit` 通过；前端全量 Vitest 269 个文件 2832 项通过；改动的前端文件 Prettier 通过（`AppSwitcher.tsx`、`UsageScriptModal.tsx`、`EditProviderDialog.tsx`、`ProviderList.tsx`、`SessionReaderHeader.tsx`、`appConfig.tsx`、`lib/api/copilot.ts`、`managedAccountUsage.ts`、`web.ts`、`SessionManagerPage.test.tsx`、`msw/state.ts` 报的差异在 HEAD 就有，不在本批改动的行上，未动）。未做浏览器验收、真实 Copilot CLI 冒烟与 Docker Linux 检查。
+- 2026-11-11：收尾。
+  - 合入后复验（main，Windows）：`cargo test --locked --lib` 3865 项通过、10 项忽略（PATH 去掉 `~/.bun/bin`）；`cargo check --locked --bin cc-switch-web` 通过、无警告；`tsc --noEmit` 通过；前端全量 Vitest 269 个文件 2833 项通过。
+  - Docker Linux（`rust:1-bookworm`，`cargo test --locked --lib`）首轮暴露 3 项失败，修复后 3894 项通过、1 项失败：
+    - `env_launch_command`（Claude / Grok / Copilot 在 Unix 下打开终端共用）的临时环境文件名只有进程号加毫秒，同一毫秒两次启动会因 `create_new` 失败；文件名加进程内序号（`9bbba12c1`）。
+    - `codex_adopting_the_catalog_drops_the_route_rows_own_pointer` 写死绝对路径，容器内按批次 D 的规则写裸文件名；期望值改走 `catalog_pointer_value`（`9bbba12c1`）。
+    - `unreadable_session_directory_preserves_index_until_successful_scan`（上游原样迁入）要求非 root 进程，容器里默认 root；以 `nobody` 单独运行通过，用例不改。
+    - `cargo check --locked --lib --tests` 的警告均为既有的 Unix 下未用辅助函数与 dead_code。
+  - 浏览器验收：调试后端加 Vite，隔离 HOME / USERPROFILE / APPDATA / LOCALAPPDATA / `CC_SWITCH_TEST_HOME`，Playwright 驱动 Chromium，宽度 1440 与 390，覆盖事件推送、Codex 暂停官方登录 / 额度保护 / Fast 档、界面密度、Skills 钉住列、会话阅读页、弹窗居中、会话全文搜索、Copilot CLI 全部入口、定价搜索与图标主题。修正 5 项并复验通过（`88921191c`）：
+    - 手动切换供应商与故障转移队列增删不推送事件，别的标签页 / 客户端不刷新：后端补发 `provider-switched`，前端同时失效 `failoverQueue`。
+    - 页头应用切换缺 Kimi Code、DeepSeek Harness、Antigravity、Oh My Pi、Copilot CLI（前四项为上一轮遗留）：改用 `APP_IDS`。
+    - 会话阅读页查找框盖住计数；390px 下会话列表工具栏挤压重叠；请求日志表头说明把 390px 用量页撑宽；窄屏导航按钮压在弹窗与侧边栏上面。
+  - 未修：390px 下全文搜索结果跳转后关键词在阅读区上方（窄屏阅读页头部占半屏）；`/favicon.ico` 404 与 GitHub 限流时检查更新返回 500 为既有问题。未验证：授权中心套餐名（无真实账号）、真实 Copilot CLI 冒烟。
+  - 文档：三语 README 补 Copilot CLI 与会话全文搜索，「当前版本」说明 main 在 3.1.0 之后的跟进；CHANGELOG 新增 Unreleased。版本号未改（仍为 3.1.0）。

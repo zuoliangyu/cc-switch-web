@@ -25,6 +25,8 @@ CC Switch Web 在本地运行 Rust 服务，可在浏览器中管理 Claude、Cl
 - MiniMax Code 的 Provider/模型（原生 `custom_provider`）、MCP、Skills、全局指令（`AGENTS.md`）、只读会话历史与用量导入；会话删除仍由 MiniMax Code 原生应用负责
 - Pi 的 Provider、Prompts、Skills、Sessions 与 Usage；Pi `/login`、`auth.json`、默认 Provider/Model、代理、故障转移和 OAuth 托管明确由 Pi 原生管理
 - Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness 的 Provider、MCP、会话与用量导入；Antigravity 官方账号切换依赖 macOS 钥匙串，仅服务端为 macOS 时可用
+- GitHub Copilot CLI 的 Provider（官方账号或自带模型）、打开终端、MCP、Skills、指令文件、会话与用量导入；卡片只提供「打开终端」，令牌和 Key 仅经环境变量传给终端进程
+- 会话正文全文搜索（默认关闭，索引建在服务端 Web 数据目录）
 - Claude、Codex、Gemini 的官方订阅额度展示
 - ChatGPT（Codex OAuth）托管账号中心、Claude 预设与额度展示
 - Claude → Codex 路由支持内置 WebSearch，Codex 路由支持 Alpha Search 透传
@@ -89,6 +91,8 @@ docker run -d --name cc-switch-web \
 ## 当前版本
 
 当前仓库版本为 `3.1.0`。本版本完成上游 `a189980f..a3eafa40`（v4.0.1–v4.0.25）的 Web 迁移：758 项提交中 560 项已迁移或适配、17 项部分迁移（均为有意保留的 Web 差异）、181 项不适用。新增 Kimi Code、Antigravity、Oh My Pi、DeepSeek Harness；界面向上游最终版收敛（供应商卡片、模式页签与面板、按模式的表单、设置分节目录、Skills 矩阵、分组预设选择器），Web 主题保持不变；用量页支持币种换算与自动汇率、全局筛选、成功率 / 速度 / 首字时间和侧栏今日数字。Windows 验证：前端 2606 项通过；Rust 3644 项通过、6 项忽略；零编译警告；已在隔离数据目录下完成桌面与窄屏浏览器验收。处置与验证见 [迁移台账](docs-dev/web-parity-post-a189980f-2026-11.md)，完整变更见 [CHANGELOG](CHANGELOG.md)。版本号与说明已更新，发布包和 Release 尚未发布。
+
+`main` 分支在 3.1.0 之后已继续跟进上游 `a3eafa40..5e9812e0`（v4.0.26–v4.0.28 及其后，108 项提交），新增 GitHub Copilot CLI、会话全文搜索与服务端事件推送等，尚未发版；见 CHANGELOG 的「Unreleased」与 [本轮迁移台账](docs-dev/web-parity-post-a3eafa40-2026-11.md)。
 
 上一版本 `3.0.0` 为主版本升级，引入关键字段配置写入与冲突处理、直连／路由／聚合模式、全局导航与账号中心，以及结构化会话阅读器、用量分析和资源管理，并完成上游 `f8788719..a189980f`（v4.0.0）适用内容的 Web 迁移。195 项提交中，176 项已迁移或按 Web 实现适配，19 项属于桌面、发行、文档布局或与 Web 约束不适用的内容。处置与验证记录见 [迁移台账](docs-dev/web-parity-post-f8788719-2026-10.md)。
 

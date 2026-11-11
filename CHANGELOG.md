@@ -4,6 +4,33 @@
 
 ## [Unreleased]
 
+跟进上游 `a3eafa40..5e9812e0`（v4.0.26–v4.0.28 及其后）：108 项提交中 80 项已迁移、4 项部分迁移（均为有意保留的 Web 差异）、24 项不适用，详见 [迁移台账](docs-dev/web-parity-post-a3eafa40-2026-11.md)。本轮先补齐了上一轮缺的两个底层框架，上一轮台账相应改判为已迁移 563、部分迁移 15、不适用 180。
+
+### 升级注意
+
+- 数据库 schema 升到 v23：请求日志与日汇总增加计价模型、输入 Token 语义两个维度（v22），MCP 与 Skills 增加 Copilot CLI 开关列（v23）；从桌面端快照迁入的库在建表阶段自动补列。Claude Desktop 网关的计费模式改为跟随 Claude 的设置。
+- Codex 官方额度保护改为默认开启；旧版本保存的「关闭」会被打开一次，之后再关闭以用户设置为准。
+- Codex 预设不再写入 `disable_response_storage`（与上游一致）。
+- 勾选「迁入既有会话」后，Codex 统一会话历史在每次服务启动时迁入，完成后推送提示。
+- 模式视图与用量页不再轮询，改由服务端事件推送刷新。
+
+### 新增与改进
+
+- 服务端事件推送：新增 `GET /api/events`（SSE，沿用访问密钥），前端共享一条连接、断线退避重连并在重连后整体重取；故障转移切换、应用项目、统一供应商同步、WebDAV 同步结果、新的请求日志、工具安装进度、会话索引进度、Codex 历史迁入结果与本地路由被系统代理接走的提示均经它推送。
+- 新应用 GitHub Copilot CLI：官方账号或自带模型卡、打开终端（令牌与 Key 仅经环境变量传给终端进程）、MCP（`mcp-config.json`）、Skills、`copilot-instructions.md`、会话浏览与恢复、用量导入、深链导入、工具安装与卸载。
+- 会话正文全文搜索：默认关闭，开启后在 Web 数据目录建立独立的 FTS 索引（不进备份与同步），结果显示摘录与高亮并可跳到对应消息；结果只返回会话根目录内的来源。
+- Codex：卡上可保留官方 Fast 档；新增「暂停使用官方登录」，官方额度用完时仍可用第三方模型；切换跨官方 / 第三方组时提示被锁住的会话数；路由 / 聚合下满足条件时写成内置 openai；原生绝对目录写绝对路径的模型目录（容器内仍写文件名）。
+- 代理：SSE 分帧与故障转移加载优化；Claude auto mode 分类器循环本地拦截；Copilot 原生 Responses 固定 item ID、Grok 模型走 xAI 兼容；IPv6 不通时竞速 IPv4；HalfOpen 探测名额在请求取消时归还；Codex 跨厂商故障转移按目标家换模型；Kimi / DeepSeek / Mistral 工具调用历史与 reasoning 回放修复；发往第三方时去掉 ChatGPT 身份头。
+- 界面：授权中心与官方卡显示套餐名（Copilot、ChatGPT、Kimi、Antigravity 含 Ultra 5x / 20x、xAI、Gemini）；Copilot 每项额度分行显示；Grok Build 当前供应商可打开终端；已安装 Skills 钉住名称栏、行内直接更新；设置 › 外观新增界面密度（缩放交给浏览器）；会话阅读页工具栏与弹窗居中跟进上游。
+- 后端：内容未变的保存不再写库与触发同步；日志维护改为启动后每日一次；MCP 401 显示「需要登录」；深链导入支持 Claude Desktop、MiniMax Code、Kimi、DeepSeek Harness、Oh My Pi 并收紧内网地址判断；DSH 配置目录设置；写配置穿过符号链接；Skill 哈希忽略 Python 字节码。
+- 预设、定价与图标：Genesis、TokenPlus、Mistral Large 4、grok-4.7 等；定价表搜索；图标跟随主题。
+
+### 验证
+
+- Windows：前端 269 个文件 2833 项通过；Rust 3865 项通过、10 项忽略；TypeScript 与 `cargo check --bin cc-switch-web` 通过、零警告。
+- Linux（Docker `rust:1-bookworm`）：Rust 3894 项通过；仅一项要求非 root 的权限用例在容器 root 下失败，以非 root 运行通过。
+- 在隔离的临时数据目录下做了 1440 与 390px 的浏览器验收，发现的 5 处问题已修正并复验（跨标签页切换推送、页头应用切换补全、窄屏布局）。本轮未运行发布构建与真实账号联调。
+
 ## [3.1.0] - 2026-11-07
 
 已完成上游 `a189980f..a3eafa40`（v4.0.1–v4.0.25）的 Web 迁移：758 项提交中 560 项迁移或适配、17 项部分迁移（均为有意保留的 Web 差异）、181 项不适用，详见 [迁移台账](docs-dev/web-parity-post-a189980f-2026-11.md)。本次将 Web 版本从 `3.0.0` 提升到 `3.1.0`；版本说明已整理，发布包与 Release 尚未发布。

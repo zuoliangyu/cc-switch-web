@@ -207,7 +207,7 @@ const ZipFilesDialog: React.FC<InstallSkillsFromZipDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="min-h-0 flex-auto overflow-y-auto px-6 py-4 space-y-4">
           <div
             className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
               isDragActive

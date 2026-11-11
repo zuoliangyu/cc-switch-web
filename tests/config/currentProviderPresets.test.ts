@@ -274,7 +274,8 @@ describe("current provider presets", () => {
       expect(names).not.toContain(retired);
     }
     for (const locale of [zh, en, ja]) {
-      expect(locale.providerForm.partnerPromotion.ccsub).toBeTruthy();
+      // 上游 242abf78 去掉了 CCSub 的推广文案（预设本身保留）
+      expect(locale.providerForm.partnerPromotion).not.toHaveProperty("ccsub");
       expect(locale.providerForm.partnerPromotion.sudocode).toBeTruthy();
       expect(locale.providerForm.partnerPromotion.teamorouter).toBeTruthy();
     }

@@ -273,6 +273,7 @@
       "agySwitchRunning": "agy is running: open agy sessions keep the previous account and may write it back. Quit them first if you can."
     },
     "openTerminalIsolated": "Open Terminal (isolated)",
+    "openTerminalNeedsRoute": "This card only works through Routing: a terminal would connect straight to its address, without the credentials and format conversion Routing provides. Turn on Routing, then run the client in a terminal directly",
     "backToList": "Back to providers",
     "searchButtonTip": "Search providers ({{shortcut}})",
     "disable": "Disable",
@@ -1441,7 +1442,6 @@
       "subrouter": "SubRouter is an AI relay aggregator that lets one key access multiple models and providers.",
       "fenno": "Fenno.ai is a stable, efficient API relay giving you access to a wide range of mainstream models. Exclusive CC Switch offer: subscribe via this link to the $1.99 Trial Plan worth $50 in credits, valid for 7 days!",
       "opencode_go": "OpenCode Go offers subscription access to a range of coding models. View plan details and subscribe via this link.",
-      "ccsub": "CCSub is a stable, affordable AI API relay — a drop-in replacement for Claude.ai & OpenAI subscriptions, with one key for all models at ~30% of direct API cost.",
       "sudocode": "With one SudoCode key, Claude Code and Claude Desktop use Claude Opus 5, while Codex uses GPT-5.6. Sign up, join QQ group 726213516, and contact the group owner to claim CNY ¥10 in trial credit.",
       "teamorouter": "TeamoRouter is an enterprise-grade Agentic LLM gateway with pricing up to 90% off. It offers exclusive benefits for CC Switch users: register via this link as a new user for 10% off your first top-up!",
       "packycode": "PackyCode is an official partner of CC Switch. Register using this link and enter \"cc-switch\" promo code during recharge to get 10% off",

@@ -39,6 +39,7 @@ import { extractProviderBaseUrl } from "@/utils/providerConfigUtils";
 import {
   terminalAvailable,
   terminalIsIsolated,
+  terminalNeedsRoute,
 } from "@/components/providers/OpenTerminalDialog";
 import {
   isKimiOfficialAccount,
@@ -631,6 +632,11 @@ export function ProviderCard({
                 : undefined
             }
             openTerminalIsolated={terminalIsIsolated(provider, appId)}
+            openTerminalDisabledReason={
+              terminalNeedsRoute(provider, appId)
+                ? t("provider.openTerminalNeedsRoute")
+                : undefined
+            }
           />
         </div>
       </div>

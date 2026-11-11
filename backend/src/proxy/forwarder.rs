@@ -1768,10 +1768,12 @@ impl RequestForwarder {
             {
                 mapped_body["max_output_tokens"] = Value::from(max_output_tokens);
             }
+            // Anthropic requires max_tokens, and Codex never sends max_output_tokens,
+            // so this default applies to every request without a provider override.
             let mut anthropic_body =
                 super::providers::transform_codex_anthropic::responses_request_to_anthropic(
                     mapped_body,
-                    8192,
+                    super::providers::transform_codex_anthropic::DEFAULT_CODEX_ANTHROPIC_MAX_TOKENS,
                 )?;
             if let Some(model) = anthropic_body
                 .get("model")
@@ -1873,6 +1875,21 @@ impl RequestForwarder {
                     provider.id
                 );
             }
+        }
+
+        // Codex 客户端私有的 `include` 标记只对官方 ChatGPT 后端有效：第三方与本地原生
+        // Responses 网关收到它会整条 400（#9042）。
+        if should_drop_codex_private_include_markers(
+            app_type,
+            provider,
+            codex_responses_to_chat,
+            codex_responses_to_anthropic,
+        ) && super::providers::strip_codex_private_include_markers(&mut request_body)
+        {
+            log::debug!(
+                "[Codex] Dropped Codex-private include markers for a third-party upstream (provider={})",
+                provider.id
+            );
         }
 
         if self.stack_request
@@ -3133,6 +3150,21 @@ fn is_chatgpt_identity_header(key_str: &str) -> bool {
     ) || key_str.starts_with("x-oai-")
         || key_str.starts_with("x-openai-")
         || key_str.starts_with("x-responsesapi-")
+}
+
+/// Codex 客户端私有的 `include` 标记（`output.encrypted_content`）只对官方 ChatGPT 后端
+/// 有效。第三方与本地原生 Responses 网关收到它会把整条请求 400 掉（#9042）。转 Chat /
+/// Anthropic 的路径本来就不带它，官方那条路逐字节不变。
+fn should_drop_codex_private_include_markers(
+    app_type: &AppType,
+    provider: &Provider,
+    codex_responses_to_chat: bool,
+    codex_responses_to_anthropic: bool,
+) -> bool {
+    matches!(app_type, AppType::Codex)
+        && !codex_responses_to_chat
+        && !codex_responses_to_anthropic
+        && !super::providers::is_codex_official_provider(provider)
 }
 
 fn codex_anthropic_error_envelope_message(body: &[u8]) -> Option<String> {
@@ -4978,6 +5010,52 @@ mod tests {
         let mut body = original.clone();
         apply_native_responses_request_compat(&provider, &mut body, false).unwrap();
         assert_eq!(body, original);
+    }
+
+    /// 官方 ChatGPT 后端认 `output.encrypted_content`；转 Chat / Anthropic 的路径本来就不带它。
+    /// 三条都跳过，其余原生 Responses 的 Codex 请求都要去掉（#9042）。
+    #[test]
+    fn private_include_marker_gate_skips_official_and_converted_requests() {
+        let mut third_party = test_provider_with_type(None);
+        third_party.settings_config = json!({
+            "config": "base_url = \"https://relay.example.com/v1\""
+        });
+        let mut official = third_party.clone();
+        official.id = crate::database::CODEX_OFFICIAL_PROVIDER_ID.to_string();
+        official.category = Some("official".to_string());
+
+        assert!(should_drop_codex_private_include_markers(
+            &AppType::Codex,
+            &third_party,
+            false,
+            false
+        ));
+        assert!(!should_drop_codex_private_include_markers(
+            &AppType::Codex,
+            &official,
+            false,
+            false
+        ));
+        // 转 Chat / 转 Anthropic 的路径不带原生 Responses 字段。
+        assert!(!should_drop_codex_private_include_markers(
+            &AppType::Codex,
+            &third_party,
+            true,
+            false
+        ));
+        assert!(!should_drop_codex_private_include_markers(
+            &AppType::Codex,
+            &third_party,
+            false,
+            true
+        ));
+        // Grok Build 走 xAI 自己的清洗，不归这里管。
+        assert!(!should_drop_codex_private_include_markers(
+            &AppType::GrokBuild,
+            &third_party,
+            false,
+            false
+        ));
     }
 
     fn test_provider_with_type(provider_type: Option<&str>) -> Provider {

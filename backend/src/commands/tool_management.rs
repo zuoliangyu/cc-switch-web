@@ -4353,7 +4353,7 @@ fn is_foreign_pip_launcher(tool: &str, path: &Path) -> bool {
 /// Also skips launchers that only share the tool's name (`is_foreign_pip_launcher`).
 #[cfg(target_os = "windows")]
 fn windows_preferred_tool_executable(tool: &str, path: &Path) -> Option<std::path::PathBuf> {
-    if is_foreign_pip_launcher(tool, path) {
+    if is_foreign_pip_launcher(tool, path) || is_vscode_copilot_shim(tool, path) {
         return None;
     }
     if tool == "opencode"
@@ -4544,12 +4544,16 @@ fn windows_preferred_path_default(tool: &str, raw: &str) -> Option<std::path::Pa
 /// Web：VS Code 往 PATH 里放的 `bin/copilot-shim/copilot(.exe)` 不是 Copilot CLI，跑起来只提示
 /// 「GitHub Copilot CLI was not found」并以 127 退出。当成没装（不是「装了但跑不起来」），
 /// 也不拿它当升级 / 卸载的目标，后面真正装好的 copilot 照常命中。
+///
+/// 按目录认（上游 f38a612c 同法），`.exe` 与 `.cmd` 都算；反斜杠先换成斜杠，Windows 形态的
+/// 路径在任何宿主上都认得出来。
 fn is_vscode_copilot_shim(tool: &str, path: &Path) -> bool {
     tool == "copilot"
         && path
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|dir| dir.eq_ignore_ascii_case("copilot-shim"))
+            .to_string_lossy()
+            .replace('\\', "/")
+            .to_ascii_lowercase()
+            .contains("/copilot-shim/")
 }
 
 fn kimi_upgrade_ignores_yes(version: Option<&str>) -> bool {
@@ -8854,6 +8858,28 @@ mod tests {
             Path::new("C:/Users/tester/AppData/Roaming/npm/copilot.cmd")
         ));
         assert!(!is_vscode_copilot_shim("codex", shim));
+    }
+
+    #[test]
+    fn vscode_copilot_shim_is_rejected_but_real_copilot_is_kept() {
+        assert!(is_vscode_copilot_shim(
+            "copilot",
+            Path::new(r"D:\Microsoft VS Code\bin\copilot-shim\copilot.exe")
+        ));
+        assert!(is_vscode_copilot_shim(
+            "copilot",
+            Path::new(r"C:\Program Files\Microsoft VS Code\bin\COPILOT-SHIM\copilot.cmd")
+        ));
+        // npm's global shim is the real CLI.
+        assert!(!is_vscode_copilot_shim(
+            "copilot",
+            Path::new(r"C:\Users\me\AppData\Roaming\npm\copilot.cmd")
+        ));
+        // Only the copilot tool is affected.
+        assert!(!is_vscode_copilot_shim(
+            "codex",
+            Path::new(r"D:\x\copilot-shim\codex.exe")
+        ));
     }
 
     #[test]
